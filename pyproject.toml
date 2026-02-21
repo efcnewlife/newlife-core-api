@@ -1,0 +1,50 @@
+[tool.pytest.ini_options]
+testpaths = ["portal", "tests"]
+
+[project]
+name = "newlife-core-api"
+version = "0.1.0"
+description = "NewLife Core API Portal with core infrastructure"
+authors = [{ name = "Jay Hsia", email = "jayhsia1997@gmail.com" }]
+readme = "README.md"
+requires-python = "^3.13"
+dependencies = [
+    # base
+    "dependency-injector",
+    "fastapi",
+    "fastapi-limiter",
+    "gunicorn",
+    "uvicorn",
+    "pydantic",
+    "pydantic-settings",
+    "python-dotenv",
+    # db
+    "asyncpg",
+    "redis",
+    "sqlalchemy",
+    "psycopg2-binary",
+    # security
+    "pyjwt",
+    # utils
+    "cryptography",
+    "email-validator",
+    "httpx",
+    "ujson",
+    "pytz",
+    "python-dateutil",
+    "pyyaml",
+]
+
+[tool.poetry]
+package-mode = false
+
+[tool.poetry.group.dev.dependencies]
+alembic = "*"
+pytest = "*"
+pytest-asyncio = "*"
+pytest-mock = "*"
+click = "*"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
