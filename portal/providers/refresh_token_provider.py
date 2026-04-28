@@ -11,7 +11,7 @@ from portal.exceptions.responses import RefreshTokenInvalidException
 from portal.libs.contexts.request_context import get_request_context, RequestContext
 from portal.libs.database import Session
 from portal.libs.logger import logger
-from portal.models import PortalRefreshToken, PortalAuthDevice
+from portal.models import AuthRefreshToken, AuthDevice
 from portal.schemas.base import RefreshTokenData
 
 
@@ -49,12 +49,12 @@ class RefreshTokenProvider:
         token_hash = self._hash_token(token=refresh_token)
         now = datetime.now(timezone.utc)
         expires_at = now + timedelta(days=self._ttl_days)
-        user_agent = self._req_ctx.user_agent or None
+        user_agent = self._req_ctx.headers.user_agent if self._req_ctx.headers else None
         ip = self._req_ctx.ip or self._req_ctx.client_ip or None
         try:
-            # Upsert PortalAuthDevice
+            # Upsert device info - if device_id already exists, update last seen; otherwise insert new
             await (
-                self._session.insert(PortalAuthDevice)
+                self._session.insert(AuthDevice)
                 .values(
                     id=device_id,
                     user_id=user_id,
@@ -62,7 +62,7 @@ class RefreshTokenProvider:
                     last_user_agent=user_agent
                 )
                 .on_conflict_do_update(
-                    constraint="pk_portal_auth_device",
+                    index_elements=["id"],
                     set_={
                         "last_seen_at": now,
                         "last_ip": ip,
@@ -82,7 +82,7 @@ class RefreshTokenProvider:
                 user_agent=user_agent,
             )
             await (
-                self._session.insert(PortalRefreshToken)
+                self._session.insert(AuthRefreshToken)
                 .values(rt_data.model_dump(exclude_none=True))
                 .execute()
             )
@@ -95,8 +95,8 @@ class RefreshTokenProvider:
         """Rotate refresh token; detect reuse and revoke family on reuse."""
         now = datetime.now(timezone.utc)
         token_hash = self._hash_token(token=refresh_token)
-        rt_data: RefreshTokenData = await self._session.select(PortalRefreshToken).where(
-            PortalRefreshToken.token_hash == token_hash
+        rt_data: RefreshTokenData = await self._session.select(AuthRefreshToken).where(
+            AuthRefreshToken.token_hash == token_hash
         ).fetchrow(as_model=RefreshTokenData)
         if not rt_data:
             raise RefreshTokenInvalidException()
@@ -110,7 +110,7 @@ class RefreshTokenProvider:
             raise RefreshTokenInvalidException("Refresh token reused.")
 
         try:
-            user_agent = self._req_ctx.user_agent or None
+            user_agent = self._req_ctx.headers.user_agent if self._req_ctx.headers else None
             # Create new token within same family
             new_refresh_token = self._generate_token()
             new_hash = self._hash_token(token=new_refresh_token)
@@ -132,17 +132,17 @@ class RefreshTokenProvider:
             # Update device last seen
             if rt_data.device_id:
                 await (
-                    self._session.update(PortalAuthDevice)
-                    .where(PortalAuthDevice.id == rt_data.device_id)
+                    self._session.update(AuthDevice)
+                    .where(AuthDevice.id == rt_data.device_id)
                     .values(last_seen_at=now, last_ip=self._req_ctx.ip or self._req_ctx.client_ip or None, last_user_agent=user_agent)
                     .execute()
                 )
-            await self._session.insert(PortalRefreshToken).values(new_rt_data.model_dump(exclude_none=True)).execute()
+            await self._session.insert(AuthRefreshToken).values(new_rt_data.model_dump(exclude_none=True)).execute()
 
             # mark old as replaced
             await (
-                self._session.update(PortalRefreshToken)
-                .where(PortalRefreshToken.id == rt_data.id)
+                self._session.update(AuthRefreshToken)
+                .where(AuthRefreshToken.id == rt_data.id)
                 .values(replaced_by_id=new_rt_data.id, last_used_at=now)
                 .execute()
             )
@@ -156,8 +156,8 @@ class RefreshTokenProvider:
         now = datetime.now(timezone.utc)
         try:
             await (
-                self._session.update(PortalRefreshToken)
-                .where(PortalRefreshToken.family_id == family_id)
+                self._session.update(AuthRefreshToken)
+                .where(AuthRefreshToken.family_id == family_id)
                 .values(revoked_at=now, revoked_reason=reason)
                 .execute()
             )
@@ -175,8 +175,8 @@ class RefreshTokenProvider:
         """
         token_hash = self._hash_token(token=token)
         rt_data: RefreshTokenData = await (
-            self._session.select(PortalRefreshToken)
-            .where(PortalRefreshToken.token_hash == token_hash)
+            self._session.select(AuthRefreshToken)
+            .where(AuthRefreshToken.token_hash == token_hash)
             .fetchrow(as_model=RefreshTokenData)
         )
         if not rt_data:
@@ -187,8 +187,8 @@ class RefreshTokenProvider:
         try:
             now = datetime.now(timezone.utc)
             await (
-                self._session.update(PortalRefreshToken)
-                .where(PortalRefreshToken.id == rt_data.id)
+                self._session.update(AuthRefreshToken)
+                .where(AuthRefreshToken.id == rt_data.id)
                 .values(revoked_at=now, revoked_reason="Logout")
                 .execute()
             )

@@ -56,7 +56,7 @@ class Configuration(BaseSettings):
         return (CustomSource(settings_cls),)
 
     # [App Base]
-    APP_NAME: str = "fastapi-template"
+    APP_NAME: str = "newlife-core-api"
     ENV: str = os.getenv(key="ENV", default="dev").lower()
     APP_VERSION: str = os.getenv(key="VERSION", default="v0.1.0")
     IS_PROD: bool = ENV == "prod"
@@ -64,10 +64,13 @@ class Configuration(BaseSettings):
     APP_FQDN: str = os.getenv(key="APP_FQDN", default="localhost")
     BASE_URL: str = f"https://{APP_FQDN}" if IS_PROD else f"http://{APP_FQDN}"
     ADMIN_PORTAL_URL: str = os.getenv(key="ADMIN_PORTAL_URL", default="http://localhost:5173")
+    DEFAULT_LOCALE: str = os.getenv(key="DEFAULT_LOCALE", default="en")
 
     # [FastAPI]
     HOST: str = os.getenv(key="HOST", default="127.0.0.1")
     PORT: int = os.getenv(key="PORT", default=8000)
+    DOCS_BASIC_AUTH_USERNAME: str = os.getenv(key="DOCS_BASIC_AUTH_USERNAME", default="developer")
+    DOCS_BASIC_AUTH_PASSWORD: str = os.getenv(key="DOCS_BASIC_AUTH_PASSWORD", default="developer")
 
     # [CORS]
     CORS_ALLOWED_ORIGINS: list[str] = os.getenv(key="CORS_ALLOWED_ORIGINS", default="*").split()
@@ -104,6 +107,12 @@ class Configuration(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = int(os.getenv(key="REFRESH_TOKEN_EXPIRE_DAYS", default="7"))
     REFRESH_TOKEN_HASH_SALT: str = os.getenv(key="REFRESH_TOKEN_HASH_SALT", default="")
     REFRESH_TOKEN_HASH_PEPPER: str = os.getenv(key="REFRESH_TOKEN_HASH_PEPPER", default="")
+
+    # [Microsoft Entra ID — Admin Portal SPA token exchange]
+    AZURE_TENANT_ID: Optional[str] = os.getenv(key="AZURE_TENANT_ID", default=None)
+    AZURE_APP_CLIENT_ID: Optional[str] = os.getenv(key="AZURE_APP_CLIENT_ID", default=None)
+    AZURE_APP_CLIENT_SECRET: Optional[str] = os.getenv(key="AZURE_APP_CLIENT_SECRET", default=None)
+    AZURE_ALLOWED_ISSUERS: Optional[str] = os.getenv(key="AZURE_ALLOWED_ISSUERS", default=None)
 
     # [Token Blacklist]
     TOKEN_BLACKLIST_REDIS_DB: int = int(os.getenv(key="TOKEN_BLACKLIST_REDIS_DB", default="1"))

@@ -188,9 +188,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
             is_superuser=user.is_superuser,
             is_admin=user.is_admin,
             last_login_at=user.last_login_at,
-            display_name=user.display_name,
+            first_name=user.first_name,
+            last_name=user.last_name,
             gender=user.gender,
-            is_ministry=user.is_ministry,
             login_admin=True,
             token=token,
             token_payload=payload.model_dump(),
@@ -233,9 +233,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
             is_superuser=user.is_superuser,
             is_admin=user.is_admin,
             last_login_at=user.last_login_at,
-            display_name=user.display_name,
+            first_name=user.first_name,
+            last_name=user.last_name,
             gender=user.gender,
-            is_ministry=user.is_ministry,
             login_admin=False,
             token=token,
             token_payload=payload.model_dump(),
@@ -269,6 +269,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
             return
 
         permission_codes = auth_config.permission_codes
+        if not permission_codes:
+            permission_codes = []
 
         if auth_config.require_all:
             # Require all permissions

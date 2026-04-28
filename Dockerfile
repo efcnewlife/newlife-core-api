@@ -1,4 +1,4 @@
-FROM python:3.13-alpine
+FROM python:3.14-alpine
 # .build-deps build-base libffi-dev git rust cargo openssl-dev
 RUN apk add --update --no-cache --virtual .build-deps build-base libffi-dev
 

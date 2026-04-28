@@ -9,8 +9,9 @@ from redis.asyncio import Redis
 from portal.config import settings
 from portal.exceptions.responses import UnauthorizedException
 from portal.libs.consts.cache_keys import CacheKeys
-from portal.libs.contexts.user_context import get_user_context
+from portal.libs.contexts.user_context import UserContext, get_user_context
 from portal.libs.database import RedisPool
+from portal.handlers import AdminPermissionHandler
 
 
 class PermissionChecker:
@@ -27,7 +28,9 @@ class PermissionChecker:
         :param user_id: User ID, if None, get from context
         :return: True if user has permission
         """
-        user_context = get_user_context()
+        user_context: Optional[UserContext] = get_user_context()
+        if not user_context:
+            raise UnauthorizedException(detail="Unauthorized")
 
         # Superuser has all permissions
         if user_context.is_superuser:
@@ -42,7 +45,7 @@ class PermissionChecker:
 
         # Check permission cache (using hash field)
         # Redis cache is the single source of truth for permissions
-        key = CacheKeys("perm").add_attribute(str(user_id)).build()
+        key = AdminPermissionHandler.permission_key(user_id)
         has_permission = await self._redis.hexists(key, permission_code)
 
         return has_permission
@@ -79,6 +82,8 @@ class PermissionChecker:
         :return: List of permission codes
         """
         user_context = get_user_context()
+        if not user_context:
+            raise UnauthorizedException(detail="Unauthorized")
 
         if user_id is None:
             user_id = user_context.user_id
@@ -88,7 +93,7 @@ class PermissionChecker:
 
         # Get permissions from cache (hash keys)
         # Redis cache is the single source of truth for permissions
-        key = CacheKeys("perm").add_attribute(str(user_id)).build()
+        key = AdminPermissionHandler.permission_key(user_id)
         permission_codes = await self._redis.hkeys(key)
         return [code.decode() if isinstance(code, bytes) else code for code in permission_codes]
 

@@ -4,15 +4,22 @@ Enums for the application - Template: Core enums only
 from enum import Enum, IntEnum
 
 
+class APIScope(Enum):
+    """API scopes"""
+    ADMIN = "admin"
+    API = "api"
+    PUBLIC = "public"
+
+
 class AccessTokenAudType(Enum):
     """Access token audience type"""
     ADMIN = "admin"
-    APP = "app"
+    USER = "user"
 
 
-class AuthProvider(Enum):
-    """Third-party authentication provider - extend with providers as needed"""
-    pass
+class ThirdPartyProvider(str, Enum):
+    """Third-party OAuth / OIDC provider keys (auth.auth_third_party_provider.name)."""
+    MICROSOFT = "microsoft"
 
 
 class Gender(IntEnum):
@@ -20,7 +27,6 @@ class Gender(IntEnum):
     UNKNOWN = 0
     MALE = 1
     FEMALE = 2
-    OTHER = 3
 
 
 class ResourceType(IntEnum):

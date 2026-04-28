@@ -1,7 +1,8 @@
 ### Custom
 .vscode
 .cursor
-
+.tmp
+docs
 
 ### Python template
 # Byte-compiled / optimized / DLL files

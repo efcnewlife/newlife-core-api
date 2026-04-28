@@ -21,15 +21,16 @@ class UserContext(BaseModel):
     is_superuser: bool = False
     is_admin: bool = False
     last_login_at: Optional[datetime] = None
-    display_name: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    preferred_name: Optional[str] = None
     gender: Optional[Gender] = None
-    is_ministry: bool = False
+    preferred_language: Optional[str] = None
     login_admin: bool = False
+    username: Optional[str] = None
     # token
     token: Optional[str] = None
     token_payload: Optional[dict] = None
-    # other
-    username: Optional[str] = None
 
 
 user_context_var: ContextVar[UserContext] = ContextVar("UserContext")

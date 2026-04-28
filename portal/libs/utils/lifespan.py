@@ -20,7 +20,6 @@ async def lifespan(app: FastAPI):
     :param app:
     """
     logger.info("Starting lifespan")
-
     # Register event handlers (optional - add Container.register_event_handlers in your project)
     if hasattr(app, "container"):
         try:

@@ -16,6 +16,14 @@ class CacheExpiry:
 
 
 class CacheKeys:
+    """
+    Cache keys builder
+    Usage:
+    example:
+    1. CacheKeys("user").add_attribute("id").add_attribute("email").build() -> user:id:email
+    2. CacheKeys("user").add_attribute("id", ":").add_attribute("email").build() -> user:id:email
+    3. CacheKeys("user").add_attribute("id").add_attribute("email", ":").build() -> user:id:email
+    """
 
     def __init__(self, resource: str):
         self._app_name = settings.APP_NAME
@@ -27,6 +35,8 @@ class CacheKeys:
         Build cache key (no trailing separator).
         :return:
         """
+        if not self.attributes:
+            return f"{self._app_name}:{self.resource}"
         parts = "".join(self.attributes).rstrip(":")
         return f"{self._app_name}:{self.resource}:{parts}" if parts else f"{self._app_name}:{self.resource}"
 

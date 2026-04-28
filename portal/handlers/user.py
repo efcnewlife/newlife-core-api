@@ -4,12 +4,13 @@ Minimal UserHandler for auth - get_user_detail_by_id only
 from typing import Optional
 from uuid import UUID
 
+import sqlalchemy as sa
 from redis.asyncio import Redis
 
 from portal.config import settings
 from portal.libs.contexts.user_context import UserContext, get_user_context
 from portal.libs.database import Session, RedisPool
-from portal.models import PortalUser, PortalUserProfile
+from portal.models import AuthUser, AuthUserProfile
 from portal.schemas.user import SUserDetail
 
 
@@ -27,23 +28,30 @@ class UserHandler:
         :param user_id:
         :return:
         """
+        display_name_expr = sa.func.trim(
+            sa.func.concat(
+                sa.func.coalesce(AuthUserProfile.first_name, ""),
+                " ",
+                sa.func.coalesce(AuthUserProfile.last_name, ""),
+            )
+        ).label("display_name")
         user: SUserDetail = await (
             self._session.select(
-                PortalUser.id,
-                PortalUser.phone_number,
-                PortalUser.email,
-                PortalUser.verified,
-                PortalUser.is_active,
-                PortalUser.is_superuser,
-                PortalUser.is_admin,
-                PortalUser.last_login_at,
-                PortalUserProfile.display_name,
-                PortalUserProfile.gender,
-                PortalUserProfile.is_ministry,
+                AuthUser.id,
+                AuthUser.phone_number,
+                AuthUser.email,
+                AuthUser.verified,
+                AuthUser.is_active,
+                AuthUser.is_superuser,
+                AuthUser.is_admin,
+                AuthUser.last_login_at,
+                AuthUserProfile.first_name,
+                AuthUserProfile.last_name,
+                AuthUserProfile.gender,
             )
-            .join(PortalUserProfile, PortalUser.id == PortalUserProfile.user_id)
-            .where(PortalUser.id == user_id)
-            .where(PortalUser.is_deleted == False)
+            .join(AuthUserProfile, AuthUser.id == AuthUserProfile.user_id)
+            .where(AuthUser.id == user_id)
+            .where(AuthUser.is_deleted == False)
             .fetchrow(as_model=SUserDetail)
         )
         if not user:

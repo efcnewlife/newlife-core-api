@@ -15,5 +15,4 @@ __all__ = [
     "AuditUpdatedAtMixin",
     "AuditUpdatedByMixin",
     "AuditUpdatedMixin",
-    "BaseMixin"
 ]

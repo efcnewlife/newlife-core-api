@@ -5,9 +5,21 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_serializer
+from pydantic import BaseModel, Field
+from pydantic import field_serializer
 
 from .mixins import UUIDBaseModel
+
+
+class HeaderInfo(BaseModel):
+    """
+    Header information
+    """
+    user_agent: Optional[str] = Field(None, description="User-Agent")
+    accept_language: Optional[str] = Field(None, description="Accept-Language")
+    host: Optional[str] = Field(None, description="Host")
+    referer: Optional[str] = Field(None, description="Referer")
+    origin: Optional[str] = Field(None, description="Origin")
 
 
 class TokenPayload(BaseModel):
@@ -33,7 +45,9 @@ class TokenPayload(BaseModel):
 class AccessTokenPayload(TokenPayload):
     """Access Token Payload"""
     email: str = Field(..., description="Email")
-    display_name: str = Field(..., description="Display name")
+    first_name: str = Field(None, description="User's first name")
+    last_name: str = Field(None, description="User's last name")
+    preferred_name: Optional[str] = Field(None, description="User's preferred name")
     roles: Optional[list] = Field(None, description="Roles")
     scope: str = Field(None, description="scope(permissions)")
     family_id: UUID = Field(..., description="Refresh token family id")

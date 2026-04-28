@@ -173,11 +173,3 @@ class RemarkMixin(object):
         :return:
         """
         return Column(String(256), comment="Remark")
-
-
-class BaseMixin(AuditMixin, DeletedMixin, DescriptionMixin, RemarkMixin):
-    """
-    BaseMixin
-    Contains audit information, logical deletion, description, and remark
-    """
-    pass

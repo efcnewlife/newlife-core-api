@@ -9,9 +9,10 @@ from portal.config import settings
 from portal.libs.authorization.permission_checker import PermissionChecker
 from portal.libs.database import RedisPool, PostgresConnection, Session
 from portal.libs.database.session_proxy import SessionProxy
-from portal.libs.events.bus import EventBus
+from portal.events.bus import EventBus
 from portal.libs.logger import logger
 from portal.providers.jwt_provider import JWTProvider
+from portal.providers.microsoft_oidc_provider import MicrosoftOidcProvider
 from portal.providers.password_provider import PasswordProvider
 from portal.providers.refresh_token_provider import RefreshTokenProvider
 from portal.providers.token_blacklist_provider import TokenBlacklistProvider
@@ -23,9 +24,9 @@ class Container(containers.DeclarativeContainer):
     wiring_config = containers.WiringConfiguration(
         modules=[],
         packages=[
-            "portal.authorization",
             "portal.handlers",
             "portal.routers",
+            "portal.routers.admin",
             "portal.middlewares",
         ],
     )
@@ -54,16 +55,62 @@ class Container(containers.DeclarativeContainer):
         RefreshTokenProvider,
         session=request_session,
     )
+    microsoft_oidc_provider = providers.Singleton(MicrosoftOidcProvider)
 
-    # [Handlers - minimal for auth]
+    # Log handlers
+    admin_log_handler = providers.Factory(handlers.AdminLogHandler)
+
+
+    # [General Handlers]
     user_handler = providers.Factory(
-        handlers.UserHandler, session=request_session, redis_client=redis_client
+        handlers.UserHandler,
+        session=request_session,
+        redis_client=redis_client
     )
+    # [Admin Handlers]
     admin_user_handler = providers.Factory(
         handlers.AdminUserHandler,
         session=request_session,
         redis_client=redis_client,
         password_provider=password_provider,
+    )
+    admin_locale_handler = providers.Factory(
+        handlers.AdminLocaleHandler,
+        session=request_session,
+        redis_client=redis_client,
+    )
+    admin_permission_handler = providers.Factory(
+        handlers.AdminPermissionHandler,
+        session=request_session,
+        redis_client=redis_client,
+        log_handler=admin_log_handler,
+    )
+    admin_resource_handler = providers.Factory(
+        handlers.AdminResourceHandler,
+        session=request_session,
+        redis_client=redis_client,
+        log_handler=admin_log_handler,
+    )
+    admin_role_handler = providers.Factory(
+        handlers.AdminRoleHandler,
+        session=request_session,
+        redis_client=redis_client,
+        log_handler=admin_log_handler,
+    )
+    admin_auth_handler = providers.Factory(
+        handlers.AdminAuthHandler,
+        session=request_session,
+        jwt_provider=jwt_provider,
+        refresh_token_provider=refresh_token_provider,
+        token_blacklist_provider=token_blacklist_provider,
+        admin_user_handler=admin_user_handler,
+        password_provider=password_provider,
+        microsoft_oidc_provider=microsoft_oidc_provider,
+    )
+    admin_verb_handler = providers.Factory(
+        handlers.AdminVerbHandler,
+        session=request_session,
+        redis_client=redis_client,
     )
 
     # [Authorization]
@@ -84,3 +131,6 @@ class Container(containers.DeclarativeContainer):
         :return:
         """
         logger.debug("No event handlers registered")
+
+
+container = Container()

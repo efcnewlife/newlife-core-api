@@ -15,12 +15,12 @@ class SUserBase(UUIDBaseModel, BaseMixinModel):
     """
     Base schema for User model, containing common fields.
     """
-    phone_number: Optional[str] = Field(None, description="User's phone number")
-    email: Optional[str] = Field(None, description="User's email address")
+    email: str = Field(None, description="User's email address")
     verified: bool = Field(False, description="Is the user verified")
     is_active: bool = Field(description="Is the user active")
     is_superuser: bool = Field(False, description="Is the user a superuser")
     is_admin: bool = Field(False, description="Can the user access the admin panel")
+    phone_number: Optional[str] = Field(None, description="User's phone number")
     last_login_at: Optional[datetime] = Field(None, description="Timestamp of the user's last login")
 
 
@@ -28,9 +28,10 @@ class SUserDetail(SUserBase):
     """
     Detailed schema for User model, extending UserBase with additional fields.
     """
-    display_name: Optional[str] = Field(None, description="User's display name")
+    first_name: str = Field(None, description="User's first name")
+    last_name: str = Field(None, description="User's last name")
+    preferred_name: Optional[str] = Field(None, description="User's preferred name")
     gender: Optional[Gender] = Field(None, description="User's gender")
-    is_ministry: bool = Field(False, description="Is the user a ministry")
 
 
 class SUserSensitive(SUserDetail):

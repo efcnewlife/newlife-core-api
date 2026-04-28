@@ -14,6 +14,7 @@ from portal.libs.consts.permission import Verb
 from portal.libs.logger import logger
 from portal.providers.token_blacklist_provider import TokenBlacklistProvider
 from portal.schemas.base import AccessTokenPayload
+from portal.schemas.user import SUserSensitive
 
 VERB_SET = {Verb.READ.value, Verb.CREATE.value, Verb.MODIFY.value, Verb.DELETE.value}
 
@@ -59,24 +60,20 @@ class JWTProvider:
 
     def create_access_token(
         self,
-        user_id: UUID,
-        email: str,
-        display_name: str,
+        user: SUserSensitive,
         family_id: UUID,
         roles: list = None,
         permissions: list = None,
-        aud_type: AccessTokenAudType = AccessTokenAudType.APP,
+        aud_type: AccessTokenAudType = AccessTokenAudType.USER,
         expires_delta: Optional[timedelta] = None
     ) -> str:
         """
 
-        :param aud_type:
-        :param user_id:
-        :param email:
-        :param display_name:
+        :param user:
         :param family_id:
         :param roles:
         :param permissions:
+        :param aud_type:
         :param expires_delta:
         :return:
         """
@@ -92,26 +89,30 @@ class JWTProvider:
                 access_token_payload = AccessTokenPayload(
                     iss=self._issuer,
                     exp=int(expire.timestamp()),
-                    sub=user_id,
+                    sub=user.id,
                     aud=self._audience + "-admin",
                     iat=int(now.timestamp()),
-                    user_id=user_id,
-                    email=email,
-                    display_name=display_name,
+                    user_id=user.id,
+                    email=user.email,
+                    first_name=user.first_name,
+                    last_name=user.last_name,
+                    preferred_name=user.preferred_name,
                     roles=roles,
                     scope=self._generate_scope(permissions=permissions),
                     family_id=family_id
                 )
-            case AccessTokenAudType.APP:
+            case AccessTokenAudType.USER:
                 access_token_payload = AccessTokenPayload(
                     iss=self._issuer,
                     exp=int(expire.timestamp()),
-                    sub=user_id,
-                    aud=self._audience + "-app",
+                    sub=user.id,
+                    aud=self._audience,
                     iat=int(now.timestamp()),
-                    user_id=user_id,
-                    email=email,
-                    display_name=display_name,
+                    user_id=user.id,
+                    email=user.email,
+                    first_name=user.first_name,
+                    last_name=user.last_name,
+                    preferred_name=user.preferred_name,
                     family_id=family_id
                 )
             case _:
