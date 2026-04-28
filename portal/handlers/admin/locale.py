@@ -10,6 +10,7 @@ from portal.libs.consts.cache_keys import CacheExpiry, CacheKeys
 from portal.libs.database import Session, RedisPool
 from portal.models import SystemLocale
 from portal.schemas.locale import SLocale
+from portal.serializers.admin.v1.locale import AdminLocaleList
 
 
 class AdminLocaleHandler:
@@ -23,7 +24,7 @@ class AdminLocaleHandler:
         self._session = session
         self._redis_client: Redis = redis_client.create(db=0)
 
-    async def get_locales(self):
+    async def get_locales(self) -> list[SLocale]:
         """
 
         :return:
@@ -44,6 +45,14 @@ class AdminLocaleHandler:
             .fetch(as_model=SLocale)
         )
         return local_list
+
+    async def get_locale_list(self) -> AdminLocaleList:
+        """
+
+        :return:
+        """
+        locales = await self.get_locales()
+        return AdminLocaleList(items=locales)
 
     @classmethod
     def _decode_redis_value(cls, value: Any) -> str:

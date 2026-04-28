@@ -146,7 +146,7 @@ def get_admin_application(container: Container) -> FastAPI:
         version=settings.APP_VERSION,
     )
     application.container = container
-    application.include_router(admin_api_router)
+    application.include_router(admin_api_router, prefix="/api")
     _register_admin_stack(application)
     _setup_exception_handlers(application)
     custom_openapi(scope=APIScope.ADMIN, application=application)

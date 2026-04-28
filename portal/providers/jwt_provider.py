@@ -16,7 +16,7 @@ from portal.providers.token_blacklist_provider import TokenBlacklistProvider
 from portal.schemas.base import AccessTokenPayload
 from portal.schemas.user import SUserSensitive
 
-VERB_SET = {Verb.READ.value, Verb.CREATE.value, Verb.MODIFY.value, Verb.DELETE.value}
+VERB_SET = {Verb.READ.value, Verb.CREATE.value, Verb.UPDATE.value, Verb.DELETE.value}
 
 
 class JWTProvider:

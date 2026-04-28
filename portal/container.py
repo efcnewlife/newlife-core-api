@@ -104,6 +104,8 @@ class Container(containers.DeclarativeContainer):
         refresh_token_provider=refresh_token_provider,
         token_blacklist_provider=token_blacklist_provider,
         admin_user_handler=admin_user_handler,
+        admin_permission_handler=admin_permission_handler,
+        admin_role_handler=admin_role_handler,
         password_provider=password_provider,
         microsoft_oidc_provider=microsoft_oidc_provider,
     )

@@ -8,7 +8,7 @@ class Verb(Enum):
     """Verb enum"""
     READ = "read"
     CREATE = "create"
-    MODIFY = "modify"
+    UPDATE = "update"
     DELETE = "delete"
 
 
@@ -45,7 +45,7 @@ class Permission:
 
         @property
         def modify(self):
-            return f"{self._resource_value}:{Verb.MODIFY.value}"
+            return f"{self._resource_value}:{Verb.UPDATE.value}"
 
         @property
         def delete(self):

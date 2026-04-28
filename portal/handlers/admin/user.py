@@ -101,30 +101,3 @@ class AdminUserHandler:
         if not user:
             return None
         return user
-
-    async def list_role_codes_and_permission_codes(self, user_id: UUID) -> Tuple[list[str], list[str]]:
-        """
-        Return distinct role codes and permission codes for RBAC-backed JWT scope.
-        """
-        role_raw = await (
-            self._session.select(AuthRole.code)
-            .join(AuthUserRole, AuthUserRole.role_id == AuthRole.id)
-            .where(AuthUserRole.user_id == user_id)
-            .where(AuthRole.is_active == True)
-            .fetchvals()
-        )
-        role_codes = list(dict.fromkeys(c for c in (role_raw or []) if c))
-
-        perm_raw = await (
-            self._session.select(AuthPermission.code)
-            .join(AuthRolePermission, AuthRolePermission.permission_id == AuthPermission.id)
-            .join(AuthUserRole, AuthUserRole.role_id == AuthRolePermission.role_id)
-            .where(AuthUserRole.user_id == user_id)
-            .where(AuthPermission.is_active == True)
-            .fetchvals()
-        )
-        permission_codes = sorted(
-            {c for c in (perm_raw or []) if c and ":" in str(c)}
-        )
-
-        return role_codes, permission_codes

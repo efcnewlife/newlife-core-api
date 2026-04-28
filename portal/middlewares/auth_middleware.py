@@ -94,7 +94,14 @@ class AuthMiddleware(BaseHTTPMiddleware):
         # Match route by path and method from app routes
         # This is necessary because routes are matched after middleware in FastAPI
         app = request.app
-        path = request.url.path
+        # Get the path relative to the app (remove mount prefix if mounted)
+        root_path = request.scope.get("root_path", "")
+        full_path = request.url.path
+        # Remove root_path prefix to get the path relative to the current app
+        if root_path and full_path.startswith(root_path):
+            path = full_path[len(root_path):]
+        else:
+            path = full_path
         method = request.method
 
         # Search through all routes to find matching route

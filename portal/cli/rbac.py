@@ -2,6 +2,7 @@
 RBAC initialization CLI commands.
 """
 import asyncio
+import time
 from typing import Any, Optional
 
 import click
@@ -70,6 +71,18 @@ async def init_rbac():
         fallback_value = entry.get(fallback_field) or ""
         return translations.get(locale_code) or translations.get("en") or fallback_value
 
+    sequence_base = time.time()
+    sequence_counter = 0
+
+    def _build_resource_sequence(raw_sequence: Any) -> float:
+        nonlocal sequence_counter
+        sequence_counter += 1
+        if isinstance(raw_sequence, int):
+            return sequence_base + (raw_sequence / 1000) + (sequence_counter / 1_000_000)
+        if isinstance(raw_sequence, float):
+            return raw_sequence
+        return sequence_base + (sequence_counter / 1_000_000)
+
     try:
         # Load seed data from portal.cli.datas.rbac_seed_data
 
@@ -90,6 +103,7 @@ async def init_rbac():
         # 2) Seed parent resources for grouping
         # parent_resources imported
         for pr in parent_resources:
+            parent_sequence = _build_resource_sequence(pr.get("sequence"))
             await (
                 session
                 .insert(AuthResource)
@@ -99,6 +113,7 @@ async def init_rbac():
                     key=pr.get("key", pr["code"]).upper(),
                     icon=pr.get("icon"),
                     path=pr.get("path"),
+                    sequence=parent_sequence,
                     type=pr.get("type", ResourceType.GENERAL.value),
                     is_visible=True,
                 )
@@ -109,6 +124,7 @@ async def init_rbac():
                         icon=pr.get("icon"),
                         path=pr.get("path"),
                         pid=pr.get("pid"),
+                        sequence=parent_sequence,
                         type=pr.get("type", ResourceType.GENERAL.value),
                         is_visible=True,
                     )
@@ -118,8 +134,8 @@ async def init_rbac():
 
         # resources imported
         for r in resources:
-            parent_prefix = r["code"].split(":", 1)[0]
-            resource_type_value = ResourceType.SYSTEM.value if parent_prefix in ("system", "comms") else ResourceType.GENERAL.value
+            resource_type_value = r.get("type", ResourceType.GENERAL.value)
+            resource_sequence = _build_resource_sequence(r.get("sequence"))
             await (
                 session
                 .insert(AuthResource)
@@ -129,6 +145,7 @@ async def init_rbac():
                     icon=r.get("icon"),
                     path=r.get("path"),
                     pid=r.get("pid"),
+                    sequence=resource_sequence,
                     type=resource_type_value,
                     is_visible=True,
                 )
@@ -139,6 +156,7 @@ async def init_rbac():
                         icon=r.get("icon"),
                         path=r.get("path"),
                         pid=r.get("pid"),
+                        sequence=resource_sequence,
                         type=resource_type_value,
                         is_visible=True,
                     )

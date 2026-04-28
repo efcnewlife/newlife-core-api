@@ -1,6 +1,7 @@
 """
 Admin authentication: password login, Microsoft Entra ID exchange, refresh, logout.
 """
+import json
 from datetime import datetime, timezone
 from typing import Any, Optional
 from uuid import UUID, uuid4
@@ -23,11 +24,13 @@ from portal.providers.refresh_token_provider import RefreshTokenProvider
 from portal.providers.token_blacklist_provider import TokenBlacklistProvider
 from portal.schemas.base import AccessTokenPayload
 from portal.schemas.user import SUserSensitive
-from portal.serializers.mixins.auth import (
-    AdminLoginSuccessResponse,
-    AdminPrincipalResponse,
-    TokenResponse,
+from portal.serializers.admin.v1.auth import (
+    AdminLoginResponse,
+    AdminInfo,
 )
+from portal.serializers.mixins import TokenResponse
+from .permission import AdminPermissionHandler
+from .role import AdminRoleHandler
 
 
 class AdminAuthHandler:
@@ -40,14 +43,19 @@ class AdminAuthHandler:
         refresh_token_provider: RefreshTokenProvider,
         token_blacklist_provider: TokenBlacklistProvider,
         admin_user_handler: AdminUserHandler,
+        admin_permission_handler: AdminPermissionHandler,
+        admin_role_handler: AdminRoleHandler,
         password_provider: PasswordProvider,
         microsoft_oidc_provider: MicrosoftOidcProvider,
     ):
+        self._expires_in = 60 * 60 * 24  # 24 hours
         self._session = session
         self._jwt_provider = jwt_provider
         self._refresh_token_provider = refresh_token_provider
         self._token_blacklist_provider = token_blacklist_provider
         self._admin_user_handler = admin_user_handler
+        self._admin_permission_handler = admin_permission_handler
+        self._admin_role_handler = admin_role_handler
         self._password_provider = password_provider
         self._microsoft_oidc_provider = microsoft_oidc_provider
 
@@ -70,6 +78,7 @@ class AdminAuthHandler:
     ) -> None:
         now = datetime.now(timezone.utc)
         row_id = uuid4()
+        serialized_additional_data = json.dumps(additional_data)
         await (
             self._session.insert(AuthUserThirdParty)
             .values(
@@ -81,17 +90,17 @@ class AdminAuthHandler:
                 access_token=access_token,
                 refresh_token=refresh_token,
                 token_expires_at=token_expires_at,
-                additional_data=additional_data,
+                additional_data=serialized_additional_data,
                 is_deleted=False,
                 created_by="oauth",
                 updated_by="oauth",
             )
             .on_conflict_do_update(
-                index_elements=["user_id", "provider_id", "provider_uid"],
+                index_elements=["user_id", "provider", "provider_uid"],
                 set_={
                     "provider_tenant_id": provider_tenant_id,
                     "token_expires_at": token_expires_at,
-                    "additional_data": additional_data,
+                    "additional_data": serialized_additional_data,
                     "updated_at": now,
                     "updated_by": "oauth",
                     "is_deleted": False,
@@ -123,6 +132,7 @@ class AdminAuthHandler:
         additional_data: dict[str, Any] = {
             "email": claims.get("email") or claims.get("preferred_username"),
             "name": claims.get("name"),
+            "auth_time": claims.get("auth_time"),
         }
         try:
             await self._upsert_auth_user_third_party(
@@ -136,13 +146,12 @@ class AdminAuthHandler:
         except Exception:
             logger.exception("Failed to upsert AuthUserThirdParty for Microsoft login")
 
-    async def _complete_admin_login(self, user: SUserSensitive) -> AdminLoginSuccessResponse:
+    async def _complete_admin_login(self, user: SUserSensitive) -> AdminLoginResponse:
         if not user.is_admin or not user.verified or not user.is_active:
             raise UnauthorizedException(detail="User is not allowed to access the admin portal")
 
-        role_codes, permission_codes = await self._admin_user_handler.list_role_codes_and_permission_codes(user.id)
-        roles = self._roles_for_jwt(user, role_codes)
-        permissions = [] if user.is_superuser else permission_codes
+        roles = await self._admin_role_handler.init_user_roles_cache(user, self._expires_in)
+        permissions = await self._admin_permission_handler.init_user_permissions_cache(user, self._expires_in)
 
         family_id = uuid4()
         device_id = uuid4()
@@ -174,17 +183,17 @@ class AdminAuthHandler:
             token_type="bearer",
             expires_in=expires_in,
         )
-        admin = AdminPrincipalResponse(
-            id=str(user.id),
+        admin = AdminInfo(
+            id=user.id,
             email=user.email or "",
             first_name=user.first_name or "",
             last_name=user.last_name or "",
             roles=roles,
             last_login_at=user.last_login_at,
         )
-        return AdminLoginSuccessResponse(admin=admin, token=token)
+        return AdminLoginResponse(admin=admin, token=token)
 
-    async def login_with_password(self, email: str, password: str) -> AdminLoginSuccessResponse:
+    async def login_with_password(self, email: str, password: str) -> AdminLoginResponse:
         """
         Login with email and password. (Local only)
         :param email:
@@ -198,7 +207,7 @@ class AdminAuthHandler:
             raise UnauthorizedException(detail="Invalid email or password")
         return await self._complete_admin_login(user)
 
-    async def microsoft_login(self, id_token: str) -> AdminLoginSuccessResponse:
+    async def microsoft_login(self, id_token: str) -> AdminLoginResponse:
         """
         Microsoft Entra ID login.
         :param id_token:
@@ -224,7 +233,7 @@ class AdminAuthHandler:
         await self._record_microsoft_third_party_login(user.id, claims)
         return await self._complete_admin_login(user)
 
-    async def refresh_session(self, refresh_token: str) -> TokenResponse:
+    async def refresh_token(self, refresh_token: str) -> TokenResponse:
         """
         Refresh access token using refresh token.
         :param refresh_token:
@@ -241,9 +250,8 @@ class AdminAuthHandler:
         if not user.is_admin or not user.verified or not user.is_active:
             raise UnauthorizedException(detail="User is not allowed to access the admin portal")
 
-        role_codes, permission_codes = await self._admin_user_handler.list_role_codes_and_permission_codes(user.id)
-        roles = self._roles_for_jwt(user, role_codes)
-        permissions = [] if user.is_superuser else permission_codes
+        roles = await self._admin_role_handler.init_user_roles_cache(user, self._expires_in)
+        permissions = await self._admin_permission_handler.init_user_permissions_cache(user, self._expires_in)
 
         access_token = self._jwt_provider.create_access_token(
             user=user,
@@ -277,24 +285,19 @@ class AdminAuthHandler:
         if refresh_token:
             await self._refresh_token_provider.revoke_by_token(refresh_token, revoke_family=True)
 
-    async def admin_profile(self) -> AdminPrincipalResponse:
+    async def admin_profile(self) -> AdminInfo:
         ctx: Optional[UserContext] = get_user_context()
         if not ctx or not ctx.user_id:
             raise UnauthorizedException(detail="Unauthorized")
         user = await self._admin_user_handler.get_user_detail_by_id(ctx.user_id)
         if not user:
             raise UnauthorizedException(detail="User not found")
-        roles = []
-        if ctx.token_payload and isinstance(ctx.token_payload, dict):
-            roles = list(ctx.token_payload.get("roles") or [])
-        if not roles:
-            role_codes, _ = await self._admin_user_handler.list_role_codes_and_permission_codes(user.id)
-            roles = self._roles_for_jwt(user, role_codes)
-        return AdminPrincipalResponse(
-            id=str(user.id),
-            email=user.email or "",
-            first_name=user.first_name or "",
-            last_name=user.last_name or "",
-            roles=roles,
+        roles = await self._admin_role_handler.init_user_roles_cache(user, self._expires_in)
+        return AdminInfo(
+            id=user.id,
+            email=user.email,
+            first_name=user.first_name,
+            last_name=user.last_name,
+            roles=roles or [],
             last_login_at=user.last_login_at,
         )

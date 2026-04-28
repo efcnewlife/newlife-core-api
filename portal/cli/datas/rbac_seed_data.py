@@ -58,6 +58,7 @@ parent_resources = [
         "key": "SYSTEM",
         "icon": "settings",
         "path": "/system",
+        "sequence": 1,
         "translations": _with_locale_values(
             {"zh-TW": "系統管理", "zh-CN": "系统管理", "en": "System Management"}
         ),
@@ -69,7 +70,7 @@ parent_resources = [
                 "en": "System related management",
             }
         ),
-        "type": ResourceType.SYSTEM.value
+        "type": ResourceType.SYSTEM.value,
     },
     {
         "id": CONTENT_PARENT_ID,
@@ -78,6 +79,7 @@ parent_resources = [
         "key": "CONTENT",
         "icon": "folder",
         "path": "/content",
+        "sequence": 2,
         "translations": _with_locale_values(
             {"zh-TW": "內容管理", "zh-CN": "内容管理", "en": "Content Management"}
         ),
@@ -89,15 +91,16 @@ parent_resources = [
                 "en": "Content related management",
             }
         ),
-        "type": ResourceType.GENERAL.value
+        "type": ResourceType.GENERAL.value,
     },
     {
         "id": SUPPORT_PARENT_ID,
         "code": "support",
         "name": "Support Management",
         "key": "SUPPORT",
-        "icon": "life-buoy",
+        "icon": "MdSupportAgent",
         "path": "/support",
+        "sequence": 3,
         "translations": _with_locale_values(
             {"zh-TW": "支援管理", "zh-CN": "支持管理", "en": "Support Management"}
         ),
@@ -109,7 +112,7 @@ parent_resources = [
                 "en": "Support and feedback",
             }
         ),
-        "type": ResourceType.GENERAL.value
+        "type": ResourceType.GENERAL.value,
     },
 ]
 
@@ -119,8 +122,10 @@ resources = [
         "code": "system:user",
         "name": "User Management",
         "key": "SYSTEM_USER",
-        "icon": "users",
+        "icon": "MdPerson",
         "path": "/system/users",
+        "type": ResourceType.SYSTEM.value,
+        "sequence": 4,
         "translations": _with_locale_values(
             {"zh-TW": "使用者管理", "zh-CN": "用户管理", "en": "User Management"}
         ),
@@ -132,52 +137,16 @@ resources = [
                 "en": "Manage system users",
             }
         ),
-        "pid": SYSTEM_PARENT_ID
-    },
-    {
-        "code": "system:role",
-        "name": "Role Management",
-        "key": "SYSTEM_ROLE",
-        "icon": "shield",
-        "path": "/system/roles",
-        "translations": _with_locale_values(
-            {"zh-TW": "角色管理", "zh-CN": "角色管理", "en": "Role Management"}
-        ),
-        "description": "Manage system roles",
-        "description_translations": _with_locale_descriptions(
-            {
-                "zh-TW": "管理系統角色",
-                "zh-CN": "管理系统角色",
-                "en": "Manage system roles",
-            }
-        ),
-        "pid": SYSTEM_PARENT_ID
-    },
-    {
-        "code": "system:permission",
-        "name": "Permission Management",
-        "key": "SYSTEM_PERMISSION",
-        "icon": "key",
-        "path": "/system/permissions",
-        "translations": _with_locale_values(
-            {"zh-TW": "權限管理", "zh-CN": "权限管理", "en": "Permission Management"}
-        ),
-        "description": "Manage system permissions",
-        "description_translations": _with_locale_descriptions(
-            {
-                "zh-TW": "管理系統權限",
-                "zh-CN": "管理系统权限",
-                "en": "Manage system permissions",
-            }
-        ),
-        "pid": SYSTEM_PARENT_ID
+        "pid": SYSTEM_PARENT_ID,
     },
     {
         "code": "system:resource",
         "name": "Resource Management",
         "key": "SYSTEM_RESOURCE",
-        "icon": "folder",
+        "icon": "MdAccountTree",
         "path": "/system/resources",
+        "type": ResourceType.SYSTEM.value,
+        "sequence": 5,
         "translations": _with_locale_values(
             {"zh-TW": "資源管理", "zh-CN": "资源管理", "en": "Resource Management"}
         ),
@@ -189,14 +158,58 @@ resources = [
                 "en": "Manage system resources",
             }
         ),
-        "pid": SYSTEM_PARENT_ID
+        "pid": SYSTEM_PARENT_ID,
+    },
+    {
+        "code": "system:permission",
+        "name": "Permission Management",
+        "key": "SYSTEM_PERMISSION",
+        "icon": "MdSecurity",
+        "path": "/system/permissions",
+        "type": ResourceType.SYSTEM.value,
+        "sequence": 6,
+        "translations": _with_locale_values(
+            {"zh-TW": "權限管理", "zh-CN": "权限管理", "en": "Permission Management"}
+        ),
+        "description": "Manage system permissions",
+        "description_translations": _with_locale_descriptions(
+            {
+                "zh-TW": "管理系統權限",
+                "zh-CN": "管理系统权限",
+                "en": "Manage system permissions",
+            }
+        ),
+        "pid": SYSTEM_PARENT_ID,
+    },
+    {
+        "code": "system:role",
+        "name": "Role Management",
+        "key": "SYSTEM_ROLE",
+        "icon": "MdAdminPanelSettings",
+        "path": "/system/roles",
+        "type": ResourceType.SYSTEM.value,
+        "sequence": 7,
+        "translations": _with_locale_values(
+            {"zh-TW": "角色管理", "zh-CN": "角色管理", "en": "Role Management"}
+        ),
+        "description": "Manage system roles",
+        "description_translations": _with_locale_descriptions(
+            {
+                "zh-TW": "管理系統角色",
+                "zh-CN": "管理系统角色",
+                "en": "Manage system roles",
+            }
+        ),
+        "pid": SYSTEM_PARENT_ID,
     },
     {
         "code": "system:log",
         "name": "System Log",
         "key": "SYSTEM_LOG",
-        "icon": "file-text",
+        "icon": "MdArticle",
         "path": "/system/logs",
+        "type": ResourceType.SYSTEM.value,
+        "sequence": 8,
         "translations": _with_locale_values(
             {"zh-TW": "系統日誌", "zh-CN": "系统日志", "en": "System Log"}
         ),
@@ -208,52 +221,16 @@ resources = [
                 "en": "Manage system logs",
             }
         ),
-        "pid": SYSTEM_PARENT_ID
-    },
-    {
-        "code": "content:faq",
-        "name": "FAQ",
-        "key": "CONTENT_FAQ",
-        "icon": "help-circle",
-        "path": "/content/faq",
-        "translations": _with_locale_values(
-            {"zh-TW": "常見問題", "zh-CN": "常见问题", "en": "FAQ"}
-        ),
-        "description": "Manage FAQ",
-        "description_translations": _with_locale_descriptions(
-            {
-                "zh-TW": "管理常見問題",
-                "zh-CN": "管理常见问题",
-                "en": "Manage FAQ",
-            }
-        ),
-        "pid": CONTENT_PARENT_ID
-    },
-    {
-        "code": "content:location",
-        "name": "Location",
-        "key": "CONTENT_LOCATION",
-        "icon": "map-pin",
-        "path": "/content/locations",
-        "translations": _with_locale_values(
-            {"zh-TW": "場地位置", "zh-CN": "场地位置", "en": "Location"}
-        ),
-        "description": "Manage locations",
-        "description_translations": _with_locale_descriptions(
-            {
-                "zh-TW": "管理場地位置",
-                "zh-CN": "管理场地位置",
-                "en": "Manage locations",
-            }
-        ),
-        "pid": CONTENT_PARENT_ID
+        "pid": SYSTEM_PARENT_ID,
     },
     {
         "code": "content:file",
         "name": "File",
         "key": "CONTENT_FILE",
-        "icon": "file",
+        "icon": "MdPermMedia",
         "path": "/content/files",
+        "type": ResourceType.GENERAL.value,
+        "sequence": 9,
         "translations": _with_locale_values(
             {"zh-TW": "檔案管理", "zh-CN": "文件管理", "en": "File"}
         ),
@@ -265,14 +242,37 @@ resources = [
                 "en": "Manage files",
             }
         ),
-        "pid": CONTENT_PARENT_ID
+        "pid": CONTENT_PARENT_ID,
+    },
+    {
+        "code": "content:location",
+        "name": "Location",
+        "key": "CONTENT_LOCATION",
+        "icon": "MdLocationOn",
+        "path": "/content/locations",
+        "type": ResourceType.GENERAL.value,
+        "sequence": 10,
+        "translations": _with_locale_values(
+            {"zh-TW": "場地位置", "zh-CN": "场地位置", "en": "Location"}
+        ),
+        "description": "Manage locations",
+        "description_translations": _with_locale_descriptions(
+            {
+                "zh-TW": "管理場地位置",
+                "zh-CN": "管理场地位置",
+                "en": "Manage locations",
+            }
+        ),
+        "pid": CONTENT_PARENT_ID,
     },
     {
         "code": "support:feedback",
         "name": "Feedback",
         "key": "SUPPORT_FEEDBACK",
-        "icon": "message-square",
+        "icon": "MdFeedback",
         "path": "/support/feedback",
+        "type": ResourceType.GENERAL.value,
+        "sequence": 12,
         "translations": _with_locale_values(
             {"zh-TW": "意見回饋", "zh-CN": "意见反馈", "en": "Feedback"}
         ),
@@ -284,6 +284,27 @@ resources = [
                 "en": "Manage feedback",
             }
         ),
-        "pid": SUPPORT_PARENT_ID
+        "pid": SUPPORT_PARENT_ID,
+    },
+    {
+        "code": "support:faq",
+        "name": "FAQ",
+        "key": "SUPPORT_FAQ",
+        "icon": "MdHelp",
+        "path": "/content/faq",
+        "type": ResourceType.GENERAL.value,
+        "sequence": 11,
+        "translations": _with_locale_values(
+            {"zh-TW": "常見問題", "zh-CN": "常见问题", "en": "FAQ"}
+        ),
+        "description": "Manage FAQ",
+        "description_translations": _with_locale_descriptions(
+            {
+                "zh-TW": "管理常見問題",
+                "zh-CN": "管理常见问题",
+                "en": "Manage FAQ",
+            }
+        ),
+        "pid": SUPPORT_PARENT_ID,
     },
 ]
