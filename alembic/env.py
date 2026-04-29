@@ -24,6 +24,9 @@ if config.config_file_name is not None:
 # target_metadata = mymodel.Base.metadata
 target_metadata = Base.metadata
 table_schema = settings.DATABASE_SCHEMA
+# Allowed schemas for migrations
+# NOTE: If you add a new schema, you need to add it to the ALLOWED_SCHEMAS list
+ALLOWED_SCHEMAS = {"public", "auth", "audit"}
 
 # Get logger
 log = logging.getLogger('alembic.env')
@@ -33,6 +36,16 @@ log = logging.getLogger('alembic.env')
 # my_important_option = config.get_main_option("my_important_option")
 # ... etc.
 config.set_main_option("sqlalchemy.url", settings.SQLALCHEMY_DATABASE_URI)
+
+
+def include_name(name, type_, parent_names):
+    if type_ == "schema":
+        return name is None or name in ALLOWED_SCHEMAS
+    if type_ == "table":
+        schema_name = parent_names.get("schema_name")
+        effective_schema = schema_name or "public"
+        return effective_schema in ALLOWED_SCHEMAS and name != "alembic_version"
+    return True
 
 
 def include_object(obj, name, type_, reflected, compare_to) -> bool:
@@ -46,8 +59,12 @@ def include_object(obj, name, type_, reflected, compare_to) -> bool:
     :return:
     """
     # Exclude alembic_version table and system tables
-    if type_ == "table" and (name == 'alembic_version' or name.startswith('pg_')):
-        return False
+    if type_ == "table":
+        schema = getattr(obj, "schema", None) or settings.DATABASE_SCHEMA
+        if schema not in ALLOWED_SCHEMAS:
+            return False
+        if name == "alembic_version" or name.startswith("pg_"):
+            return False
 
     # Check constraint name length for PostgreSQL (max 63 characters)
     if type_ == "foreign_key_constraint" and len(name) > 63:
@@ -66,7 +83,6 @@ def include_object(obj, name, type_, reflected, compare_to) -> bool:
 
             # If fields and tables are the same, skip this constraint
             if obj_columns == compare_columns and obj_table == compare_table:
-                log.debug("Skipping foreign key constraint - same columns and referenced table")
                 return False
 
     return True
@@ -90,6 +106,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        include_schemas=True,
     )
 
     with context.begin_transaction():
@@ -139,7 +156,9 @@ def run_migrations_online() -> None:
             connection=connection,
             target_metadata=target_metadata,
             compare_server_default=True,
+            include_name=include_name,
             include_object=include_object,
+            include_schemas=True,
             process_revision_directives=process_revision_directives,
         )
 
