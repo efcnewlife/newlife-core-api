@@ -1,9 +1,9 @@
 """
-
---------------------------------------------------
+Initial schema for authentication and authorization system, including tables for users, rbac, auditing, and more.
 Revision ID: ea7fb3945441
-Revises: 
+Revises:
 Create Date: 2026-04-27 19:28:35.191415
+--------------------------------------------------
 """
 from typing import Sequence, Union
 

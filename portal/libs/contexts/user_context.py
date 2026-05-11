@@ -25,7 +25,7 @@ class UserContext(BaseModel):
     last_name: Optional[str] = None
     preferred_name: Optional[str] = None
     gender: Optional[Gender] = None
-    preferred_language: Optional[str] = None
+    preferred_locale_id: Optional[UUID] = None
     login_admin: bool = False
     username: Optional[str] = None
     # token

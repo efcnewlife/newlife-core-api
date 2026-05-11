@@ -189,6 +189,7 @@ class AdminAuthHandler:
             first_name=user.first_name or "",
             last_name=user.last_name or "",
             roles=roles,
+            preferred_locale_id=user.preferred_locale_id,
             last_login_at=user.last_login_at,
         )
         return AdminLoginResponse(admin=admin, token=token)
@@ -299,5 +300,6 @@ class AdminAuthHandler:
             first_name=user.first_name,
             last_name=user.last_name,
             roles=roles or [],
+            preferred_locale_id=user.preferred_locale_id,
             last_login_at=user.last_login_at,
         )

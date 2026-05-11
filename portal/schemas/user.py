@@ -31,6 +31,7 @@ class SUserDetail(SUserBase):
     first_name: str = Field(None, description="User's first name")
     last_name: str = Field(None, description="User's last name")
     preferred_name: Optional[str] = Field(None, description="User's preferred name")
+    preferred_locale_id: Optional[UUID] = Field(None, description="User's preferred locale id")
     gender: Optional[Gender] = Field(None, description="User's gender")
 
 

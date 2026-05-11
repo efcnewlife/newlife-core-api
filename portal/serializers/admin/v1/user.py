@@ -91,3 +91,8 @@ class AdminUserRoles(BaseModel):
 class AdminBindRole(BaseModel):
     """BindRole"""
     role_ids: list[UUID] = Field(..., description="Role IDs to assign to the user")
+
+
+class AdminUserPreferredLanguageUpdate(BaseModel):
+    """Update current user preferred language"""
+    preferred_locale_id: UUID = Field(..., description="Preferred locale id", serialization_alias="preferredLocaleId")

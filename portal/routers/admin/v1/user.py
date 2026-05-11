@@ -25,6 +25,7 @@ from portal.serializers.admin.v1.user import (
     AdminChangePassword,
     AdminUserRoles,
     AdminUserList,
+    AdminUserPreferredLanguageUpdate,
 )
 
 router: AuthRouter = AuthRouter(is_admin=True)
@@ -74,26 +75,6 @@ async def get_user_list(
     return await admin_user_handler.get_user_list(keyword=query_model.keyword)
 
 
-@router.get(
-    path="/list-with-device-token",
-    status_code=status.HTTP_200_OK,
-    response_model=AdminUserList,
-    permissions=[
-        Permission.SYSTEM_USER.read
-    ]
-)
-@inject
-async def get_user_list_with_device_token(
-    query_model: Annotated[KeywordQueryBaseModel, Query()],
-    admin_user_handler: AdminUserHandler = Depends(Provide[Container.admin_user_handler])
-):
-    """
-    Get user list restricted to users who have at least one FCM device token.
-    Same query params and response as /list.
-    """
-    return await admin_user_handler.get_user_list_with_device_token(keyword=query_model.keyword)
-
-
 @router.post(
     path="",
     status_code=status.HTTP_201_CREATED,
@@ -120,9 +101,6 @@ async def create_user(
     path="/me",
     status_code=status.HTTP_200_OK,
     response_model=AdminUserItem,
-    permissions=[
-        Permission.SYSTEM_USER.read
-    ]
 )
 @inject
 async def get_current_user(
@@ -139,9 +117,6 @@ async def get_current_user(
 @router.put(
     path="/me",
     status_code=status.HTTP_204_NO_CONTENT,
-    permissions=[
-        Permission.SYSTEM_USER.modify
-    ]
 )
 @inject
 async def update_current_user(
@@ -155,6 +130,21 @@ async def update_current_user(
     :return:
     """
     await admin_user_handler.update_current_user(model=user_data)
+
+
+@router.put(
+    path="/me/preferred-language",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+@inject
+async def update_current_user_preferred_locale(
+    model: AdminUserPreferredLanguageUpdate,
+    admin_user_handler: AdminUserHandler = Depends(Provide[Container.admin_user_handler])
+):
+    """
+    Update current user preferred locale.
+    """
+    await admin_user_handler.update_current_user_preferred_locale(model.preferred_locale_id)
 
 
 @router.get(

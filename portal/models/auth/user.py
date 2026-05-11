@@ -55,7 +55,13 @@ class AuthUserProfile(ModelBase, AuditMixin, DescriptionMixin):
     title = Column(sa.String(64), comment="Title")
     gender = Column(sa.Integer, default=Gender.UNKNOWN.value, comment="Refer to Gender enum")
     preferred_name = Column(sa.String(64), comment="Preferred name")
-    preferred_language = Column(sa.String(16), comment="Preferred language")
+    preferred_locale_id = Column(
+        UUID,
+        sa.ForeignKey("public.system_locale.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="Preferred locale ID",
+    )
 
 
 class AuthUserThirdParty(ModelBase, DeletedMixin, AuditMixin):
