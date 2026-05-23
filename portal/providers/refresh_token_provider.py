@@ -12,7 +12,7 @@ from portal.libs.contexts.request_context import get_request_context, RequestCon
 from portal.libs.database import Session
 from portal.libs.logger import logger
 from portal.models import AuthRefreshToken, AuthDevice
-from portal.schemas.base import RefreshTokenData
+from portal.application.auth.results import RefreshTokenData
 
 
 class RefreshTokenProvider:

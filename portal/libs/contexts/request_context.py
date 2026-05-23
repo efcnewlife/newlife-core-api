@@ -7,7 +7,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from portal.schemas.base import HeaderInfo
+from portal.application.auth.results import HeaderInfo
 
 
 class RequestContext(BaseModel):
@@ -53,6 +53,8 @@ def get_resolved_locale_id() -> Optional[UUID]:
     try:
         ctx = get_request_context()
     except LookupError:
+        return None
+    if ctx is None:
         return None
     return ctx.resolved_locale_id
 

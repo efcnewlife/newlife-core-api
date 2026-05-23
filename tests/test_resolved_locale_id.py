@@ -2,6 +2,7 @@ from uuid import UUID
 
 import pytest
 
+from portal.application.auth.results import HeaderInfo
 from portal.libs.contexts.request_context import (
     get_resolved_locale_id,
     get_request_context,
@@ -9,12 +10,10 @@ from portal.libs.contexts.request_context import (
     set_request_context,
     RequestContext,
 )
-from portal.schemas.base import HeaderInfo
 
 
 def test_get_resolved_locale_id_no_context():
-    with pytest.raises(LookupError):
-        get_request_context()
+    assert get_request_context() is None
     assert get_resolved_locale_id() is None
 
 

@@ -8,7 +8,7 @@ from fastapi.datastructures import Headers
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from portal.container import Container
-from portal.handlers import AdminLocaleHandler
+from portal.application.locale.locale_service import LocaleService
 from portal.libs.contexts.request_context import (
     RequestContext,
     set_request_context,
@@ -18,7 +18,7 @@ from portal.libs.contexts.request_session_context import (
     set_request_session,
     reset_request_session,
 )
-from portal.schemas.base import HeaderInfo
+from portal.application.auth.results import HeaderInfo
 
 
 def _resolve_ip(request: Request) -> str | None:
@@ -167,15 +167,15 @@ class CoreRequestMiddleware(BaseHTTPMiddleware):
     async def locale_detector(
         self,
         accept_language: Optional[str],
-        admin_locale_handler: AdminLocaleHandler = Provide[Container.admin_locale_handler],
+        locale_service: LocaleService = Provide[Container.locale_service],
     ) -> tuple[Optional[str], Optional[UUID], list[str]]:
         """
 
         :param accept_language:
-        :param admin_locale_handler:
+        :param locale_service:
         :return:
         """
-        snapshot = await admin_locale_handler.get_locale_snapshot()
+        snapshot = await locale_service.get_locale_snapshot()
         ordered_active_locales = snapshot.get("active_locales", [])
         active_locales = set(ordered_active_locales)
         default_locale = snapshot.get("default_locale")
@@ -208,7 +208,7 @@ class CoreRequestMiddleware(BaseHTTPMiddleware):
             if not language_code:
                 continue
             if language_code not in language_cache:
-                language_cache[language_code] = await admin_locale_handler.get_locale_codes_by_language(language_code)
+                language_cache[language_code] = await locale_service.get_locale_codes_by_language(language_code)
             locale_codes = language_cache.get(language_code, [])
             if not locale_codes:
                 continue

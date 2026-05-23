@@ -6,7 +6,7 @@ from typing import Optional
 
 from pydantic import Field, BaseModel
 
-from portal.schemas.mixins import UUIDBaseModel
+from portal.serializers.mixins.model_mixins import UUIDBaseModel
 
 
 class AdminVerbItem(UUIDBaseModel):

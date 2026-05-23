@@ -13,8 +13,7 @@ from portal.libs.consts.enums import AccessTokenAudType
 from portal.libs.consts.permission import Verb
 from portal.libs.logger import logger
 from portal.providers.token_blacklist_provider import TokenBlacklistProvider
-from portal.schemas.base import AccessTokenPayload
-from portal.schemas.user import SUserSensitive
+from portal.application.auth.results import AccessTokenPayload, UserSensitive
 
 VERB_SET = {Verb.READ.value, Verb.CREATE.value, Verb.UPDATE.value, Verb.DELETE.value}
 
@@ -60,7 +59,7 @@ class JWTProvider:
 
     def create_access_token(
         self,
-        user: SUserSensitive,
+        user: UserSensitive,
         family_id: UUID,
         roles: list = None,
         permissions: list = None,

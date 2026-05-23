@@ -1,16 +1,11 @@
 """
-Schema for permission
+Schema for permission (legacy re-exports; prefer portal.domain.rbac.entities).
 """
-from typing import Optional
-
 from pydantic import BaseModel, Field
 
+from portal.domain.rbac.entities import PermissionRecord
 
-class PermissionBase(BaseModel):
-    """Permission Base Schema"""
-    code: str = Field(..., description="Permission code")
-    resource_code: str = Field(..., description="Resource code")
-    action: str = Field(..., description="Action")
+PermissionBase = PermissionRecord
 
 
 class PermissionList(BaseModel):

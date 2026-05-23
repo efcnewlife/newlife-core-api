@@ -1,13 +1,15 @@
 """
-Schema of Locale model.
+Schema of Locale model (backward-compatible re-exports).
 """
 from typing import Optional
+
 from pydantic import Field
 
-from portal.schemas.mixins import UUIDBaseModel
+from portal.domain.common.mixins import UUIDModel
+from portal.domain.locale.entities import Locale
 
 
-class SLocale(UUIDBaseModel):
+class SLocale(UUIDModel):
     """
     Schema for Locale model
     """
@@ -18,3 +20,7 @@ class SLocale(UUIDBaseModel):
     native_name: Optional[str] = Field(None, description="Native locale name")
     is_active: bool = Field(True, description="Is locale active")
     is_default: bool = Field(False, description="Is default locale")
+
+    @classmethod
+    def from_locale(cls, locale: Locale) -> "SLocale":
+        return cls.model_validate(locale.model_dump())

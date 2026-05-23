@@ -7,8 +7,19 @@ from typing import Annotated
 from dependency_injector.wiring import inject, Provide
 from fastapi import Depends, status, Query
 
+from portal.application.rbac.mappers import (
+    change_resource_parent_to_command,
+    change_resource_sequence_to_command,
+    create_id_result_to_api,
+    create_resource_to_command,
+    delete_model_to_command,
+    resource_detail_result_to_api,
+    resource_list_result_to_api,
+    resource_list_query_to_command,
+    update_resource_to_command,
+)
+from portal.application.rbac.resource_service import ResourceService
 from portal.container import Container
-from portal.handlers import AdminResourceHandler
 from portal.libs.consts.permission import Permission
 from portal.routers.auth_router import AuthRouter
 from portal.schemas.mixins import UUIDBaseModel
@@ -38,15 +49,16 @@ router: AuthRouter = AuthRouter(is_admin=True)
 @inject
 async def create_resource(
     resource_data: AdminResourceCreate,
-    admin_resource_handler: AdminResourceHandler = Depends(Provide[Container.admin_resource_handler])
+    resource_service: ResourceService = Depends(Provide[Container.resource_service]),
 ):
     """
 
     :param resource_data:
-    :param admin_resource_handler:
+    :param resource_service:
     :return:
     """
-    return await admin_resource_handler.create_resource(model=resource_data)
+    result = await resource_service.create_resource(command=create_resource_to_command(resource_data))
+    return create_id_result_to_api(result)
 
 
 @router.delete(
@@ -61,16 +73,19 @@ async def create_resource(
 async def delete_resource(
     resource_id: uuid.UUID,
     model: DeleteBaseModel,
-    admin_resource_handler: AdminResourceHandler = Depends(Provide[Container.admin_resource_handler])
+    resource_service: ResourceService = Depends(Provide[Container.resource_service]),
 ):
     """
 
     :param resource_id:
     :param model:
-    :param admin_resource_handler:
+    :param resource_service:
     :return:
     """
-    await admin_resource_handler.delete_resource(resource_id=resource_id, model=model)
+    await resource_service.delete_resource(
+        resource_id=resource_id,
+        command=delete_model_to_command(model),
+    )
 
 
 @router.put(
@@ -84,15 +99,15 @@ async def delete_resource(
 @inject
 async def restore_resource(
     resource_id: uuid.UUID,
-    admin_resource_handler: AdminResourceHandler = Depends(Provide[Container.admin_resource_handler])
+    resource_service: ResourceService = Depends(Provide[Container.resource_service]),
 ):
     """
 
     :param resource_id:
-    :param admin_resource_handler:
+    :param resource_service:
     :return:
     """
-    await admin_resource_handler.restore_resource(resource_id=resource_id)
+    await resource_service.restore_resource(resource_id=resource_id)
 
 
 @router.put(
@@ -107,16 +122,19 @@ async def restore_resource(
 async def change_resource_parent(
     resource_id: uuid.UUID,
     model: AdminResourceChangeParent,
-    admin_resource_handler: AdminResourceHandler = Depends(Provide[Container.admin_resource_handler])
+    resource_service: ResourceService = Depends(Provide[Container.resource_service]),
 ):
     """
 
     :param resource_id:
     :param model:
-    :param admin_resource_handler:
+    :param resource_service:
     :return:
     """
-    await admin_resource_handler.change_parent(resource_id=resource_id, model=model)
+    await resource_service.change_parent(
+        resource_id=resource_id,
+        command=change_resource_parent_to_command(model),
+    )
 
 
 @router.put(
@@ -131,16 +149,19 @@ async def change_resource_parent(
 async def update_resource(
     resource_id: uuid.UUID,
     resource_data: AdminResourceUpdate,
-    admin_resource_handler: AdminResourceHandler = Depends(Provide[Container.admin_resource_handler])
+    resource_service: ResourceService = Depends(Provide[Container.resource_service]),
 ):
     """
 
     :param resource_id:
     :param resource_data:
-    :param admin_resource_handler:
+    :param resource_service:
     :return:
     """
-    await admin_resource_handler.update_resource(resource_id=resource_id, model=resource_data)
+    await resource_service.update_resource(
+        resource_id=resource_id,
+        command=update_resource_to_command(resource_data),
+    )
 
 
 @router.post(
@@ -154,15 +175,15 @@ async def update_resource(
 @inject
 async def change_resource_sequence(
     model: AdminResourceChangeSequence,
-    admin_resource_handler: AdminResourceHandler = Depends(Provide[Container.admin_resource_handler])
+    resource_service: ResourceService = Depends(Provide[Container.resource_service]),
 ):
     """
 
     :param model:
-    :param admin_resource_handler:
+    :param resource_service:
     :return:
     """
-    await admin_resource_handler.change_sequence(model=model)
+    await resource_service.change_sequence(command=change_resource_sequence_to_command(model))
 
 
 @router.get(
@@ -176,15 +197,16 @@ async def change_resource_sequence(
 @inject
 async def get_resources(
     query_model: Annotated[DeleteQueryBaseModel, Query()],
-    admin_resource_handler: AdminResourceHandler = Depends(Provide[Container.admin_resource_handler])
+    resource_service: ResourceService = Depends(Provide[Container.resource_service]),
 ):
     """
     Get resources
     :param query_model:
-    :param admin_resource_handler:
+    :param resource_service:
     :return:
     """
-    return await admin_resource_handler.get_resources(query_model)
+    result = await resource_service.get_resources(command=resource_list_query_to_command(query_model))
+    return resource_list_result_to_api(result)
 
 
 @router.get(
@@ -194,14 +216,15 @@ async def get_resources(
 )
 @inject
 async def get_menus(
-    admin_resource_handler: AdminResourceHandler = Depends(Provide[Container.admin_resource_handler])
+    resource_service: ResourceService = Depends(Provide[Container.resource_service]),
 ):
     """
     Get menus
-    :param admin_resource_handler:
+    :param resource_service:
     :return:
     """
-    return await admin_resource_handler.get_user_permission_menus()
+    result = await resource_service.get_user_permission_menus()
+    return resource_list_result_to_api(result)
 
 
 @router.get(
@@ -215,12 +238,13 @@ async def get_menus(
 @inject
 async def get_resource(
     resource_id: uuid.UUID,
-    admin_resource_handler: AdminResourceHandler = Depends(Provide[Container.admin_resource_handler])
+    resource_service: ResourceService = Depends(Provide[Container.resource_service]),
 ):
     """
 
     :param resource_id:
-    :param admin_resource_handler:
+    :param resource_service:
     :return:
     """
-    return await admin_resource_handler.get_resource(resource_id=resource_id)
+    result = await resource_service.get_resource(resource_id=resource_id)
+    return resource_detail_result_to_api(result)

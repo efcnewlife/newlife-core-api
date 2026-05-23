@@ -6,7 +6,7 @@ from uuid import UUID
 
 from pydantic import Field, BaseModel, field_validator, model_validator
 
-from portal.schemas.mixins import UUIDBaseModel, JSONStringMixinModel
+from portal.serializers.mixins.model_mixins import UUIDBaseModel, JSONStringMixinModel
 from portal.serializers.admin.v1.translation import (
     AdminTranslationInput,
     validate_unique_locale_ids,

@@ -13,14 +13,13 @@ from starlette.responses import Response, JSONResponse
 from portal.config import settings
 from portal.container import Container
 from portal.exceptions.responses import UnauthorizedException, InvalidTokenException, ForbiddenException
-from portal.handlers import AdminUserHandler, UserHandler
+from portal.application.auth.user_read_service import UserReadService
 from portal.libs.authorization.auth_config import AuthConfig
 from portal.libs.authorization.permission_checker import PermissionChecker
 from portal.libs.contexts.user_context import UserContext, set_user_context, get_user_context
 from portal.libs.logger import logger
 from portal.providers.jwt_provider import JWTProvider
-from portal.schemas.base import AccessTokenPayload
-from portal.schemas.user import SUserSensitive, SUserDetail
+from portal.application.auth.results import AccessTokenPayload, UserDetail, UserSensitive
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
@@ -163,14 +162,14 @@ class AuthMiddleware(BaseHTTPMiddleware):
         request: Request,
         token: str,
         jwt_provider: JWTProvider = Provide[Container.jwt_provider],
-        admin_user_handler: AdminUserHandler = Provide[Container.admin_user_handler],
+        user_read_service: UserReadService = Provide[Container.user_read_service],
     ) -> None:
         """
         Verify admin token and set UserContext
         :param request:
         :param token:
         :param jwt_provider:
-        :param admin_user_handler:
+        :param user_read_service:
         :return:
         """
         payload: AccessTokenPayload = jwt_provider.verify_token(
@@ -180,7 +179,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if not payload:
             raise InvalidTokenException()
 
-        user: SUserSensitive = await admin_user_handler.get_user_detail_by_id(payload.sub)
+        user: UserSensitive = await user_read_service.get_user_sensitive_by_id(payload.sub)
         if not user:
             raise UnauthorizedException()
         if not user.is_active or not user.is_admin or not user.verified:
@@ -211,7 +210,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         request: Request,
         token: str,
         jwt_provider: JWTProvider = Provide[Container.jwt_provider],
-        user_handler: UserHandler = Provide[Container.user_handler],
+        user_read_service: UserReadService = Provide[Container.user_read_service],
     ) -> None:
         """
         Verify user token and set UserContext
@@ -225,7 +224,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if not payload:
             raise InvalidTokenException()
 
-        user: SUserDetail = await user_handler.get_user_detail_by_id(payload.sub)
+        user: UserDetail = await user_read_service.get_user_detail_by_id(payload.sub)
         if not user:
             raise UnauthorizedException()
         if not user.is_active or not user.verified:

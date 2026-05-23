@@ -7,7 +7,7 @@ from uuid import UUID
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, EmailStr, Field
 
-from portal.schemas.mixins import UUIDBaseModel
+from portal.domain.common.mixins import UUIDModel
 from portal.serializers.mixins import LoginResponse
 
 
@@ -17,7 +17,7 @@ class AdminLoginRequest(BaseModel):
     password: str = Field(..., description="Admin password")
 
 
-class AdminInfo(UUIDBaseModel):
+class AdminInfo(UUIDModel):
     """Admin info"""
     email: str = Field(..., description="Admin email")
     first_name: str = Field(..., description="First name")

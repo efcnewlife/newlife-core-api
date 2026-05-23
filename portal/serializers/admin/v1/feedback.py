@@ -7,7 +7,7 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 from portal.libs.consts.enums import FeedbackStatus
-from portal.schemas.mixins import UUIDBaseModel
+from portal.serializers.mixins.model_mixins import UUIDBaseModel
 from portal.serializers.mixins import GenericQueryBaseModel, PaginationBaseResponseModel
 
 

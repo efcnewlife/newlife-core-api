@@ -9,7 +9,7 @@ from portal.libs.contexts.request_context import get_request_context
 from portal.middlewares.core_request import CoreRequestMiddleware
 
 
-class FakeAdminLocaleHandler:
+class FakeLocaleService:
     def __init__(self, snapshot: dict, language_map: dict[str, list[str]]):
         self.snapshot = snapshot
         self.language_map = language_map
@@ -77,7 +77,7 @@ async def test_parse_accept_language_order():
 @pytest.mark.asyncio
 async def test_locale_detector_exact_match():
     middleware = CoreRequestMiddleware(app=Starlette())
-    handler = FakeAdminLocaleHandler(
+    handler = FakeLocaleService(
         snapshot={
             "active_locales": ["en-US", "fr-CH"],
             "default_locale": "en-US",
@@ -91,7 +91,7 @@ async def test_locale_detector_exact_match():
     )
     resolved_code, resolved_id, candidates = await middleware.locale_detector(
         "fr-CH, en;q=0.8",
-        admin_locale_handler=handler,
+        locale_service=handler,
     )
     assert resolved_code == "fr-CH"
     assert resolved_id == UUID("00000000-0000-0000-0000-000000000002")
@@ -101,7 +101,7 @@ async def test_locale_detector_exact_match():
 @pytest.mark.asyncio
 async def test_locale_detector_language_fallback():
     middleware = CoreRequestMiddleware(app=Starlette())
-    handler = FakeAdminLocaleHandler(
+    handler = FakeLocaleService(
         snapshot={
             "active_locales": ["en-US", "fr-CH"],
             "default_locale": "en-US",
@@ -115,7 +115,7 @@ async def test_locale_detector_language_fallback():
     )
     resolved_code, resolved_id, _ = await middleware.locale_detector(
         "fr-FR, en;q=0.8",
-        admin_locale_handler=handler,
+        locale_service=handler,
     )
     assert resolved_code == "fr-CH"
     assert resolved_id == UUID("00000000-0000-0000-0000-000000000002")
@@ -124,7 +124,7 @@ async def test_locale_detector_language_fallback():
 @pytest.mark.asyncio
 async def test_locale_detector_wildcard_fallback_to_default():
     middleware = CoreRequestMiddleware(app=Starlette())
-    handler = FakeAdminLocaleHandler(
+    handler = FakeLocaleService(
         snapshot={
             "active_locales": ["en-US", "fr-CH"],
             "default_locale": "en-US",
@@ -138,7 +138,7 @@ async def test_locale_detector_wildcard_fallback_to_default():
     )
     resolved_code, resolved_id, _ = await middleware.locale_detector(
         "*;q=0.1",
-        admin_locale_handler=handler,
+        locale_service=handler,
     )
     assert resolved_code == "en-US"
     assert resolved_id == UUID("00000000-0000-0000-0000-000000000001")

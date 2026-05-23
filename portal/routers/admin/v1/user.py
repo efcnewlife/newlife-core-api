@@ -7,8 +7,22 @@ from typing import Annotated
 from dependency_injector.wiring import inject, Provide
 from fastapi import Depends, Query, status
 
+from portal.application.rbac.mappers import (
+    admin_user_detail_result_to_api,
+    admin_user_list_result_to_api,
+    admin_user_page_result_to_api,
+    admin_user_roles_result_to_api,
+    admin_user_pages_query_to_command,
+    bind_user_roles_to_command,
+    bulk_ids_to_command,
+    change_password_to_command,
+    create_admin_user_to_command,
+    create_id_result_to_api,
+    delete_model_to_command,
+    update_admin_user_to_command,
+)
 from portal.container import Container
-from portal.handlers import AdminUserHandler
+from portal.application.auth.admin_user_service import AdminUserService
 from portal.libs.consts.permission import Permission
 from portal.routers.auth_router import AuthRouter
 from portal.schemas.mixins import UUIDBaseModel
@@ -42,15 +56,16 @@ router: AuthRouter = AuthRouter(is_admin=True)
 @inject
 async def get_user_pages(
     query_model: Annotated[AdminUserQuery, Query()],
-    admin_user_handler: AdminUserHandler = Depends(Provide[Container.admin_user_handler])
+    admin_user_service: AdminUserService = Depends(Provide[Container.admin_user_service])
 ):
     """
     Get user pages
     :param query_model:
-    :param admin_user_handler:
+    :param admin_user_service:
     :return:
     """
-    return await admin_user_handler.get_user_pages(model=query_model)
+    result = await admin_user_service.get_user_pages(command=admin_user_pages_query_to_command(query_model))
+    return admin_user_page_result_to_api(result)
 
 
 @router.get(
@@ -64,15 +79,16 @@ async def get_user_pages(
 @inject
 async def get_user_list(
     query_model: Annotated[KeywordQueryBaseModel, Query()],
-    admin_user_handler: AdminUserHandler = Depends(Provide[Container.admin_user_handler])
+    admin_user_service: AdminUserService = Depends(Provide[Container.admin_user_service])
 ):
     """
 
     :param query_model:
-    :param admin_user_handler:
+    :param admin_user_service:
     :return:
     """
-    return await admin_user_handler.get_user_list(keyword=query_model.keyword)
+    result = await admin_user_service.get_user_list(keyword=query_model.keyword)
+    return admin_user_list_result_to_api(result)
 
 
 @router.post(
@@ -86,15 +102,16 @@ async def get_user_list(
 @inject
 async def create_user(
     user_data: AdminUserCreate,
-    admin_user_handler: AdminUserHandler = Depends(Provide[Container.admin_user_handler])
+    admin_user_service: AdminUserService = Depends(Provide[Container.admin_user_service])
 ):
     """
     Create a user
     :param user_data:
-    :param admin_user_handler:
+    :param admin_user_service:
     :return:
     """
-    return await admin_user_handler.create_user(model=user_data)
+    result = await admin_user_service.create_user(command=create_admin_user_to_command(user_data))
+    return create_id_result_to_api(result)
 
 
 @router.get(
@@ -104,14 +121,18 @@ async def create_user(
 )
 @inject
 async def get_current_user(
-    admin_user_handler: AdminUserHandler = Depends(Provide[Container.admin_user_handler])
+    admin_user_service: AdminUserService = Depends(Provide[Container.admin_user_service])
 ):
     """
 
-    :param admin_user_handler:
+    :param admin_user_service:
     :return:
     """
-    return await admin_user_handler.get_current_user()
+    result = await admin_user_service.get_current_user()
+    if not result:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="User not found")
+    return admin_user_detail_result_to_api(result)
 
 
 @router.put(
@@ -121,15 +142,15 @@ async def get_current_user(
 @inject
 async def update_current_user(
     user_data: AdminUserUpdate,
-    admin_user_handler: AdminUserHandler = Depends(Provide[Container.admin_user_handler])
+    admin_user_service: AdminUserService = Depends(Provide[Container.admin_user_service])
 ):
     """
 
     :param user_data:
-    :param admin_user_handler:
+    :param admin_user_service:
     :return:
     """
-    await admin_user_handler.update_current_user(model=user_data)
+    await admin_user_service.update_current_user(command=update_admin_user_to_command(user_data))
 
 
 @router.put(
@@ -139,12 +160,12 @@ async def update_current_user(
 @inject
 async def update_current_user_preferred_locale(
     model: AdminUserPreferredLanguageUpdate,
-    admin_user_handler: AdminUserHandler = Depends(Provide[Container.admin_user_handler])
+    admin_user_service: AdminUserService = Depends(Provide[Container.admin_user_service])
 ):
     """
     Update current user preferred locale.
     """
-    await admin_user_handler.update_current_user_preferred_locale(model.preferred_locale_id)
+    await admin_user_service.update_current_user_preferred_locale(model.preferred_locale_id)
 
 
 @router.get(
@@ -159,15 +180,16 @@ async def update_current_user_preferred_locale(
 @inject
 async def get_user_roles(
     user_id: uuid.UUID,
-    admin_user_handler: AdminUserHandler = Depends(Provide[Container.admin_user_handler])
+    admin_user_service: AdminUserService = Depends(Provide[Container.admin_user_service])
 ):
     """
     Get user roles
     :param user_id:
-    :param admin_user_handler:
+    :param admin_user_service:
     :return:
     """
-    return await admin_user_handler.get_user_roles(user_id=user_id)
+    result = await admin_user_service.get_user_roles(user_id=user_id)
+    return admin_user_roles_result_to_api(result)
 
 
 @router.get(
@@ -181,19 +203,19 @@ async def get_user_roles(
 @inject
 async def get_user(
     user_id: uuid.UUID,
-    admin_user_handler: AdminUserHandler = Depends(Provide[Container.admin_user_handler])
+    admin_user_service: AdminUserService = Depends(Provide[Container.admin_user_service])
 ):
     """
     Get a user by ID
     :param user_id:
-    :param admin_user_handler:
+    :param admin_user_service:
     :return:
     """
-    user = await admin_user_handler.get_user_by_id(user_id=user_id)
-    if not user:
+    result = await admin_user_service.get_user_by_id(user_id=user_id)
+    if not result:
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="User not found")
-    return user
+    return admin_user_detail_result_to_api(result)
 
 
 @router.put(
@@ -206,15 +228,15 @@ async def get_user(
 @inject
 async def restore_users(
     model: AdminUserBulkAction,
-    admin_user_handler: AdminUserHandler = Depends(Provide[Container.admin_user_handler])
+    admin_user_service: AdminUserService = Depends(Provide[Container.admin_user_service])
 ):
     """
     Restore soft-deleted users
     :param model:
-    :param admin_user_handler:
+    :param admin_user_service:
     :return:
     """
-    await admin_user_handler.restore_user(model=model)
+    await admin_user_service.restore_user(command=bulk_ids_to_command(model))
 
 
 @router.post(
@@ -229,16 +251,19 @@ async def restore_users(
 async def bind_roles_to_user(
     user_id: uuid.UUID,
     model: AdminBindRole,
-    admin_user_handler: AdminUserHandler = Depends(Provide[Container.admin_user_handler])
+    admin_user_service: AdminUserService = Depends(Provide[Container.admin_user_service])
 ):
     """
     Bind roles to user
     :param user_id:
     :param model:
-    :param admin_user_handler:
+    :param admin_user_service:
     :return:
     """
-    await admin_user_handler.bind_roles(user_id=user_id, model=model)
+    await admin_user_service.bind_roles(
+        user_id=user_id,
+        command=bind_user_roles_to_command(model),
+    )
 
 
 @router.post(
@@ -252,16 +277,19 @@ async def bind_roles_to_user(
 async def change_user_password(
     user_id: uuid.UUID,
     model: AdminChangePassword,
-    admin_user_handler: AdminUserHandler = Depends(Provide[Container.admin_user_handler])
+    admin_user_service: AdminUserService = Depends(Provide[Container.admin_user_service])
 ):
     """
 
     :param user_id:
     :param model:
-    :param admin_user_handler:
+    :param admin_user_service:
     :return:
     """
-    await admin_user_handler.change_password(user_id=user_id, model=model)
+    await admin_user_service.change_password(
+        user_id=user_id,
+        command=change_password_to_command(model),
+    )
 
 
 @router.put(
@@ -275,16 +303,19 @@ async def change_user_password(
 async def update_user(
     user_id: uuid.UUID,
     user_data: AdminUserUpdate,
-    admin_user_handler: AdminUserHandler = Depends(Provide[Container.admin_user_handler])
+    admin_user_service: AdminUserService = Depends(Provide[Container.admin_user_service])
 ):
     """
     Update a user
     :param user_id:
     :param user_data:
-    :param admin_user_handler:
+    :param admin_user_service:
     :return:
     """
-    await admin_user_handler.update_user(user_id=user_id, model=user_data)
+    await admin_user_service.update_user(
+        user_id=user_id,
+        command=update_admin_user_to_command(user_data),
+    )
 
 
 @router.delete(
@@ -298,13 +329,16 @@ async def update_user(
 async def delete_user(
     user_id: uuid.UUID,
     model: DeleteBaseModel,
-    admin_user_handler: AdminUserHandler = Depends(Provide[Container.admin_user_handler])
+    admin_user_service: AdminUserService = Depends(Provide[Container.admin_user_service])
 ):
     """
     Delete a user (soft by default)
     :param user_id:
     :param model:
-    :param admin_user_handler:
+    :param admin_user_service:
     :return:
     """
-    await admin_user_handler.delete_user(user_id=user_id, model=model)
+    await admin_user_service.delete_user(
+        user_id=user_id,
+        command=delete_model_to_command(model),
+    )

@@ -8,7 +8,7 @@ from uuid import UUID
 import ujson
 from pydantic import Field, BaseModel, model_validator, field_validator
 
-from portal.schemas.mixins import UUIDBaseModel
+from portal.serializers.mixins.model_mixins import UUIDBaseModel
 from portal.serializers.admin.v1.translation import (
     AdminTranslationInput,
     validate_unique_locale_ids,

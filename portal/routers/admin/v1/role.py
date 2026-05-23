@@ -7,8 +7,19 @@ from typing import Annotated
 from dependency_injector.wiring import inject, Provide
 from fastapi import Depends, Query, status
 
+from portal.application.rbac.mappers import (
+    assign_role_permissions_to_command,
+    create_id_result_to_api,
+    create_role_to_command,
+    delete_model_to_command,
+    pages_query_to_command,
+    role_detail_result_to_api,
+    role_list_result_to_api,
+    role_page_result_to_api,
+    update_role_to_command,
+)
+from portal.application.rbac.role_service import RoleService
 from portal.container import Container
-from portal.handlers import AdminRoleHandler
 from portal.libs.consts.permission import Permission
 from portal.routers.auth_router import AuthRouter
 from portal.schemas.mixins import UUIDBaseModel
@@ -36,15 +47,16 @@ router: AuthRouter = AuthRouter(is_admin=True)
 @inject
 async def get_role_pages(
     query_model: Annotated[GenericQueryBaseModel, Query()],
-    admin_role_handler: AdminRoleHandler = Depends(Provide[Container.admin_role_handler])
+    role_service: RoleService = Depends(Provide[Container.role_service]),
 ):
     """
     Get paginated roles
     :param query_model:
-    :param admin_role_handler:
+    :param role_service:
     :return:
     """
-    return await admin_role_handler.get_role_pages(model=query_model)
+    result = await role_service.get_role_pages(command=pages_query_to_command(query_model))
+    return role_page_result_to_api(result)
 
 
 @router.get(
@@ -57,14 +69,15 @@ async def get_role_pages(
 )
 @inject
 async def get_role_list(
-    admin_role_handler: AdminRoleHandler = Depends(Provide[Container.admin_role_handler])
+    role_service: RoleService = Depends(Provide[Container.role_service]),
 ):
     """
     Get role list
-    :param admin_role_handler:
+    :param role_service:
     :return:
     """
-    return await admin_role_handler.get_active_roles()
+    result = await role_service.get_active_roles()
+    return role_list_result_to_api(result)
 
 
 @router.get(
@@ -78,15 +91,19 @@ async def get_role_list(
 @inject
 async def get_role(
     role_id: uuid.UUID,
-    admin_role_handler: AdminRoleHandler = Depends(Provide[Container.admin_role_handler])
+    role_service: RoleService = Depends(Provide[Container.role_service]),
 ):
     """
 
     :param role_id:
-    :param admin_role_handler:
+    :param role_service:
     :return:
     """
-    return await admin_role_handler.get_role_by_id(role_id=role_id)
+    result = await role_service.get_role_by_id(role_id=role_id)
+    if not result:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Role not found")
+    return role_detail_result_to_api(result)
 
 
 @router.post(
@@ -101,15 +118,16 @@ async def get_role(
 @inject
 async def create_role(
     role_data: AdminRoleCreate,
-    admin_role_handler: AdminRoleHandler = Depends(Provide[Container.admin_role_handler])
+    role_service: RoleService = Depends(Provide[Container.role_service]),
 ):
     """
     Create a role
     :param role_data:
-    :param admin_role_handler:
+    :param role_service:
     :return:
     """
-    return await admin_role_handler.create_role(model=role_data)
+    result = await role_service.create_role(command=create_role_to_command(role_data))
+    return create_id_result_to_api(result)
 
 
 @router.put(
@@ -124,16 +142,16 @@ async def create_role(
 async def update_role(
     role_id: uuid.UUID,
     role_data: AdminRoleUpdate,
-    admin_role_handler: AdminRoleHandler = Depends(Provide[Container.admin_role_handler])
+    role_service: RoleService = Depends(Provide[Container.role_service]),
 ):
     """
     Update a role
     :param role_id:
     :param role_data:
-    :param admin_role_handler:
+    :param role_service:
     :return:
     """
-    await admin_role_handler.update_role(role_id=role_id, model=role_data)
+    await role_service.update_role(role_id=role_id, command=update_role_to_command(role_data))
 
 
 @router.delete(
@@ -148,16 +166,16 @@ async def update_role(
 async def delete_role(
     role_id: uuid.UUID,
     model: DeleteBaseModel,
-    admin_role_handler: AdminRoleHandler = Depends(Provide[Container.admin_role_handler])
+    role_service: RoleService = Depends(Provide[Container.role_service]),
 ):
     """
     Delete a role (soft by default)
     :param role_id:
     :param model:
-    :param admin_role_handler:
+    :param role_service:
     :return:
     """
-    await admin_role_handler.delete_role(role_id=role_id, model=model)
+    await role_service.delete_role(role_id=role_id, command=delete_model_to_command(model))
 
 
 @router.put(
@@ -171,15 +189,15 @@ async def delete_role(
 @inject
 async def restore_role(
     role_id: uuid.UUID,
-    admin_role_handler: AdminRoleHandler = Depends(Provide[Container.admin_role_handler])
+    role_service: RoleService = Depends(Provide[Container.role_service]),
 ):
     """
     Restore a soft-deleted role
     :param role_id:
-    :param admin_role_handler:
+    :param role_service:
     :return:
     """
-    await admin_role_handler.restore_role(role_id=role_id)
+    await role_service.restore_role(role_id=role_id)
 
 
 @router.post(
@@ -194,13 +212,16 @@ async def restore_role(
 async def assign_role_permissions(
     role_id: uuid.UUID,
     model: AdminRolePermissionAssign,
-    admin_role_handler: AdminRoleHandler = Depends(Provide[Container.admin_role_handler])
+    role_service: RoleService = Depends(Provide[Container.role_service]),
 ):
     """
     Assign or revoke permissions for a role
     :param role_id:
     :param model:
-    :param admin_role_handler:
+    :param role_service:
     :return:
     """
-    await admin_role_handler.assign_role_permissions(role_id=role_id, model=model)
+    await role_service.assign_role_permissions(
+        role_id=role_id,
+        command=assign_role_permissions_to_command(model),
+    )
