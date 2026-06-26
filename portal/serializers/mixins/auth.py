@@ -21,7 +21,7 @@ class LoginResponse(BaseModel):
 
 class RefreshTokenRequest(BaseModel):
     """Refresh token request"""
-    refresh_token: str = Field(..., description="Refresh token", serialization_alias="refreshToken")
+    refresh_token: str = Field(..., description="Refresh token")
 
 
 class LogoutRequest(BaseModel):

@@ -1,5 +1,6 @@
 import re
 from datetime import datetime, date
+from decimal import Decimal
 
 # integer
 RE_INT = re.compile(r'^-?\d+$')
@@ -63,7 +64,7 @@ def is_bool(value):
 def is_number(value):
     if value is None:
         return False
-    if isinstance(value, float) or isinstance(value, int):
+    if isinstance(value, (float, int, Decimal)):
         return True
     if not isinstance(value, str):
         return False

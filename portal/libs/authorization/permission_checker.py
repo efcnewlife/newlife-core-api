@@ -11,7 +11,7 @@ from portal.exceptions.responses import UnauthorizedException
 from portal.libs.consts.cache_keys import CacheKeys
 from portal.libs.contexts.user_context import UserContext, get_user_context
 from portal.libs.database import RedisPool
-from portal.handlers import AdminPermissionHandler
+from portal.infrastructure.cache.permission_cache import PermissionCache
 
 
 class PermissionChecker:
@@ -45,7 +45,7 @@ class PermissionChecker:
 
         # Check permission cache (using hash field)
         # Redis cache is the single source of truth for permissions
-        key = AdminPermissionHandler.permission_key(user_id)
+        key = PermissionCache.permission_key(user_id)
         has_permission = await self._redis.hexists(key, permission_code)
 
         return has_permission
@@ -93,7 +93,7 @@ class PermissionChecker:
 
         # Get permissions from cache (hash keys)
         # Redis cache is the single source of truth for permissions
-        key = AdminPermissionHandler.permission_key(user_id)
+        key = PermissionCache.permission_key(user_id)
         permission_codes = await self._redis.hkeys(key)
         return [code.decode() if isinstance(code, bytes) else code for code in permission_codes]
 

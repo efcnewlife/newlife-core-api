@@ -1,0 +1,3 @@
+"""
+Locale application commands.
+"""

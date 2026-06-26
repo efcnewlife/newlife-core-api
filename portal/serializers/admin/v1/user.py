@@ -7,8 +7,8 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from portal.libs.consts.enums import Gender
-from portal.schemas.mixins import UUIDBaseModel, JSONStringMixinModel
-from portal.schemas.user import SUserDetail
+from portal.application.auth.results import UserDetail
+from portal.serializers.mixins.model_mixins import UUIDBaseModel, JSONStringMixinModel
 from portal.serializers.mixins import PaginationBaseResponseModel, GenericQueryBaseModel
 
 
@@ -29,12 +29,12 @@ class AdminUserBase(UUIDBaseModel, JSONStringMixinModel):
     display_name: Optional[str] = Field(None, description="User's display name", serialization_alias="displayName")
 
 
-class AdminUserTableItem(SUserDetail):
+class AdminUserTableItem(UserDetail):
     """UserTableItem"""
     pass
 
 
-class AdminUserItem(SUserDetail):
+class AdminUserItem(UserDetail):
     """UserItem"""
     pass
 
@@ -95,4 +95,4 @@ class AdminBindRole(BaseModel):
 
 class AdminUserPreferredLanguageUpdate(BaseModel):
     """Update current user preferred language"""
-    preferred_locale_id: UUID = Field(..., description="Preferred locale id", serialization_alias="preferredLocaleId")
+    preferred_locale_id: UUID = Field(..., description="Preferred locale id")

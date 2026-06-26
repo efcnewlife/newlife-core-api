@@ -27,6 +27,15 @@ class AuthUser(ModelBase, RemarkMixin, DeletedMixin, AuditMixin):
     is_active = Column(sa.Boolean, default=True, index=True, comment="Is active")
     is_superuser = Column(sa.Boolean, default=False, comment="Is superuser")  # Top-level admin can access all resources in the admin panel
     is_admin = Column(sa.Boolean, default=False, comment="Is admin")  # Can access the admin panel
+    person_id = Column(
+        UUID,
+        sa.ForeignKey("member.person.id", ondelete="SET NULL"),
+        nullable=True,
+        unique=True,
+        index=True,
+        comment="Linked member person ID",
+    )
+    account_kind = Column(sa.String(32), comment="Account kind: member, guest, external, service")
     password_changed_at = Column(sa.TIMESTAMP(timezone=True), comment="Password last changed time")
     password_expires_at = Column(sa.TIMESTAMP(timezone=True), comment="Password expiration time")
     last_login_at = Column(sa.TIMESTAMP(timezone=True), comment="Last login")

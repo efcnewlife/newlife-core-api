@@ -14,6 +14,7 @@ from .base import (
     GenericQueryBaseModel,
     PaginationBaseResponseModel,
     DeleteBaseModel,
+    DetailQueryModel,
 )
 
 __all__ = [
@@ -29,4 +30,5 @@ __all__ = [
     "GenericQueryBaseModel",
     "PaginationBaseResponseModel",
     "DeleteBaseModel",
+    "DetailQueryModel",
 ]

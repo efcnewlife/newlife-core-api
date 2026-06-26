@@ -15,7 +15,7 @@ from pydantic.fields import FieldInfo
 from pydantic_settings import BaseSettings, EnvSettingsSource, PydanticBaseSettingsSource
 
 from portal.libs.shared import Converter
-from portal.schemas.rate_limiter import RateLimitersConfig
+from portal.libs.rate_limit.config import RateLimitersConfig
 
 load_dotenv()
 

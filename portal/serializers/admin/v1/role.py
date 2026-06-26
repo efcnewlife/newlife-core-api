@@ -8,7 +8,7 @@ from uuid import UUID
 import ujson
 from pydantic import Field, BaseModel, model_validator, field_validator
 
-from portal.schemas.mixins import UUIDBaseModel
+from portal.serializers.mixins.model_mixins import UUIDBaseModel
 from portal.serializers.admin.v1.translation import (
     AdminTranslationInput,
     validate_unique_locale_ids,
@@ -89,13 +89,7 @@ class AdminRoleWrite(BaseModel):
 class AdminRoleCreate(AdminRoleWrite):
     """RoleCreate"""
 
-    @model_validator(mode="after")
-    def validate_legacy_or_translations(self):
-        if self.translations:
-            return self
-        if self.name:
-            return self
-        raise ValueError("Either translations or name is required")
+    translations: list[AdminTranslationInput] = Field(..., min_length=1, description="Localized content")
 
 
 class AdminRoleUpdate(AdminRoleWrite):
@@ -110,4 +104,4 @@ class AdminRoleBulkDelete(BaseModel):
 
 class AdminRolePermissionAssign(BaseModel):
     """Assign or revoke permissions to a role"""
-    permission_ids: list[UUID] = Field(..., serialization_alias="permissionIds", description="Permission IDs to assign or revoke")
+    permission_ids: list[UUID] = Field(..., description="Permission IDs to assign or revoke")

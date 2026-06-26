@@ -13,8 +13,7 @@ from portal.libs.consts.enums import AccessTokenAudType
 from portal.libs.consts.permission import Verb
 from portal.libs.logger import logger
 from portal.providers.token_blacklist_provider import TokenBlacklistProvider
-from portal.schemas.base import AccessTokenPayload
-from portal.schemas.user import SUserSensitive
+from portal.application.auth.results import AccessTokenPayload, UserSensitive
 
 VERB_SET = {Verb.READ.value, Verb.CREATE.value, Verb.UPDATE.value, Verb.DELETE.value}
 
@@ -60,7 +59,7 @@ class JWTProvider:
 
     def create_access_token(
         self,
-        user: SUserSensitive,
+        user: UserSensitive,
         family_id: UUID,
         roles: list = None,
         permissions: list = None,
@@ -148,72 +147,3 @@ class JWTProvider:
         except jwt.PyJWTError as e:
             logger.error(f"Error decoding JWT: {e}")
             return None
-
-    def is_token_expired(self, token: str, is_admin: bool = True) -> bool:
-        """
-        Check if token is expired
-        """
-        payload: AccessTokenPayload = self.verify_token(
-            token=token,
-            is_admin=is_admin
-        )
-        if not payload:
-            return True
-
-        if not payload.exp:
-            return True
-
-        return datetime.now(timezone.utc) > datetime.fromtimestamp(payload.exp, tz=timezone.utc)
-
-    def is_admin_token(self, token: str) -> bool:
-        """
-        Check if token is for admin user
-        """
-        payload: AccessTokenPayload = self.verify_token(
-            token=token,
-            is_admin=True
-        )
-        if not payload:
-            return False
-
-        return payload.iss == self._issuer
-
-    def is_user_token(self, token: str) -> bool:
-        """
-        Check if token is for frontend user
-        """
-
-    async def verify_token_with_blacklist(self, token: str, is_admin: bool = True) -> Optional[AccessTokenPayload]:
-        """
-        Verify token and check if it's blacklisted
-        """
-        # First verify the token
-        payload: AccessTokenPayload = self.verify_token(
-            token=token,
-            is_admin=is_admin,
-            options={"verify_signature": False}
-        )
-        if not payload:
-            return None
-
-        # Check if token is blacklisted
-        if await self.token_blacklist_provider.is_blacklisted(token):
-            return None
-
-        return payload
-
-    # Deprecated: refresh tokens are opaque and managed by RefreshTokenProvider
-    def get_token_expiration(self, token: str, is_admin: bool = True) -> Optional[datetime]:
-        """
-        Get token expiration time
-        """
-        payload: AccessTokenPayload = self.verify_token(
-            token=token,
-            is_admin=is_admin,
-            options={"verify_signature": False}
-        )
-        if not payload:
-            return None
-        if not payload.exp:
-            return None
-        return datetime.fromtimestamp(payload.exp, tz=timezone.utc)

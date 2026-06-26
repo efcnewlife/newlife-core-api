@@ -3,15 +3,12 @@ Superuser related CLI commands.
 """
 
 import asyncio
-from typing import Optional
-from uuid import uuid4
 
 import click
 
+from portal.application.cli.superuser_seed_service import SuperuserSeedService
 from portal.container import Container
-from portal.libs.consts.enums import Gender
 from portal.libs.shared import validator
-from portal.models import AuthUser, AuthUserProfile
 from portal.providers.password_provider import PasswordProvider
 
 
@@ -20,91 +17,19 @@ async def create_superuser(
     password: str,
     first_name: str,
     last_name: str,
-) -> Optional[AuthUser]:
+):
     """
-    Create a superuser.
-
-    Notes:
-    - This CLI writes directly into `AuthUser` and `AuthUserProfile`.
-    - RBAC roles are not required for authorization because middleware/permission
-      checks include a superuser bypass (`AuthUser.is_superuser`).
+    Create a superuser via application seed service.
     """
     container = Container()
     session = container.db_session()
-    password_provider = PasswordProvider()
-
-    normalized_email = (email or "").strip().lower()
-
-    if not normalized_email or not validator.is_email(normalized_email):
-        raise ValueError("Invalid email format")
-    if len(password) < 8:
-        raise ValueError("Password must be at least 8 characters long")
-    first_name = (first_name or "").strip()
-    last_name = (last_name or "").strip()
-    if not first_name:
-        raise ValueError("first_name is required")
-    if not last_name:
-        raise ValueError("last_name is required")
-
-    # DB column length constraints
-    first_name = first_name[:64]
-    last_name = last_name[:64]
-
     try:
-        existing_user_id = await (
-            session
-            .select(AuthUser.id)
-            .where(AuthUser.email == normalized_email)
-            .fetchval()
-        )
-
-        if existing_user_id:
-            return await (
-                session
-                .select(AuthUser)
-                .where(AuthUser.id == existing_user_id)
-                .fetchrow()
-            )
-
-        password_hash = password_provider.hash_password(password)
-        user_id = uuid4()
-
-        await (
-            session
-            .insert(AuthUser)
-            .values(
-                id=user_id,
-                email=normalized_email,
-                password_hash=password_hash,
-                verified=True,
-                is_active=True,
-                is_superuser=True,
-                is_admin=True,
-            )
-            .execute()
-        )
-
-        await (
-            session
-            .insert(AuthUserProfile)
-            .values(
-                id=uuid4(),
-                user_id=user_id,
-                first_name=first_name,
-                last_name=last_name,
-                gender=Gender.UNKNOWN.value,
-            )
-            .execute()
-        )
-
-        await session.commit()
-
-        click.echo(f"Superuser created: {normalized_email}")
-        return await (
-            session
-            .select(AuthUser)
-            .where(AuthUser.id == user_id)
-            .fetchrow()
+        service = SuperuserSeedService(session, PasswordProvider())
+        return await service.run(
+            email=email,
+            password=password,
+            first_name=first_name,
+            last_name=last_name,
         )
     except Exception as exc:
         click.echo(f"Error creating superuser: {exc}")
@@ -187,4 +112,3 @@ def create_superuser_process() -> None:
             fg="bright_green",
         )
     )
-
