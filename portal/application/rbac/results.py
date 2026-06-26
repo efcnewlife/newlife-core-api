@@ -7,6 +7,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from portal.domain.common.mixins import UUIDBaseModel
 from portal.domain.rbac.entities import (
     PermissionDetail,
     PermissionListItem,
@@ -27,10 +28,8 @@ class VerbListResult(BaseModel):
     items: list[VerbListItem] = Field(default_factory=list)
 
 
-class CreateIdResult(BaseModel):
+class CreateIdResult(UUIDBaseModel):
     """Created entity id."""
-
-    id: UUID = Field(...)
 
 
 class RolePageResult(BaseModel):
@@ -68,19 +67,17 @@ class ResourceTreeResult(BaseModel):
     items: list[ResourceTreeNode] = Field(default_factory=list)
 
 
-class AdminUserListItem(BaseModel):
+class AdminUserListItem(UUIDBaseModel):
     """Admin user list row."""
 
-    id: UUID = Field(...)
     phone_number: Optional[str] = Field(default=None)
     email: Optional[str] = Field(default=None)
     display_name: Optional[str] = Field(default=None)
 
 
-class AdminUserTableRow(BaseModel):
+class AdminUserTableRow(UUIDBaseModel):
     """Admin user table row."""
 
-    id: UUID = Field(...)
     phone_number: Optional[str] = Field(default=None)
     email: Optional[str] = Field(default=None)
     verified: bool = Field(default=False)

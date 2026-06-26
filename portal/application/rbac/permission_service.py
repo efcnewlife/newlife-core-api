@@ -61,22 +61,7 @@ class PermissionService:
         self,
         command: CreatePermissionCommand | UpdatePermissionCommand,
     ) -> list[dict[str, Any]]:
-        translation_payloads = command.translations or []
-        if (
-            not translation_payloads
-            and command.name
-            and self._req_ctx
-            and self._req_ctx.resolved_locale_id
-        ):
-            translation_payloads = [
-                {
-                    "locale_id": self._req_ctx.resolved_locale_id,
-                    "name": command.name,
-                    "description": command.description,
-                    "remark": command.remark,
-                }
-            ]
-        return translation_payloads
+        return list(command.translations or [])
 
     def _translation_rows(
         self,

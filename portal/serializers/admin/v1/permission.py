@@ -4,7 +4,7 @@ Permission serializers
 from typing import Optional
 from uuid import UUID
 
-from pydantic import Field, BaseModel, field_validator, model_validator
+from pydantic import Field, BaseModel, field_validator
 
 from portal.serializers.mixins.model_mixins import UUIDBaseModel, JSONStringMixinModel
 from portal.serializers.admin.v1.translation import (
@@ -84,13 +84,7 @@ class AdminPermissionWrite(BaseModel):
 class AdminPermissionCreate(AdminPermissionWrite):
     """PermissionCreate"""
 
-    @model_validator(mode="after")
-    def validate_legacy_or_translations(self):
-        if self.translations:
-            return self
-        if self.name:
-            return self
-        raise ValueError("Either translations or name is required")
+    translations: list[AdminTranslationInput] = Field(..., min_length=1, description="Localized content")
 
 
 class AdminPermissionUpdate(AdminPermissionWrite):

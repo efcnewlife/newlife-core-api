@@ -4,7 +4,9 @@ RBAC application commands (snake_case, no API serialization aliases).
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
+
+from portal.domain.common.mixins import UUIDBaseModel
 
 from portal.libs.consts.enums import Gender, ResourceType
 
@@ -51,13 +53,7 @@ class CreateRoleCommand(BaseModel):
     description: Optional[str] = Field(default=None)
     remark: Optional[str] = Field(default=None)
     permissions: list[UUID] = Field(default_factory=list)
-    translations: Optional[list[TranslationCommand]] = Field(default=None)
-
-    @model_validator(mode="after")
-    def validate_legacy_or_translations(self):
-        if self.translations or self.name:
-            return self
-        raise ValueError("Either translations or name is required")
+    translations: list[TranslationCommand] = Field(..., min_length=1)
 
 
 class UpdateRoleCommand(BaseModel):
@@ -91,13 +87,7 @@ class CreateResourceCommand(BaseModel):
     is_visible: bool = Field(default=True)
     description: Optional[str] = Field(default=None)
     remark: Optional[str] = Field(default=None)
-    translations: Optional[list[TranslationCommand]] = Field(default=None)
-
-    @model_validator(mode="after")
-    def validate_legacy_or_translations(self):
-        if self.translations or self.name:
-            return self
-        raise ValueError("Either translations or name is required")
+    translations: list[TranslationCommand] = Field(..., min_length=1)
 
 
 class UpdateResourceCommand(BaseModel):
@@ -122,10 +112,9 @@ class ChangeResourceParentCommand(BaseModel):
     pid: UUID = Field(...)
 
 
-class ChangeResourceSequenceCommand(BaseModel):
+class ChangeResourceSequenceCommand(UUIDBaseModel):
     """Swap resource sequence values."""
 
-    id: UUID = Field(...)
     sequence: float = Field(...)
     another_id: UUID = Field(...)
     another_sequence: float = Field(...)
@@ -210,13 +199,7 @@ class CreatePermissionCommand(BaseModel):
     name: Optional[str] = Field(default=None)
     description: Optional[str] = Field(default=None)
     remark: Optional[str] = Field(default=None)
-    translations: Optional[list[TranslationCommand]] = Field(default=None)
-
-    @model_validator(mode="after")
-    def validate_legacy_or_translations(self):
-        if self.translations or self.name:
-            return self
-        raise ValueError("Either translations or name is required")
+    translations: list[TranslationCommand] = Field(..., min_length=1)
 
 
 class UpdatePermissionCommand(BaseModel):

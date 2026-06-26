@@ -7,6 +7,8 @@ from typing import Optional
 import pydantic
 from pydantic import BaseModel, Field
 
+from portal.domain.common.mixins import UUIDBaseModel
+
 
 class DeleteQueryBaseModel(BaseModel):
     """Filter for deleted-only listings."""
@@ -18,13 +20,13 @@ class PaginationQueryBaseModel(BaseModel):
     """Pagination parameters."""
 
     page: int = Field(0, description="Page number")
-    page_size: int = Field(10, description="Page size", serialization_alias="pageSize")
+    page_size: int = Field(10, description="Page size")
 
 
 class OrderByQueryBaseModel(PaginationQueryBaseModel):
     """Pagination with ordering."""
 
-    order_by: Optional[str] = Field(None, description="Order by field", serialization_alias="orderBy")
+    order_by: Optional[str] = Field(None, description="Order by field")
     descending: bool = Field(False, description="Descending order")
 
 
@@ -36,6 +38,15 @@ class KeywordQueryBaseModel(BaseModel):
 
 class GenericQueryBaseModel(OrderByQueryBaseModel, DeleteQueryBaseModel, KeywordQueryBaseModel):
     """Combined list query parameters."""
+
+
+class DetailQueryModel(BaseModel):
+    """Single-entity detail query parameters."""
+
+    all_locales: bool = Field(
+        False,
+        description="When true, return translations for all locales instead of the resolved locale only",
+    )
 
 
 class DeleteBaseModel(BaseModel):
@@ -52,13 +63,12 @@ class DeleteBaseModel(BaseModel):
         return self
 
 
-class ChangeSequence(BaseModel):
+class ChangeSequence(UUIDBaseModel):
     """Reorder command for sortable resources."""
 
-    id: uuid.UUID = Field(..., description="Resource ID")
     sequence: float = Field(..., description="New sequence")
-    another_id: uuid.UUID = Field(..., description="Another resource ID to swap sequence with", serialization_alias="anotherId")
-    another_sequence: float = Field(..., description="Another resource's current sequence", serialization_alias="anotherSequence")
+    another_id: uuid.UUID = Field(..., description="Another resource ID to swap sequence with")
+    another_sequence: float = Field(..., description="Another resource's current sequence")
 
 
 class BulkAction(BaseModel):

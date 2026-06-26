@@ -119,13 +119,7 @@ class AdminResourceWrite(BaseModel):
 class AdminResourceCreate(AdminResourceWrite):
     """ResourceCreate"""
 
-    @model_validator(mode="after")
-    def validate_legacy_or_translations(self):
-        if self.translations:
-            return self
-        if self.name:
-            return self
-        raise ValueError("Either translations or name is required")
+    translations: list[AdminTranslationInput] = Field(..., min_length=1, description="Localized content")
 
 
 class AdminResourceUpdate(AdminResourceWrite):
