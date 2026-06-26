@@ -71,7 +71,6 @@ flowchart TB
 | Delivery | `portal/routers/`, `portal/serializers/`, `portal/middlewares/` | HTTP routes, API contracts (camelCase), auth and request context |
 | Cross-cutting | `portal/providers/`, `portal/events/`, `portal/libs/` | JWT/OIDC/password, event bus, DB session, authorization helpers |
 | DI | `portal/containers/` | `core`, `admin`, `events`; composition root at `portal/container.py` |
-| Legacy re-export | `portal/schemas/` | Backward-compatible aliases to `domain/` / `application/` types |
 
 ### Repository layout
 
