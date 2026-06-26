@@ -3,10 +3,11 @@ Auth application read models and token payloads.
 """
 from datetime import datetime
 from typing import Optional
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from pydantic import BaseModel, Field, field_serializer
 
+from portal.domain.common.mixins import UUIDBaseModel
 from portal.libs.consts.enums import Gender
 
 
@@ -47,10 +48,9 @@ class AccessTokenPayload(TokenPayload):
     family_id: UUID = Field(..., description="Refresh token family id")
 
 
-class RefreshTokenData(BaseModel):
+class RefreshTokenData(UUIDBaseModel):
     """Opaque refresh token metadata for provider operations."""
 
-    id: UUID = Field(default_factory=uuid4, description="Refresh token row id")
     user_id: UUID = Field(..., description="User ID")
     device_id: UUID = Field(..., description="Device ID")
     family_id: UUID = Field(..., description="Family ID")
@@ -65,10 +65,9 @@ class RefreshTokenData(BaseModel):
     user_agent: Optional[str] = Field(None, description="User agent")
 
 
-class UserDetail(BaseModel):
+class UserDetail(UUIDBaseModel):
     """User detail for token validation and public auth context."""
 
-    id: UUID = Field(..., description="User id")
     email: Optional[str] = Field(default=None, description="User email address")
     verified: bool = Field(default=False, description="Whether the user is verified")
     is_active: bool = Field(default=True, description="Whether the user is active")
@@ -101,13 +100,13 @@ class TokenResult(BaseModel):
     expires_in: int = Field(..., description="Access token lifetime in seconds")
 
 
-class AdminProfileResult(BaseModel):
+class AdminProfileResult(UUIDBaseModel):
     """Authenticated admin profile."""
 
-    id: UUID = Field(..., description="Admin user id")
     email: str = Field(..., description="Admin email")
     first_name: str = Field(..., description="First name")
     last_name: Optional[str] = Field(default=None, description="Last name")
+    preferred_name: Optional[str] = Field(default=None, description="Preferred display name")
     roles: list[str] = Field(default_factory=list, description="Admin roles")
     preferred_locale_id: Optional[UUID] = Field(default=None, description="Preferred locale id")
     last_login_at: Optional[datetime] = Field(default=None, description="Last login time")

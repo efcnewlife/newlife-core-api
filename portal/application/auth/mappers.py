@@ -43,6 +43,7 @@ def admin_profile_result_to_api(result: AdminProfileResult) -> AdminInfo:
         email=result.email,
         first_name=result.first_name,
         last_name=result.last_name,
+        preferred_name=result.preferred_name,
         roles=result.roles,
         preferred_locale_id=result.preferred_locale_id,
         last_login_at=result.last_login_at,

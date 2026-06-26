@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field
 
 from portal.domain.common.mixins import UUIDModel
 from portal.serializers.mixins import LoginResponse
@@ -22,6 +22,7 @@ class AdminInfo(UUIDModel):
     email: str = Field(..., description="Admin email")
     first_name: str = Field(..., description="First name")
     last_name: Optional[str] = Field(..., description="Last name")
+    preferred_name: Optional[str] = Field(None, description="Preferred display name", serialization_alias="preferredName")
     roles: list[str] = Field(default_factory=list, description="Admin roles")
     preferred_locale_id: Optional[UUID] = Field(None, description="Preferred locale id", serialization_alias="preferredLocaleId")
     last_login_at: Optional[datetime] = Field(None, description="Last login time")
@@ -46,11 +47,5 @@ class AdminResetPasswordWithTokenRequest(BaseModel):
 
 class MicrosoftIdTokenRequest(BaseModel):
     """Microsoft Entra ID token exchange body"""
-    model_config = ConfigDict(populate_by_name=True)
 
-    id_token: str = Field(
-        ...,
-        description="Microsoft ID token",
-        validation_alias=AliasChoices("id_token", "idToken"),
-        serialization_alias="idToken",
-    )
+    id_token: str = Field(..., description="Microsoft ID token")
