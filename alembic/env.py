@@ -1,4 +1,5 @@
 import logging
+import sys
 from logging.config import fileConfig
 
 from alembic import context
@@ -26,10 +27,46 @@ target_metadata = Base.metadata
 table_schema = settings.DATABASE_SCHEMA
 # Allowed schemas for migrations
 # NOTE: If you add a new schema, you need to add it to the ALLOWED_SCHEMAS list
-ALLOWED_SCHEMAS = {"public", "auth", "audit"}
+ALLOWED_SCHEMAS = {"public", "auth", "audit", "org", "member", "facility"}
 
 # Get logger
-log = logging.getLogger('alembic.env')
+log = logging.getLogger("alembic.env")
+
+
+def _metadata_schemas() -> set[str]:
+    """Collect distinct schema names from SQLAlchemy metadata (None -> public)."""
+    schemas: set[str] = set()
+    for table in target_metadata.tables.values():
+        schemas.add(table.schema or "public")
+    return schemas
+
+
+def _check_allowed_schemas() -> bool:
+    """Exit when ORM metadata contains schemas not listed in ALLOWED_SCHEMAS."""
+    missing_from_allowed = _metadata_schemas() - ALLOWED_SCHEMAS
+    if not missing_from_allowed:
+        return True
+    log.error(
+        f"Schema mismatch: metadata contains schemas {missing_from_allowed} not in ALLOWED_SCHEMAS {ALLOWED_SCHEMAS}"
+    )
+    return False
+
+
+def _emit_env_startup_logs() -> None:
+    print("-" * 150)
+    log.info("Checking allowed schemas...")
+    try:
+        is_allowed_schemas_ok = _check_allowed_schemas()
+        if not is_allowed_schemas_ok:
+            sys.exit(1)
+    except Exception as exc:
+        log.error("Error checking allowed schemas: %s", exc)
+        sys.exit(1)
+    finally:
+        print("-" * 150)
+
+
+_emit_env_startup_logs()
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
@@ -117,11 +154,12 @@ def process_revision_directives(context, revision, directives):
     """
     Process migration directives, reorder table columns to put 'id' first
     """
-    if not config.cmd_opts.autogenerate:
+    if not config.cmd_opts or not getattr(config.cmd_opts, "autogenerate", False):
         return
 
     script = directives[0]
-    if not script.upgrade_ops:
+    if not script.upgrade_ops or not script.upgrade_ops.ops:
+        log.warning("autogenerate empty; check ALLOWED_SCHEMAS in alembic/env.py.")
         return
 
     for op in script.upgrade_ops.ops:
