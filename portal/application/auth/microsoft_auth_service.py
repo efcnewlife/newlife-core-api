@@ -20,6 +20,31 @@ from portal.libs.tracing.distributed_trace import distributed_trace
 from portal.providers.microsoft_oidc_provider import MicrosoftOidcProvider
 
 
+def _profile_fields_from_microsoft_claims(claims: dict[str, Any]) -> tuple[str, str, Optional[str]]:
+    given_name = str(claims.get("given_name") or "").strip()
+    family_name = str(claims.get("family_name") or "").strip()
+    display_name = str(claims.get("name") or "").strip()
+
+    if not given_name and display_name:
+        name_parts = display_name.split(None, 1)
+        given_name = name_parts[0] if name_parts else ""
+        if not family_name and len(name_parts) > 1:
+            family_name = name_parts[1]
+
+    if not given_name:
+        fallback = (
+            display_name
+            or str(claims.get("preferred_username") or claims.get("email") or claims.get("upn") or "")
+            .strip()
+        )
+        if "@" in fallback:
+            fallback = fallback.split("@", 1)[0]
+        given_name = fallback or "User"
+
+    preferred_name = display_name or None
+    return given_name, family_name, preferred_name
+
+
 class MicrosoftAuthService:
     """Microsoft OIDC login use cases."""
 
@@ -70,6 +95,21 @@ class MicrosoftAuthService:
         except Exception:
             logger.exception("Failed to upsert AuthUserThirdParty for Microsoft login")
 
+    async def _ensure_user_profile(self, user_id: UUID, claims: dict[str, Any]) -> None:
+        if await self._repository.user_profile_exists(user_id):
+            return
+        first_name, last_name, preferred_name = _profile_fields_from_microsoft_claims(claims)
+        try:
+            await self._repository.create_user_profile(
+                user_id=user_id,
+                first_name=first_name,
+                last_name=last_name,
+                preferred_name=preferred_name,
+            )
+        except Exception:
+            logger.exception("Failed to create AuthUserProfile for Microsoft login user_id=%s", user_id)
+            raise
+
     @distributed_trace()
     async def microsoft_login(self, command: MicrosoftLoginCommand) -> LoginResult:
         if not self._microsoft_oidc_provider.is_configured():
@@ -89,7 +129,13 @@ class MicrosoftAuthService:
 
         user: Optional[UserSensitive] = await self._repository.get_sensitive_by_email(email)
         if not user:
-            raise UnauthorizedException(detail="User not found")
+            user = await self._repository.get_sensitive_by_email_without_profile(email)
+            if not user:
+                raise UnauthorizedException(detail="User not found")
+            await self._ensure_user_profile(user.id, claims)
+            user = await self._repository.get_sensitive_by_email(email)
+            if not user:
+                raise UnauthorizedException(detail="User not found")
         if not user.is_admin or not user.verified or not user.is_active:
             raise UnauthorizedException(detail="User is not allowed to access the admin portal")
         await self._record_microsoft_third_party_login(user.id, claims)

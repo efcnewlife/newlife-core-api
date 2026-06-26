@@ -24,7 +24,7 @@ from portal.application.rbac.results import (
     CreateIdResult,
 )
 from portal.exceptions.responses import ConflictErrorException
-from portal.libs.consts.enums import ThirdPartyProvider
+from portal.libs.consts.enums import Gender, ThirdPartyProvider
 from portal.libs.database import Session
 from portal.models import (
     AuthUser,
@@ -118,6 +118,60 @@ class UserRepository:
             .fetchrow(as_model=UserSensitive)
         )
         return user
+
+    async def get_sensitive_by_email_without_profile(self, email: str) -> Optional[UserSensitive]:
+        """Load auth account by email without requiring an AuthUserProfile row."""
+        if not email:
+            return None
+        normalized = email.strip().lower()
+        user: UserSensitive = await (
+            self._session.select(
+                AuthUser.id,
+                AuthUser.phone_number,
+                AuthUser.email,
+                AuthUser.password_hash,
+                AuthUser.verified,
+                AuthUser.is_active,
+                AuthUser.is_superuser,
+                AuthUser.is_admin,
+                AuthUser.password_changed_at,
+                AuthUser.password_expires_at,
+                AuthUser.last_login_at,
+            )
+            .where(sa.func.lower(AuthUser.email) == normalized)
+            .where(AuthUser.is_deleted == False)
+            .fetchrow(as_model=UserSensitive)
+        )
+        return user
+
+    async def user_profile_exists(self, user_id: UUID) -> bool:
+        profile_id = await (
+            self._session.select(AuthUserProfile.id)
+            .where(AuthUserProfile.user_id == user_id)
+            .fetchval()
+        )
+        return bool(profile_id)
+
+    async def create_user_profile(
+        self,
+        user_id: UUID,
+        first_name: str,
+        last_name: str,
+        preferred_name: Optional[str] = None,
+    ) -> None:
+        await (
+            self._session.insert(AuthUserProfile)
+            .values(
+                user_id=user_id,
+                first_name=first_name,
+                last_name=last_name,
+                preferred_name=preferred_name,
+                gender=Gender.UNKNOWN.value,
+                created_by="microsoft_oauth",
+                updated_by="microsoft_oauth",
+            )
+            .execute()
+        )
 
     async def get_user_pages(
         self,
