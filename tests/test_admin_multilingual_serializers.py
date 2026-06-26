@@ -4,6 +4,9 @@ import pytest
 from pydantic import ValidationError
 
 from portal.libs.consts.enums import ResourceType
+from portal.serializers.admin.v1.facility.rental_rate import AdminRentalRateCreate
+from portal.serializers.admin.v1.facility.room import AdminRoomCreate
+from portal.serializers.admin.v1.ministry import AdminMinistryCreate
 from portal.serializers.admin.v1.permission import AdminPermissionCreate, AdminPermissionUpdate
 from portal.serializers.admin.v1.resource import AdminResourceCreate, AdminResourceUpdate
 from portal.serializers.admin.v1.role import AdminRoleCreate, AdminRoleUpdate
@@ -18,7 +21,7 @@ def _translation(locale_id):
     }
 
 
-def test_create_requires_translations_or_legacy_name():
+def test_create_requires_translations():
     with pytest.raises(ValidationError):
         AdminPermissionCreate(
             code="permission_code",
@@ -42,6 +45,33 @@ def test_create_requires_translations_or_legacy_name():
             code="role_code",
             is_active=True,
             permissions=[],
+        )
+
+
+def test_create_rejects_legacy_name_only():
+    with pytest.raises(ValidationError):
+        AdminPermissionCreate(
+            code="permission_code",
+            resource_id=uuid4(),
+            verb_id=uuid4(),
+            is_active=True,
+            name="Legacy Name",
+        )
+
+    with pytest.raises(ValidationError):
+        AdminRoomCreate(
+            code="room-a",
+            name="Room A",
+        )
+
+    with pytest.raises(ValidationError):
+        AdminMinistryCreate(name="Youth")
+
+    with pytest.raises(ValidationError):
+        AdminRentalRateCreate(
+            facility_id=uuid4(),
+            unit_amount="10",
+            name="Hourly",
         )
 
 

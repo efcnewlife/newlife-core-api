@@ -47,9 +47,9 @@ def test_microsoft_auth_returns_503_when_not_configured(client: TestClient):
     assert response.status_code == 503
 
 
-def test_microsoft_auth_accepts_id_token_alias(client: TestClient):
+def test_microsoft_auth_rejects_camel_case_id_token(client: TestClient):
     response = client.post("/admin/api/v1/auth/login/microsoft", json={"idToken": "invalid"})
-    assert response.status_code == 503
+    assert response.status_code == 422
 
 
 def test_public_healthz(client: TestClient):
