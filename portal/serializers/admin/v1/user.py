@@ -95,4 +95,4 @@ class AdminBindRole(BaseModel):
 
 class AdminUserPreferredLanguageUpdate(BaseModel):
     """Update current user preferred language"""
-    preferred_locale_id: UUID = Field(..., description="Preferred locale id", serialization_alias="preferredLocaleId")
+    preferred_locale_id: UUID = Field(..., description="Preferred locale id")

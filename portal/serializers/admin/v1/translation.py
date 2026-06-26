@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 class AdminTranslationInput(BaseModel):
     """Shared translation input model."""
 
-    locale_id: UUID = Field(..., serialization_alias="localeId", description="Locale ID")
+    locale_id: UUID = Field(..., description="Locale ID")
     name: str = Field(..., description="Name")
     description: Optional[str] = Field(None, description="Description")
     remark: Optional[str] = Field(None, description="Remark")
