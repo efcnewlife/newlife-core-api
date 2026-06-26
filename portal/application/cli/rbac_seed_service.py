@@ -20,6 +20,7 @@ from portal.models import (
     AuthPermission,
     AuthPermissionTranslation,
     AuthRolePermission,
+    AuthUserRole,
 )
 from portal.cli.datas.rbac_seed_data import (
     SUPPORTED_LOCALES,
@@ -27,6 +28,43 @@ from portal.cli.datas.rbac_seed_data import (
     parent_resources,
     resources,
 )
+
+
+async def clear_rbac_data(session: Session) -> None:
+    """
+    Delete all RBAC rows (associations, translations, catalog, roles).
+    Does not commit; caller owns the transaction boundary.
+    """
+    await session.delete(AuthUserRole).execute()
+    await session.delete(AuthRolePermission).execute()
+    await session.delete(AuthRoleTranslation).execute()
+    await session.delete(AuthPermissionTranslation).execute()
+    await session.delete(AuthPermission).execute()
+    await session.delete(AuthResourceTranslation).execute()
+    await session.delete(AuthVerbTranslation).execute()
+    # Child resources before parents (self-referential pid).
+    await session.delete(AuthResource).where(AuthResource.pid.isnot(None)).execute()
+    await session.delete(AuthResource).execute()
+    await session.delete(AuthVerb).execute()
+    await session.delete(AuthRole).execute()
+
+
+async def run_rbac_reset(session: Session) -> None:
+    """
+    Wipe all RBAC data and re-seed from rbac_seed_data.
+    """
+    click.echo(click.style("Clearing all RBAC data...", fg="yellow"))
+    try:
+        await clear_rbac_data(session)
+    except Exception as e:
+        await session.rollback()
+        click.echo(click.style(f"RBAC reset failed while clearing: {e}", fg="red"))
+        logger.exception(e)
+        raise
+
+    click.echo(click.style("Re-seeding RBAC from seed data...", fg="cyan"))
+    await run_rbac_seed(session)
+    logger.info("RBAC reset completed.")
 
 
 async def run_rbac_seed(session: Session):
