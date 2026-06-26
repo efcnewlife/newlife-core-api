@@ -22,7 +22,7 @@ from portal.application.rbac.role_service import RoleService
 from portal.container import Container
 from portal.libs.consts.permission import Permission
 from portal.routers.auth_router import AuthRouter
-from portal.schemas.mixins import UUIDBaseModel
+from portal.serializers.mixins.model_mixins import UUIDBaseModel
 from portal.serializers.mixins import DeleteBaseModel, GenericQueryBaseModel
 from portal.serializers.admin.v1.role import (
     AdminRolePages,

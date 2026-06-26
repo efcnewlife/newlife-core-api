@@ -19,6 +19,33 @@ from .auth import (
     AuthDevice,
     AuthRefreshToken
 )
+from .facility import (
+    FacilityRoom,
+    FacilityRoomTranslation,
+    FacilityRoomSlotTemplate,
+    FacilityRentalRate,
+    FacilityRentalRateTranslation,
+    FacilityRentalDiscountRule,
+    FacilityRentalSurcharge,
+    FacilityRentalPolicySetting,
+    FacilityBooking,
+    FacilityBookingRoom,
+    FacilityBookingSlot,
+    FacilityBookingSurcharge,
+    FacilityBookingOverrideLog,
+)
+from .member import (
+    MemberPerson,
+)
+from .org import (
+    OrgMinistry,
+    OrgMinistryApproval,
+    OrgMinistryMember,
+    OrgMinistryTranslation,
+    OrgPosition,
+    OrgPositionAssignment,
+    OrgPositionTranslation,
+)
 from .system_locale import SystemLocale
 
 __all__ = [
@@ -44,4 +71,28 @@ __all__ = [
     # auth
     "AuthDevice",
     "AuthRefreshToken",
+    # facility
+    "FacilityRoom",
+    "FacilityRoomTranslation",
+    "FacilityRoomSlotTemplate",
+    "FacilityRentalRate",
+    "FacilityRentalRateTranslation",
+    "FacilityRentalDiscountRule",
+    "FacilityRentalSurcharge",
+    "FacilityRentalPolicySetting",
+    "FacilityBooking",
+    "FacilityBookingRoom",
+    "FacilityBookingSlot",
+    "FacilityBookingSurcharge",
+    "FacilityBookingOverrideLog",
+    # member
+    "MemberPerson",
+    # org
+    "OrgPosition",
+    "OrgPositionTranslation",
+    "OrgPositionAssignment",
+    "OrgMinistry",
+    "OrgMinistryTranslation",
+    "OrgMinistryMember",
+    "OrgMinistryApproval",
 ]

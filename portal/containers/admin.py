@@ -26,6 +26,8 @@ from portal.infrastructure.persistence.repositories.role_repository import RoleR
 from portal.infrastructure.persistence.repositories.user_repository import UserRepository
 from portal.infrastructure.persistence.repositories.verb_repository import VerbRepository
 from portal.libs.authorization.permission_checker import PermissionChecker
+from portal.containers.facility import FacilityContainer
+from portal.containers.org import OrgContainer
 
 
 class AdminContainer(containers.DeclarativeContainer):
@@ -149,3 +151,6 @@ class AdminContainer(containers.DeclarativeContainer):
         PermissionChecker,
         redis_client=core.redis_client,
     )
+
+    facility = providers.Container(FacilityContainer, core=core)
+    org = providers.Container(OrgContainer, core=core)

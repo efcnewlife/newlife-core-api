@@ -10,6 +10,9 @@ from .resource import router as resource_router
 from .role import router as role_router
 from .user import router as user_router
 from .verb import router as verb_router
+from .facility import router as facility_router
+from .ministry import router as ministry_router
+from .org import router as org_router
 
 router = AuthRouter(
     dependencies=[
@@ -24,3 +27,6 @@ router.include_router(resource_router, prefix="/resource", tags=["Resource"])
 router.include_router(role_router, prefix="/role", tags=["Role"])
 router.include_router(user_router, prefix="/user", tags=["User"])
 router.include_router(verb_router, prefix="/verb", tags=["Verb"])
+router.include_router(facility_router, prefix="/facility")
+router.include_router(ministry_router, prefix="/ministry")
+router.include_router(org_router, prefix="/org")

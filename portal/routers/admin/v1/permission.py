@@ -22,7 +22,7 @@ from portal.application.rbac.permission_service import PermissionService
 from portal.container import Container
 from portal.libs.consts.permission import Permission
 from portal.routers.auth_router import AuthRouter
-from portal.schemas.mixins import UUIDBaseModel
+from portal.serializers.mixins.model_mixins import UUIDBaseModel
 from portal.serializers.mixins import DeleteBaseModel
 from portal.serializers.admin.v1.permission import (
     AdminPermissionPage,

@@ -1,6 +1,7 @@
 """
 Root DI container: composes core, admin, and events sub-containers.
 """
+from typing import TypeVar
 
 from dependency_injector import containers, providers
 
@@ -24,7 +25,7 @@ class RootContainer(containers.DeclarativeContainer):
     )
 
     core = providers.Container(CoreContainer)
-    admin = providers.Container(AdminContainer, core=core)
+    admin: AdminContainer = providers.Container(AdminContainer, core=core)
     events = providers.Container(EventsContainer, core=core)
 
     config = core.config
@@ -51,6 +52,20 @@ class RootContainer(containers.DeclarativeContainer):
     verb_service = admin.verb_service
     permission_checker = admin.permission_checker
     rbac_audit_service = admin.rbac_audit_service
+
+    room_service = admin.facility.room_service
+    room_slot_template_service = admin.facility.room_slot_template_service
+    rental_rate_service = admin.facility.rental_rate_service
+    rental_catalog_service = admin.facility.rental_catalog_service
+    pricing_service = admin.facility.pricing_service
+    booking_service = admin.facility.booking_service
+    member_service = admin.facility.member_service
+    override_log_service = admin.facility.override_log_service
+
+    org_ministry_service = admin.org.ministry_service
+    org_ministry_approval_service = admin.org.ministry_approval_service
+    org_position_service = admin.org.position_service
+    org_member_person_service = admin.org.member_person_service
 
     event_bus = events.event_bus
 
