@@ -8,17 +8,7 @@ from uuid import UUID
 import ujson
 from pydantic import BaseModel, Field, field_serializer, model_validator
 
-from portal.domain.common.mixins import UUIDModel
-
-
-class UUIDBaseModel(UUIDModel):
-    """UUID base model with string id serialization for JSON responses."""
-
-    @field_serializer("id")
-    def serialize_uuid(self, value: UUID, _info) -> Optional[str]:
-        if value is None:
-            return None
-        return str(value)
+from portal.domain.common.mixins import UUIDBaseModel
 
 
 class JSONStringMixinModel(BaseModel):
