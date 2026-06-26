@@ -22,7 +22,7 @@ from pyrate_limiter import Duration, Limiter, Rate
 from pyrate_limiter.buckets.redis_bucket import RedisBucket
 
 from portal.config import settings
-from portal.schemas.rate_limiter import RateLimiterConfig
+from portal.libs.rate_limit.config import RateLimiterConfig
 
 
 async def default_identifier(request: Request) -> str:
@@ -74,7 +74,7 @@ def get_rate_limiters_config(config_type: str = "default") -> RateLimiterConfig:
     """
     if not settings.RATE_LIMITERS_CONFIG:
         # If configuration is not loaded, return default value
-        from portal.schemas.rate_limiter import RateLimitWindow
+        from portal.libs.rate_limit.config import RateLimitWindow
         return RateLimiterConfig(
             short=RateLimitWindow(times=3, seconds=1),
             medium=RateLimitWindow(times=20, seconds=30),

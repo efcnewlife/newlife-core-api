@@ -1,5 +1,5 @@
 """
-Rate limiter configuration schemas
+Rate limiter configuration models
 """
 from pydantic import BaseModel, Field
 
@@ -28,4 +28,3 @@ class RateLimitersConfig(BaseModel):
     default: RateLimiterConfig = Field(..., description="Default rate limiter configuration for general endpoints")
     read: RateLimiterConfig = Field(..., description="Rate limiter configuration for read endpoints (more lenient)")
     write: RateLimiterConfig = Field(..., description="Rate limiter configuration for write endpoints (more strict)")
-
