@@ -5,13 +5,37 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field
+import ujson
+from pydantic import BaseModel, Field, field_serializer, model_validator
 
 
-class UUIDModel(BaseModel):
-    """UUID identifier for domain entities."""
+class JsonStringParseModel(BaseModel):
+    """Parse JSON string values before validation (e.g. asyncpg jsonb array elements)."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def parse_json_string(cls, values):
+        if isinstance(values, str):
+            try:
+                values = ujson.loads(values)
+            except ujson.JSONDecodeError as error:
+                raise ValueError(f"Invalid JSON string: {error}") from error
+        return values
+
+
+class UUIDBaseModel(BaseModel):
+    """UUID identifier with string serialization for JSON."""
 
     id: UUID = Field(default_factory=uuid4)
+
+    @field_serializer("id")
+    def serialize_uuid(self, value: UUID, _info) -> Optional[str]:
+        if value is None:
+            return None
+        return str(value)
+
+
+UUIDModel = UUIDBaseModel
 
 
 class AuditModel(BaseModel):
