@@ -380,17 +380,17 @@ The Admin Portal SPA can sign in with Microsoft and exchange the Entra **ID toke
 4. Ensure `CORS_ALLOWED_ORIGINS` includes the Admin Portal origin.
 5. The portal user must already exist with `is_admin`, `is_active`, and `verified`; matching is by **email** from the token.
 
-### 5. docker
+### 5. Docker
 
 Make sure you have Docker installed and running.
 
-> start up local redis and postgresql server with `docker-compose.yml`
+> Start up local Redis and PostgreSQL with `docker-compose.yml`.
 
 ```shell
 docker compose up -d
 ```
 
-### 5. Database Setup
+### 6. Database Setup
 
 > How to use Alembic to manage database migrations.
 > 
@@ -456,6 +456,46 @@ or
 ```shell
 poetry run alembic history --verbose
 ```
+
+### 7. Project initialization (CLI)
+
+After migrations, seed baseline data and create the first admin account. Run all commands from the project root:
+
+```shell
+poetry run python -m portal.cli.main --help
+```
+
+#### Recommended order (fresh database)
+
+Prerequisites: `.env` configured, Docker services running, and `alembic upgrade head` completed.
+
+```shell
+# 1. Supported locales (en, zh-TW, zh-CN)
+poetry run python -m portal.cli.main init-locales
+
+# 2. RBAC catalog (verbs, resources, permissions, admin role)
+poetry run python -m portal.cli.main init-rbac
+
+# 3. First portal admin (interactive prompts)
+poetry run python -m portal.cli.main create-superuser
+
+# 4. Optional: org position seed data
+poetry run python -m portal.cli.main seed-positions
+```
+
+| Command | Purpose |
+|---------|---------|
+| `init-locales` | Insert supported `SystemLocale` rows from `portal/cli/datas/locale_data.py`. |
+| `init-rbac` | Seed verbs, resources, permissions, and the `admin` role from `portal/cli/datas/rbac_seed_data.py`. Safe to re-run (upserts). |
+| `create-superuser` | Create an `AuthUser` with `is_admin` / `is_superuser` via interactive prompts. |
+| `seed-positions` | Upsert org positions and translations from `portal/cli/datas/position_seed_data.py`. |
+| `reset-rbac` | **Destructive:** delete all RBAC data and re-seed from `rbac_seed_data`. |
+
+Notes:
+
+- Run `init-locales` before `init-rbac`; RBAC translations depend on locale rows.
+- `seed-positions` and `reset-rbac` are blocked when `ENV` is not `dev` unless `--force` is passed.
+- Seed logic lives in `portal/application/cli/*_seed_service.py`; `portal/cli/` provides thin Click entrypoints only.
 
 ## Run FastAPI server
 
