@@ -10,6 +10,7 @@ from fastapi import status
 
 from portal.application.auth.commands import MicrosoftLoginCommand
 from portal.application.auth.login_service import LoginService
+from portal.application.auth.microsoft_profile_mapper import profile_fields_from_microsoft_claims
 from portal.application.auth.results import LoginResult, UserSensitive
 from portal.config import settings
 from portal.exceptions.responses import ApiBaseException, UnauthorizedException
@@ -18,31 +19,6 @@ from portal.libs.consts.enums import ThirdPartyProvider
 from portal.libs.logger import logger
 from portal.libs.tracing.distributed_trace import distributed_trace
 from portal.providers.microsoft_oidc_provider import MicrosoftOidcProvider
-
-
-def _profile_fields_from_microsoft_claims(claims: dict[str, Any]) -> tuple[str, str, Optional[str]]:
-    given_name = str(claims.get("given_name") or "").strip()
-    family_name = str(claims.get("family_name") or "").strip()
-    display_name = str(claims.get("name") or "").strip()
-
-    if not given_name and display_name:
-        name_parts = display_name.split(None, 1)
-        given_name = name_parts[0] if name_parts else ""
-        if not family_name and len(name_parts) > 1:
-            family_name = name_parts[1]
-
-    if not given_name:
-        fallback = (
-            display_name
-            or str(claims.get("preferred_username") or claims.get("email") or claims.get("upn") or "")
-            .strip()
-        )
-        if "@" in fallback:
-            fallback = fallback.split("@", 1)[0]
-        given_name = fallback or "User"
-
-    preferred_name = display_name or None
-    return given_name, family_name, preferred_name
 
 
 class MicrosoftAuthService:
@@ -98,7 +74,7 @@ class MicrosoftAuthService:
     async def _ensure_user_profile(self, user_id: UUID, claims: dict[str, Any]) -> None:
         if await self._repository.user_profile_exists(user_id):
             return
-        first_name, last_name, preferred_name = _profile_fields_from_microsoft_claims(claims)
+        first_name, last_name, preferred_name = profile_fields_from_microsoft_claims(claims)
         try:
             await self._repository.create_user_profile(
                 user_id=user_id,

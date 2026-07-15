@@ -2,6 +2,7 @@
 Organization application commands.
 """
 from datetime import datetime
+from datetime import date, time
 from typing import Optional
 from uuid import UUID
 
@@ -21,6 +22,7 @@ __all__ = [
     "LinkMemberPersonCommand",
     "MinistryApplicationCommand",
     "MinistryMemberEntryCommand",
+    "MinistryScheduleCommand",
     "OrgTranslationCommand",
     "PagesQueryCommand",
     "PositionTranslationCommand",
@@ -40,6 +42,18 @@ class OrgTranslationCommand(BaseModel):
     name: str = Field(...)
     description: Optional[str] = Field(default=None)
     remark: Optional[str] = Field(default=None)
+    schedule_note: Optional[str] = Field(default=None)
+
+
+class MinistryScheduleCommand(BaseModel):
+    """Ministry schedule row."""
+
+    days_of_week: list[int] = Field(default_factory=list)
+    start_time: Optional[time] = Field(default=None)
+    end_time: Optional[time] = Field(default=None)
+    effective_from: Optional[date] = Field(default=None)
+    effective_to: Optional[date] = Field(default=None)
+    sequence: Optional[float] = Field(default=None)
 
 
 class PositionTranslationCommand(BaseModel):
@@ -56,6 +70,9 @@ class CreateMinistryCommand(BaseModel):
 
     name: Optional[str] = Field(default=None)
     owner_position_id: Optional[UUID] = Field(default=None)
+    ministry_type_id: Optional[UUID] = Field(default=None)
+    target_audience_ids: list[UUID] = Field(default_factory=list)
+    schedules: list[MinistryScheduleCommand] = Field(default_factory=list)
     has_priority_booking: bool = Field(default=False)
     is_active: bool = Field(default=True)
     sequence: Optional[float] = Field(default=None)
@@ -67,6 +84,9 @@ class UpdateMinistryCommand(BaseModel):
 
     name: Optional[str] = Field(default=None)
     owner_position_id: Optional[UUID] = Field(default=None)
+    ministry_type_id: Optional[UUID] = Field(default=None)
+    target_audience_ids: Optional[list[UUID]] = Field(default=None)
+    schedules: Optional[list[MinistryScheduleCommand]] = Field(default=None)
     has_priority_booking: bool = Field(default=False)
     is_active: bool = Field(default=True)
     sequence: Optional[float] = Field(default=None)
@@ -79,6 +99,7 @@ class MinistryMemberEntryCommand(BaseModel):
     user_id: UUID = Field(...)
     member_role: MinistryMemberRole = Field(...)
     remark: Optional[str] = Field(default=None)
+    contact_email: Optional[str] = Field(default=None)
 
 
 class ReplaceMinistryMembersCommand(BaseModel):

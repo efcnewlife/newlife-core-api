@@ -3,13 +3,14 @@ Facility booking application results.
 """
 from datetime import date, datetime, time
 from decimal import Decimal
-from typing import Optional
+from typing import Any, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from portal.domain.common.mixins import JsonStringParseModel, UUIDBaseModel
 from portal.domain.facility.constants import RentalRateBillingUnit
+from portal.domain.facility.rate_applicability import coerce_applicability_from_db
 
 from portal.application.org.results import (
     CreateIdResult,
@@ -106,6 +107,7 @@ class RentalRateResult(UUIDBaseModel):
     currency: str = Field(...)
     is_default: bool = Field(default=False)
     is_active: bool = Field(default=True)
+    applicability: Optional[dict] = Field(default=None)
     effective_from: Optional[date] = Field(default=None)
     effective_to: Optional[date] = Field(default=None)
     sequence: Optional[float] = Field(default=None)
@@ -117,6 +119,11 @@ class RentalRateResult(UUIDBaseModel):
     updated_by: Optional[str] = Field(default=None)
     delete_reason: Optional[str] = Field(default=None)
     translations: list[TranslationItemResult] = Field(default_factory=list)
+
+    @field_validator("applicability", mode="before")
+    @classmethod
+    def parse_applicability_from_db(cls, value: Any) -> Optional[dict]:
+        return coerce_applicability_from_db(value)
 
 
 class RentalRatePageResult(BaseModel):

@@ -20,6 +20,7 @@ from portal.application.facility.results import (
 )
 from portal.application.rbac.commands import PagesQueryCommand
 from portal.domain.facility.constants import RentalPolicySettingKey, RentalRateBillingUnit
+from portal.domain.facility.rate_applicability import RateSelectionContext, matches_applicability
 from portal.libs.database import Session
 from portal.libs.database.execute_result import affected_rows
 from portal.models import (
@@ -75,6 +76,7 @@ class RentalRepository:
             FacilityRentalRate.currency,
             FacilityRentalRate.is_default,
             FacilityRentalRate.is_active,
+            FacilityRentalRate.applicability,
             FacilityRentalRate.effective_from,
             FacilityRentalRate.effective_to,
             FacilityRentalRate.sequence,
@@ -217,6 +219,7 @@ class RentalRepository:
                 FacilityRentalRate.currency,
                 FacilityRentalRate.is_default,
                 FacilityRentalRate.is_active,
+                FacilityRentalRate.applicability,
                 FacilityRentalRate.effective_from,
                 FacilityRentalRate.effective_to,
                 FacilityRentalRate.sequence,
@@ -506,27 +509,31 @@ class RentalRepository:
     def pick_rate_for_line(
         rates: list[RentalRateResult],
         billed_hours: Decimal,
-        daily_flat_threshold: Decimal,
     ) -> tuple[Optional[RentalRateResult], str]:
-        hourly = next(
-            (rate for rate in rates if rate.billing_unit == RentalRateBillingUnit.HOURLY.value and rate.is_active),
-            None,
-        )
-        daily_flat = next(
-            (rate for rate in rates if rate.billing_unit == RentalRateBillingUnit.DAILY_FLAT.value and rate.is_active),
-            None,
-        )
-        if billed_hours >= daily_flat_threshold and daily_flat:
-            return daily_flat, RentalRateBillingUnit.DAILY_FLAT.value
-        if hourly:
-            return hourly, RentalRateBillingUnit.HOURLY.value
-        default_rate = next((rate for rate in rates if rate.is_default and rate.is_active), None)
-        if default_rate:
-            return default_rate, default_rate.billing_unit
-        if rates:
-            first = rates[0]
-            return first, first.billing_unit
-        return None, RentalRateBillingUnit.HOURLY.value
+        ctx = RateSelectionContext(billed_hours=billed_hours)
+        eligible = [
+            rate
+            for rate in rates
+            if rate.is_active and matches_applicability(rate.applicability, ctx)
+        ]
+        if not eligible:
+            default_rate = next((rate for rate in rates if rate.is_default and rate.is_active), None)
+            if default_rate:
+                return default_rate, default_rate.billing_unit
+            active = [rate for rate in rates if rate.is_active]
+            if active:
+                first = active[0]
+                return first, first.billing_unit
+            return None, RentalRateBillingUnit.HOURLY.value
+
+        def _sort_key(rate: RentalRateResult) -> tuple:
+            has_rule = 0 if rate.applicability else 1
+            sequence = rate.sequence if rate.sequence is not None else float("inf")
+            default_rank = 0 if rate.is_default else 1
+            return (has_rule, sequence, default_rank)
+
+        chosen = sorted(eligible, key=_sort_key)[0]
+        return chosen, chosen.billing_unit
 
     @staticmethod
     def is_unique_violation(exc: Exception) -> bool:

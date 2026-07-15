@@ -14,6 +14,7 @@ from portal.application.org.commands import (
     LinkMemberPersonCommand,
     MinistryApplicationCommand,
     MinistryMemberEntryCommand,
+    MinistryScheduleCommand,
     OrgTranslationCommand,
     PagesQueryCommand,
     PositionTranslationCommand,
@@ -32,6 +33,11 @@ from portal.application.org.results import (
     MinistryListResult,
     MinistryMemberResult,
     MinistryPageResult,
+    MinistryScheduleResult,
+    MinistryTypeListResult,
+    MinistryTypeResult,
+    TargetAudienceListResult,
+    TargetAudienceResult,
     PositionDetailResult,
     PositionPageResult,
     PositionTranslationItemResult,
@@ -57,7 +63,15 @@ from portal.serializers.admin.v1.ministry import (
     AdminMinistryPages,
     AdminMinistryReject,
     AdminMinistryReplaceMembers,
+    AdminMinistryScheduleInput,
+    AdminMinistryScheduleItem,
     AdminMinistryUpdate,
+)
+from portal.serializers.admin.v1.ministry_catalog import (
+    AdminMinistryTypeItem,
+    AdminMinistryTypeList,
+    AdminTargetAudienceItem,
+    AdminTargetAudienceList,
 )
 from portal.serializers.admin.v1.org.position import (
     AdminAssignablePositionItem,
@@ -108,6 +122,7 @@ def _org_translation_commands(
             name=item.name,
             description=item.description,
             remark=item.remark,
+            schedule_note=item.schedule_note,
         )
         for item in translations
     ]
@@ -136,6 +151,7 @@ def _org_translation_items_to_api(items: list[TranslationItemResult]) -> list[Ad
             name=item.name,
             description=item.description,
             remark=item.remark,
+            schedule_note=item.schedule_note,
         )
         for item in items
     ]
@@ -155,12 +171,57 @@ def _position_translation_items_to_api(
     ]
 
 
+def _schedule_commands(schedules: list[AdminMinistryScheduleInput] | None) -> list[MinistryScheduleCommand] | None:
+    if schedules is None:
+        return None
+    return [
+        MinistryScheduleCommand(
+            days_of_week=schedule.days_of_week,
+            start_time=schedule.start_time,
+            end_time=schedule.end_time,
+            effective_from=schedule.effective_from,
+            effective_to=schedule.effective_to,
+            sequence=schedule.sequence,
+        )
+        for schedule in schedules
+    ]
+
+
+def _ministry_type_to_api(item: MinistryTypeResult | None) -> AdminMinistryTypeItem | None:
+    if not item:
+        return None
+    return AdminMinistryTypeItem(id=item.id, code=item.code, name=item.name)
+
+
+def _target_audiences_to_api(items: list[TargetAudienceResult]) -> list[AdminTargetAudienceItem]:
+    return [
+        AdminTargetAudienceItem(id=item.id, code=item.code, name=item.name)
+        for item in items
+    ]
+
+
+def _schedules_to_api(items: list[MinistryScheduleResult]) -> list[AdminMinistryScheduleItem]:
+    return [
+        AdminMinistryScheduleItem(
+            id=item.id,
+            days_of_week=item.days_of_week,
+            start_time=item.start_time,
+            end_time=item.end_time,
+            effective_from=item.effective_from,
+            effective_to=item.effective_to,
+            sequence=item.sequence,
+        )
+        for item in items
+    ]
+
+
 def _member_commands(members: list[AdminMinistryMemberInput]) -> list[MinistryMemberEntryCommand]:
     return [
         MinistryMemberEntryCommand(
             user_id=member.user_id,
             member_role=member.member_role,
             remark=member.remark,
+            contact_email=member.contact_email,
         )
         for member in members
     ]
@@ -174,6 +235,7 @@ def _members_to_api(members: list[MinistryMemberResult]) -> list[AdminMinistryMe
             email=member.email,
             display_name=member.display_name,
             remark=member.remark,
+            contact_email=member.contact_email,
         )
         for member in members
     ]
@@ -187,6 +249,9 @@ def create_ministry_to_command(model: AdminMinistryCreate) -> CreateMinistryComm
     return CreateMinistryCommand(
         name=model.name,
         owner_position_id=model.owner_position_id,
+        ministry_type_id=model.ministry_type_id,
+        target_audience_ids=model.target_audience_ids or [],
+        schedules=_schedule_commands(model.schedules) or [],
         has_priority_booking=model.has_priority_booking,
         is_active=model.is_active,
         sequence=model.sequence,
@@ -198,6 +263,9 @@ def update_ministry_to_command(model: AdminMinistryUpdate) -> UpdateMinistryComm
     return UpdateMinistryCommand(
         name=model.name,
         owner_position_id=model.owner_position_id,
+        ministry_type_id=model.ministry_type_id,
+        target_audience_ids=model.target_audience_ids,
+        schedules=_schedule_commands(model.schedules),
         has_priority_booking=model.has_priority_booking,
         is_active=model.is_active,
         sequence=model.sequence,
@@ -232,6 +300,8 @@ def ministry_detail_to_api(result: MinistryDetailResult) -> AdminMinistryDetail:
         name=result.name,
         status=result.status,
         owner_position_id=result.owner_position_id,
+        ministry_type_id=result.ministry_type_id,
+        ministry_type=_ministry_type_to_api(result.ministry_type),
         has_priority_booking=result.has_priority_booking,
         is_active=result.is_active,
         sequence=result.sequence,
@@ -249,6 +319,8 @@ def ministry_detail_to_api(result: MinistryDetailResult) -> AdminMinistryDetail:
         delete_reason=result.delete_reason,
         translations=_org_translation_items_to_api(result.translations),
         members=_members_to_api(result.members),
+        target_audiences=_target_audiences_to_api(result.target_audiences),
+        schedules=_schedules_to_api(result.schedules),
     )
 
 
@@ -272,7 +344,27 @@ def ministry_list_to_api(result: MinistryListResult) -> AdminMinistryList:
                 status=item.status,
                 has_priority_booking=item.has_priority_booking,
                 is_active=item.is_active,
+                ministry_type=_ministry_type_to_api(item.ministry_type),
+                target_audiences=_target_audiences_to_api(item.target_audiences),
             )
+            for item in result.items
+        ]
+    )
+
+
+def ministry_type_list_to_api(result: MinistryTypeListResult) -> AdminMinistryTypeList:
+    return AdminMinistryTypeList(
+        items=[
+            AdminMinistryTypeItem(id=item.id, code=item.code, name=item.name)
+            for item in result.items
+        ]
+    )
+
+
+def target_audience_list_to_api(result: TargetAudienceListResult) -> AdminTargetAudienceList:
+    return AdminTargetAudienceList(
+        items=[
+            AdminTargetAudienceItem(id=item.id, code=item.code, name=item.name)
             for item in result.items
         ]
     )

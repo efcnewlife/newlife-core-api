@@ -1,7 +1,7 @@
 """
 Organization application results.
 """
-from datetime import datetime
+from datetime import date, datetime, time
 from typing import Optional
 from uuid import UUID
 
@@ -20,6 +20,11 @@ __all__ = [
     "MinistryListResult",
     "MinistryMemberResult",
     "MinistryPageResult",
+    "MinistryScheduleResult",
+    "MinistryTypeResult",
+    "MinistryTypeListResult",
+    "TargetAudienceResult",
+    "TargetAudienceListResult",
     "PositionDetailResult",
     "PositionListItemResult",
     "PositionPageResult",
@@ -39,6 +44,45 @@ class TranslationItemResult(JsonStringParseModel):
     name: str = Field(...)
     description: Optional[str] = Field(default=None)
     remark: Optional[str] = Field(default=None)
+    schedule_note: Optional[str] = Field(default=None)
+
+
+class MinistryTypeResult(UUIDBaseModel):
+    """Ministry type catalog row."""
+
+    code: str = Field(...)
+    name: Optional[str] = Field(default=None)
+
+
+class TargetAudienceResult(UUIDBaseModel):
+    """Target audience catalog row."""
+
+    code: str = Field(...)
+    name: Optional[str] = Field(default=None)
+
+
+class MinistryTypeListResult(BaseModel):
+    """Active ministry types."""
+
+    items: list[MinistryTypeResult] = Field(default_factory=list)
+
+
+class TargetAudienceListResult(BaseModel):
+    """Active target audiences."""
+
+    items: list[TargetAudienceResult] = Field(default_factory=list)
+
+
+class MinistryScheduleResult(UUIDBaseModel):
+    """Ministry schedule row."""
+
+    days_of_week_mask: Optional[int] = Field(default=None)
+    days_of_week: list[int] = Field(default_factory=list)
+    start_time: Optional[time] = Field(default=None)
+    end_time: Optional[time] = Field(default=None)
+    effective_from: Optional[date] = Field(default=None)
+    effective_to: Optional[date] = Field(default=None)
+    sequence: Optional[float] = Field(default=None)
 
 
 class PositionTranslationItemResult(JsonStringParseModel):
@@ -58,6 +102,7 @@ class MinistryMemberResult(BaseModel):
     email: Optional[str] = Field(default=None)
     display_name: Optional[str] = Field(default=None)
     remark: Optional[str] = Field(default=None)
+    contact_email: Optional[str] = Field(default=None)
 
 
 class MinistryListItemResult(UUIDBaseModel):
@@ -67,6 +112,8 @@ class MinistryListItemResult(UUIDBaseModel):
     status: str = Field(...)
     has_priority_booking: bool = Field(default=False)
     is_active: bool = Field(default=True)
+    ministry_type: Optional[MinistryTypeResult] = Field(default=None)
+    target_audiences: list[TargetAudienceResult] = Field(default_factory=list)
 
 
 class MinistryDetailResult(UUIDBaseModel):
@@ -75,6 +122,10 @@ class MinistryDetailResult(UUIDBaseModel):
     name: Optional[str] = Field(default=None)
     status: str = Field(...)
     owner_position_id: Optional[UUID] = Field(default=None)
+    ministry_type_id: Optional[UUID] = Field(default=None)
+    ministry_type: Optional[MinistryTypeResult] = Field(default=None)
+    ministry_type_code: Optional[str] = Field(default=None)
+    ministry_type_name: Optional[str] = Field(default=None)
     has_priority_booking: bool = Field(default=False)
     is_active: bool = Field(default=True)
     sequence: Optional[float] = Field(default=None)
@@ -92,6 +143,8 @@ class MinistryDetailResult(UUIDBaseModel):
     delete_reason: Optional[str] = Field(default=None)
     translations: list[TranslationItemResult] = Field(default_factory=list)
     members: list[MinistryMemberResult] = Field(default_factory=list)
+    target_audiences: list[TargetAudienceResult] = Field(default_factory=list)
+    schedules: list[MinistryScheduleResult] = Field(default_factory=list)
 
 
 class MinistryPageResult(BaseModel):

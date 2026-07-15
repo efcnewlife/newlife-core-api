@@ -3,6 +3,7 @@
 .cursor
 .tmp
 docs
+temp
 
 ### Python template
 # Byte-compiled / optimized / DLL files

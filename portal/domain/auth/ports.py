@@ -51,3 +51,37 @@ class UserRepositoryPort(Protocol):
         refresh_token: Optional[str] = None,
     ) -> None:
         ...
+
+    async def get_user_id_by_third_party(
+        self,
+        provider: ThirdPartyProvider,
+        provider_uid: str,
+    ) -> Optional[UUID]:
+        ...
+
+    async def create_directory_user(
+        self,
+        user_id: UUID,
+        email: str,
+        *,
+        verified: bool,
+        is_active: bool,
+        is_admin: bool,
+        account_kind: str,
+        first_name: str,
+        last_name: str,
+        preferred_name: Optional[str] = None,
+    ) -> None:
+        ...
+
+    async def update_directory_user_profile(
+        self,
+        user_id: UUID,
+        first_name: str,
+        last_name: str,
+        preferred_name: Optional[str] = None,
+    ) -> None:
+        ...
+
+    async def update_user_active_flag(self, user_id: UUID, is_active: bool) -> None:
+        ...

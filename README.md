@@ -481,6 +481,10 @@ poetry run python -m portal.cli.main create-superuser
 
 # 4. Optional: org position seed data
 poetry run python -m portal.cli.main seed-positions
+
+# 5. Optional: ministry catalog seed data (before creating ministries)
+poetry run python -m portal.cli.main seed-ministry-types
+poetry run python -m portal.cli.main seed-target-audiences
 ```
 
 | Command | Purpose |
@@ -489,12 +493,14 @@ poetry run python -m portal.cli.main seed-positions
 | `init-rbac` | Seed verbs, resources, permissions, and the `admin` role from `portal/cli/datas/rbac_seed_data.py`. Safe to re-run (upserts). |
 | `create-superuser` | Create an `AuthUser` with `is_admin` / `is_superuser` via interactive prompts. |
 | `seed-positions` | Upsert org positions and translations from `portal/cli/datas/position_seed_data.py`. |
+| `seed-ministry-types` | Upsert ministry type catalog (`outreach`, `internal`, `worship`) and translations. |
+| `seed-target-audiences` | Upsert target audience catalog (`children`, `youths`, `adults`, `family`, `all_ages`) and translations. |
 | `reset-rbac` | **Destructive:** delete all RBAC data and re-seed from `rbac_seed_data`. |
 
 Notes:
 
 - Run `init-locales` before `init-rbac`; RBAC translations depend on locale rows.
-- `seed-positions` and `reset-rbac` are blocked when `ENV` is not `dev` unless `--force` is passed.
+- `seed-positions`, `seed-ministry-types`, `seed-target-audiences`, and `reset-rbac` are blocked when `ENV` is not `dev` unless `--force` is passed.
 - Seed logic lives in `portal/application/cli/*_seed_service.py`; `portal/cli/` provides thin Click entrypoints only.
 
 ## Run FastAPI server

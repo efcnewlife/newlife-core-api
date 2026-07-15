@@ -249,10 +249,10 @@ def create_rental_rate_to_command(model: AdminRentalRateCreate) -> CreateRentalR
         currency=model.currency,
         is_default=model.is_default,
         is_active=model.is_active,
+        applicability=model.applicability,
         effective_from=model.effective_from,
         effective_to=model.effective_to,
         sequence=model.sequence,
-        name=model.name,
         translations=_translation_commands(model.translations),
     )
 
@@ -265,6 +265,7 @@ def update_rental_rate_to_command(model: AdminRentalRateUpdate) -> UpdateRentalR
         currency=model.currency,
         is_default=model.is_default,
         is_active=model.is_active,
+        applicability=model.applicability,
         effective_from=model.effective_from,
         effective_to=model.effective_to,
         sequence=model.sequence,
@@ -282,6 +283,7 @@ def rental_rate_to_api(result: RentalRateResult) -> AdminRentalRateItem:
         currency=result.currency,
         is_default=result.is_default,
         is_active=result.is_active,
+        applicability=result.applicability,
         effective_from=result.effective_from,
         effective_to=result.effective_to,
         sequence=result.sequence,

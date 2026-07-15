@@ -8,6 +8,7 @@ from portal.config import settings
 from portal.libs.database import PostgresConnection, RedisPool, Session
 from portal.libs.database.session_proxy import SessionProxy
 from portal.providers.jwt_provider import JWTProvider
+from portal.providers.microsoft_graph_provider import MicrosoftGraphProvider
 from portal.providers.microsoft_oidc_provider import MicrosoftOidcProvider
 from portal.providers.password_provider import PasswordProvider
 from portal.providers.refresh_token_provider import RefreshTokenProvider
@@ -40,3 +41,4 @@ class CoreContainer(containers.DeclarativeContainer):
         session=request_session,
     )
     microsoft_oidc_provider = providers.Singleton(MicrosoftOidcProvider)
+    microsoft_graph_provider = providers.Singleton(MicrosoftGraphProvider)

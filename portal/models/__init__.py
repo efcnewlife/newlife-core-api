@@ -41,10 +41,16 @@ from .org import (
     OrgMinistry,
     OrgMinistryApproval,
     OrgMinistryMember,
+    OrgMinistrySchedule,
+    OrgMinistryTargetAudience,
     OrgMinistryTranslation,
+    OrgMinistryType,
+    OrgMinistryTypeTranslation,
     OrgPosition,
     OrgPositionAssignment,
     OrgPositionTranslation,
+    OrgTargetAudience,
+    OrgTargetAudienceTranslation,
 )
 from .system_locale import SystemLocale
 
@@ -91,8 +97,14 @@ __all__ = [
     "OrgPosition",
     "OrgPositionTranslation",
     "OrgPositionAssignment",
+    "OrgMinistryType",
+    "OrgMinistryTypeTranslation",
+    "OrgTargetAudience",
+    "OrgTargetAudienceTranslation",
+    "OrgMinistryTargetAudience",
     "OrgMinistry",
     "OrgMinistryTranslation",
     "OrgMinistryMember",
+    "OrgMinistrySchedule",
     "OrgMinistryApproval",
 ]

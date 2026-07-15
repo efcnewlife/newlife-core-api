@@ -14,6 +14,7 @@ class AdminOrgTranslationInput(BaseModel):
     name: str = Field(..., description="Name")
     description: Optional[str] = Field(None, description="Description")
     remark: Optional[str] = Field(None, description="Remark")
+    schedule_note: Optional[str] = Field(None, description="Schedule supplement note")
 
 
 class AdminOrgTranslationItem(BaseModel):
@@ -23,6 +24,11 @@ class AdminOrgTranslationItem(BaseModel):
     name: str = Field(..., description="Name")
     description: Optional[str] = Field(None, description="Description")
     remark: Optional[str] = Field(None, description="Remark")
+    schedule_note: Optional[str] = Field(
+        None,
+        serialization_alias="scheduleNote",
+        description="Schedule supplement note",
+    )
 
 
 class AdminPositionTranslationInput(BaseModel):

@@ -74,6 +74,7 @@ def make_rental_rate(
     is_active: bool = True,
     is_default: bool = False,
     rate_id: UUID | None = None,
+    applicability: dict | None = None,
 ) -> RentalRateResult:
     return RentalRateResult(
         id=rate_id or new_uuid(),
@@ -83,6 +84,7 @@ def make_rental_rate(
         currency="CAD",
         is_default=is_default,
         is_active=is_active,
+        applicability=applicability,
     )
 
 
@@ -96,11 +98,14 @@ def make_hourly_and_daily_rates(
             facility_id=facility_id,
             billing_unit=RentalRateBillingUnit.HOURLY.value,
             unit_amount=hourly_amount,
+            is_default=True,
+            applicability={"all": [{"op": "hours_lt", "value": 5}]},
         ),
         make_rental_rate(
             facility_id=facility_id,
             billing_unit=RentalRateBillingUnit.DAILY_FLAT.value,
             unit_amount=daily_amount,
+            applicability={"all": [{"op": "hours_gte", "value": 5}]},
         ),
     ]
 

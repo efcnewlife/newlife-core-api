@@ -1,9 +1,12 @@
 """
 Facility rental rate application service.
 """
+import json
 import uuid
 from typing import Any, Optional
 from uuid import UUID
+
+from pydantic import ValidationError
 
 from portal.application.facility.commands import (
     CreateRentalRateCommand,
@@ -13,6 +16,7 @@ from portal.application.facility.commands import (
 )
 from portal.application.facility.results import CreateIdResult, RentalRateListResult, RentalRatePageResult, RentalRateResult
 from portal.domain.facility.constants import RentalRateBillingUnit
+from portal.domain.facility.rate_applicability import parse_applicability
 from portal.exceptions.responses import ApiBaseException, BadRequestException, ConflictErrorException, NotFoundException
 from portal.infrastructure.persistence.repositories.facility.rental_repository import RentalRepository
 from portal.infrastructure.persistence.repositories.facility.room_repository import RoomRepository
@@ -63,6 +67,19 @@ class RentalRateService:
         rows = [dict(rental_rate_id=rate_id, **item) for item in translation_payloads]
         await self._repository.upsert_rate_translations(rows)
 
+    def _validated_applicability(self, raw) -> dict | None:
+        try:
+            return parse_applicability(raw)
+        except (ValidationError, ValueError) as error:
+            raise BadRequestException(detail=f"Invalid applicability rule: {error}") from error
+
+    def _applicability_for_storage(self, raw) -> str | None:
+        """Serialize applicability for asyncpg JSONB bind (expects str, not dict)."""
+        validated = self._validated_applicability(raw)
+        if validated is None:
+            return None
+        return json.dumps(validated)
+
     @distributed_trace()
     async def get_rate_pages(
         self,
@@ -106,6 +123,7 @@ class RentalRateService:
                 "currency": command.currency,
                 "is_default": command.is_default,
                 "is_active": command.is_active,
+                "applicability": self._applicability_for_storage(command.applicability),
                 "effective_from": command.effective_from,
                 "effective_to": command.effective_to,
             }
@@ -139,6 +157,7 @@ class RentalRateService:
                 "currency": command.currency,
                 "is_default": command.is_default,
                 "is_active": command.is_active,
+                "applicability": self._applicability_for_storage(command.applicability),
                 "effective_from": command.effective_from,
                 "effective_to": command.effective_to,
                 **({"sequence": command.sequence} if command.sequence is not None else {}),

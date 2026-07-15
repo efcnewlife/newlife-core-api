@@ -152,6 +152,89 @@ class UserRepository:
         )
         return bool(profile_id)
 
+    async def get_user_id_by_third_party(
+        self,
+        provider: ThirdPartyProvider,
+        provider_uid: str,
+    ) -> Optional[UUID]:
+        user_id = await (
+            self._session.select(AuthUserThirdParty.user_id)
+            .where(AuthUserThirdParty.provider == provider.value)
+            .where(AuthUserThirdParty.provider_uid == provider_uid)
+            .where(AuthUserThirdParty.is_deleted == False)
+            .fetchval()
+        )
+        return user_id
+
+    async def create_directory_user(
+        self,
+        user_id: UUID,
+        email: str,
+        *,
+        verified: bool,
+        is_active: bool,
+        is_admin: bool,
+        account_kind: str,
+        first_name: str,
+        last_name: str,
+        preferred_name: Optional[str] = None,
+    ) -> None:
+        await (
+            self._session.insert(AuthUser)
+            .values(
+                id=user_id,
+                email=email.strip().lower(),
+                verified=verified,
+                is_active=is_active,
+                is_admin=is_admin,
+                is_superuser=False,
+                account_kind=account_kind,
+                created_by="microsoft_graph_sync",
+                updated_by="microsoft_graph_sync",
+            )
+            .execute()
+        )
+        await (
+            self._session.insert(AuthUserProfile)
+            .values(
+                user_id=user_id,
+                first_name=first_name[:64],
+                last_name=last_name[:64],
+                preferred_name=(preferred_name[:64] if preferred_name else None),
+                gender=Gender.UNKNOWN.value,
+                created_by="microsoft_graph_sync",
+                updated_by="microsoft_graph_sync",
+            )
+            .execute()
+        )
+
+    async def update_directory_user_profile(
+        self,
+        user_id: UUID,
+        first_name: str,
+        last_name: str,
+        preferred_name: Optional[str] = None,
+    ) -> None:
+        await (
+            self._session.update(AuthUserProfile)
+            .where(AuthUserProfile.user_id == user_id)
+            .values(
+                first_name=first_name[:64],
+                last_name=last_name[:64],
+                preferred_name=(preferred_name[:64] if preferred_name else None),
+                updated_by="microsoft_graph_sync",
+            )
+            .execute()
+        )
+
+    async def update_user_active_flag(self, user_id: UUID, is_active: bool) -> None:
+        await (
+            self._session.update(AuthUser)
+            .where(AuthUser.id == user_id)
+            .values(is_active=is_active, updated_by="microsoft_graph_sync")
+            .execute()
+        )
+
     async def create_user_profile(
         self,
         user_id: UUID,

@@ -2,7 +2,6 @@
 Ministry application service.
 """
 import uuid
-from datetime import datetime, timezone
 from typing import Any, Optional
 from uuid import UUID
 
@@ -14,6 +13,7 @@ from portal.application.org.commands import (
     ReplaceMinistryMembersCommand,
     UpdateMinistryCommand,
 )
+from portal.application.org.ministry_schedule import build_schedule_payloads, validate_ministry_schedules
 from portal.application.org.results import (
     CreateIdResult,
     MinistryDetailResult,
@@ -21,9 +21,13 @@ from portal.application.org.results import (
     MinistryMemberResult,
     MinistryPageResult,
 )
+from portal.application.org.target_audience_validation import validate_target_audience_ids
+from portal.domain.org.catalog_codes import MINISTRY_TYPE_INTERNAL
 from portal.domain.org.constants import MinistryMemberRole, MinistryStatus
 from portal.exceptions.responses import ApiBaseException, BadRequestException, NotFoundException
 from portal.infrastructure.persistence.repositories.org.ministry_repository import MinistryRepository
+from portal.infrastructure.persistence.repositories.org.ministry_type_repository import MinistryTypeRepository
+from portal.infrastructure.persistence.repositories.org.target_audience_repository import TargetAudienceRepository
 from portal.libs.contexts.request_context import RequestContext, get_request_context
 from portal.libs.contexts.user_context import UserContext, get_user_context
 from portal.libs.tracing.distributed_trace import distributed_trace
@@ -32,8 +36,15 @@ from portal.libs.tracing.distributed_trace import distributed_trace
 class MinistryService:
     """Org ministry CRUD and member assignment."""
 
-    def __init__(self, ministry_repository: MinistryRepository):
+    def __init__(
+        self,
+        ministry_repository: MinistryRepository,
+        ministry_type_repository: MinistryTypeRepository,
+        target_audience_repository: TargetAudienceRepository,
+    ):
         self._repository = ministry_repository
+        self._ministry_type_repository = ministry_type_repository
+        self._target_audience_repository = target_audience_repository
         self._req_ctx: Optional[RequestContext] = get_request_context()
         self._user_ctx: Optional[UserContext] = get_user_context()
 
@@ -58,9 +69,27 @@ class MinistryService:
                 name=item.name,
                 description=item.description,
                 remark=item.remark,
+                schedule_note=item.schedule_note,
             )
             for item in translation_payloads
         ]
+
+    async def _resolve_ministry_type_id(self, ministry_type_id: Optional[UUID]) -> UUID:
+        if ministry_type_id:
+            ministry_type = await self._ministry_type_repository.get_active_by_id(ministry_type_id)
+            if not ministry_type:
+                raise BadRequestException(detail="Invalid or inactive ministry_type_id")
+            return ministry_type_id
+        default_id = await self._ministry_type_repository.get_id_by_code(MINISTRY_TYPE_INTERNAL)
+        if not default_id:
+            raise BadRequestException(detail="Default ministry type is not seeded")
+        return default_id
+
+    async def _validate_target_audiences(self, audience_ids: list[UUID]) -> None:
+        if not audience_ids:
+            return
+        active_audiences = await self._target_audience_repository.fetch_active_by_ids(audience_ids)
+        validate_target_audience_ids(audience_ids, active_audiences)
 
     async def _validate_and_upsert_translations(self, ministry_id: UUID, translation_payloads: list) -> None:
         if not translation_payloads:
@@ -71,6 +100,18 @@ class MinistryService:
             raise BadRequestException(detail="Invalid or inactive locale_id in translations")
         rows = [dict(ministry_id=ministry_id, **item) for item in translation_payloads]
         await self._repository.upsert_translations(rows)
+
+    async def _upsert_schedules(self, ministry_id: UUID, schedules) -> None:
+        if schedules is None:
+            return
+        validate_ministry_schedules(schedules)
+        await self._repository.upsert_schedules(ministry_id, build_schedule_payloads(schedules))
+
+    async def _upsert_target_audiences(self, ministry_id: UUID, audience_ids: Optional[list[UUID]]) -> None:
+        if audience_ids is None:
+            return
+        await self._validate_target_audiences(audience_ids)
+        await self._repository.upsert_target_audiences(ministry_id, audience_ids)
 
     @distributed_trace()
     async def get_ministry_pages(self, command: PagesQueryCommand) -> MinistryPageResult:
@@ -100,10 +141,14 @@ class MinistryService:
         translation_payloads = self._build_translation_payloads(command)
         if not translation_payloads:
             raise BadRequestException(detail="translations are required")
+        ministry_type_id = await self._resolve_ministry_type_id(command.ministry_type_id)
+        await self._validate_target_audiences(command.target_audience_ids)
+        validate_ministry_schedules(command.schedules)
         try:
             payload = {
                 "id": ministry_id,
                 "owner_position_id": command.owner_position_id,
+                "ministry_type_id": ministry_type_id,
                 "status": MinistryStatus.DRAFT.value,
                 "has_priority_booking": command.has_priority_booking,
                 "is_active": command.is_active,
@@ -113,6 +158,8 @@ class MinistryService:
                 payload["sequence"] = command.sequence
             await self._repository.insert_ministry(payload)
             await self._validate_and_upsert_translations(ministry_id, translation_payloads)
+            await self._repository.upsert_schedules(ministry_id, build_schedule_payloads(command.schedules))
+            await self._repository.upsert_target_audiences(ministry_id, command.target_audience_ids)
         except ApiBaseException:
             raise
         except Exception as error:
@@ -130,6 +177,8 @@ class MinistryService:
         }
         if command.owner_position_id is not None:
             values["owner_position_id"] = command.owner_position_id
+        if command.ministry_type_id is not None:
+            values["ministry_type_id"] = await self._resolve_ministry_type_id(command.ministry_type_id)
         if command.sequence is not None:
             values["sequence"] = command.sequence
         affected = await self._repository.update_ministry(ministry_id, values)
@@ -138,6 +187,8 @@ class MinistryService:
         translation_payloads = self._build_translation_payloads(command)
         if translation_payloads:
             await self._validate_and_upsert_translations(ministry_id, translation_payloads)
+        await self._upsert_schedules(ministry_id, command.schedules)
+        await self._upsert_target_audiences(ministry_id, command.target_audience_ids)
 
     @distributed_trace()
     async def delete_ministry(self, ministry_id: UUID, command: DeleteCommand) -> None:
@@ -191,6 +242,7 @@ class MinistryService:
                 user_id=member.user_id,
                 member_role=member.member_role.value,
                 remark=member.remark,
+                contact_email=member.contact_email,
             )
             for member in command.members
         ]

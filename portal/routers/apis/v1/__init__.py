@@ -1,18 +1,10 @@
 """
-Top level router for v1 API - Template: minimal placeholder
+Member API router aggregate.
 """
-from fastapi import APIRouter
+from portal.routers.auth_router import AuthRouter
+from .ministry import router as ministry_router
+from .org import router as org_router
 
-from portal.config import settings
-from portal.route_classes import LogRoute
-from portal.libs.depends import DEFAULT_RATE_LIMITERS
-
-router = APIRouter(
-    dependencies=[
-        *DEFAULT_RATE_LIMITERS
-    ],
-    route_class=LogRoute
-)
-# Add your API routes here, e.g.:
-# router.include_router(auth_router, prefix="/auth", tags=["Auth"])
-# router.include_router(user_router, prefix="/user", tags=["User"])
+router = AuthRouter()
+router.include_router(org_router, prefix="/org", tags=["Org"])
+router.include_router(ministry_router, prefix="/ministry", tags=["Ministry"])

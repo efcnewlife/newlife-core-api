@@ -83,9 +83,8 @@ class StubRentalRepository:
     def pick_rate_for_line(
         rates: list[RentalRateResult],
         billed_hours: Decimal,
-        daily_flat_threshold: Decimal,
     ):
-        return RentalRepository.pick_rate_for_line(rates, billed_hours, daily_flat_threshold)
+        return RentalRepository.pick_rate_for_line(rates, billed_hours)
 
     @staticmethod
     def is_unique_violation(exc: Exception) -> bool:

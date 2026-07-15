@@ -3,7 +3,7 @@ Facility rental rate, discount, surcharge, and policy models.
 """
 import sqlalchemy as sa
 from sqlalchemy import Column
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 
 from portal.domain.facility.constants import RentalRateBillingUnit
@@ -47,6 +47,10 @@ class FacilityRentalRate(ModelBase, AuditMixin, SortableMixin, DeletedMixin):
         nullable=False,
         server_default=sa.text("true"),
         comment="Active flag",
+    )
+    applicability = Column(
+        JSONB,
+        comment="JSON applicability rule; null means always eligible",
     )
     effective_from = Column(sa.Date, comment="Price version effective start")
     effective_to = Column(sa.Date, comment="Price version effective end")

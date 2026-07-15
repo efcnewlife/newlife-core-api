@@ -28,6 +28,7 @@ def ministry_translations_agg():
             sa.cast("name", sa.VARCHAR(8)), OrgMinistryTranslation.name,
             sa.cast("description", sa.VARCHAR(16)), OrgMinistryTranslation.description,
             sa.cast("remark", sa.VARCHAR(8)), OrgMinistryTranslation.remark,
+            sa.cast("schedule_note", sa.VARCHAR(16)), OrgMinistryTranslation.schedule_note,
         ),
         JSONB,
     )

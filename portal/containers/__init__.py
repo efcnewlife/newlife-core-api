@@ -38,6 +38,7 @@ class RootContainer(containers.DeclarativeContainer):
     refresh_token_provider = core.refresh_token_provider
     token_blacklist_provider = core.token_blacklist_provider
     microsoft_oidc_provider = core.microsoft_oidc_provider
+    microsoft_graph_provider = core.microsoft_graph_provider
 
     user_repository = admin.user_repository
     user_read_service = admin.user_read_service
@@ -63,6 +64,7 @@ class RootContainer(containers.DeclarativeContainer):
     override_log_service = admin.facility.override_log_service
 
     org_ministry_service = admin.org.ministry_service
+    org_ministry_catalog_service = admin.org.ministry_catalog_service
     org_ministry_approval_service = admin.org.ministry_approval_service
     org_position_service = admin.org.position_service
     org_member_person_service = admin.org.member_person_service

@@ -19,7 +19,6 @@ from portal.infrastructure.persistence.repositories.facility.rental_repository i
 from portal.infrastructure.persistence.repositories.facility.room_repository import RoomRepository
 from portal.libs.tracing.distributed_trace import distributed_trace
 
-DEFAULT_DAILY_FLAT_MIN_HOURS = Decimal("5")
 DEFAULT_MINIMUM_FEE = Decimal("0")
 MONEY_QUANT = Decimal("0.01")
 
@@ -57,7 +56,6 @@ class PricingService:
             if line.billed_hours <= 0:
                 raise BadRequestException(detail="billed_hours must be positive")
 
-            threshold = await self._resolve_daily_flat_min_hours(line.facility_id)
             rates = await self._rental_repository.list_active_rates_for_facility(
                 facility_id=line.facility_id,
                 as_of_date=command.as_of_date,
@@ -65,7 +63,6 @@ class PricingService:
             rate, tier = self._rental_repository.pick_rate_for_line(
                 rates=rates,
                 billed_hours=line.billed_hours,
-                daily_flat_threshold=threshold,
             )
             if not rate:
                 raise BadRequestException(detail=f"No active rental rate for room {line.facility_id}")
@@ -131,15 +128,6 @@ class PricingService:
         if billing_unit == RentalRateBillingUnit.FLAT_PER_BOOKING.value:
             return amount
         return amount * billed_hours
-
-    async def _resolve_daily_flat_min_hours(self, facility_id: UUID) -> Decimal:
-        amount = await self._rental_repository.get_policy_amount(
-            RentalPolicySettingKey.DAILY_FLAT_MIN_HOURS,
-            facility_id,
-        )
-        if amount is None:
-            return DEFAULT_DAILY_FLAT_MIN_HOURS
-        return amount
 
     async def _resolve_minimum_fee(self, facility_id: UUID) -> Decimal:
         amount = await self._rental_repository.get_policy_amount(

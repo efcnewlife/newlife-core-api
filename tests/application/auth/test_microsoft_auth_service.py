@@ -6,10 +6,8 @@ from uuid import uuid4
 import pytest
 
 from portal.application.auth.commands import MicrosoftLoginCommand
-from portal.application.auth.microsoft_auth_service import (
-    MicrosoftAuthService,
-    _profile_fields_from_microsoft_claims,
-)
+from portal.application.auth.microsoft_auth_service import MicrosoftAuthService
+from portal.application.auth.microsoft_profile_mapper import profile_fields_from_microsoft_claims
 from portal.application.auth.results import AdminProfileResult, LoginResult, TokenResult, UserSensitive
 from portal.exceptions.responses import UnauthorizedException
 
@@ -27,7 +25,7 @@ SAMPLE_CLAIMS = {
 
 
 def test_profile_fields_from_microsoft_claims_uses_given_and_family_name():
-    first_name, last_name, preferred_name = _profile_fields_from_microsoft_claims(SAMPLE_CLAIMS)
+    first_name, last_name, preferred_name = profile_fields_from_microsoft_claims(SAMPLE_CLAIMS)
     assert first_name == "Jay"
     assert last_name == "Hsia"
     assert preferred_name == "Jay Hsia"
@@ -35,7 +33,7 @@ def test_profile_fields_from_microsoft_claims_uses_given_and_family_name():
 
 def test_profile_fields_from_microsoft_claims_splits_display_name():
     claims = {"name": "Jay Hsia", "upn": "jay.hsia@efcnewlife.org"}
-    first_name, last_name, preferred_name = _profile_fields_from_microsoft_claims(claims)
+    first_name, last_name, preferred_name = profile_fields_from_microsoft_claims(claims)
     assert first_name == "Jay"
     assert last_name == "Hsia"
     assert preferred_name == "Jay Hsia"
