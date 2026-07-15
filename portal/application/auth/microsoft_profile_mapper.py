@@ -3,7 +3,7 @@ Map Microsoft OIDC claims or Graph user fields to AuthUserProfile columns.
 """
 from typing import Any, Optional
 
-from portal.providers.microsoft_graph_provider import GraphUserRecord
+from portal.providers.ms_graph.models import GraphUserRecord
 
 
 def profile_fields_from_microsoft_claims(claims: dict[str, Any]) -> tuple[str, str, Optional[str]]:

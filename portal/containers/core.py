@@ -10,6 +10,7 @@ from portal.libs.database.session_proxy import SessionProxy
 from portal.providers.jwt_provider import JWTProvider
 from portal.providers.microsoft_graph_provider import MicrosoftGraphProvider
 from portal.providers.microsoft_oidc_provider import MicrosoftOidcProvider
+from portal.providers.ms_graph.container import MSGraphContainer
 from portal.providers.password_provider import PasswordProvider
 from portal.providers.refresh_token_provider import RefreshTokenProvider
 from portal.providers.token_blacklist_provider import TokenBlacklistProvider
@@ -41,4 +42,9 @@ class CoreContainer(containers.DeclarativeContainer):
         session=request_session,
     )
     microsoft_oidc_provider = providers.Singleton(MicrosoftOidcProvider)
-    microsoft_graph_provider = providers.Singleton(MicrosoftGraphProvider)
+
+    ms_graph = providers.Container(MSGraphContainer)
+    microsoft_graph_provider = providers.Singleton(
+        MicrosoftGraphProvider,
+        users_factory=ms_graph.users.provider,
+    )

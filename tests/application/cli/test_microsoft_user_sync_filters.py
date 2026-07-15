@@ -7,7 +7,7 @@ from portal.application.cli.microsoft_user_sync_filters import (
     classify_service_account,
     is_syncable_person,
 )
-from portal.providers.microsoft_graph_provider import GraphUserRecord
+from portal.providers.ms_graph.models import GraphUserRecord
 
 
 def _record(

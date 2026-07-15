@@ -4,7 +4,7 @@ Heuristics to exclude shared mailboxes and service accounts from directory sync.
 import re
 from typing import Optional
 
-from portal.providers.microsoft_graph_provider import GraphUserRecord
+from portal.providers.ms_graph.models import GraphUserRecord
 
 # Surnames commonly used on functional accounts (from tenant export review).
 BLOCKED_SURNAME_TOKENS: frozenset[str] = frozenset(

@@ -26,6 +26,9 @@ dependencies = [
     # security
     "pyjwt",
     "msal",
+    "azure-identity",
+    # microsoft graph
+    "msgraph-beta-sdk",
     # utils
     "cryptography",
     "email-validator",

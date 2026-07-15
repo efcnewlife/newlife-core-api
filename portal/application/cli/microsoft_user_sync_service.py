@@ -19,7 +19,8 @@ from portal.libs.consts.enums import ThirdPartyProvider
 from portal.libs.database import Session
 from portal.libs.logger import logger
 from portal.libs.tracing.distributed_trace import distributed_trace
-from portal.providers.microsoft_graph_provider import GraphUserRecord, MicrosoftGraphProvider
+from portal.providers.microsoft_graph_provider import MicrosoftGraphProvider
+from portal.providers.ms_graph.models import GraphUserRecord
 
 SYNC_EMAIL_DOMAIN = "efcnewlife.org"
 DEFAULT_SYNC_FILTER = (
