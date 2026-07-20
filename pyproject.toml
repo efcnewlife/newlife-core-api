@@ -27,12 +27,15 @@ dependencies = [
     "pyjwt",
     "msal",
     "azure-identity",
+    "azure-storage-blob",
     # microsoft graph
     "msgraph-beta-sdk",
     # utils
     "cryptography",
     "email-validator",
     "httpx",
+    "pillow",
+    "python-multipart",
     "ujson",
     "pytz",
     "python-dateutil",

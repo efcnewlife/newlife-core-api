@@ -45,3 +45,18 @@ class OperationType(Enum):
     LOGIN = "login"
     LOGOUT = "logout"
     OTHER = "other"
+
+
+# Re-export content enums for existing serializer imports.
+from portal.domain.content.constants import FileStatus, FileUploadSource  # noqa: E402
+
+__all__ = [
+    "APIScope",
+    "AccessTokenAudType",
+    "ThirdPartyProvider",
+    "Gender",
+    "ResourceType",
+    "OperationType",
+    "FileStatus",
+    "FileUploadSource",
+]

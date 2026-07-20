@@ -1,7 +1,8 @@
 """
 Handler for AdminOperationLogEvent: insert audit log row.
 """
-from typing import Optional
+import json
+from typing import Any, Optional
 from uuid import UUID
 
 from portal.events.base import EventHandler
@@ -20,6 +21,15 @@ class AdminOperationLogEventHandler(EventHandler):
     def __init__(self, session: Session):
         self._session = session
 
+    @staticmethod
+    def _serialize_jsonb(value: Any) -> Optional[str]:
+        """asyncpg JSONB bind expects a JSON string, not a Python dict/list."""
+        if value is None:
+            return None
+        if isinstance(value, str):
+            return value
+        return json.dumps(value)
+
     @property
     def event_type(self) -> type[AdminOperationLogEvent]:
         return AdminOperationLogEvent
@@ -33,9 +43,9 @@ class AdminOperationLogEventHandler(EventHandler):
                 record_id=event.record_id,
                 operation_type=event.operation_type.value,
                 operation_code=event.operation_code,
-                old_data=event.old_data,
-                new_data=event.new_data,
-                changed_fields=event.changed_fields,
+                old_data=self._serialize_jsonb(event.old_data),
+                new_data=self._serialize_jsonb(event.new_data),
+                changed_fields=self._serialize_jsonb(event.changed_fields),
                 ip_address=event.ip_address,
                 user_agent=event.user_agent,
                 created_by=created_by,

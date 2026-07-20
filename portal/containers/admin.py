@@ -154,3 +154,8 @@ class AdminContainer(containers.DeclarativeContainer):
 
     facility = providers.Container(FacilityContainer, core=core)
     org = providers.Container(OrgContainer, core=core)
+    content = providers.Container(
+        ContentContainer,
+        core=core,
+        rbac_audit_service=rbac_audit_service,
+    )

@@ -37,6 +37,10 @@ from .facility import (
 from .member import (
     MemberPerson,
 )
+from .content import (
+    ContentFile,
+    ContentFileAssociation,
+)
 from .org import (
     OrgMinistry,
     OrgMinistryApproval,
@@ -93,6 +97,9 @@ __all__ = [
     "FacilityBookingOverrideLog",
     # member
     "MemberPerson",
+    # content
+    "ContentFile",
+    "ContentFileAssociation",
     # org
     "OrgPosition",
     "OrgPositionTranslation",

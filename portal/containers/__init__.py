@@ -69,6 +69,8 @@ class RootContainer(containers.DeclarativeContainer):
     org_position_service = admin.org.position_service
     org_member_person_service = admin.org.member_person_service
 
+    file_service = admin.content.file_service
+
     event_bus = events.event_bus
 
     @staticmethod

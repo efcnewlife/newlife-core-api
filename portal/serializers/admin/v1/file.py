@@ -1,10 +1,13 @@
 """
 File Serializer
 """
+from datetime import datetime
 from typing import Optional
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from portal.domain.content.constants import MediaCategory
 from portal.libs.consts.enums import FileStatus, FileUploadSource
 from portal.serializers.mixins.model_mixins import UUIDBaseModel
 from portal.serializers.mixins import OrderByQueryBaseModel, PaginationBaseResponseModel
@@ -38,11 +41,28 @@ class AdminFileDetail(AdminFileBase):
 class AdminFileGridItem(AdminFileBase):
     """File Grid Item"""
     url: Optional[str] = Field(None, description="URL")
+    created_at: Optional[datetime] = Field(None, description="Created at", serialization_alias="createdAt")
 
 
 class AdminFileQuery(OrderByQueryBaseModel):
     """FileQuery"""
     keyword: Optional[str] = Field(None, description="Keyword filter")
+    media_category: Optional[MediaCategory] = Field(None, description="Media category filter")
+
+
+class AdminFileCategoryStats(BaseModel):
+    """Category aggregate stats."""
+
+    count: int = Field(..., description="File count")
+    size_bytes: int = Field(..., description="Total size in bytes", serialization_alias="sizeBytes")
+
+
+class AdminFileSummary(BaseModel):
+    """Storage summary for All Media and donut chart."""
+
+    images: AdminFileCategoryStats = Field(..., description="Images stats")
+    files: AdminFileCategoryStats = Field(..., description="Files stats")
+    total: AdminFileCategoryStats = Field(..., description="Total stats")
 
 
 class AdminFilePages(PaginationBaseResponseModel):
@@ -67,7 +87,13 @@ class AdminFileUploadResponseModel(UUIDBaseModel):
     duplicate: Optional[bool] = Field(None, description="Is duplicate")
 
 
+class AdminFileBulkAction(BaseModel):
+    """Bulk file action."""
+
+    ids: list[UUID] = Field(..., description="File IDs")
+
+
 class AdminBulkActionResponseModel(BaseModel):
     """Bulk Action Response Model"""
-    success_count: int = Field(..., description="Count of items affected")
-    failed_items: Optional[list[AdminFileBase]] = Field(None, description="Failed items")
+    success_count: int = Field(..., description="Count of items affected", serialization_alias="successCount")
+    failed_items: Optional[list[AdminFileBase]] = Field(None, description="Failed items", serialization_alias="failedItems")

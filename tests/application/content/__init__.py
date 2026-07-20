@@ -1,0 +1,3 @@
+"""
+Content application tests package.
+"""

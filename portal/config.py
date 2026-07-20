@@ -77,8 +77,21 @@ class Configuration(BaseSettings):
     CORS_ALLOW_ORIGINS_REGEX: Optional[str] = os.getenv(key="CORS_ALLOW_ORIGINS_REGEX")
 
     # [STORAGE]
-    # TODO: Add support for S3, Azure Blob Storage, etc.
-    MAX_UPLOAD_SIZE: int = int(os.getenv(key="MAX_UPLOAD_SIZE", default=5 * 1024 * 1024))  # 3MB
+    STORAGE_BACKEND: str = os.getenv(key="STORAGE_BACKEND", default="azure_blob")
+    AZURE_STORAGE_ACCOUNT_NAME: Optional[str] = os.getenv(key="AZURE_STORAGE_ACCOUNT_NAME", default=None)
+    AZURE_STORAGE_CONNECTION_STRING: Optional[str] = os.getenv(
+        key="AZURE_STORAGE_CONNECTION_STRING",
+        default=None,
+    )
+    AZURE_STORAGE_CONTAINER_NAME: str = os.getenv(key="AZURE_STORAGE_CONTAINER_NAME", default="files")
+    AZURE_STORAGE_REGION: str = os.getenv(key="AZURE_STORAGE_REGION", default="eastus")
+    AZURE_STORAGE_BLOB_PREFIX: str = os.getenv(
+        key="AZURE_STORAGE_BLOB_PREFIX",
+        default=f"original_files/{ENV}",
+    )
+    AZURE_BLOB_CACHE_CONTROL: str = os.getenv(key="AZURE_BLOB_CACHE_CONTROL", default="max-age=86400")
+    SIGNED_URL_EXPIRY_SECONDS: int = int(os.getenv(key="SIGNED_URL_EXPIRY_SECONDS", default="3600"))
+    MAX_UPLOAD_SIZE: int = int(os.getenv(key="MAX_UPLOAD_SIZE", default=5 * 1024 * 1024))  # 5MB
 
     # [Redis]
     REDIS_URL: Optional[str] = os.getenv(key="REDIS_URL")

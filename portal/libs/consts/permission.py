@@ -30,6 +30,7 @@ class Resource(Enum):
     MINISTRY_APPROVAL = "ministry:approval"
     ORG_POSITION = "org:position"
     MEMBER_PERSON = "member:person"
+    CONTENT_FILE = "content:file"
 
 
 class Permission:
@@ -78,3 +79,4 @@ class Permission:
     MINISTRY_APPROVAL = PermissionCode(Resource.MINISTRY_APPROVAL)
     ORG_POSITION = PermissionCode(Resource.ORG_POSITION)
     MEMBER_PERSON = PermissionCode(Resource.MEMBER_PERSON)
+    CONTENT_FILE = PermissionCode(Resource.CONTENT_FILE)
