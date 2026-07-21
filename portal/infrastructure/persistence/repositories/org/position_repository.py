@@ -102,9 +102,82 @@ class PositionRepository:
         if not row:
             return None
         data = row.model_dump()
+        # #region agent log
+        try:
+            import json as _json, time as _time
+            _name_before = data.get("name")
+            _tr_raw = data.get("translations")
+            _tr_first_name = None
+            if _tr_raw and isinstance(_tr_raw, (list, tuple)) and len(_tr_raw) > 0:
+                _first = _tr_raw[0]
+                if isinstance(_first, dict):
+                    _tr_first_name = _first.get("name")
+                elif isinstance(_first, str):
+                    try:
+                        _tr_first_name = _json.loads(_first).get("name")
+                    except Exception:
+                        _tr_first_name = None
+            with open(
+                "/Users/jayhsia/Projects/github/organization/efcnewlife/newlife-core-api/.cursor/debug-a40f35.log",
+                "a",
+            ) as _f:
+                _f.write(
+                    _json.dumps(
+                        {
+                            "sessionId": "a40f35",
+                            "hypothesisId": "A",
+                            "location": "position_repository.py:_normalize_row:before_pop",
+                            "message": "name before pop",
+                            "data": {
+                                "code": data.get("code"),
+                                "name_before": _name_before,
+                                "team": data.get("team"),
+                                "translation_first_name": _tr_first_name,
+                            },
+                            "timestamp": int(_time.time() * 1000),
+                            "runId": "post-fix",
+                        }
+                    )
+                    + "\n"
+                )
+        except Exception:
+            pass
+        # #endregion
         translations = data.pop("translations", None)
         data["translations"] = self._parse_translations(translations)
-        data.pop("name", None)
+        # #region agent log
+        try:
+            import json as _json, time as _time
+            with open(
+                "/Users/jayhsia/Projects/github/organization/efcnewlife/newlife-core-api/.cursor/debug-a40f35.log",
+                "a",
+            ) as _f:
+                _f.write(
+                    _json.dumps(
+                        {
+                            "sessionId": "a40f35",
+                            "hypothesisId": "A",
+                            "location": "position_repository.py:_normalize_row:after_normalize",
+                            "message": "name after normalize (kept)",
+                            "data": {
+                                "code": data.get("code"),
+                                "name_in_data": data.get("name"),
+                                "parsed_translations_count": len(data.get("translations") or []),
+                                "parsed_first_name": (
+                                    data["translations"][0].name
+                                    if data.get("translations")
+                                    else None
+                                ),
+                            },
+                            "timestamp": int(_time.time() * 1000),
+                            "runId": "post-fix",
+                        }
+                    )
+                    + "\n"
+                )
+        except Exception:
+            pass
+        # #endregion
         return PositionDetailResult.model_validate(data)
 
     def _normalize_items(self, items: list[PositionDetailResult]) -> list[PositionDetailResult]:
@@ -147,10 +220,18 @@ class PositionRepository:
             .fetchpages(no_order_by=False, as_model=PositionDetailResult)
         )
         normalized = self._normalize_items(items)
+        incumbent_map = await self._batch_current_incumbents([item.id for item in normalized])
         enriched = []
         for item in normalized:
-            current_user_id = await self._current_user_id(item.id)
-            enriched.append(item.model_copy(update={"current_user_id": current_user_id}))
+            incumbent = incumbent_map.get(item.id)
+            enriched.append(
+                item.model_copy(
+                    update={
+                        "current_user_id": incumbent[0] if incumbent else None,
+                        "current_user_display_name": incumbent[1] if incumbent else None,
+                    }
+                )
+            )
         return enriched, count
 
     async def get_by_id(
@@ -168,18 +249,62 @@ class PositionRepository:
         normalized = self._normalize_row(row)
         if not normalized:
             return None
-        current_user_id = await self._current_user_id(position_id)
-        return normalized.model_copy(update={"current_user_id": current_user_id})
+        incumbent = await self._current_incumbent(position_id)
+        return normalized.model_copy(
+            update={
+                "current_user_id": incumbent[0] if incumbent else None,
+                "current_user_display_name": incumbent[1] if incumbent else None,
+            }
+        )
 
-    async def _current_user_id(self, position_id: UUID) -> Optional[UUID]:
-        return await (
-            self._session.select(OrgPositionAssignment.user_id)
+    async def _current_incumbent(self, position_id: UUID) -> Optional[tuple[UUID, Optional[str]]]:
+        display_name = sa.func.coalesce(AuthUserProfile.preferred_name, AuthUser.email)
+        row = await (
+            self._session.select(
+                OrgPositionAssignment.user_id,
+                display_name.label("display_name"),
+            )
+            .select_from(OrgPositionAssignment)
+            .outerjoin(AuthUser, AuthUser.id == OrgPositionAssignment.user_id)
+            .outerjoin(AuthUserProfile, AuthUserProfile.user_id == AuthUser.id)
             .where(OrgPositionAssignment.position_id == position_id)
             .where(OrgPositionAssignment.end_at.is_(None))
             .order_by(OrgPositionAssignment.start_at.desc())
             .limit(1)
-            .fetchval()
+            .fetchrow()
         )
+        if not row:
+            return None
+        return row["user_id"], row.get("display_name")
+
+    async def _batch_current_incumbents(
+        self,
+        position_ids: list[UUID],
+    ) -> dict[UUID, tuple[UUID, Optional[str]]]:
+        if not position_ids:
+            return {}
+        display_name = sa.func.coalesce(AuthUserProfile.preferred_name, AuthUser.email)
+        rows = await (
+            self._session.select(
+                OrgPositionAssignment.position_id,
+                OrgPositionAssignment.user_id,
+                display_name.label("display_name"),
+            )
+            .select_from(OrgPositionAssignment)
+            .outerjoin(AuthUser, AuthUser.id == OrgPositionAssignment.user_id)
+            .outerjoin(AuthUserProfile, AuthUserProfile.user_id == AuthUser.id)
+            .where(OrgPositionAssignment.position_id.in_(position_ids))
+            .where(OrgPositionAssignment.end_at.is_(None))
+            .order_by(OrgPositionAssignment.start_at.desc())
+            .fetch()
+        )
+        result: dict[UUID, tuple[UUID, Optional[str]]] = {}
+        for row in rows or []:
+            position_id = row["position_id"]
+            if position_id in result:
+                continue
+            result[position_id] = (row["user_id"], row.get("display_name"))
+        return result
 
     async def list_assignable(self, locale_id: Optional[UUID]) -> list[AssignablePositionResult]:
         display_name = sa.func.coalesce(AuthUserProfile.preferred_name, AuthUser.email)

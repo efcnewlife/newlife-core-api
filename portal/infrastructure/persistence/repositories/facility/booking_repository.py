@@ -318,6 +318,35 @@ class BookingRepository:
         if slot_rows:
             await self._session.insert(FacilityBookingSlot).values(slot_rows).execute_rowcount()
 
+    async def insert_booking(self, payload: dict) -> None:
+        await self._session.insert(FacilityBooking).values(payload).execute()
+
+    async def list_user_bookings(
+        self,
+        user_id: UUID,
+        locale_id: Optional[UUID],
+    ) -> list[BookingListItemResult]:
+        # Reuse pages query with large page for member "mine" list
+        from portal.application.facility.commands import BookingPagesQueryCommand
+
+        command = BookingPagesQueryCommand(
+            page=0,
+            page_size=100,
+            user_id=user_id,
+            order_by="start_at",
+            descending=True,
+        )
+        items, _count = await self.fetch_pages(command, locale_id)
+        return items
+
+    async def get_user_id_for_booking(self, booking_id: UUID) -> Optional[UUID]:
+        return await (
+            self._session.select(FacilityBooking.user_id)
+            .where(FacilityBooking.id == booking_id)
+            .where(FacilityBooking.is_deleted == False)
+            .fetchval()
+        )
+
     async def get_booking_type_and_flags(self, booking_id: UUID) -> Optional[dict]:
         return await (
             self._session.select(

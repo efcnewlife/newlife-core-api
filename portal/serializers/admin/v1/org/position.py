@@ -43,6 +43,11 @@ class AdminPositionDetail(AdminPositionBase):
         serialization_alias="currentUserId",
         description="Current incumbent user ID",
     )
+    current_user_display_name: Optional[str] = Field(
+        None,
+        serialization_alias="currentUserDisplayName",
+        description="Current incumbent display name",
+    )
 
 
 class AdminPositionPages(PaginationBaseResponseModel):

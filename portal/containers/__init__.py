@@ -39,6 +39,7 @@ class RootContainer(containers.DeclarativeContainer):
     token_blacklist_provider = core.token_blacklist_provider
     microsoft_oidc_provider = core.microsoft_oidc_provider
     microsoft_graph_provider = core.microsoft_graph_provider
+    member_refresh_app_binding_provider = core.member_refresh_app_binding_provider
 
     user_repository = admin.user_repository
     user_read_service = admin.user_read_service
@@ -46,6 +47,7 @@ class RootContainer(containers.DeclarativeContainer):
     login_service = admin.login_service
     refresh_token_service = admin.refresh_token_service
     microsoft_auth_service = admin.microsoft_auth_service
+    member_web_app_registry = admin.member_web_app_registry
     locale_service = admin.locale_service
     permission_service = admin.permission_service
     resource_service = admin.resource_service
@@ -60,6 +62,7 @@ class RootContainer(containers.DeclarativeContainer):
     rental_catalog_service = admin.facility.rental_catalog_service
     pricing_service = admin.facility.pricing_service
     booking_service = admin.facility.booking_service
+    availability_service = admin.facility.availability_service
     member_service = admin.facility.member_service
     override_log_service = admin.facility.override_log_service
 

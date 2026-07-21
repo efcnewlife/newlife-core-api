@@ -14,12 +14,14 @@ from portal.config import settings
 from portal.container import Container
 from portal.exceptions.responses import UnauthorizedException, InvalidTokenException, ForbiddenException
 from portal.application.auth.user_read_service import UserReadService
+from portal.application.auth.member_web_app_resolver import resolve_request_app_code
 from portal.libs.authorization.auth_config import AuthConfig
 from portal.libs.authorization.permission_checker import PermissionChecker
 from portal.libs.contexts.user_context import UserContext, set_user_context, get_user_context
 from portal.libs.logger import logger
 from portal.providers.jwt_provider import JWTProvider
 from portal.application.auth.results import AccessTokenPayload, UserDetail, UserSensitive
+from portal.domain.auth.member_web_app import MemberWebAppRegistry
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
@@ -211,11 +213,12 @@ class AuthMiddleware(BaseHTTPMiddleware):
         token: str,
         jwt_provider: JWTProvider = Provide[Container.jwt_provider],
         user_read_service: UserReadService = Provide[Container.user_read_service],
+        member_web_app_registry: MemberWebAppRegistry = Provide[Container.member_web_app_registry],
     ) -> None:
         """
         Verify user token and set UserContext
         :param request: FastAPI Request
-        :param token: Firebase token
+        :param token: Access token
         """
         payload: AccessTokenPayload = jwt_provider.verify_token(
             token=token,
@@ -223,6 +226,12 @@ class AuthMiddleware(BaseHTTPMiddleware):
         )
         if not payload:
             raise InvalidTokenException()
+        if not payload.azp:
+            raise InvalidTokenException(detail="Missing authorized party")
+
+        request_app_code = resolve_request_app_code(member_web_app_registry, required=True)
+        if payload.azp != request_app_code:
+            raise ForbiddenException(detail="Token is not valid for this web app")
 
         user: UserDetail = await user_read_service.get_user_detail_by_id(payload.sub)
         if not user:

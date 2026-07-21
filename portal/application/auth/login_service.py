@@ -10,6 +10,8 @@ from portal.application.auth.mappers import normalize_user_for_token
 from portal.application.auth.results import (
     AdminProfileResult,
     LoginResult,
+    MemberLoginResult,
+    MemberProfileResult,
     TokenResult,
     UserSensitive,
 )
@@ -24,6 +26,7 @@ from portal.libs.tracing.distributed_trace import distributed_trace
 from portal.providers.jwt_provider import JWTProvider
 from portal.providers.password_provider import PasswordProvider
 from portal.providers.refresh_token_provider import RefreshTokenProvider
+from portal.providers.member_refresh_app_binding_provider import MemberRefreshAppBindingProvider
 
 
 class LoginService:
@@ -37,6 +40,7 @@ class LoginService:
         password_provider: PasswordProvider,
         role_service: RoleService,
         permission_service: PermissionService,
+        member_refresh_app_binding_provider: Optional[MemberRefreshAppBindingProvider] = None,
     ):
         self._expires_in = 60 * 60 * 24
         self._repository = user_repository
@@ -45,6 +49,7 @@ class LoginService:
         self._password_provider = password_provider
         self._role_service = role_service
         self._permission_service = permission_service
+        self._member_refresh_app_binding_provider = member_refresh_app_binding_provider
 
     @distributed_trace()
     async def login_with_password(self, command: LoginCommand) -> LoginResult:
@@ -103,6 +108,71 @@ class LoginService:
             last_login_at=user.last_login_at,
         )
         return LoginResult(admin=admin, token=token)
+
+    @distributed_trace()
+    async def complete_member_login(self, user: UserSensitive, app_code: str) -> MemberLoginResult:
+        if not user.verified or not user.is_active:
+            raise UnauthorizedException(detail="User is not allowed to access the app")
+        if not app_code:
+            raise UnauthorizedException(detail="Missing web app binding")
+
+        token_user = normalize_user_for_token(user)
+        family_id = uuid4()
+        device_id = uuid4()
+        access_token = self._jwt_provider.create_access_token(
+            user=token_user,
+            family_id=family_id,
+            aud_type=AccessTokenAudType.USER,
+            azp=app_code,
+        )
+        refresh_token = await self._refresh_token_provider.issue(
+            user_id=user.id,
+            device_id=device_id,
+            family_id=family_id,
+        )
+        if self._member_refresh_app_binding_provider:
+            await self._member_refresh_app_binding_provider.bind(family_id, app_code)
+
+        now = datetime.now(timezone.utc)
+        await self._repository.update_last_login_at(user_id=user.id, last_login_at=now)
+
+        expires_in = settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60
+        token = TokenResult(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            token_type="bearer",
+            expires_in=expires_in,
+        )
+        member = MemberProfileResult(
+            id=user.id,
+            email=user.email or "",
+            first_name=user.first_name or "",
+            last_name=user.last_name or "",
+            preferred_name=user.preferred_name,
+            roles=[],
+            preferred_locale_id=user.preferred_locale_id,
+            last_login_at=user.last_login_at,
+        )
+        return MemberLoginResult(member=member, token=token)
+
+    @distributed_trace()
+    async def member_profile(self) -> MemberProfileResult:
+        ctx: Optional[UserContext] = get_user_context()
+        if not ctx or not ctx.user_id:
+            raise UnauthorizedException(detail="Unauthorized")
+        user = await self._repository.get_sensitive_by_id(ctx.user_id)
+        if not user:
+            raise UnauthorizedException(detail="User not found")
+        return MemberProfileResult(
+            id=user.id,
+            email=user.email or "",
+            first_name=user.first_name or "",
+            last_name=user.last_name or "",
+            preferred_name=user.preferred_name,
+            roles=[],
+            preferred_locale_id=user.preferred_locale_id,
+            last_login_at=user.last_login_at,
+        )
 
     @distributed_trace()
     async def admin_profile(self) -> AdminProfileResult:

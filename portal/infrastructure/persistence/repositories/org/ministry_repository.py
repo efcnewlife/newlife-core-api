@@ -356,7 +356,18 @@ class MinistryRepository:
         )
         return ministry_ids or []
 
-    async def list_owned_active(self, user_id: UUID, locale_id: Optional[UUID]) -> list[MinistryListItemResult]:
+    async def list_owned_active(
+        self,
+        user_id: UUID,
+        locale_id: Optional[UUID],
+        *,
+        include_pending: bool = False,
+    ) -> list[MinistryListItemResult]:
+        statuses = [MinistryStatus.ACTIVE.value]
+        if include_pending:
+            statuses.append(MinistryStatus.PENDING_APPROVAL.value)
+            statuses.append(MinistryStatus.REJECTED.value)
+
         query = (
             self._session.select(
                 OrgMinistry.id,
@@ -389,7 +400,7 @@ class MinistryRepository:
                 )
             )
             .where(OrgMinistry.is_deleted == False)
-            .where(OrgMinistry.status == MinistryStatus.ACTIVE.value)
+            .where(OrgMinistry.status.in_(statuses))
             .group_by(OrgMinistry.id)
             .order_by(OrgMinistry.sequence)
             .fetch(as_model=MinistryListItemResult)

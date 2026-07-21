@@ -1,8 +1,16 @@
 """
 Map auth application results to API serializers.
 """
-from portal.application.auth.results import AdminProfileResult, LoginResult, TokenResult, UserSensitive
+from portal.application.auth.results import (
+    AdminProfileResult,
+    LoginResult,
+    MemberLoginResult,
+    MemberProfileResult,
+    TokenResult,
+    UserSensitive,
+)
 from portal.serializers.admin.v1.auth import AdminInfo, AdminLoginResponse
+from portal.serializers.apis.v1.auth import MemberInfo, MemberLoginResponse
 from portal.serializers.mixins import TokenResponse
 
 
@@ -58,5 +66,35 @@ def login_result_to_api(result: LoginResult) -> AdminLoginResponse:
     """
     return AdminLoginResponse(
         admin=admin_profile_result_to_api(result.admin),
+        token=token_result_to_api(result.token),
+    )
+
+
+def member_profile_result_to_api(result: MemberProfileResult) -> MemberInfo:
+    """
+    Map member profile result to API response model.
+    :param result:
+    :return:
+    """
+    return MemberInfo(
+        id=result.id,
+        email=result.email,
+        first_name=result.first_name,
+        last_name=result.last_name,
+        preferred_name=result.preferred_name,
+        roles=result.roles,
+        preferred_locale_id=result.preferred_locale_id,
+        last_login_at=result.last_login_at,
+    )
+
+
+def member_login_result_to_api(result: MemberLoginResult) -> MemberLoginResponse:
+    """
+    Map member login result to API response model.
+    :param result:
+    :return:
+    """
+    return MemberLoginResponse(
+        member=member_profile_result_to_api(result.member),
         token=token_result_to_api(result.token),
     )

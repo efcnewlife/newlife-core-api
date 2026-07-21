@@ -28,12 +28,19 @@ from portal.infrastructure.persistence.repositories.verb_repository import VerbR
 from portal.libs.authorization.permission_checker import PermissionChecker
 from portal.containers.facility import FacilityContainer
 from portal.containers.org import OrgContainer
+from portal.containers.content import ContentContainer
+from portal.config import settings as app_settings
+from portal.domain.auth.member_web_app import MemberWebAppRegistry, parse_member_web_apps
 
 
 class AdminContainer(containers.DeclarativeContainer):
     """Admin portal application services."""
 
     core = providers.DependenciesContainer()
+
+    member_web_app_registry = providers.Singleton(
+        lambda: MemberWebAppRegistry(parse_member_web_apps(app_settings.MEMBER_WEB_APPS)),
+    )
 
     rbac_audit_service = providers.Factory(RbacAuditService)
 
@@ -116,6 +123,7 @@ class AdminContainer(containers.DeclarativeContainer):
         password_provider=core.password_provider,
         role_service=role_service,
         permission_service=permission_service,
+        member_refresh_app_binding_provider=core.member_refresh_app_binding_provider,
     )
     refresh_token_service = providers.Factory(
         RefreshTokenService,
@@ -125,12 +133,15 @@ class AdminContainer(containers.DeclarativeContainer):
         token_blacklist_provider=core.token_blacklist_provider,
         role_service=role_service,
         permission_service=permission_service,
+        member_web_app_registry=member_web_app_registry,
+        member_refresh_app_binding_provider=core.member_refresh_app_binding_provider,
     )
     microsoft_auth_service = providers.Factory(
         MicrosoftAuthService,
         user_repository=user_repository,
         microsoft_oidc_provider=core.microsoft_oidc_provider,
         login_service=login_service,
+        member_web_app_registry=member_web_app_registry,
     )
 
     verb_repository = providers.Factory(

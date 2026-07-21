@@ -64,7 +64,8 @@ class JWTProvider:
         roles: list = None,
         permissions: list = None,
         aud_type: AccessTokenAudType = AccessTokenAudType.USER,
-        expires_delta: Optional[timedelta] = None
+        expires_delta: Optional[timedelta] = None,
+        azp: Optional[str] = None,
     ) -> str:
         """
 
@@ -74,6 +75,7 @@ class JWTProvider:
         :param permissions:
         :param aud_type:
         :param expires_delta:
+        :param azp: Authorized party (member web app code); required for USER tokens
         :return:
         """
         now = datetime.now(timezone.utc)
@@ -105,14 +107,15 @@ class JWTProvider:
                     iss=self._issuer,
                     exp=int(expire.timestamp()),
                     sub=user.id,
-                    aud=self._audience,
+                    aud=self._audience + "-app",
                     iat=int(now.timestamp()),
                     user_id=user.id,
                     email=user.email,
                     first_name=user.first_name,
                     last_name=user.last_name,
                     preferred_name=user.preferred_name,
-                    family_id=family_id
+                    family_id=family_id,
+                    azp=azp,
                 )
             case _:
                 raise ValueError(f"Invalid access token aud type: {aud_type}")

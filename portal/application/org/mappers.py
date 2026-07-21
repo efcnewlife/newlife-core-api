@@ -414,6 +414,7 @@ def position_detail_to_api(result: PositionDetailResult) -> AdminPositionDetail:
         delete_reason=result.delete_reason,
         translations=_position_translation_items_to_api(result.translations),
         current_user_id=result.current_user_id,
+        current_user_display_name=result.current_user_display_name,
     )
 
 

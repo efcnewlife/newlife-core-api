@@ -8,6 +8,7 @@ from .superuser import create_superuser_process
 from .init_locale import init_locales_process
 from .rbac import init_rbac_process, reset_rbac_process
 from .seed_position import seed_positions_process
+from .seed_position_assignment import seed_position_assignments_process
 from .seed_ministry_type import seed_ministry_types_process
 from .seed_target_audience import seed_target_audiences_process
 from .seed_facility_rental import seed_facility_rental_process
@@ -59,6 +60,18 @@ def init_locales_cmd():
 def seed_positions_cmd(force: bool):
     """Seed org positions with multilingual translations."""
     seed_positions_process(force=force)
+
+
+@cli.command(name="seed-position-assignments")
+@click.option(
+    "--force",
+    is_flag=True,
+    default=False,
+    help="Skip confirmation and allow running when ENV is prod or stg.",
+)
+def seed_position_assignments_cmd(force: bool):
+    """Bind users to org positions as incumbents (by email and position code)."""
+    seed_position_assignments_process(force=force)
 
 
 @cli.command(name="seed-ministry-types")

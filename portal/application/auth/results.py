@@ -46,6 +46,7 @@ class AccessTokenPayload(TokenPayload):
     roles: Optional[list] = Field(None, description="Roles")
     scope: str = Field(None, description="scope(permissions)")
     family_id: UUID = Field(..., description="Refresh token family id")
+    azp: Optional[str] = Field(None, description="Authorized party (member web app code)")
 
 
 class RefreshTokenData(UUIDBaseModel):
@@ -116,4 +117,23 @@ class LoginResult(BaseModel):
     """Admin login outcome."""
 
     admin: AdminProfileResult = Field(..., description="Admin profile")
+    token: TokenResult = Field(..., description="Issued tokens")
+
+
+class MemberProfileResult(UUIDBaseModel):
+    """Authenticated member profile for app SPAs."""
+
+    email: str = Field(..., description="Member email")
+    first_name: str = Field(..., description="First name")
+    last_name: Optional[str] = Field(default=None, description="Last name")
+    preferred_name: Optional[str] = Field(default=None, description="Preferred display name")
+    roles: list[str] = Field(default_factory=list, description="Roles")
+    preferred_locale_id: Optional[UUID] = Field(default=None, description="Preferred locale id")
+    last_login_at: Optional[datetime] = Field(default=None, description="Last login time")
+
+
+class MemberLoginResult(BaseModel):
+    """Member login outcome."""
+
+    member: MemberProfileResult = Field(..., description="Member profile")
     token: TokenResult = Field(..., description="Issued tokens")

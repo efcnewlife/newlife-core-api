@@ -1,7 +1,7 @@
 """
 Facility booking application results.
 """
-from datetime import date, datetime, time
+from datetime import date as DateType, datetime, time
 from decimal import Decimal
 from typing import Any, Optional
 from uuid import UUID
@@ -74,8 +74,8 @@ class RoomSlotTemplateResult(UUIDBaseModel):
     end_time: time = Field(...)
     slot_duration_minutes: int = Field(...)
     is_active: bool = Field(default=True)
-    effective_from: Optional[date] = Field(default=None)
-    effective_to: Optional[date] = Field(default=None)
+    effective_from: Optional[DateType] = Field(default=None)
+    effective_to: Optional[DateType] = Field(default=None)
     created_at: Optional[datetime] = Field(default=None)
     created_by: Optional[str] = Field(default=None)
     updated_at: Optional[datetime] = Field(default=None)
@@ -108,8 +108,8 @@ class RentalRateResult(UUIDBaseModel):
     is_default: bool = Field(default=False)
     is_active: bool = Field(default=True)
     applicability: Optional[dict] = Field(default=None)
-    effective_from: Optional[date] = Field(default=None)
-    effective_to: Optional[date] = Field(default=None)
+    effective_from: Optional[DateType] = Field(default=None)
+    effective_to: Optional[DateType] = Field(default=None)
     sequence: Optional[float] = Field(default=None)
     remark: Optional[str] = Field(default=None)
     name: Optional[str] = Field(default=None)
@@ -374,3 +374,35 @@ class OverrideLogPageResult(BaseModel):
     page_size: int = Field(...)
     total: int = Field(...)
     items: list[OverrideLogResult] = Field(default_factory=list)
+
+
+class TimeSlotResult(BaseModel):
+    """Available time window."""
+
+    start: str = Field(..., description="HH:MM local")
+    end: str = Field(..., description="HH:MM local")
+
+
+class DayAvailabilityResult(BaseModel):
+    """AM/PM availability buckets."""
+
+    am: list[TimeSlotResult] = Field(default_factory=list)
+    pm: list[TimeSlotResult] = Field(default_factory=list)
+
+
+class RoomAvailabilityResult(UUIDBaseModel):
+    """Room with day availability."""
+
+    code: str = Field(...)
+    name: Optional[str] = Field(default=None)
+    room_number: Optional[str] = Field(default=None)
+    capacity: Optional[int] = Field(default=None)
+    is_active: bool = Field(default=True)
+    availability: DayAvailabilityResult = Field(default_factory=DayAvailabilityResult)
+
+
+class RoomAvailabilityListResult(BaseModel):
+    """Rooms available on a date."""
+
+    date: DateType = Field(...)
+    items: list[RoomAvailabilityResult] = Field(default_factory=list)

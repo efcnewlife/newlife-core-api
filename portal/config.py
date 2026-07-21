@@ -127,6 +127,14 @@ class Configuration(BaseSettings):
     AZURE_APP_CLIENT_SECRET: Optional[str] = os.getenv(key="AZURE_APP_CLIENT_SECRET", default=None)
     AZURE_ALLOWED_ISSUERS: Optional[str] = os.getenv(key="AZURE_ALLOWED_ISSUERS", default=None)
 
+    # [Member web apps — Origin -> app_code for /api/v1 auth]
+    # Format: code|origin|origin,code|origin
+    # Example: facility-booking|http://localhost:5174,another-app|http://localhost:5180
+    MEMBER_WEB_APPS: str = os.getenv(
+        key="MEMBER_WEB_APPS",
+        default="facility-booking|http://localhost:5174",
+    )
+
     # [Token Blacklist]
     TOKEN_BLACKLIST_REDIS_DB: int = int(os.getenv(key="TOKEN_BLACKLIST_REDIS_DB", default="1"))
     TOKEN_BLACKLIST_CLEANUP_INTERVAL: int = int(os.getenv(key="TOKEN_BLACKLIST_CLEANUP_INTERVAL", default="3600"))

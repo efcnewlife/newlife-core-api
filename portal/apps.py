@@ -58,10 +58,11 @@ def _register_public_stack(application: FastAPI) -> None:
 
 def _register_api_stack(application: FastAPI) -> None:
     """
-    App-user API surface: session + CORS only until user auth is implemented.
+    App-user API surface with member JWT auth (Origin-bound azp).
     :param application:
     :return:
     """
+    application.add_middleware(AuthMiddleware)
     _register_core_request_middleware(application)
     _register_cors(application)
 

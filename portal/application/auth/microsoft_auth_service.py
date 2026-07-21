@@ -11,10 +11,12 @@ from fastapi import status
 from portal.application.auth.commands import MicrosoftLoginCommand
 from portal.application.auth.login_service import LoginService
 from portal.application.auth.microsoft_profile_mapper import profile_fields_from_microsoft_claims
-from portal.application.auth.results import LoginResult, UserSensitive
+from portal.application.auth.results import LoginResult, MemberLoginResult, UserSensitive
 from portal.config import settings
 from portal.exceptions.responses import ApiBaseException, UnauthorizedException
 from portal.domain.auth.ports import UserRepositoryPort
+from portal.application.auth.member_web_app_resolver import resolve_request_app_code
+from portal.domain.auth.member_web_app import MemberWebAppRegistry
 from portal.libs.consts.enums import ThirdPartyProvider
 from portal.libs.logger import logger
 from portal.libs.tracing.distributed_trace import distributed_trace
@@ -29,10 +31,12 @@ class MicrosoftAuthService:
         user_repository: UserRepositoryPort,
         microsoft_oidc_provider: MicrosoftOidcProvider,
         login_service: LoginService,
+        member_web_app_registry: Optional[MemberWebAppRegistry] = None,
     ):
         self._repository = user_repository
         self._microsoft_oidc_provider = microsoft_oidc_provider
         self._login_service = login_service
+        self._member_web_app_registry = member_web_app_registry
 
     async def _record_microsoft_third_party_login(self, user_id: UUID, claims: dict[str, Any]) -> None:
         oid_raw = claims.get("oid") or claims.get("sub")
@@ -88,6 +92,12 @@ class MicrosoftAuthService:
 
     @distributed_trace()
     async def microsoft_login(self, command: MicrosoftLoginCommand) -> LoginResult:
+        user = await self._resolve_microsoft_user(command)
+        if not user.is_admin or not user.verified or not user.is_active:
+            raise UnauthorizedException(detail="User is not allowed to access the admin portal")
+        return await self._login_service.complete_admin_login(user)
+
+    async def _resolve_microsoft_user(self, command: MicrosoftLoginCommand) -> UserSensitive:
         if not self._microsoft_oidc_provider.is_configured():
             raise ApiBaseException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -112,7 +122,18 @@ class MicrosoftAuthService:
             user = await self._repository.get_sensitive_by_email(email)
             if not user:
                 raise UnauthorizedException(detail="User not found")
-        if not user.is_admin or not user.verified or not user.is_active:
-            raise UnauthorizedException(detail="User is not allowed to access the admin portal")
         await self._record_microsoft_third_party_login(user.id, claims)
-        return await self._login_service.complete_admin_login(user)
+        return user
+
+    @distributed_trace()
+    async def microsoft_member_login(self, command: MicrosoftLoginCommand) -> MemberLoginResult:
+        if not self._member_web_app_registry:
+            raise ApiBaseException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Member web app registry is not configured",
+            )
+        app_code = resolve_request_app_code(self._member_web_app_registry, required=True)
+        user = await self._resolve_microsoft_user(command)
+        if not user.verified or not user.is_active:
+            raise UnauthorizedException(detail="User is not allowed to access the app")
+        return await self._login_service.complete_member_login(user, app_code=app_code)

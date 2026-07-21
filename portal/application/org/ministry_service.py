@@ -207,11 +207,15 @@ class MinistryService:
             await self._repository.restore_ministry(ministry_id)
 
     @distributed_trace()
-    async def list_owned_ministries(self) -> MinistryListResult:
+    async def list_owned_ministries(self, include_pending: bool = False) -> MinistryListResult:
         user_id = self._current_user_id()
         if not user_id:
             return MinistryListResult(items=[])
-        items = await self._repository.list_owned_active(user_id, self._resolved_locale_id())
+        items = await self._repository.list_owned_active(
+            user_id,
+            self._resolved_locale_id(),
+            include_pending=include_pending,
+        )
         return MinistryListResult(items=items)
 
     @distributed_trace()

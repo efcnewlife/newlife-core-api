@@ -14,6 +14,7 @@ from portal.providers.ms_graph.container import MSGraphContainer
 from portal.providers.password_provider import PasswordProvider
 from portal.providers.refresh_token_provider import RefreshTokenProvider
 from portal.providers.token_blacklist_provider import TokenBlacklistProvider
+from portal.providers.member_refresh_app_binding_provider import MemberRefreshAppBindingProvider
 
 
 class CoreContainer(containers.DeclarativeContainer):
@@ -30,6 +31,10 @@ class CoreContainer(containers.DeclarativeContainer):
 
     token_blacklist_provider = providers.Factory(
         TokenBlacklistProvider,
+        redis_client=redis_client,
+    )
+    member_refresh_app_binding_provider = providers.Factory(
+        MemberRefreshAppBindingProvider,
         redis_client=redis_client,
     )
     jwt_provider = providers.Singleton(

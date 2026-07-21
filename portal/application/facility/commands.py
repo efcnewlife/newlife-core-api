@@ -240,6 +240,25 @@ class CancelBookingCommand(BaseModel):
     cancel_reason: Optional[str] = Field(default=None)
 
 
+class CreateBookingCommand(BaseModel):
+    """Create a one-time booking."""
+
+    start_at: datetime = Field(...)
+    end_at: datetime = Field(...)
+    is_mission_aligned: bool = Field(default=False)
+    ministry_id: Optional[UUID] = Field(default=None)
+    rooms: list[BookingRoomLineCommand] = Field(default_factory=list)
+    surcharge_codes: list[str] = Field(default_factory=list)
+    remark: Optional[str] = Field(default=None)
+
+
+class RoomAvailabilityQueryCommand(BaseModel):
+    """Query room availability for a date."""
+
+    target_date: date = Field(...)
+    ministry_id: Optional[UUID] = Field(default=None)
+
+
 class ReplaceMinistryMemberCommand(BaseModel):
     """Replace ministry memberships for a user."""
 
@@ -252,6 +271,7 @@ __all__ = [
     "BookingRoomLineCommand",
     "BulkIdsCommand",
     "CancelBookingCommand",
+    "CreateBookingCommand",
     "CreateDiscountRuleCommand",
     "CreateMinistryCommand",
     "CreateRentalRateCommand",
@@ -267,6 +287,7 @@ __all__ = [
     "PreviewQuoteCommand",
     "PreviewQuoteRoomLineCommand",
     "ReplaceMinistryMemberCommand",
+    "RoomAvailabilityQueryCommand",
     "UpdateBookingCommand",
     "UpdateDiscountRuleCommand",
     "UpdateMinistryCommand",

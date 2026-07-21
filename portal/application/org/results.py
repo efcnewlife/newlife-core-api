@@ -204,6 +204,7 @@ class PositionDetailResult(UUIDBaseModel):
     delete_reason: Optional[str] = Field(default=None)
     translations: list[PositionTranslationItemResult] = Field(default_factory=list)
     current_user_id: Optional[UUID] = Field(default=None)
+    current_user_display_name: Optional[str] = Field(default=None)
 
 
 class PositionPageResult(BaseModel):

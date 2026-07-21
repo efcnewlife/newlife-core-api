@@ -5,6 +5,7 @@ Facility bounded context DI container.
 from dependency_injector import containers, providers
 
 from portal.application.facility.booking_service import BookingService
+from portal.application.facility.availability_service import AvailabilityService
 from portal.application.facility.member_service import MemberService
 from portal.application.facility.override_log_service import OverrideLogService
 from portal.application.facility.pricing_service import PricingService
@@ -85,6 +86,13 @@ class FacilityContainer(containers.DeclarativeContainer):
         booking_repository=booking_repository,
         pricing_service=pricing_service,
         rental_repository=rental_repository,
+        ministry_repository=ministry_repository,
+    )
+    availability_service = providers.Factory(
+        AvailabilityService,
+        room_repository=room_repository,
+        room_slot_template_repository=room_slot_template_repository,
+        booking_repository=booking_repository,
         ministry_repository=ministry_repository,
     )
     member_service = providers.Factory(
