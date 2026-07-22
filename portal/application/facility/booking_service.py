@@ -26,6 +26,9 @@ from portal.domain.facility.constants import (
 from portal.exceptions.responses import BadRequestException, ForbiddenException, NotFoundException
 from portal.infrastructure.persistence.repositories.facility.booking_repository import BookingRepository
 from portal.infrastructure.persistence.repositories.facility.rental_repository import RentalRepository
+from portal.infrastructure.persistence.repositories.facility.room_blackout_repository import (
+    RoomBlackoutRepository,
+)
 from portal.infrastructure.persistence.repositories.org.ministry_repository import MinistryRepository
 from portal.domain.org.constants import MinistryStatus
 from portal.libs.contexts.request_context import RequestContext, get_request_context
@@ -42,11 +45,13 @@ class BookingService:
         pricing_service: PricingService,
         rental_repository: RentalRepository,
         ministry_repository: MinistryRepository,
+        room_blackout_repository: RoomBlackoutRepository,
     ):
         self._repository = booking_repository
         self._pricing_service = pricing_service
         self._rental_repository = rental_repository
         self._ministry_repository = ministry_repository
+        self._blackout_repository = room_blackout_repository
         self._req_ctx: Optional[RequestContext] = get_request_context()
         self._user_ctx: Optional[UserContext] = get_user_context()
 
@@ -117,6 +122,12 @@ class BookingService:
                 exclude_booking_id=booking_id,
             ):
                 raise BadRequestException(detail=f"Room {line.facility_id} has a scheduling conflict")
+            if await self._blackout_repository.has_blackout_overlap(
+                facility_id=line.facility_id,
+                start_at=start_at,
+                end_at=end_at,
+            ):
+                raise BadRequestException(detail=f"Room {line.facility_id} is closed for the selected time")
 
         quote_lines = []
         for line in command.rooms:
@@ -226,6 +237,12 @@ class BookingService:
                 end_at=end_at,
             ):
                 raise BadRequestException(detail=f"Room {line.facility_id} has a scheduling conflict")
+            if await self._blackout_repository.has_blackout_overlap(
+                facility_id=line.facility_id,
+                start_at=start_at,
+                end_at=end_at,
+            ):
+                raise BadRequestException(detail=f"Room {line.facility_id} is closed for the selected time")
 
         quote_lines = []
         for line in command.rooms:

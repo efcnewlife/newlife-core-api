@@ -21,7 +21,6 @@ from portal.application.facility.commands import (
 from portal.application.org.commands import OrgTranslationCommand
 from portal.application.facility.results import (
     DiscountRuleResult,
-    MemberDetailResult,
     MinistryDetailResult,
     PreviewQuoteResult,
     PreviewQuoteRoomLineResult,
@@ -202,14 +201,6 @@ def make_ministry_detail(
         name="Youth",
         status="active",
         is_active=True,
-    )
-
-
-def make_member_detail(user_id: UUID | None = None) -> MemberDetailResult:
-    return MemberDetailResult(
-        id=user_id or new_uuid(),
-        email="user@example.com",
-        display_name="Test User",
     )
 
 

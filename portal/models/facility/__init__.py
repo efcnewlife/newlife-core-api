@@ -6,6 +6,7 @@ from .room import (
     FacilityRoomTranslation,
 )
 from .room_slot_template import FacilityRoomSlotTemplate
+from .room_blackout import FacilityRoomBlackout
 from .rental import (
     FacilityRentalRate,
     FacilityRentalRateTranslation,
@@ -25,6 +26,7 @@ __all__ = [
     "FacilityRoom",
     "FacilityRoomTranslation",
     "FacilityRoomSlotTemplate",
+    "FacilityRoomBlackout",
     "FacilityRentalRate",
     "FacilityRentalRateTranslation",
     "FacilityRentalDiscountRule",

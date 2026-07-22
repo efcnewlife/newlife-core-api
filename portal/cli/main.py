@@ -12,6 +12,7 @@ from .seed_position_assignment import seed_position_assignments_process
 from .seed_ministry_type import seed_ministry_types_process
 from .seed_target_audience import seed_target_audiences_process
 from .seed_facility_rental import seed_facility_rental_process
+from .seed_facility_slots import seed_facility_slots_process
 from .sync_microsoft_users import sync_microsoft_users_process
 
 
@@ -110,13 +111,25 @@ def seed_target_audiences_cmd(force: bool):
     is_flag=True,
     default=False,
     help=(
-        "Hard-delete facility bookings, slot templates, rooms, rates, discounts, "
+        "Hard-delete facility bookings, blackouts, slot templates, rooms, rates, discounts, "
         "surcharges, and policy settings, then re-seed from seed data."
     ),
 )
 def seed_facility_rental_cmd(force: bool, reset: bool):
     """Seed facility rooms, rates, discounts, surcharges, and policy settings."""
     seed_facility_rental_process(force=force, reset=reset)
+
+
+@cli.command(name="seed-facility-slots")
+@click.option(
+    "--force",
+    is_flag=True,
+    default=False,
+    help="Skip confirmation and allow running when ENV is prod or stg.",
+)
+def seed_facility_slots_cmd(force: bool):
+    """Seed demo room slot templates and blackouts for existing rooms."""
+    seed_facility_slots_process(force=force)
 
 
 @cli.command(name="sync-microsoft-users")

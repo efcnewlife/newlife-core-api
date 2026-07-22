@@ -27,6 +27,7 @@ from portal.models import (
     FacilityRentalSurcharge,
     FacilityRoom,
     FacilityRoomSlotTemplate,
+    FacilityRoomBlackout,
     FacilityRoomTranslation,
     SystemLocale,
 )
@@ -44,6 +45,7 @@ async def clear_facility_rental_catalog(session: Session) -> None:
     await session.delete(FacilityBookingSlot).execute()
     await session.delete(FacilityBookingRoom).execute()
     await session.delete(FacilityBooking).execute()
+    await session.delete(FacilityRoomBlackout).execute()
     await session.delete(FacilityRoomSlotTemplate).execute()
     await session.delete(FacilityRentalPolicySetting).execute()
     await session.delete(FacilityRentalRateTranslation).execute()

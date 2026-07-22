@@ -476,33 +476,6 @@ class MinistryRepository:
             .execute()
         )
 
-    async def replace_user_ministries(
-        self,
-        user_id: UUID,
-        ministry_ids: list[UUID],
-    ) -> None:
-        await (
-            self._session.delete(OrgMinistryMember)
-            .where(OrgMinistryMember.user_id == user_id)
-            .execute()
-        )
-        if not ministry_ids:
-            return
-        await (
-            self._session.insert(OrgMinistryMember)
-            .values(
-                [
-                    {
-                        "user_id": user_id,
-                        "ministry_id": ministry_id,
-                        "member_role": MinistryMemberRole.SECONDARY.value,
-                    }
-                    for ministry_id in ministry_ids
-                ]
-            )
-            .execute()
-        )
-
     async def list_schedules(self, ministry_id: UUID) -> list[MinistryScheduleResult]:
         from portal.domain.facility.days_of_week_mask import mask_to_days
 
@@ -610,71 +583,6 @@ class MinistryRepository:
             .where(OrgMinistryApproval.status == MinistryApprovalStatus.PENDING.value)
             .execute()
         )
-
-    async def fetch_member_pages(self, model, locale_id: Optional[UUID]) -> tuple[list, int]:
-        from portal.application.facility.results import MinistryMemberRowResult
-
-        display_name = sa.func.coalesce(AuthUserProfile.preferred_name, AuthUser.email)
-        member_filter = sa.and_(
-            AuthUser.is_admin == False,
-            AuthUser.is_deleted == False,
-        )
-        items, count = await (
-            self._session.select(
-                AuthUser.id.label("user_id"),
-                AuthUser.email,
-                display_name.label("display_name"),
-            )
-            .select_from(AuthUser)
-            .outerjoin(AuthUserProfile, AuthUserProfile.user_id == AuthUser.id)
-            .where(member_filter)
-            .where(
-                model.ministry_id,
-                lambda: sa.exists(
-                    sa.select(1).where(
-                        OrgMinistryMember.user_id == AuthUser.id,
-                        OrgMinistryMember.ministry_id == model.ministry_id,
-                    )
-                ),
-            )
-            .where(
-                model.keyword,
-                lambda: sa.or_(
-                    AuthUser.email.ilike(f"%{model.keyword}%"),
-                    AuthUserProfile.first_name.ilike(f"%{model.keyword}%"),
-                    AuthUserProfile.last_name.ilike(f"%{model.keyword}%"),
-                ),
-            )
-            .order_by_with(
-                tables=[AuthUser],
-                order_by=model.order_by,
-                descending=model.descending,
-            )
-            .limit(model.page_size)
-            .offset(model.page * model.page_size)
-            .fetchpages(no_order_by=False, as_model=MinistryMemberRowResult)
-        )
-        enriched = []
-        for item in items or []:
-            ministry_ids = await self._list_ministry_ids_for_user(item.user_id)
-            enriched.append(
-                MinistryMemberRowResult(
-                    user_id=item.user_id,
-                    email=item.email,
-                    display_name=item.display_name,
-                    ministry_ids=ministry_ids,
-                    ministry_names=[],
-                )
-            )
-        return enriched, count
-
-    async def _list_ministry_ids_for_user(self, user_id: UUID) -> list[UUID]:
-        rows = await (
-            self._session.select(OrgMinistryMember.ministry_id)
-            .where(OrgMinistryMember.user_id == user_id)
-            .fetch()
-        )
-        return [row["ministry_id"] for row in rows or []]
 
     async def delete_soft(self, ministry_id: UUID, reason: Optional[str]) -> None:
         await (

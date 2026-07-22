@@ -16,6 +16,9 @@ from portal.application.facility.results import (
 from portal.exceptions.responses import BadRequestException, ForbiddenException
 from portal.infrastructure.persistence.repositories.facility.booking_repository import BookingRepository
 from portal.infrastructure.persistence.repositories.facility.room_repository import RoomRepository
+from portal.infrastructure.persistence.repositories.facility.room_blackout_repository import (
+    RoomBlackoutRepository,
+)
 from portal.infrastructure.persistence.repositories.facility.room_slot_template_repository import (
     RoomSlotTemplateRepository,
 )
@@ -37,11 +40,13 @@ class AvailabilityService:
         room_slot_template_repository: RoomSlotTemplateRepository,
         booking_repository: BookingRepository,
         ministry_repository: MinistryRepository,
+        room_blackout_repository: RoomBlackoutRepository,
     ):
         self._room_repository = room_repository
         self._slot_template_repository = room_slot_template_repository
         self._booking_repository = booking_repository
         self._ministry_repository = ministry_repository
+        self._blackout_repository = room_blackout_repository
         self._req_ctx: Optional[RequestContext] = get_request_context()
         self._user_ctx: Optional[UserContext] = get_user_context()
 
@@ -81,6 +86,7 @@ class AvailabilityService:
 
         for room in rooms:
             templates = await self._slot_template_repository.list_active_for_day(room.id, day_of_week)
+            blackouts = await self._blackout_repository.list_active_for_room_day(room.id, day)
             am_slots: list[TimeSlotResult] = []
             pm_slots: list[TimeSlotResult] = []
             for template in templates:
@@ -93,6 +99,11 @@ class AvailabilityService:
                 window_end = self._combine_local(day, template.end_time)
                 while cursor + timedelta(minutes=duration) <= window_end:
                     slot_end = cursor + timedelta(minutes=duration)
+                    local_start = cursor.astimezone(LOCAL_TZ).time()
+                    local_end = slot_end.astimezone(LOCAL_TZ).time()
+                    if self._blackout_repository.slot_overlaps_blackouts(blackouts, local_start, local_end):
+                        cursor = slot_end
+                        continue
                     overlap = await self._booking_repository.has_confirmed_slot_overlap(
                         facility_id=room.id,
                         start_at=cursor,

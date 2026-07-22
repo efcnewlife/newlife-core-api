@@ -10,14 +10,12 @@ from asyncpg import UniqueViolationError
 
 from portal.application.facility.commands import (
     BookingPagesQueryCommand,
-    MemberPagesQueryCommand,
     OverrideLogPagesQueryCommand,
     PagesQueryCommand,
 )
 from portal.application.facility.results import (
     BookingDetailResult,
     DiscountRuleResult,
-    MemberDetailResult,
     MinistryDetailResult,
     OverrideLogResult,
     RentalRateResult,
@@ -365,6 +363,106 @@ class StubRoomSlotTemplateRepository:
         return []
 
 
+class StubRoomBlackoutRepository:
+    """In-memory room blackout stub."""
+
+    def __init__(
+        self,
+        candidates: list | None = None,
+        blackout_by_id: dict | None = None,
+        update_affected: int = 1,
+        has_overlap: bool = False,
+        for_room_day: list | None = None,
+    ):
+        self.candidates = candidates or []
+        self.blackout_by_id = blackout_by_id or {}
+        self.update_affected = update_affected
+        self.has_overlap = has_overlap
+        self.for_room_day = for_room_day or []
+        self.insert_calls: list[dict] = []
+        self.list_candidates_calls = 0
+
+    @staticmethod
+    def effective_dates_overlap(left_from, left_to, right_from, right_to) -> bool:
+        from portal.infrastructure.persistence.repositories.facility.room_blackout_repository import (
+            RoomBlackoutRepository,
+        )
+
+        return RoomBlackoutRepository.effective_dates_overlap(
+            left_from, left_to, right_from, right_to
+        )
+
+    @staticmethod
+    def time_ranges_overlap(left_start, left_end, right_start, right_end) -> bool:
+        from portal.infrastructure.persistence.repositories.facility.room_blackout_repository import (
+            RoomBlackoutRepository,
+        )
+
+        return RoomBlackoutRepository.time_ranges_overlap(
+            left_start, left_end, right_start, right_end
+        )
+
+    @staticmethod
+    def scopes_overlap(left_facility_id, right_facility_id) -> bool:
+        from portal.infrastructure.persistence.repositories.facility.room_blackout_repository import (
+            RoomBlackoutRepository,
+        )
+
+        return RoomBlackoutRepository.scopes_overlap(left_facility_id, right_facility_id)
+
+    def slot_overlaps_blackouts(self, blackouts, slot_start_local, slot_end_local) -> bool:
+        from portal.infrastructure.persistence.repositories.facility.room_blackout_repository import (
+            RoomBlackoutRepository,
+        )
+
+        return RoomBlackoutRepository.slot_overlaps_blackouts(
+            self, blackouts, slot_start_local, slot_end_local
+        )
+
+    async def list_active_overlapping_candidates(
+        self,
+        facility_id,
+        kind: str,
+        exclude_blackout_id=None,
+    ):
+        self.list_candidates_calls += 1
+        return [
+            item
+            for item in self.candidates
+            if getattr(item, "id", None) != exclude_blackout_id and getattr(item, "kind", None) == kind
+        ]
+
+    async def list_active_for_room_day(self, facility_id, target_date):
+        return list(self.for_room_day)
+
+    async def has_blackout_overlap(self, facility_id, start_at, end_at) -> bool:
+        return self.has_overlap
+
+    async def get_by_id(self, blackout_id):
+        return self.blackout_by_id.get(blackout_id)
+
+    async def insert_blackout(self, payload: dict) -> None:
+        self.insert_calls.append(payload)
+
+    async def update_blackout(self, blackout_id, values: dict) -> int:
+        return self.update_affected
+
+    async def delete_hard(self, blackout_id) -> None:
+        pass
+
+    async def delete_soft(self, blackout_id, reason: str | None) -> None:
+        pass
+
+    async def restore_blackout(self, blackout_id) -> None:
+        pass
+
+    async def fetch_pages(self, command, facility_id=None):
+        return [], 0
+
+    async def list_by_facility(self, facility_id):
+        return []
+
+
 class StubMinistryRepository:
     """In-memory ministry stub."""
 
@@ -379,7 +477,6 @@ class StubMinistryRepository:
         self.update_affected = update_affected
         self.insert_calls: list[dict] = []
         self.replace_members_calls: list[dict] = []
-        self.replace_user_ministries_calls: list[dict] = []
 
     async def get_by_id(self, ministry_id: UUID) -> MinistryDetailResult | None:
         return self.ministry_by_id.get(ministry_id)
@@ -407,6 +504,13 @@ class StubMinistryRepository:
     async def list_active(self, locale_id):
         return []
 
+    async def get_status(self, ministry_id: UUID) -> str | None:
+        ministry = self.ministry_by_id.get(ministry_id)
+        return getattr(ministry, "status", None) if ministry else None
+
+    async def is_user_booking_member(self, ministry_id: UUID, user_id: UUID) -> bool:
+        return True
+
     async def fetch_active_locale_ids(self, locale_ids: list[UUID]) -> list[UUID]:
         return locale_ids
 
@@ -422,36 +526,11 @@ class StubMinistryRepository:
             dict(ministry_id=ministry_id, members=members)
         )
 
-    async def replace_user_ministries(
-        self,
-        user_id: UUID,
-        ministry_ids: list[UUID],
-    ) -> None:
-        self.replace_user_ministries_calls.append(
-            dict(user_id=user_id, ministry_ids=ministry_ids)
-        )
-
-    async def fetch_member_pages(self, command, locale_id):
-        return [], 0
-
     @staticmethod
     def is_unique_violation(exc: Exception) -> bool:
         from portal.infrastructure.persistence.repositories.facility.ministry_repository import MinistryRepository
 
         return MinistryRepository.is_unique_violation(exc)
-
-
-class StubMemberRepository:
-    """In-memory member stub."""
-
-    def __init__(self, member_by_id: dict[UUID, MemberDetailResult] | None = None):
-        self.member_by_id = member_by_id or {}
-
-    async def get_detail(self, user_id: UUID, locale_id=None) -> MemberDetailResult | None:
-        return self.member_by_id.get(user_id)
-
-    async def fetch_pages(self, command: MemberPagesQueryCommand, locale_id):
-        return [], 0
 
 
 class StubOverrideLogRepository:

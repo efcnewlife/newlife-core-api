@@ -80,6 +80,38 @@ class UpdateRoomSlotTemplateCommand(BaseModel):
     effective_to: Optional[date] = Field(default=None)
 
 
+class CreateRoomBlackoutCommand(BaseModel):
+    """Create room blackout."""
+
+    facility_id: Optional[UUID] = Field(default=None)
+    name: str = Field(...)
+    reason: str = Field(...)
+    kind: str = Field(...)
+    blackout_date: Optional[date] = Field(default=None)
+    days_of_week: Optional[list[int]] = Field(default=None)
+    start_time: time = Field(...)
+    end_time: time = Field(...)
+    is_active: bool = Field(default=True)
+    effective_from: Optional[date] = Field(default=None)
+    effective_to: Optional[date] = Field(default=None)
+
+
+class UpdateRoomBlackoutCommand(BaseModel):
+    """Update room blackout."""
+
+    facility_id: Optional[UUID] = Field(default=None)
+    name: str = Field(...)
+    reason: str = Field(...)
+    kind: str = Field(...)
+    blackout_date: Optional[date] = Field(default=None)
+    days_of_week: Optional[list[int]] = Field(default=None)
+    start_time: time = Field(...)
+    end_time: time = Field(...)
+    is_active: bool = Field(default=True)
+    effective_from: Optional[date] = Field(default=None)
+    effective_to: Optional[date] = Field(default=None)
+
+
 class CreateRentalRateCommand(BaseModel):
     """Create rental rate row."""
 
@@ -192,18 +224,6 @@ class BookingPagesQueryCommand(PagesQueryCommand):
     date_to: Optional[datetime] = Field(default=None)
 
 
-class MemberPagesQueryCommand(PagesQueryCommand):
-    """Paginated facility member list filters."""
-
-    ministry_id: Optional[UUID] = Field(default=None)
-
-
-class MinistryMemberPagesQueryCommand(PagesQueryCommand):
-    """Paginated ministry member assignment list."""
-
-    ministry_id: Optional[UUID] = Field(default=None)
-
-
 class OverrideLogPagesQueryCommand(PagesQueryCommand):
     """Paginated override audit log filters."""
 
@@ -259,12 +279,6 @@ class RoomAvailabilityQueryCommand(BaseModel):
     ministry_id: Optional[UUID] = Field(default=None)
 
 
-class ReplaceMinistryMemberCommand(BaseModel):
-    """Replace ministry memberships for a user."""
-
-    ministry_ids: list[UUID] = Field(default_factory=list)
-
-
 __all__ = [
     "ReplaceMinistryMembersCommand",
     "BookingPagesQueryCommand",
@@ -276,23 +290,22 @@ __all__ = [
     "CreateMinistryCommand",
     "CreateRentalRateCommand",
     "CreateRoomCommand",
+    "CreateRoomBlackoutCommand",
     "CreateRoomSlotTemplateCommand",
     "CreateSurchargeCommand",
     "DeleteCommand",
     "FacilityTranslationCommand",
-    "MemberPagesQueryCommand",
-    "MinistryMemberPagesQueryCommand",
     "OverrideLogPagesQueryCommand",
     "PagesQueryCommand",
     "PreviewQuoteCommand",
     "PreviewQuoteRoomLineCommand",
-    "ReplaceMinistryMemberCommand",
     "RoomAvailabilityQueryCommand",
     "UpdateBookingCommand",
     "UpdateDiscountRuleCommand",
     "UpdateMinistryCommand",
     "UpdatePolicySettingCommand",
     "UpdateRentalRateCommand",
+    "UpdateRoomBlackoutCommand",
     "UpdateRoomCommand",
     "UpdateRoomSlotTemplateCommand",
     "UpdateSurchargeCommand",

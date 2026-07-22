@@ -353,13 +353,34 @@ resources = [
         "pid": FACILITY_PARENT_ID,
     },
     {
+        "code": "facility:room_blackout",
+        "name": "Room Blackouts",
+        "key": "FACILITY_ROOM_BLACKOUT",
+        "icon": "MdEventBusy",
+        "path": "/facility/room-blackouts",
+        "type": ResourceType.GENERAL.value,
+        "sequence": 12,
+        "translations": _with_locale_values(
+            {"zh-TW": "不開放時段", "zh-CN": "不开放时段", "en": "Room Blackouts"}
+        ),
+        "description": "Manage closed hours per room or campus-wide",
+        "description_translations": _with_locale_descriptions(
+            {
+                "zh-TW": "管理場地或全館不開放時段",
+                "zh-CN": "管理场地或全馆不开放时段",
+                "en": "Manage closed hours per room or campus-wide",
+            }
+        ),
+        "pid": FACILITY_PARENT_ID,
+    },
+    {
         "code": "facility:rental_rate",
         "name": "Rental Rates",
         "key": "FACILITY_RENTAL_RATE",
         "icon": "MdAttachMoney",
         "path": "/facility/rental-rates",
         "type": ResourceType.GENERAL.value,
-        "sequence": 12,
+        "sequence": 13,
         "translations": _with_locale_values(
             {"zh-TW": "租金費率", "zh-CN": "租金费率", "en": "Rental Rates"}
         ),
@@ -411,27 +432,6 @@ resources = [
                 "zh-TW": "預約覆寫稽核紀錄",
                 "zh-CN": "预约覆写稽核记录",
                 "en": "Read-only booking override audit log",
-            }
-        ),
-        "pid": FACILITY_PARENT_ID,
-    },
-    {
-        "code": "facility:member",
-        "name": "Members",
-        "key": "FACILITY_MEMBER",
-        "icon": "MdPeople",
-        "path": "/facility/members",
-        "type": ResourceType.GENERAL.value,
-        "sequence": 15,
-        "translations": _with_locale_values(
-            {"zh-TW": "會員查詢", "zh-CN": "会员查询", "en": "Members"}
-        ),
-        "description": "Search SSO members for facility booking",
-        "description_translations": _with_locale_descriptions(
-            {
-                "zh-TW": "查詢場地預約會員",
-                "zh-CN": "查询场地预约会员",
-                "en": "Search SSO members for facility booking",
             }
         ),
         "pid": FACILITY_PARENT_ID,

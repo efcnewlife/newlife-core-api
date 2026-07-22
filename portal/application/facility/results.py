@@ -98,6 +98,42 @@ class RoomSlotTemplateListResult(BaseModel):
     items: list[RoomSlotTemplateResult] = Field(default_factory=list)
 
 
+class RoomBlackoutResult(UUIDBaseModel):
+    """Room blackout row."""
+
+    facility_id: Optional[UUID] = Field(default=None)
+    name: str = Field(...)
+    reason: str = Field(...)
+    kind: str = Field(...)
+    blackout_date: Optional[DateType] = Field(default=None)
+    days_of_week_mask: Optional[int] = Field(default=None)
+    start_time: time = Field(...)
+    end_time: time = Field(...)
+    is_active: bool = Field(default=True)
+    effective_from: Optional[DateType] = Field(default=None)
+    effective_to: Optional[DateType] = Field(default=None)
+    created_at: Optional[datetime] = Field(default=None)
+    created_by: Optional[str] = Field(default=None)
+    updated_at: Optional[datetime] = Field(default=None)
+    updated_by: Optional[str] = Field(default=None)
+    delete_reason: Optional[str] = Field(default=None)
+
+
+class RoomBlackoutPageResult(BaseModel):
+    """Paginated room blackouts."""
+
+    page: int = Field(...)
+    page_size: int = Field(...)
+    total: int = Field(...)
+    items: list[RoomBlackoutResult] = Field(default_factory=list)
+
+
+class RoomBlackoutListResult(BaseModel):
+    """Room blackout list."""
+
+    items: list[RoomBlackoutResult] = Field(default_factory=list)
+
+
 class RentalRateResult(UUIDBaseModel):
     """Rental rate row."""
 
@@ -298,58 +334,6 @@ class BookingPageResult(BaseModel):
     page_size: int = Field(...)
     total: int = Field(...)
     items: list[BookingListItemResult] = Field(default_factory=list)
-
-
-class MemberMinistryTagResult(UUIDBaseModel):
-    """Ministry tag on member row."""
-
-    name: Optional[str] = Field(default=None)
-
-
-class MemberListItemResult(UUIDBaseModel):
-    """Facility member list row."""
-
-    email: Optional[str] = Field(default=None)
-    display_name: Optional[str] = Field(default=None)
-    last_login_at: Optional[datetime] = Field(default=None)
-    ministries: list[MemberMinistryTagResult] = Field(default_factory=list)
-
-
-class MemberPageResult(BaseModel):
-    """Paginated facility members."""
-
-    page: int = Field(...)
-    page_size: int = Field(...)
-    total: int = Field(...)
-    items: list[MemberListItemResult] = Field(default_factory=list)
-
-
-class MemberDetailResult(UUIDBaseModel):
-    """Facility member detail."""
-
-    email: Optional[str] = Field(default=None)
-    display_name: Optional[str] = Field(default=None)
-    last_login_at: Optional[datetime] = Field(default=None)
-    ministries: list[MemberMinistryTagResult] = Field(default_factory=list)
-
-
-class MinistryMemberRowResult(BaseModel):
-    """Ministry member assignment row."""
-
-    user_id: UUID = Field(...)
-    email: Optional[str] = Field(default=None)
-    display_name: Optional[str] = Field(default=None)
-    ministry_ids: list[UUID] = Field(default_factory=list)
-    ministry_names: list[str] = Field(default_factory=list)
-
-
-class MinistryMemberPageResult(BaseModel):
-    """Paginated ministry members."""
-
-    page: int = Field(...)
-    page_size: int = Field(...)
-    total: int = Field(...)
-    items: list[MinistryMemberRowResult] = Field(default_factory=list)
 
 
 class OverrideLogResult(UUIDBaseModel):

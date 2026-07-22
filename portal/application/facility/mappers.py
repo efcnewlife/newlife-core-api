@@ -7,6 +7,7 @@ from portal.application.facility.commands import (
     BulkIdsCommand,
     CreateDiscountRuleCommand,
     CreateRentalRateCommand,
+    CreateRoomBlackoutCommand,
     CreateRoomCommand,
     CreateRoomSlotTemplateCommand,
     CreateSurchargeCommand,
@@ -18,6 +19,7 @@ from portal.application.facility.commands import (
     UpdateDiscountRuleCommand,
     UpdatePolicySettingCommand,
     UpdateRentalRateCommand,
+    UpdateRoomBlackoutCommand,
     UpdateRoomCommand,
     UpdateRoomSlotTemplateCommand,
     UpdateSurchargeCommand,
@@ -32,6 +34,9 @@ from portal.application.facility.results import (
     RentalRateListResult,
     RentalRatePageResult,
     RentalRateResult,
+    RoomBlackoutListResult,
+    RoomBlackoutPageResult,
+    RoomBlackoutResult,
     RoomDetailResult,
     RoomListResult,
     RoomPageResult,
@@ -81,6 +86,13 @@ from portal.serializers.admin.v1.facility.room_slot_template import (
     AdminRoomSlotTemplateList,
     AdminRoomSlotTemplatePages,
     AdminRoomSlotTemplateUpdate,
+)
+from portal.serializers.admin.v1.facility.room_blackout import (
+    AdminRoomBlackoutCreate,
+    AdminRoomBlackoutItem,
+    AdminRoomBlackoutList,
+    AdminRoomBlackoutPages,
+    AdminRoomBlackoutUpdate,
 )
 from portal.serializers.admin.v1.facility.translation import (
     AdminFacilityTranslationInput,
@@ -237,6 +249,48 @@ def room_slot_template_pages_query_to_command(model) -> tuple[PagesQueryCommand,
 
     base = pages_query_to_command(model)
     if not isinstance(model, AdminRoomSlotTemplateQuery):
+        return base, None
+    return base, model.facility_id
+
+
+def create_room_blackout_to_command(model: AdminRoomBlackoutCreate) -> CreateRoomBlackoutCommand:
+    return CreateRoomBlackoutCommand.model_validate(model.model_dump())
+
+
+def update_room_blackout_to_command(model: AdminRoomBlackoutUpdate) -> UpdateRoomBlackoutCommand:
+    return UpdateRoomBlackoutCommand.model_validate(model.model_dump())
+
+
+def room_blackout_to_api(result: RoomBlackoutResult) -> AdminRoomBlackoutItem:
+    from portal.domain.facility.days_of_week_mask import mask_to_days
+
+    payload = result.model_dump()
+    if result.days_of_week_mask is not None:
+        payload["days_of_week"] = mask_to_days(result.days_of_week_mask)
+    else:
+        payload["days_of_week"] = None
+    del payload["days_of_week_mask"]
+    return AdminRoomBlackoutItem.model_validate(payload)
+
+
+def room_blackout_page_to_api(result: RoomBlackoutPageResult) -> AdminRoomBlackoutPages:
+    return AdminRoomBlackoutPages(
+        page=result.page,
+        page_size=result.page_size,
+        total=result.total,
+        items=[room_blackout_to_api(item) for item in result.items],
+    )
+
+
+def room_blackout_list_to_api(result: RoomBlackoutListResult) -> AdminRoomBlackoutList:
+    return AdminRoomBlackoutList(items=[room_blackout_to_api(item) for item in result.items])
+
+
+def room_blackout_pages_query_to_command(model) -> tuple[PagesQueryCommand, UUID | None]:
+    from portal.serializers.admin.v1.facility.room_blackout import AdminRoomBlackoutQuery
+
+    base = pages_query_to_command(model)
+    if not isinstance(model, AdminRoomBlackoutQuery):
         return base, None
     return base, model.facility_id
 
@@ -420,16 +474,6 @@ def booking_pages_query_to_command(model) -> "BookingPagesQueryCommand":
     )
 
 
-def member_pages_query_to_command(model) -> "MemberPagesQueryCommand":
-    from portal.application.facility.commands import MemberPagesQueryCommand
-    from portal.serializers.admin.v1.facility.member import AdminMemberQuery
-
-    base = pages_query_to_command(model)
-    if not isinstance(model, AdminMemberQuery):
-        return MemberPagesQueryCommand(**base.model_dump())
-    return MemberPagesQueryCommand(**base.model_dump(), ministry_id=model.ministry_id)
-
-
 def override_log_pages_query_to_command(model) -> "OverrideLogPagesQueryCommand":
     from portal.application.facility.commands import OverrideLogPagesQueryCommand
     from portal.serializers.admin.v1.facility.override_log import AdminOverrideLogQuery
@@ -474,13 +518,6 @@ def cancel_booking_to_command(model) -> "CancelBookingCommand":
     return CancelBookingCommand(scope=model.scope, cancel_reason=model.cancel_reason)
 
 
-def replace_member_ministries_to_command(model) -> "ReplaceMinistryMemberCommand":
-    from portal.application.facility.commands import ReplaceMinistryMemberCommand
-    from portal.serializers.admin.v1.facility.member import AdminMemberMinistriesUpdate
-
-    return ReplaceMinistryMemberCommand(ministry_ids=model.ministry_ids)
-
-
 def booking_page_to_api(result) -> "AdminBookingPages":
     from portal.serializers.admin.v1.facility.booking import AdminBookingDetail, AdminBookingPages
 
@@ -496,23 +533,6 @@ def booking_detail_to_api(result) -> "AdminBookingDetail":
     from portal.serializers.admin.v1.facility.booking import AdminBookingDetail
 
     return AdminBookingDetail.model_validate(result.model_dump())
-
-
-def member_page_to_api(result) -> "AdminMemberPages":
-    from portal.serializers.admin.v1.facility.member import AdminMemberPages
-
-    return AdminMemberPages(
-        page=result.page,
-        page_size=result.page_size,
-        total=result.total,
-        items=[item for item in result.items],
-    )
-
-
-def member_detail_to_api(result) -> "AdminMemberDetail":
-    from portal.serializers.admin.v1.facility.member import AdminMemberDetail
-
-    return AdminMemberDetail.model_validate(result.model_dump())
 
 
 def override_log_page_to_api(result) -> "AdminOverrideLogPages":

@@ -58,12 +58,12 @@ class RootContainer(containers.DeclarativeContainer):
 
     room_service = admin.facility.room_service
     room_slot_template_service = admin.facility.room_slot_template_service
+    room_blackout_service = admin.facility.room_blackout_service
     rental_rate_service = admin.facility.rental_rate_service
     rental_catalog_service = admin.facility.rental_catalog_service
     pricing_service = admin.facility.pricing_service
     booking_service = admin.facility.booking_service
     availability_service = admin.facility.availability_service
-    member_service = admin.facility.member_service
     override_log_service = admin.facility.override_log_service
 
     org_ministry_service = admin.org.ministry_service

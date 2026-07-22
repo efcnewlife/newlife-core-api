@@ -19,8 +19,10 @@ from tests.fixtures.facility.factories import (
 )
 from tests.fixtures.facility.stubs import (
     StubBookingRepository,
+    StubMinistryRepository,
     StubPricingService,
     StubRentalRepository,
+    StubRoomBlackoutRepository,
 )
 
 
@@ -28,12 +30,15 @@ def _booking_service(
     booking_stub: StubBookingRepository,
     rental_stub: StubRentalRepository | None = None,
     pricing_stub: StubPricingService | None = None,
+    blackout_stub: StubRoomBlackoutRepository | None = None,
 ) -> BookingService:
     quote = make_preview_quote_result(quoted_amount=Decimal("150"), discount_percent=Decimal("10"))
     return BookingService(
         booking_stub,
         pricing_stub or StubPricingService(quote),
         rental_stub or StubRentalRepository(),
+        StubMinistryRepository(),
+        blackout_stub or StubRoomBlackoutRepository(),
     )
 
 
@@ -106,6 +111,15 @@ async def test_update_booking_slot_overlap_conflict():
     stub = StubBookingRepository(has_overlap=True)
     service = _booking_service(stub)
     with pytest.raises(BadRequestException, match="scheduling conflict"):
+        await service.update_booking(uuid4(), make_update_booking_command(facility_id=room_id))
+
+
+@pytest.mark.asyncio
+async def test_update_booking_blackout_conflict():
+    room_id = new_uuid()
+    stub = StubBookingRepository(has_overlap=False)
+    service = _booking_service(stub, blackout_stub=StubRoomBlackoutRepository(has_overlap=True))
+    with pytest.raises(BadRequestException, match="closed for the selected time"):
         await service.update_booking(uuid4(), make_update_booking_command(facility_id=room_id))
 
 

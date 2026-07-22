@@ -485,6 +485,10 @@ poetry run python -m portal.cli.main seed-positions
 # 5. Optional: ministry catalog seed data (before creating ministries)
 poetry run python -m portal.cli.main seed-ministry-types
 poetry run python -m portal.cli.main seed-target-audiences
+
+# 6. Optional: facility rooms/rates, then demo slot templates + blackouts
+poetry run python -m portal.cli.main seed-facility-rental
+poetry run python -m portal.cli.main seed-facility-slots
 ```
 
 | Command | Purpose |
@@ -495,12 +499,15 @@ poetry run python -m portal.cli.main seed-target-audiences
 | `seed-positions` | Upsert org positions and translations from `portal/cli/datas/position_seed_data.py`. |
 | `seed-ministry-types` | Upsert ministry type catalog (`outreach`, `internal`, `worship`) and translations. |
 | `seed-target-audiences` | Upsert target audience catalog (`children`, `youths`, `adults`, `family`, `all_ages`) and translations. |
+| `seed-facility-rental` | Upsert facility rooms, rates, discounts, surcharges, and policy settings. |
+| `seed-facility-slots` | Replace demo (`seed:`-prefixed) room slot templates and blackouts for existing rooms. |
 | `reset-rbac` | **Destructive:** delete all RBAC data and re-seed from `rbac_seed_data`. |
 
 Notes:
 
 - Run `init-locales` before `init-rbac`; RBAC translations depend on locale rows.
-- `seed-positions`, `seed-ministry-types`, `seed-target-audiences`, and `reset-rbac` are blocked when `ENV` is not `dev` unless `--force` is passed.
+- `seed-positions`, `seed-ministry-types`, `seed-target-audiences`, `seed-facility-rental`, `seed-facility-slots`, and `reset-rbac` are blocked when `ENV` is not `dev` unless `--force` is passed.
+- Run `seed-facility-rental` before `seed-facility-slots` so room codes exist.
 - Seed logic lives in `portal/application/cli/*_seed_service.py`; `portal/cli/` provides thin Click entrypoints only.
 
 ## Run FastAPI server

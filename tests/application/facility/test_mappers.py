@@ -16,12 +16,10 @@ from portal.application.facility.mappers import (
     create_surcharge_to_command,
     delete_model_to_command,
     discount_rule_to_api,
-    member_pages_query_to_command,
     override_log_pages_query_to_command,
     pages_query_to_command,
     preview_quote_result_to_api,
     preview_quote_to_command,
-    replace_member_ministries_to_command,
     room_detail_to_api,
     update_booking_to_command,
     update_policy_setting_to_command,
@@ -41,7 +39,6 @@ from portal.application.facility.results import (
 from portal.application.org.results import MinistryDetailResult
 from portal.domain.facility.constants import BookingType, RentalRateBillingUnit
 from portal.serializers.admin.v1.facility.booking import AdminBookingCancel, AdminBookingQuery, AdminBookingUpdate
-from portal.serializers.admin.v1.facility.member import AdminMemberMinistriesUpdate, AdminMemberQuery
 from portal.serializers.admin.v1.facility.override_log import AdminOverrideLogQuery
 from portal.serializers.admin.v1.facility.rental_catalog import (
     AdminDiscountRuleCreate,
@@ -285,16 +282,6 @@ def test_booking_and_member_mappers():
     cancel_cmd = cancel_booking_to_command(AdminBookingCancel(scope="series", cancel_reason="weather"))
     assert cancel_cmd.scope == "series"
     assert cancel_cmd.cancel_reason == "weather"
-
-    member_query = AdminMemberQuery(page=1, page_size=10, ministry_id=uuid4())
-    member_cmd = member_pages_query_to_command(member_query)
-    assert member_cmd.ministry_id is not None
-
-    ministry_ids = [uuid4()]
-    replace_cmd = replace_member_ministries_to_command(
-        AdminMemberMinistriesUpdate(ministry_ids=ministry_ids)
-    )
-    assert replace_cmd.ministry_ids == ministry_ids
 
 
 def test_override_log_pages_query_to_command():

@@ -159,7 +159,7 @@ FastAPI (public)  portal.main:app
 
 | Context | Application path | Key services |
 |---------|------------------|--------------|
-| **facility** | `application/facility/` | `RoomService`, `RoomSlotTemplateService`, `RentalRateService`, `RentalCatalogService`, `PricingService`, `BookingService`, `MemberService`, `OverrideLogService` |
+| **facility** | `application/facility/` | `RoomService`, `RoomSlotTemplateService`, `RentalRateService`, `RentalCatalogService`, `PricingService`, `BookingService`, `OverrideLogService` |
 | **org** | `application/org/` | `MinistryService`, `MinistryApprovalService`, `PositionService`, `MemberPersonService` |
 
 ### Domain packages (`portal/domain/`)

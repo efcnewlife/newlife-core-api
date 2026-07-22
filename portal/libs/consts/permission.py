@@ -21,10 +21,10 @@ class Resource(Enum):
     SYSTEM_LOG = "system:log"
     FACILITY_ROOM = "facility:room"
     FACILITY_ROOM_SLOT_TEMPLATE = "facility:room_slot_template"
+    FACILITY_ROOM_BLACKOUT = "facility:room_blackout"
     FACILITY_RENTAL_RATE = "facility:rental_rate"
     FACILITY_BOOKING = "facility:booking"
     FACILITY_BOOKING_OVERRIDE_LOG = "facility:booking_override_log"
-    FACILITY_MEMBER = "facility:member"
     MINISTRY_MINISTRY = "ministry:ministry"
     MINISTRY_MEMBER = "ministry:member"
     MINISTRY_APPROVAL = "ministry:approval"
@@ -70,10 +70,10 @@ class Permission:
     SYSTEM_LOG = PermissionCode(Resource.SYSTEM_LOG)
     FACILITY_ROOM = PermissionCode(Resource.FACILITY_ROOM)
     FACILITY_ROOM_SLOT_TEMPLATE = PermissionCode(Resource.FACILITY_ROOM_SLOT_TEMPLATE)
+    FACILITY_ROOM_BLACKOUT = PermissionCode(Resource.FACILITY_ROOM_BLACKOUT)
     FACILITY_RENTAL_RATE = PermissionCode(Resource.FACILITY_RENTAL_RATE)
     FACILITY_BOOKING = PermissionCode(Resource.FACILITY_BOOKING)
     FACILITY_BOOKING_OVERRIDE_LOG = PermissionCode(Resource.FACILITY_BOOKING_OVERRIDE_LOG)
-    FACILITY_MEMBER = PermissionCode(Resource.FACILITY_MEMBER)
     MINISTRY_MINISTRY = PermissionCode(Resource.MINISTRY_MINISTRY)
     MINISTRY_MEMBER = PermissionCode(Resource.MINISTRY_MEMBER)
     MINISTRY_APPROVAL = PermissionCode(Resource.MINISTRY_APPROVAL)

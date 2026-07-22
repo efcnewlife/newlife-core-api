@@ -81,3 +81,10 @@ class DayOfWeek(IntEnum):
     FRIDAY = 4
     SATURDAY = 5
     SUNDAY = 6
+
+
+class RoomBlackoutKind(str, Enum):
+    """Room blackout recurrence kind."""
+
+    ONE_OFF = "one_off"
+    RECURRING = "recurring"
