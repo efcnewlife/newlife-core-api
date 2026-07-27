@@ -287,12 +287,25 @@ facility_policy_seed_rows: list[dict[str, Any]] = [
 APPLICABILITY_HOURS_LT_5: dict[str, Any] = {"all": [{"op": "hours_lt", "value": 5}]}
 APPLICABILITY_HOURS_GTE_5: dict[str, Any] = {"all": [{"op": "hours_gte", "value": 5}]}
 
-rate_applicability_by_billing_unit: dict[str, dict[str, Any]] = {
-    "hourly": APPLICABILITY_HOURS_LT_5,
-    "daily_flat": APPLICABILITY_HOURS_GTE_5,
-}
+GLOBAL_RATE_UNIT_AMOUNT = Decimal("30.00")
 
-rate_name_translations: dict[str, dict[str, dict[str, str]]] = {
-    "hourly": _translations("Hourly", "每小時"),
-    "daily_flat": _translations("Daily flat (5+ hours)", "全日定價（5小時以上）"),
-}
+facility_rental_rate_template_seed_rows: list[dict[str, Any]] = [
+    {
+        "name": "Hourly",
+        "billing_unit": "hourly",
+        "applicability": APPLICABILITY_HOURS_LT_5,
+        "unit_amount": GLOBAL_RATE_UNIT_AMOUNT,
+        "currency": "CAD",
+        "is_default": True,
+        "is_active": True,
+    },
+    {
+        "name": "Daily flat (5+ hours)",
+        "billing_unit": "daily_flat",
+        "applicability": APPLICABILITY_HOURS_GTE_5,
+        "unit_amount": GLOBAL_RATE_UNIT_AMOUNT,
+        "currency": "CAD",
+        "is_default": False,
+        "is_active": True,
+    },
+]

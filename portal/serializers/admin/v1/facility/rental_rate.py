@@ -1,19 +1,13 @@
 """
-Rental rate serializers.
+Rental rate serializers (room bindings; price from template).
 """
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 
-from portal.domain.facility.constants import RentalRateBillingUnit
-from portal.serializers.admin.v1.facility.translation import (
-    AdminFacilityTranslationInput,
-    AdminFacilityTranslationItem,
-    validate_unique_facility_locale_ids,
-)
 from portal.serializers.mixins.base import GenericQueryBaseModel, PaginationBaseResponseModel
 from portal.serializers.mixins.model_mixins import UUIDBaseModel
 
@@ -24,27 +18,31 @@ class AdminRentalRateQuery(GenericQueryBaseModel):
     facility_id: Optional[UUID] = Field(default=None)
 
 
+class AdminRentalRateTemplateEmbed(BaseModel):
+    """Embedded template summary on a rate binding."""
+
+    id: UUID = Field(..., description="Template ID")
+    name: str = Field(..., description="Template name")
+    billing_unit: str = Field(..., serialization_alias="billingUnit", description="Billing unit")
+    applicability: Optional[dict] = Field(None, description="Applicability rule")
+    unit_amount: Decimal = Field(..., serialization_alias="unitAmount", description="Template unit price")
+    currency: str = Field(..., description="Template currency")
+    is_default: bool = Field(False, serialization_alias="isDefault", description="Default flag")
+    is_active: bool = Field(True, serialization_alias="isActive", description="Active flag")
+
+
 class AdminRentalRateItem(UUIDBaseModel):
-    """Rental rate item."""
+    """Rental rate binding item (price comes from embedded template)."""
 
     facility_id: UUID = Field(..., serialization_alias="facilityId", description="Room ID")
-    billing_unit: str = Field(..., serialization_alias="billingUnit", description="Billing unit")
-    unit_amount: Decimal = Field(..., serialization_alias="unitAmount", description="Unit amount")
-    currency: str = Field(..., description="Currency")
-    is_default: bool = Field(False, serialization_alias="isDefault", description="Default rate flag")
+    template_id: UUID = Field(..., serialization_alias="templateId", description="Template ID")
     is_active: bool = Field(True, serialization_alias="isActive", description="Active flag")
-    applicability: Optional[dict] = Field(None, description="JSON applicability rule; null = always eligible")
-    effective_from: Optional[date] = Field(None, serialization_alias="effectiveFrom", description="Effective from")
-    effective_to: Optional[date] = Field(None, serialization_alias="effectiveTo", description="Effective to")
-    sequence: Optional[float] = Field(None, description="Sort sequence")
-    remark: Optional[str] = Field(None, description="Remark")
-    name: Optional[str] = Field(None, description="Display name")
     created_at: Optional[datetime] = Field(None, serialization_alias="createAt", description="Created at")
     created_by: Optional[str] = Field(None, serialization_alias="createdBy", description="Created by")
     updated_at: Optional[datetime] = Field(None, serialization_alias="updateAt", description="Updated at")
     updated_by: Optional[str] = Field(None, serialization_alias="updatedBy", description="Updated by")
     delete_reason: Optional[str] = Field(None, serialization_alias="deleteReason", description="Delete reason")
-    translations: list[AdminFacilityTranslationItem] = Field(default_factory=list, description="Translations")
+    template: Optional[AdminRentalRateTemplateEmbed] = Field(None, description="Embedded template")
 
 
 class AdminRentalRatePages(PaginationBaseResponseModel):
@@ -60,38 +58,19 @@ class AdminRentalRateList(BaseModel):
 
 
 class AdminRentalRateWrite(BaseModel):
-    """Rental rate write."""
+    """Rental rate binding write (room only)."""
 
     facility_id: UUID = Field(..., description="Room ID")
-    billing_unit: RentalRateBillingUnit = Field(
-        RentalRateBillingUnit.HOURLY,
-        description="Billing unit",
-    )
-    unit_amount: Decimal = Field(..., description="Unit amount")
-    currency: str = Field("CAD", description="Currency")
-    is_default: bool = Field(False, description="Default rate flag")
+    template_id: UUID = Field(..., description="Template ID")
     is_active: bool = Field(True, description="Active flag")
-    applicability: Optional[dict] = Field(None, description="JSON applicability rule; null = always eligible")
-    effective_from: Optional[date] = Field(None, description="Effective from")
-    effective_to: Optional[date] = Field(None, description="Effective to")
-    sequence: Optional[float] = Field(None, description="Sort sequence")
-    name: Optional[str] = Field(None, description="Display name")
-    translations: Optional[list[AdminFacilityTranslationInput]] = Field(None, description="Translations")
-
-    @field_validator("translations")
-    @classmethod
-    def validate_translations(cls, value):
-        return validate_unique_facility_locale_ids(value)
 
 
 class AdminRentalRateCreate(AdminRentalRateWrite):
-    """Create rental rate."""
-
-    translations: list[AdminFacilityTranslationInput] = Field(..., min_length=1, description="Translations")
+    """Create rental rate binding."""
 
 
 class AdminRentalRateUpdate(AdminRentalRateWrite):
-    """Update rental rate."""
+    """Update rental rate binding."""
 
 
 class AdminPreviewQuoteRoomLine(BaseModel):
@@ -119,12 +98,16 @@ class AdminPreviewQuoteRequest(BaseModel):
 
 
 class AdminPreviewQuoteRoomLineResult(BaseModel):
-    """Preview quote room line result."""
+    """Preview quote room line result with rule snapshot."""
 
     facility_id: UUID = Field(..., serialization_alias="facilityId", description="Room ID")
     billed_hours: Decimal = Field(..., serialization_alias="billedHours", description="Billed hours")
-    pricing_tier_used: str = Field(..., serialization_alias="pricingTierUsed", description="Pricing tier")
-    rental_rate_id: Optional[UUID] = Field(None, serialization_alias="rentalRateId", description="Rental rate ID")
+    rental_rate_name: str = Field(..., serialization_alias="rentalRateName", description="Rule display name")
+    billing_unit: str = Field(..., serialization_alias="billingUnit", description="Billing unit")
+    unit_amount: Decimal = Field(..., serialization_alias="unitAmount", description="Unit amount")
+    currency: str = Field(..., description="Currency")
+    applicability: Optional[dict] = Field(None, description="Applicability rule snapshot")
+    is_default: bool = Field(False, serialization_alias="isDefault", description="Default flag snapshot")
     line_subtotal: Decimal = Field(..., serialization_alias="lineSubtotal", description="Line subtotal")
 
 

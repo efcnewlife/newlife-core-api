@@ -197,8 +197,12 @@ class BookingRepository:
                 FacilityBookingRoom.start_at,
                 FacilityBookingRoom.end_at,
                 FacilityBookingRoom.billed_hours,
-                FacilityBookingRoom.pricing_tier_used,
-                FacilityBookingRoom.rental_rate_id,
+                FacilityBookingRoom.rental_rate_name,
+                FacilityBookingRoom.billing_unit,
+                FacilityBookingRoom.unit_amount,
+                FacilityBookingRoom.currency,
+                FacilityBookingRoom.applicability,
+                FacilityBookingRoom.is_default,
                 FacilityBookingRoom.line_subtotal,
             )
             .select_from(FacilityBookingRoom)

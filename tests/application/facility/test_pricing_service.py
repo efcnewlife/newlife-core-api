@@ -66,7 +66,9 @@ async def test_preview_quote_hourly_subtotal_below_threshold():
     service = _pricing_service(rental, {room_id})
     result = await service.preview_quote(make_preview_quote_command(facility_id=room_id, billed_hours=Decimal("4")))
     assert result.subtotal_amount == Decimal("40.00")
-    assert result.room_lines[0].pricing_tier_used == RentalRateBillingUnit.HOURLY.value
+    assert result.room_lines[0].billing_unit == RentalRateBillingUnit.HOURLY.value
+    assert result.room_lines[0].rental_rate_name
+    assert result.room_lines[0].unit_amount == Decimal("10")
 
 
 @pytest.mark.asyncio
@@ -75,7 +77,7 @@ async def test_preview_quote_daily_flat_subtotal_for_six_hours():
     rental = StubRentalRepository(rates_by_facility={room_id: make_hourly_and_daily_rates(room_id)})
     service = _pricing_service(rental, {room_id})
     result = await service.preview_quote(make_preview_quote_command(facility_id=room_id, billed_hours=Decimal("6")))
-    assert result.room_lines[0].pricing_tier_used == RentalRateBillingUnit.DAILY_FLAT.value
+    assert result.room_lines[0].billing_unit == RentalRateBillingUnit.DAILY_FLAT.value
     assert result.subtotal_amount == Decimal("200.00")
 
 
@@ -188,6 +190,58 @@ async def test_preview_quote_applies_minimum_fee_floor():
     service = _pricing_service(rental, {room_id})
     result = await service.preview_quote(make_preview_quote_command(facility_id=room_id, billed_hours=Decimal("1")))
     assert result.quoted_amount == Decimal("100.00")
+
+
+@pytest.mark.asyncio
+async def test_preview_quote_uses_templates_when_room_has_no_bindings():
+    from tests.fixtures.facility.factories import make_rental_rate_template
+
+    room_id = new_uuid()
+    template = make_rental_rate_template(
+        name="Hourly template",
+        billing_unit=RentalRateBillingUnit.HOURLY.value,
+        unit_amount=Decimal("12"),
+        is_default=True,
+    )
+    rental = StubRentalRepository(rates_by_facility={})
+    rental.templates_by_id[template.id] = template
+    service = _pricing_service(rental, {room_id})
+    result = await service.preview_quote(
+        make_preview_quote_command(facility_id=room_id, billed_hours=Decimal("2"))
+    )
+    assert result.room_lines[0].billing_unit == RentalRateBillingUnit.HOURLY.value
+    assert result.room_lines[0].unit_amount == Decimal("12")
+    assert result.room_lines[0].rental_rate_name == "Hourly template"
+    assert result.subtotal_amount == Decimal("24.00")
+
+
+@pytest.mark.asyncio
+async def test_preview_quote_falls_back_to_templates_when_room_bindings_do_not_match():
+    from tests.fixtures.facility.factories import make_rental_rate_template
+
+    room_id = new_uuid()
+    mismatched = make_rental_rate(
+        facility_id=room_id,
+        billing_unit=RentalRateBillingUnit.DAILY_FLAT.value,
+        unit_amount=Decimal("200"),
+        is_default=False,
+        applicability={"all": [{"op": "hours_gte", "value": 99}]},
+    )
+    template = make_rental_rate_template(
+        name="Fallback hourly",
+        billing_unit=RentalRateBillingUnit.HOURLY.value,
+        unit_amount=Decimal("15"),
+        is_default=True,
+    )
+    rental = StubRentalRepository(rates_by_facility={room_id: [mismatched]})
+    rental.templates_by_id[template.id] = template
+    service = _pricing_service(rental, {room_id})
+    result = await service.preview_quote(
+        make_preview_quote_command(facility_id=room_id, billed_hours=Decimal("2"))
+    )
+    assert result.room_lines[0].rental_rate_name == "Fallback hourly"
+    assert result.room_lines[0].unit_amount == Decimal("15")
+    assert result.subtotal_amount == Decimal("30.00")
 
 
 @pytest.mark.asyncio

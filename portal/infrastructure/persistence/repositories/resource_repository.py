@@ -260,11 +260,13 @@ class ResourceRepository:
         self,
         is_deleted: bool,
         locale_id: Optional[UUID],
+        visible_only: bool = False,
     ) -> list[ResourceItem]:
         """
         List resources for admin menus.
         :param is_deleted:
         :param locale_id:
+        :param visible_only: When True, exclude resources with is_visible=False (side menu).
         :return:
         """
         resources: list[ResourceItem] = await (
@@ -277,6 +279,7 @@ class ResourceRepository:
                 ),
             )
             .where(is_deleted == False, lambda: AuthResource.is_deleted == is_deleted)
+            .where(visible_only, lambda: AuthResource.is_visible == True)
             .order_by(AuthResource.sequence)
             .fetch(as_model=ResourceItem)
         )

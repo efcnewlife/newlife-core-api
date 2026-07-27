@@ -29,7 +29,7 @@ class StubResourceRepository:
     async def get_by_id(self, resource_id, locale_id):
         return self._detail
 
-    async def list_menus(self, is_deleted, locale_id):
+    async def list_menus(self, is_deleted, locale_id, visible_only=False):
         self.list_menus_called = True
         return self._menu_items
 

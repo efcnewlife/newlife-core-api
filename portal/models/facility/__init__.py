@@ -8,8 +8,8 @@ from .room import (
 from .room_slot_template import FacilityRoomSlotTemplate
 from .room_blackout import FacilityRoomBlackout
 from .rental import (
+    FacilityRentalRateTemplate,
     FacilityRentalRate,
-    FacilityRentalRateTranslation,
     FacilityRentalDiscountRule,
     FacilityRentalSurcharge,
     FacilityRentalPolicySetting,
@@ -27,8 +27,8 @@ __all__ = [
     "FacilityRoomTranslation",
     "FacilityRoomSlotTemplate",
     "FacilityRoomBlackout",
+    "FacilityRentalRateTemplate",
     "FacilityRentalRate",
-    "FacilityRentalRateTranslation",
     "FacilityRentalDiscountRule",
     "FacilityRentalSurcharge",
     "FacilityRentalPolicySetting",

@@ -371,15 +371,21 @@ class ResourceService:
         hierarchical_items = self.build_tree(resources)
         return ResourceTreeResult(items=hierarchical_items)
 
-    async def get_resource_menus(self, is_deleted: bool = False) -> list[ResourceItem]:
+    async def get_resource_menus(
+        self,
+        is_deleted: bool = False,
+        visible_only: bool = False,
+    ) -> list[ResourceItem]:
         """
         Flat resource menu list.
         :param is_deleted:
+        :param visible_only:
         :return:
         """
         return await self._repository.list_menus(
             is_deleted=is_deleted,
             locale_id=self._resolved_locale_id(),
+            visible_only=visible_only,
         )
 
     async def get_resource_by_user_id(self, user_id: UUID) -> list[ResourceItem]:
@@ -406,13 +412,13 @@ class ResourceService:
 
     async def get_user_permission_menus(self) -> ResourceListResult:
         """
-        Menus for the current admin user (superuser sees all).
+        Menus for the current admin user (superuser sees all visible menus).
         :return:
         """
         if not self._user_ctx.user_id or not self._user_ctx.is_admin:
             raise UnauthorizedException()
         if self._user_ctx.is_superuser:
-            resource_items = await self.get_resource_menus()
+            resource_items = await self.get_resource_menus(visible_only=True)
         else:
             resource_items = await self.get_resource_by_user_id(user_id=self._user_ctx.user_id)
         return ResourceListResult(items=resource_items)

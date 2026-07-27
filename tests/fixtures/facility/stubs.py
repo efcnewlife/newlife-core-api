@@ -52,7 +52,10 @@ class StubRentalRepository:
         self.insert_discount_calls: list[dict] = []
         self.insert_surcharge_calls: list[dict] = []
         self.insert_rate_calls: list[dict] = []
-        self.fetch_active_locale_ids_result: list[UUID] = []
+        self.insert_template_calls: list[dict] = []
+        self.templates_by_id: dict[UUID, Any] = {}
+        self.rates_by_id: dict[UUID, RentalRateResult] = {}
+        self.count_rates_for_template_result = 0
         self.discount_rules_by_id: dict[UUID, DiscountRuleResult] = {}
         self.surcharges_by_id: dict[UUID, SurchargeResult] = {}
 
@@ -81,8 +84,17 @@ class StubRentalRepository:
     def pick_rate_for_line(
         rates: list[RentalRateResult],
         billed_hours: Decimal,
+        allow_first_active: bool = True,
     ):
-        return RentalRepository.pick_rate_for_line(rates, billed_hours)
+        return RentalRepository.pick_rate_for_line(
+            rates,
+            billed_hours,
+            allow_first_active=allow_first_active,
+        )
+
+    @staticmethod
+    def template_to_rate_candidate(template):
+        return RentalRepository.template_to_rate_candidate(template)
 
     @staticmethod
     def is_unique_violation(exc: Exception) -> bool:
@@ -130,17 +142,17 @@ class StubRentalRepository:
         if self.insert_raises_unique:
             raise UniqueViolationError("duplicate")
 
-    async def fetch_rate_pages(self, command, locale_id, facility_id=None):
+    async def fetch_rate_pages(self, command, facility_id=None):
         return [], 0
 
-    async def list_rates(self, facility_id, locale_id):
+    async def list_rates(self, facility_id=None):
         return []
 
-    async def get_rate_by_id(self, rate_id: UUID, locale_id=None):
-        return None
+    async def get_rate_by_id(self, rate_id: UUID):
+        return self.rates_by_id.get(rate_id)
 
     async def update_rate(self, rate_id: UUID, values: dict) -> int:
-        return 0
+        return 1 if rate_id in self.rates_by_id else 0
 
     async def delete_rate_hard(self, rate_id: UUID) -> None:
         pass
@@ -151,11 +163,34 @@ class StubRentalRepository:
     async def restore_rate(self, rate_id: UUID) -> None:
         pass
 
-    async def fetch_active_locale_ids(self, locale_ids: list[UUID]) -> list[UUID]:
-        return self.fetch_active_locale_ids_result or locale_ids
+    async def get_template_by_id(self, template_id: UUID):
+        return self.templates_by_id.get(template_id)
 
-    async def upsert_rate_translations(self, rows: list) -> None:
+    async def count_rates_for_template(self, template_id: UUID) -> int:
+        return self.count_rates_for_template_result
+
+    async def insert_template(self, payload: dict) -> None:
+        if self.insert_raises_unique:
+            raise UniqueViolationError("duplicate")
+        self.insert_template_calls.append(payload)
+
+    async def update_template(self, template_id: UUID, values: dict) -> int:
+        return 1 if template_id in self.templates_by_id else 0
+
+    async def delete_template_soft(self, template_id: UUID, reason: str | None) -> None:
         pass
+
+    async def restore_template(self, template_id: UUID) -> None:
+        pass
+
+    async def fetch_template_pages(self, command):
+        return [], 0
+
+    async def list_templates(self, active_only: bool = True):
+        items = list(self.templates_by_id.values())
+        if active_only:
+            return [item for item in items if getattr(item, "is_active", True)]
+        return items
 
 
 class StubRoomRepository:

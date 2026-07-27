@@ -6,7 +6,7 @@ from typing import Optional
 from uuid import UUID
 
 from portal.application.facility.commands import PreviewQuoteCommand
-from portal.application.facility.results import PreviewQuoteResult, PreviewQuoteRoomLineResult
+from portal.application.facility.results import PreviewQuoteResult, PreviewQuoteRoomLineResult, RentalRateResult
 from portal.domain.facility.constants import (
     BookingType,
     RentalDiscountCode,
@@ -38,6 +38,37 @@ class PricingService:
     def _quantize(amount: Decimal) -> Decimal:
         return amount.quantize(MONEY_QUANT, rounding=ROUND_HALF_UP)
 
+    async def _resolve_rate_for_room(
+        self,
+        facility_id: UUID,
+        billed_hours: Decimal,
+        as_of_date,
+    ) -> Optional[RentalRateResult]:
+        room_rates = await self._rental_repository.list_active_rates_for_facility(
+            facility_id=facility_id,
+            as_of_date=as_of_date,
+        )
+        if room_rates:
+            rate, _tier = self._rental_repository.pick_rate_for_line(
+                rates=room_rates,
+                billed_hours=billed_hours,
+                allow_first_active=False,
+            )
+            if rate:
+                return rate
+
+        templates = await self._rental_repository.list_templates(active_only=True)
+        candidates = [
+            self._rental_repository.template_to_rate_candidate(template)
+            for template in templates
+        ]
+        rate, _tier = self._rental_repository.pick_rate_for_line(
+            rates=candidates,
+            billed_hours=billed_hours,
+            allow_first_active=True,
+        )
+        return rate
+
     @distributed_trace()
     async def preview_quote(self, command: PreviewQuoteCommand) -> PreviewQuoteResult:
         """
@@ -56,25 +87,27 @@ class PricingService:
             if line.billed_hours <= 0:
                 raise BadRequestException(detail="billed_hours must be positive")
 
-            rates = await self._rental_repository.list_active_rates_for_facility(
+            rate = await self._resolve_rate_for_room(
                 facility_id=line.facility_id,
-                as_of_date=command.as_of_date,
-            )
-            rate, tier = self._rental_repository.pick_rate_for_line(
-                rates=rates,
                 billed_hours=line.billed_hours,
+                as_of_date=command.as_of_date,
             )
             if not rate:
                 raise BadRequestException(detail=f"No active rental rate for room {line.facility_id}")
 
-            line_subtotal = self._compute_line_subtotal(rate.billing_unit, rate.unit_amount, line.billed_hours)
+            billing_unit = rate.billing_unit or RentalRateBillingUnit.HOURLY.value
+            line_subtotal = self._compute_line_subtotal(billing_unit, rate.unit_amount, line.billed_hours)
             subtotal += line_subtotal
             room_lines.append(
                 PreviewQuoteRoomLineResult(
                     facility_id=line.facility_id,
                     billed_hours=line.billed_hours,
-                    pricing_tier_used=tier,
-                    rental_rate_id=rate.id,
+                    rental_rate_name=rate.template_name or "",
+                    billing_unit=billing_unit,
+                    unit_amount=rate.unit_amount,
+                    currency=rate.currency or "CAD",
+                    applicability=rate.applicability,
+                    is_default=rate.is_default,
                     line_subtotal=self._quantize(line_subtotal),
                 )
             )

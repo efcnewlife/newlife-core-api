@@ -4,7 +4,7 @@ Admin facility rental rate API routes.
 import uuid
 from typing import Annotated, Optional
 
-from dependency_injector.wiring import inject, Provide
+from dependency_injector.wiring import Provide, inject
 from fastapi import Depends, HTTPException, Query, status
 
 from portal.application.facility.mappers import (
@@ -25,7 +25,7 @@ from portal.container import Container
 from portal.libs.consts.permission import Permission
 from portal.routers.auth_router import AuthRouter
 from portal.serializers.mixins.model_mixins import UUIDBaseModel
-from portal.serializers.mixins import DeleteBaseModel, DetailQueryModel
+from portal.serializers.mixins import DeleteBaseModel
 from portal.serializers.admin.v1.facility.rental_rate import (
     AdminPreviewQuoteRequest,
     AdminPreviewQuoteResponse,
@@ -70,7 +70,9 @@ async def get_rental_rate_list(
     facility_id: Annotated[Optional[uuid.UUID], Query(alias="facilityId")] = None,
     rental_rate_service: RentalRateService = Depends(Provide[Container.rental_rate_service]),
 ):
-    result = await rental_rate_service.get_rate_list(facility_id=facility_id)
+    result = await rental_rate_service.get_rate_list(
+        facility_id=facility_id,
+    )
     return rental_rate_list_to_api(result)
 
 
@@ -113,13 +115,9 @@ async def create_rental_rate(
 @inject
 async def get_rental_rate(
     rate_id: uuid.UUID,
-    query_model: Annotated[DetailQueryModel, Query()],
     rental_rate_service: RentalRateService = Depends(Provide[Container.rental_rate_service]),
 ):
-    result = await rental_rate_service.get_rate_by_id(
-        rate_id=rate_id,
-        all_locales=query_model.all_locales,
-    )
+    result = await rental_rate_service.get_rate_by_id(rate_id=rate_id)
     if not result:
         raise HTTPException(status_code=404, detail="Rental rate not found")
     return rental_rate_to_api(result)

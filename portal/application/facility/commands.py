@@ -112,37 +112,44 @@ class UpdateRoomBlackoutCommand(BaseModel):
     effective_to: Optional[date] = Field(default=None)
 
 
-class CreateRentalRateCommand(BaseModel):
-    """Create rental rate row."""
+class CreateRentalRateTemplateCommand(BaseModel):
+    """Create rental rate template."""
 
-    facility_id: UUID = Field(...)
+    name: str = Field(...)
     billing_unit: RentalRateBillingUnit = Field(default=RentalRateBillingUnit.HOURLY)
+    applicability: Optional[dict] = Field(default=None)
     unit_amount: Decimal = Field(...)
     currency: str = Field(default="CAD")
     is_default: bool = Field(default=False)
     is_active: bool = Field(default=True)
+
+
+class UpdateRentalRateTemplateCommand(BaseModel):
+    """Update rental rate template."""
+
+    name: str = Field(...)
+    billing_unit: RentalRateBillingUnit = Field(...)
     applicability: Optional[dict] = Field(default=None)
-    effective_from: Optional[date] = Field(default=None)
-    effective_to: Optional[date] = Field(default=None)
-    sequence: Optional[float] = Field(default=None)
-    translations: list[FacilityTranslationCommand] = Field(..., min_length=1)
+    unit_amount: Decimal = Field(...)
+    currency: str = Field(default="CAD")
+    is_default: bool = Field(default=False)
+    is_active: bool = Field(default=True)
+
+
+class CreateRentalRateCommand(BaseModel):
+    """Create room binding to a rate template."""
+
+    facility_id: UUID = Field(...)
+    template_id: UUID = Field(...)
+    is_active: bool = Field(default=True)
 
 
 class UpdateRentalRateCommand(BaseModel):
-    """Update rental rate row."""
+    """Update room binding to a rate template."""
 
     facility_id: UUID = Field(...)
-    billing_unit: RentalRateBillingUnit = Field(...)
-    unit_amount: Decimal = Field(...)
-    currency: str = Field(default="CAD")
-    is_default: bool = Field(default=False)
+    template_id: UUID = Field(...)
     is_active: bool = Field(default=True)
-    applicability: Optional[dict] = Field(default=None)
-    effective_from: Optional[date] = Field(default=None)
-    effective_to: Optional[date] = Field(default=None)
-    sequence: Optional[float] = Field(default=None)
-    translations: Optional[list[FacilityTranslationCommand]] = Field(default=None)
-    name: Optional[str] = Field(default=None)
 
 
 class CreateDiscountRuleCommand(BaseModel):
@@ -289,6 +296,7 @@ __all__ = [
     "CreateDiscountRuleCommand",
     "CreateMinistryCommand",
     "CreateRentalRateCommand",
+    "CreateRentalRateTemplateCommand",
     "CreateRoomCommand",
     "CreateRoomBlackoutCommand",
     "CreateRoomSlotTemplateCommand",
@@ -305,6 +313,7 @@ __all__ = [
     "UpdateMinistryCommand",
     "UpdatePolicySettingCommand",
     "UpdateRentalRateCommand",
+    "UpdateRentalRateTemplateCommand",
     "UpdateRoomBlackoutCommand",
     "UpdateRoomCommand",
     "UpdateRoomSlotTemplateCommand",

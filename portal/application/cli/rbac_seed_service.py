@@ -141,6 +141,7 @@ async def run_rbac_seed(session: Session):
         # parent_resources imported
         for pr in parent_resources:
             parent_sequence = _build_resource_sequence(pr.get("sequence"))
+            parent_is_visible = bool(pr.get("is_visible", True))
             await (
                 session
                 .insert(AuthResource)
@@ -152,7 +153,7 @@ async def run_rbac_seed(session: Session):
                     path=pr.get("path"),
                     sequence=parent_sequence,
                     type=pr.get("type", ResourceType.GENERAL.value),
-                    is_visible=True,
+                    is_visible=parent_is_visible,
                 )
                 .on_conflict_do_update(
                     index_elements=["code"],
@@ -163,7 +164,7 @@ async def run_rbac_seed(session: Session):
                         pid=pr.get("pid"),
                         sequence=parent_sequence,
                         type=pr.get("type", ResourceType.GENERAL.value),
-                        is_visible=True,
+                        is_visible=parent_is_visible,
                     )
                 )
                 .execute()
@@ -173,6 +174,7 @@ async def run_rbac_seed(session: Session):
         for r in resources:
             resource_type_value = r.get("type", ResourceType.GENERAL.value)
             resource_sequence = _build_resource_sequence(r.get("sequence"))
+            resource_is_visible = bool(r.get("is_visible", True))
             await (
                 session
                 .insert(AuthResource)
@@ -184,7 +186,7 @@ async def run_rbac_seed(session: Session):
                     pid=r.get("pid"),
                     sequence=resource_sequence,
                     type=resource_type_value,
-                    is_visible=True,
+                    is_visible=resource_is_visible,
                 )
                 .on_conflict_do_update(
                     index_elements=["code"],
@@ -195,7 +197,7 @@ async def run_rbac_seed(session: Session):
                         pid=r.get("pid"),
                         sequence=resource_sequence,
                         type=resource_type_value,
-                        is_visible=True,
+                        is_visible=resource_is_visible,
                     )
                 )
                 .execute()

@@ -105,13 +105,13 @@ parent_resources = [
         "path": "/facility",
         "sequence": 2.5,
         "translations": _with_locale_values(
-            {"zh-TW": "場地預約", "zh-CN": "场地预约", "en": "Facility Booking"}
+            {"zh-TW": "場地預訂", "zh-CN": "场地预订", "en": "Facility Booking"}
         ),
         "description": "Facility rooms, rates, and bookings",
         "description_translations": _with_locale_descriptions(
             {
-                "zh-TW": "場地、費率與預約管理",
-                "zh-CN": "场地、费率与预约管理",
+                "zh-TW": "場地、費率與預訂管理",
+                "zh-CN": "场地、费率与预订管理",
                 "en": "Facility rooms, rates, and bookings",
             }
         ),
@@ -374,6 +374,28 @@ resources = [
         "pid": FACILITY_PARENT_ID,
     },
     {
+        "code": "facility:rental_rate_template",
+        "name": "Rental Rate Templates",
+        "key": "FACILITY_RENTAL_RATE_TEMPLATE",
+        "icon": "MdOutlineRule",
+        "path": "/facility/rental-rate-templates",
+        "type": ResourceType.GENERAL.value,
+        "sequence": 12,
+        "is_visible": False,
+        "translations": _with_locale_values(
+            {"zh-TW": "租金費率範本", "zh-CN": "租金费率模板", "en": "Rental Rate Templates"}
+        ),
+        "description": "Manage rental rate billing templates",
+        "description_translations": _with_locale_descriptions(
+            {
+                "zh-TW": "管理場地租金計費範本",
+                "zh-CN": "管理场地租金计费模板",
+                "en": "Manage rental rate billing templates",
+            }
+        ),
+        "pid": FACILITY_PARENT_ID,
+    },
+    {
         "code": "facility:rental_rate",
         "name": "Rental Rates",
         "key": "FACILITY_RENTAL_RATE",
@@ -384,12 +406,12 @@ resources = [
         "translations": _with_locale_values(
             {"zh-TW": "租金費率", "zh-CN": "租金费率", "en": "Rental Rates"}
         ),
-        "description": "Manage rental rate schedules",
+        "description": "Manage rental rate amounts (global and per room)",
         "description_translations": _with_locale_descriptions(
             {
-                "zh-TW": "管理場地租金費率",
-                "zh-CN": "管理场地租金费率",
-                "en": "Manage rental rate schedules",
+                "zh-TW": "管理場地租金金額（全域與各房間）",
+                "zh-CN": "管理场地租金金额（全局与各房间）",
+                "en": "Manage rental rate amounts (global and per room)",
             }
         ),
         "pid": FACILITY_PARENT_ID,
@@ -403,13 +425,13 @@ resources = [
         "type": ResourceType.GENERAL.value,
         "sequence": 13,
         "translations": _with_locale_values(
-            {"zh-TW": "預約管理", "zh-CN": "预约管理", "en": "Bookings"}
+            {"zh-TW": "預訂管理", "zh-CN": "预订管理", "en": "Bookings"}
         ),
         "description": "Manage facility bookings",
         "description_translations": _with_locale_descriptions(
             {
-                "zh-TW": "管理場地預約",
-                "zh-CN": "管理场地预约",
+                "zh-TW": "管理場地預訂",
+                "zh-CN": "管理场地预订",
                 "en": "Manage facility bookings",
             }
         ),
@@ -429,8 +451,8 @@ resources = [
         "description": "Read-only booking override audit log",
         "description_translations": _with_locale_descriptions(
             {
-                "zh-TW": "預約覆寫稽核紀錄",
-                "zh-CN": "预约覆写稽核记录",
+                "zh-TW": "預訂覆寫稽核紀錄",
+                "zh-CN": "预订覆写稽核记录",
                 "en": "Read-only booking override audit log",
             }
         ),

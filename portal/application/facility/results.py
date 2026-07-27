@@ -134,27 +134,62 @@ class RoomBlackoutListResult(BaseModel):
     items: list[RoomBlackoutResult] = Field(default_factory=list)
 
 
-class RentalRateResult(UUIDBaseModel):
-    """Rental rate row."""
+class RentalRateTemplateResult(UUIDBaseModel):
+    """Rental rate template row."""
 
-    facility_id: UUID = Field(...)
+    name: str = Field(...)
     billing_unit: str = Field(...)
+    applicability: Optional[dict] = Field(default=None)
     unit_amount: Decimal = Field(...)
-    currency: str = Field(...)
+    currency: str = Field(default="CAD")
     is_default: bool = Field(default=False)
     is_active: bool = Field(default=True)
-    applicability: Optional[dict] = Field(default=None)
-    effective_from: Optional[DateType] = Field(default=None)
-    effective_to: Optional[DateType] = Field(default=None)
-    sequence: Optional[float] = Field(default=None)
-    remark: Optional[str] = Field(default=None)
-    name: Optional[str] = Field(default=None)
     created_at: Optional[datetime] = Field(default=None)
     created_by: Optional[str] = Field(default=None)
     updated_at: Optional[datetime] = Field(default=None)
     updated_by: Optional[str] = Field(default=None)
     delete_reason: Optional[str] = Field(default=None)
-    translations: list[TranslationItemResult] = Field(default_factory=list)
+
+    @field_validator("applicability", mode="before")
+    @classmethod
+    def parse_applicability_from_db(cls, value: Any) -> Optional[dict]:
+        return coerce_applicability_from_db(value)
+
+
+class RentalRateTemplatePageResult(BaseModel):
+    """Paginated rental rate templates."""
+
+    page: int = Field(...)
+    page_size: int = Field(...)
+    total: int = Field(...)
+    items: list[RentalRateTemplateResult] = Field(default_factory=list)
+
+
+class RentalRateTemplateListResult(BaseModel):
+    """Rental rate template list."""
+
+    items: list[RentalRateTemplateResult] = Field(default_factory=list)
+
+
+class RentalRateResult(UUIDBaseModel):
+    """Rental rate binding with joined template fields for pricing/admin."""
+
+    facility_id: Optional[UUID] = Field(default=None)
+    template_id: UUID = Field(...)
+    is_active: bool = Field(default=True)
+    created_at: Optional[datetime] = Field(default=None)
+    created_by: Optional[str] = Field(default=None)
+    updated_at: Optional[datetime] = Field(default=None)
+    updated_by: Optional[str] = Field(default=None)
+    delete_reason: Optional[str] = Field(default=None)
+    # Joined from template (pricing / embed)
+    unit_amount: Decimal = Field(...)
+    currency: str = Field(...)
+    template_name: Optional[str] = Field(default=None)
+    billing_unit: Optional[str] = Field(default=None)
+    applicability: Optional[dict] = Field(default=None)
+    is_default: bool = Field(default=False)
+    template_is_active: bool = Field(default=True)
 
     @field_validator("applicability", mode="before")
     @classmethod
@@ -233,12 +268,16 @@ class PolicySettingListResult(BaseModel):
 
 
 class PreviewQuoteRoomLineResult(BaseModel):
-    """Quoted room line."""
+    """Quoted room line with rule snapshot fields."""
 
     facility_id: UUID = Field(...)
     billed_hours: Decimal = Field(...)
-    pricing_tier_used: str = Field(...)
-    rental_rate_id: Optional[UUID] = Field(default=None)
+    rental_rate_name: str = Field(default="")
+    billing_unit: str = Field(...)
+    unit_amount: Decimal = Field(...)
+    currency: str = Field(default="CAD")
+    applicability: Optional[dict] = Field(default=None)
+    is_default: bool = Field(default=False)
     line_subtotal: Decimal = Field(...)
 
 
@@ -255,7 +294,7 @@ class PreviewQuoteResult(BaseModel):
 
 
 class BookingRoomLineResult(UUIDBaseModel):
-    """Booking room line detail."""
+    """Booking room line detail with rule snapshot."""
 
     facility_id: UUID = Field(...)
     facility_name: Optional[str] = Field(default=None)
@@ -264,8 +303,12 @@ class BookingRoomLineResult(UUIDBaseModel):
     start_at: datetime = Field(...)
     end_at: datetime = Field(...)
     billed_hours: Optional[Decimal] = Field(default=None)
-    pricing_tier_used: Optional[str] = Field(default=None)
-    rental_rate_id: Optional[UUID] = Field(default=None)
+    rental_rate_name: Optional[str] = Field(default=None)
+    billing_unit: Optional[str] = Field(default=None)
+    unit_amount: Optional[Decimal] = Field(default=None)
+    currency: Optional[str] = Field(default=None)
+    applicability: Optional[dict] = Field(default=None)
+    is_default: Optional[bool] = Field(default=None)
     line_subtotal: Optional[Decimal] = Field(default=None)
 
 

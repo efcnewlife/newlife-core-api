@@ -7,6 +7,7 @@ from portal.application.facility.commands import (
     BulkIdsCommand,
     CreateDiscountRuleCommand,
     CreateRentalRateCommand,
+    CreateRentalRateTemplateCommand,
     CreateRoomBlackoutCommand,
     CreateRoomCommand,
     CreateRoomSlotTemplateCommand,
@@ -19,6 +20,7 @@ from portal.application.facility.commands import (
     UpdateDiscountRuleCommand,
     UpdatePolicySettingCommand,
     UpdateRentalRateCommand,
+    UpdateRentalRateTemplateCommand,
     UpdateRoomBlackoutCommand,
     UpdateRoomCommand,
     UpdateRoomSlotTemplateCommand,
@@ -34,6 +36,9 @@ from portal.application.facility.results import (
     RentalRateListResult,
     RentalRatePageResult,
     RentalRateResult,
+    RentalRateTemplateListResult,
+    RentalRateTemplatePageResult,
+    RentalRateTemplateResult,
     RoomBlackoutListResult,
     RoomBlackoutPageResult,
     RoomBlackoutResult,
@@ -70,7 +75,15 @@ from portal.serializers.admin.v1.facility.rental_rate import (
     AdminRentalRateItem,
     AdminRentalRateList,
     AdminRentalRatePages,
+    AdminRentalRateTemplateEmbed,
     AdminRentalRateUpdate,
+)
+from portal.serializers.admin.v1.facility.rental_rate_template import (
+    AdminRentalRateTemplateCreate,
+    AdminRentalRateTemplateItem,
+    AdminRentalRateTemplateList,
+    AdminRentalRateTemplatePages,
+    AdminRentalRateTemplateUpdate,
 )
 from portal.serializers.admin.v1.facility.room import (
     AdminRoomBulkAction,
@@ -295,60 +308,105 @@ def room_blackout_pages_query_to_command(model) -> tuple[PagesQueryCommand, UUID
     return base, model.facility_id
 
 
-def create_rental_rate_to_command(model: AdminRentalRateCreate) -> CreateRentalRateCommand:
-    return CreateRentalRateCommand(
-        facility_id=model.facility_id,
+def create_rental_rate_template_to_command(
+    model: AdminRentalRateTemplateCreate,
+) -> CreateRentalRateTemplateCommand:
+    return CreateRentalRateTemplateCommand(
+        name=model.name,
         billing_unit=model.billing_unit,
+        applicability=model.applicability,
         unit_amount=model.unit_amount,
         currency=model.currency,
         is_default=model.is_default,
         is_active=model.is_active,
+    )
+
+
+def update_rental_rate_template_to_command(
+    model: AdminRentalRateTemplateUpdate,
+) -> UpdateRentalRateTemplateCommand:
+    return UpdateRentalRateTemplateCommand(
+        name=model.name,
+        billing_unit=model.billing_unit,
         applicability=model.applicability,
-        effective_from=model.effective_from,
-        effective_to=model.effective_to,
-        sequence=model.sequence,
-        translations=_translation_commands(model.translations),
+        unit_amount=model.unit_amount,
+        currency=model.currency,
+        is_default=model.is_default,
+        is_active=model.is_active,
+    )
+
+
+def rental_rate_template_to_api(result: RentalRateTemplateResult) -> AdminRentalRateTemplateItem:
+    return AdminRentalRateTemplateItem(
+        id=result.id,
+        name=result.name,
+        billing_unit=result.billing_unit,
+        applicability=result.applicability,
+        unit_amount=result.unit_amount,
+        currency=result.currency,
+        is_default=result.is_default,
+        is_active=result.is_active,
+        created_at=result.created_at,
+        created_by=result.created_by,
+        updated_at=result.updated_at,
+        updated_by=result.updated_by,
+        delete_reason=result.delete_reason,
+    )
+
+
+def rental_rate_template_page_to_api(result: RentalRateTemplatePageResult) -> AdminRentalRateTemplatePages:
+    return AdminRentalRateTemplatePages(
+        page=result.page,
+        page_size=result.page_size,
+        total=result.total,
+        items=[rental_rate_template_to_api(item) for item in result.items],
+    )
+
+
+def rental_rate_template_list_to_api(result: RentalRateTemplateListResult) -> AdminRentalRateTemplateList:
+    return AdminRentalRateTemplateList(items=[rental_rate_template_to_api(item) for item in result.items])
+
+
+def create_rental_rate_to_command(model: AdminRentalRateCreate) -> CreateRentalRateCommand:
+    return CreateRentalRateCommand(
+        facility_id=model.facility_id,
+        template_id=model.template_id,
+        is_active=model.is_active,
     )
 
 
 def update_rental_rate_to_command(model: AdminRentalRateUpdate) -> UpdateRentalRateCommand:
     return UpdateRentalRateCommand(
         facility_id=model.facility_id,
-        billing_unit=model.billing_unit,
-        unit_amount=model.unit_amount,
-        currency=model.currency,
-        is_default=model.is_default,
+        template_id=model.template_id,
         is_active=model.is_active,
-        applicability=model.applicability,
-        effective_from=model.effective_from,
-        effective_to=model.effective_to,
-        sequence=model.sequence,
-        name=model.name,
-        translations=_translation_commands(model.translations),
     )
 
 
 def rental_rate_to_api(result: RentalRateResult) -> AdminRentalRateItem:
+    template_embed = None
+    if result.template_id and result.billing_unit is not None:
+        template_embed = AdminRentalRateTemplateEmbed(
+            id=result.template_id,
+            name=result.template_name or "",
+            billing_unit=result.billing_unit,
+            applicability=result.applicability,
+            unit_amount=result.unit_amount,
+            currency=result.currency,
+            is_default=result.is_default,
+            is_active=result.template_is_active,
+        )
     return AdminRentalRateItem(
         id=result.id,
         facility_id=result.facility_id,
-        billing_unit=result.billing_unit,
-        unit_amount=result.unit_amount,
-        currency=result.currency,
-        is_default=result.is_default,
+        template_id=result.template_id,
         is_active=result.is_active,
-        applicability=result.applicability,
-        effective_from=result.effective_from,
-        effective_to=result.effective_to,
-        sequence=result.sequence,
-        remark=result.remark,
-        name=result.name,
         created_at=result.created_at,
         created_by=result.created_by,
         updated_at=result.updated_at,
         updated_by=result.updated_by,
         delete_reason=result.delete_reason,
-        translations=_translation_items_to_api(result.translations),
+        template=template_embed,
     )
 
 
@@ -403,8 +461,12 @@ def preview_quote_result_to_api(result: PreviewQuoteResult) -> AdminPreviewQuote
             AdminPreviewQuoteRoomLineResult(
                 facility_id=line.facility_id,
                 billed_hours=line.billed_hours,
-                pricing_tier_used=line.pricing_tier_used,
-                rental_rate_id=line.rental_rate_id,
+                rental_rate_name=line.rental_rate_name,
+                billing_unit=line.billing_unit,
+                unit_amount=line.unit_amount,
+                currency=line.currency,
+                applicability=line.applicability,
+                is_default=line.is_default,
                 line_subtotal=line.line_subtotal,
             )
             for line in result.room_lines

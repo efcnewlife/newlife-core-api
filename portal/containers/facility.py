@@ -10,6 +10,7 @@ from portal.application.facility.override_log_service import OverrideLogService
 from portal.application.facility.pricing_service import PricingService
 from portal.application.facility.rental_catalog_service import RentalCatalogService
 from portal.application.facility.rental_rate_service import RentalRateService
+from portal.application.facility.rental_rate_template_service import RentalRateTemplateService
 from portal.application.facility.room_service import RoomService
 from portal.application.facility.room_slot_template_service import RoomSlotTemplateService
 from portal.application.facility.room_blackout_service import RoomBlackoutService
@@ -73,6 +74,10 @@ class FacilityContainer(containers.DeclarativeContainer):
         RoomBlackoutService,
         room_blackout_repository=room_blackout_repository,
         room_repository=room_repository,
+    )
+    rental_rate_template_service = providers.Factory(
+        RentalRateTemplateService,
+        rental_repository=rental_repository,
     )
     rental_rate_service = providers.Factory(
         RentalRateService,

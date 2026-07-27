@@ -6,17 +6,15 @@ from decimal import Decimal
 from typing import Any, Optional
 from uuid import UUID
 
-import ujson
 import sqlalchemy as sa
 from asyncpg import UniqueViolationError
-from sqlalchemy.dialects.postgresql import JSONB
 
 from portal.application.facility.results import (
     DiscountRuleResult,
     PolicySettingResult,
     RentalRateResult,
+    RentalRateTemplateResult,
     SurchargeResult,
-    TranslationItemResult,
 )
 from portal.application.rbac.commands import PagesQueryCommand
 from portal.domain.facility.constants import RentalPolicySettingKey, RentalRateBillingUnit
@@ -27,11 +25,9 @@ from portal.models import (
     FacilityRentalDiscountRule,
     FacilityRentalPolicySetting,
     FacilityRentalRate,
-    FacilityRentalRateTranslation,
+    FacilityRentalRateTemplate,
     FacilityRentalSurcharge,
-    SystemLocale,
 )
-from portal.models.mixins.context import apply_audit_fields_to_rows
 
 
 class RentalRepository:
@@ -40,131 +36,151 @@ class RentalRepository:
     def __init__(self, session: Session):
         self._session = session
 
-    @staticmethod
-    def _rate_translations_agg():
-        translation_json = sa.cast(
-            sa.func.json_build_object(
-                sa.cast("locale_id", sa.VARCHAR(16)), FacilityRentalRateTranslation.locale_id,
-                sa.cast("name", sa.VARCHAR(8)), FacilityRentalRateTranslation.name,
-                sa.cast("description", sa.VARCHAR(16)), FacilityRentalRateTranslation.description,
-                sa.cast("remark", sa.VARCHAR(8)), FacilityRentalRateTranslation.remark,
-            ),
-            JSONB,
+    def _rate_select(self):
+        return (
+            self._session.select(
+                FacilityRentalRate.id,
+                FacilityRentalRate.facility_id,
+                FacilityRentalRate.template_id,
+                FacilityRentalRate.is_active,
+                FacilityRentalRate.created_at,
+                FacilityRentalRate.created_by,
+                FacilityRentalRate.updated_at,
+                FacilityRentalRate.updated_by,
+                FacilityRentalRate.delete_reason,
+                FacilityRentalRateTemplate.unit_amount,
+                FacilityRentalRateTemplate.currency,
+                FacilityRentalRateTemplate.name.label("template_name"),
+                FacilityRentalRateTemplate.billing_unit,
+                FacilityRentalRateTemplate.applicability,
+                FacilityRentalRateTemplate.is_default,
+                FacilityRentalRateTemplate.is_active.label("template_is_active"),
+            )
+            .select_from(FacilityRentalRate)
+            .join(
+                FacilityRentalRateTemplate,
+                FacilityRentalRateTemplate.id == FacilityRentalRate.template_id,
+            )
         )
-        return sa.func.coalesce(
-            sa.func.array_agg(sa.distinct(translation_json)).filter(FacilityRentalRateTranslation.id.isnot(None)),
-            sa.cast(sa.text("'{}'"), sa.ARRAY(JSONB)),
-        ).label("translations")
 
-    @staticmethod
-    def _locale_scoped_max(column, locale_id: Optional[UUID]):
-        if locale_id:
-            return sa.func.max(
-                sa.case(
-                    (FacilityRentalRateTranslation.locale_id == locale_id, column),
-                    else_=None,
-                )
-            )
-        return sa.func.max(column)
-
-    def _rate_select(self, locale_id: Optional[UUID] = None):
+    def _template_select(self):
         return self._session.select(
-            FacilityRentalRate.id,
-            FacilityRentalRate.facility_id,
-            FacilityRentalRate.billing_unit,
-            FacilityRentalRate.unit_amount,
-            FacilityRentalRate.currency,
-            FacilityRentalRate.is_default,
-            FacilityRentalRate.is_active,
-            FacilityRentalRate.applicability,
-            FacilityRentalRate.effective_from,
-            FacilityRentalRate.effective_to,
-            FacilityRentalRate.sequence,
-            self._locale_scoped_max(FacilityRentalRateTranslation.name, locale_id).label("name"),
-            self._locale_scoped_max(FacilityRentalRateTranslation.remark, locale_id).label("remark"),
-            FacilityRentalRate.created_at,
-            FacilityRentalRate.created_by,
-            FacilityRentalRate.updated_at,
-            FacilityRentalRate.updated_by,
-            FacilityRentalRate.delete_reason,
-            self._rate_translations_agg(),
-        ).select_from(FacilityRentalRate)
+            FacilityRentalRateTemplate.id,
+            FacilityRentalRateTemplate.name,
+            FacilityRentalRateTemplate.billing_unit,
+            FacilityRentalRateTemplate.applicability,
+            FacilityRentalRateTemplate.unit_amount,
+            FacilityRentalRateTemplate.currency,
+            FacilityRentalRateTemplate.is_default,
+            FacilityRentalRateTemplate.is_active,
+            FacilityRentalRateTemplate.created_at,
+            FacilityRentalRateTemplate.created_by,
+            FacilityRentalRateTemplate.updated_at,
+            FacilityRentalRateTemplate.updated_by,
+            FacilityRentalRateTemplate.delete_reason,
+        )
 
-    def _rate_query(self, locale_id: Optional[UUID] = None, all_locales: bool = False):
-        query = self._rate_select(locale_id)
-        if all_locales:
-            return query.outerjoin(
-                FacilityRentalRateTranslation,
-                FacilityRentalRateTranslation.rental_rate_id == FacilityRentalRate.id,
+    async def fetch_template_pages(
+        self,
+        model: PagesQueryCommand,
+    ) -> tuple[list[RentalRateTemplateResult], int]:
+        query = (
+            self._template_select()
+            .where(FacilityRentalRateTemplate.is_deleted == model.deleted)
+            .where(
+                model.keyword,
+                lambda: FacilityRentalRateTemplate.name.ilike(f"%{model.keyword}%"),
             )
-        if locale_id:
-            return query.outerjoin(
-                FacilityRentalRateTranslation,
-                sa.and_(
-                    FacilityRentalRateTranslation.rental_rate_id == FacilityRentalRate.id,
-                    FacilityRentalRateTranslation.locale_id == locale_id,
-                ),
+        )
+        items, count = await (
+            query.order_by_with(
+                tables=[FacilityRentalRateTemplate],
+                order_by=model.order_by,
+                descending=model.descending,
             )
-        return query.outerjoin(FacilityRentalRateTranslation, sa.false())
+            .limit(model.page_size)
+            .offset(model.page * model.page_size)
+            .fetchpages(no_order_by=False, as_model=RentalRateTemplateResult)
+        )
+        return items or [], count
 
-    @staticmethod
-    def _parse_translations(raw: Any) -> list[TranslationItemResult]:
-        if not raw:
-            return []
-        items = []
-        for entry in raw:
-            if not entry:
-                continue
-            if isinstance(entry, str):
-                try:
-                    entry = ujson.loads(entry)
-                except ujson.JSONDecodeError:
-                    continue
-            items.append(
-                TranslationItemResult(
-                    locale_id=entry.get("locale_id") or entry.get("localeId"),
-                    name=entry.get("name", ""),
-                    description=entry.get("description"),
-                    remark=entry.get("remark"),
-                )
-            )
-        return items
+    async def list_templates(self, active_only: bool = True) -> list[RentalRateTemplateResult]:
+        query = self._template_select().where(FacilityRentalRateTemplate.is_deleted == False)
+        if active_only:
+            query = query.where(FacilityRentalRateTemplate.is_active == True)
+        items: list[RentalRateTemplateResult] = await query.order_by(
+            FacilityRentalRateTemplate.name
+        ).fetch(as_model=RentalRateTemplateResult)
+        return items or []
 
-    def _normalize_rate(self, row: Optional[RentalRateResult]) -> Optional[RentalRateResult]:
-        if not row:
-            return None
-        data = row.model_dump()
-        translations = data.pop("translations", None)
-        data["translations"] = self._parse_translations(translations)
-        return RentalRateResult.model_validate(data)
+    async def get_template_by_id(self, template_id: UUID) -> Optional[RentalRateTemplateResult]:
+        return await (
+            self._template_select()
+            .where(FacilityRentalRateTemplate.id == template_id)
+            .where(FacilityRentalRateTemplate.is_deleted == False)
+            .fetchrow(as_model=RentalRateTemplateResult)
+        )
 
-    def _normalize_rates(self, rows: list[RentalRateResult]) -> list[RentalRateResult]:
-        return [self._normalize_rate(row) for row in rows if row]
+    async def count_rates_for_template(self, template_id: UUID) -> int:
+        count = await (
+            self._session.select(sa.func.count())
+            .select_from(FacilityRentalRate)
+            .where(FacilityRentalRate.template_id == template_id)
+            .where(FacilityRentalRate.is_deleted == False)
+            .fetchval()
+        )
+        return int(count or 0)
+
+    async def insert_template(self, payload: dict[str, Any]) -> None:
+        await self._session.insert(FacilityRentalRateTemplate).values(payload).execute()
+
+    async def update_template(self, template_id: UUID, values: dict[str, Any]) -> int:
+        result = await (
+            self._session.update(FacilityRentalRateTemplate)
+            .values(**values)
+            .where(FacilityRentalRateTemplate.id == template_id)
+            .where(FacilityRentalRateTemplate.is_deleted == False)
+            .execute()
+        )
+        return affected_rows(result)
+
+    async def delete_template_soft(self, template_id: UUID, reason: Optional[str]) -> None:
+        await (
+            self._session.update(FacilityRentalRateTemplate)
+            .values(is_deleted=True, delete_reason=reason)
+            .where(FacilityRentalRateTemplate.id == template_id)
+            .execute()
+        )
+
+    async def restore_template(self, template_id: UUID) -> None:
+        await (
+            self._session.update(FacilityRentalRateTemplate)
+            .values(is_deleted=False, delete_reason=None)
+            .where(FacilityRentalRateTemplate.id == template_id)
+            .execute()
+        )
 
     async def fetch_rate_pages(
         self,
         model: PagesQueryCommand,
-        locale_id: Optional[UUID],
         facility_id: Optional[UUID] = None,
     ) -> tuple[list[RentalRateResult], int]:
         query = (
-            self._rate_query(locale_id)
+            self._rate_select()
             .where(FacilityRentalRate.is_deleted == model.deleted)
             .where(
                 model.keyword,
                 lambda: sa.or_(
-                    FacilityRentalRateTranslation.name.ilike(f"%{model.keyword}%"),
-                    FacilityRentalRateTranslation.description.ilike(f"%{model.keyword}%"),
-                    FacilityRentalRateTranslation.remark.ilike(f"%{model.keyword}%"),
+                    FacilityRentalRateTemplate.name.ilike(f"%{model.keyword}%"),
+                    FacilityRentalRateTemplate.billing_unit.ilike(f"%{model.keyword}%"),
                 ),
             )
         )
-        if facility_id:
+        if facility_id is not None:
             query = query.where(FacilityRentalRate.facility_id == facility_id)
         items, count = await (
-            query.group_by(FacilityRentalRate.id)
-            .order_by_with(
-                tables=[FacilityRentalRate],
+            query.order_by_with(
+                tables=[FacilityRentalRate, FacilityRentalRateTemplate],
                 order_by=model.order_by,
                 descending=model.descending,
             )
@@ -172,70 +188,65 @@ class RentalRepository:
             .offset(model.page * model.page_size)
             .fetchpages(no_order_by=False, as_model=RentalRateResult)
         )
-        return self._normalize_rates(items), count
+        return items or [], count
 
     async def list_rates(
         self,
         facility_id: Optional[UUID],
-        locale_id: Optional[UUID],
     ) -> list[RentalRateResult]:
         query = (
-            self._rate_query(locale_id)
+            self._rate_select()
             .where(FacilityRentalRate.is_deleted == False)
             .where(FacilityRentalRate.is_active == True)
         )
-        if facility_id:
+        if facility_id is not None:
             query = query.where(FacilityRentalRate.facility_id == facility_id)
-        items: list[RentalRateResult] = await query.group_by(FacilityRentalRate.id).order_by(
-            FacilityRentalRate.sequence
+        items: list[RentalRateResult] = await query.order_by(
+            FacilityRentalRateTemplate.name
         ).fetch(as_model=RentalRateResult)
-        return self._normalize_rates(items)
+        return items or []
 
-    async def get_rate_by_id(
-        self,
-        rate_id: UUID,
-        locale_id: Optional[UUID],
-        all_locales: bool = False,
-    ) -> Optional[RentalRateResult]:
-        row: Optional[RentalRateResult] = await (
-            self._rate_query(locale_id, all_locales)
+    async def get_rate_by_id(self, rate_id: UUID) -> Optional[RentalRateResult]:
+        return await (
+            self._rate_select()
             .where(FacilityRentalRate.id == rate_id)
-            .group_by(FacilityRentalRate.id)
             .fetchrow(as_model=RentalRateResult)
         )
-        return self._normalize_rate(row)
 
     async def list_active_rates_for_facility(
         self,
         facility_id: UUID,
         as_of_date: Optional[date],
     ) -> list[RentalRateResult]:
-        query = (
-            self._session.select(
-                FacilityRentalRate.id,
-                FacilityRentalRate.facility_id,
-                FacilityRentalRate.billing_unit,
-                FacilityRentalRate.unit_amount,
-                FacilityRentalRate.currency,
-                FacilityRentalRate.is_default,
-                FacilityRentalRate.is_active,
-                FacilityRentalRate.applicability,
-                FacilityRentalRate.effective_from,
-                FacilityRentalRate.effective_to,
-                FacilityRentalRate.sequence,
-            )
+        """Return active room bindings for the facility (price from joined template)."""
+        _ = as_of_date
+        room_rows: list[RentalRateResult] = await (
+            self._rate_select()
             .where(FacilityRentalRate.is_deleted == False)
             .where(FacilityRentalRate.is_active == True)
+            .where(FacilityRentalRateTemplate.is_deleted == False)
+            .where(FacilityRentalRateTemplate.is_active == True)
             .where(FacilityRentalRate.facility_id == facility_id)
+            .fetch(as_model=RentalRateResult)
         )
-        if as_of_date:
-            query = query.where(
-                sa.or_(FacilityRentalRate.effective_from.is_(None), FacilityRentalRate.effective_from <= as_of_date)
-            ).where(
-                sa.or_(FacilityRentalRate.effective_to.is_(None), FacilityRentalRate.effective_to >= as_of_date)
-            )
-        rows: list[RentalRateResult] = await query.fetch(as_model=RentalRateResult)
-        return rows or []
+        return room_rows or []
+
+    @staticmethod
+    def template_to_rate_candidate(template: RentalRateTemplateResult) -> RentalRateResult:
+        """Build a pricing candidate from an active template (no room binding)."""
+        return RentalRateResult(
+            id=template.id,
+            facility_id=None,
+            template_id=template.id,
+            is_active=template.is_active,
+            unit_amount=template.unit_amount,
+            currency=template.currency,
+            template_name=template.name,
+            billing_unit=template.billing_unit,
+            applicability=template.applicability,
+            is_default=template.is_default,
+            template_is_active=template.is_active,
+        )
 
     async def insert_rate(self, payload: dict[str, Any]) -> None:
         await self._session.insert(FacilityRentalRate).values(payload).execute()
@@ -249,22 +260,6 @@ class RentalRepository:
             .execute()
         )
         return affected_rows(result)
-
-    async def upsert_rate_translations(self, rows: list[dict[str, Any]]) -> None:
-        rows = apply_audit_fields_to_rows(rows)
-        await (
-            self._session.insert(FacilityRentalRateTranslation)
-            .values(rows)
-            .on_conflict_do_update(
-                index_elements=["rental_rate_id", "locale_id"],
-                set_=dict(
-                    name=sa.literal_column("excluded.name"),
-                    description=sa.literal_column("excluded.description"),
-                    remark=sa.literal_column("excluded.remark"),
-                ),
-            )
-            .execute()
-        )
 
     async def delete_rate_soft(self, rate_id: UUID, reason: Optional[str]) -> None:
         await (
@@ -284,16 +279,6 @@ class RentalRepository:
             .where(FacilityRentalRate.id == rate_id)
             .execute()
         )
-
-    async def fetch_active_locale_ids(self, locale_ids: list[UUID]) -> set[UUID]:
-        active_locale_ids = await (
-            self._session.select(SystemLocale.id)
-            .where(SystemLocale.id.in_(locale_ids))
-            .where(SystemLocale.is_active == True)
-            .where(SystemLocale.is_deleted == False)
-            .fetchvals()
-        )
-        return set(active_locale_ids)
 
     async def list_discount_rules(self) -> list[DiscountRuleResult]:
         items: list[DiscountRuleResult] = await (
@@ -509,6 +494,7 @@ class RentalRepository:
     def pick_rate_for_line(
         rates: list[RentalRateResult],
         billed_hours: Decimal,
+        allow_first_active: bool = True,
     ) -> tuple[Optional[RentalRateResult], str]:
         ctx = RateSelectionContext(billed_hours=billed_hours)
         eligible = [
@@ -519,21 +505,21 @@ class RentalRepository:
         if not eligible:
             default_rate = next((rate for rate in rates if rate.is_default and rate.is_active), None)
             if default_rate:
-                return default_rate, default_rate.billing_unit
-            active = [rate for rate in rates if rate.is_active]
-            if active:
-                first = active[0]
-                return first, first.billing_unit
+                return default_rate, default_rate.billing_unit or RentalRateBillingUnit.HOURLY.value
+            if allow_first_active:
+                active = [rate for rate in rates if rate.is_active]
+                if active:
+                    first = active[0]
+                    return first, first.billing_unit or RentalRateBillingUnit.HOURLY.value
             return None, RentalRateBillingUnit.HOURLY.value
 
         def _sort_key(rate: RentalRateResult) -> tuple:
             has_rule = 0 if rate.applicability else 1
-            sequence = rate.sequence if rate.sequence is not None else float("inf")
             default_rank = 0 if rate.is_default else 1
-            return (has_rule, sequence, default_rank)
+            return (has_rule, default_rank)
 
         chosen = sorted(eligible, key=_sort_key)[0]
-        return chosen, chosen.billing_unit
+        return chosen, chosen.billing_unit or RentalRateBillingUnit.HOURLY.value
 
     @staticmethod
     def is_unique_violation(exc: Exception) -> bool:

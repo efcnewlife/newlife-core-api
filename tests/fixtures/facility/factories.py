@@ -6,9 +6,11 @@ from decimal import Decimal
 from uuid import UUID, uuid4
 
 from portal.application.facility.commands import (
+    BookingRoomLineCommand,
     CreateDiscountRuleCommand,
     CreateMinistryCommand,
     CreateRentalRateCommand,
+    CreateRentalRateTemplateCommand,
     CreateRoomCommand,
     CreateRoomSlotTemplateCommand,
     CreateSurchargeCommand,
@@ -16,7 +18,6 @@ from portal.application.facility.commands import (
     PreviewQuoteCommand,
     PreviewQuoteRoomLineCommand,
     UpdateBookingCommand,
-    BookingRoomLineCommand,
 )
 from portal.application.org.commands import OrgTranslationCommand
 from portal.application.facility.results import (
@@ -25,6 +26,7 @@ from portal.application.facility.results import (
     PreviewQuoteResult,
     PreviewQuoteRoomLineResult,
     RentalRateResult,
+    RentalRateTemplateResult,
     RoomDetailResult,
     RoomSlotTemplateResult,
     SurchargeResult,
@@ -66,6 +68,29 @@ def make_create_ministry_command(
     )
 
 
+def make_rental_rate_template(
+    *,
+    template_id: UUID | None = None,
+    name: str = "Hourly",
+    billing_unit: str = RentalRateBillingUnit.HOURLY.value,
+    is_default: bool = True,
+    is_active: bool = True,
+    applicability: dict | None = None,
+    unit_amount: Decimal = Decimal("30"),
+    currency: str = "CAD",
+) -> RentalRateTemplateResult:
+    return RentalRateTemplateResult(
+        id=template_id or new_uuid(),
+        name=name,
+        billing_unit=billing_unit,
+        applicability=applicability,
+        unit_amount=unit_amount,
+        currency=currency,
+        is_default=is_default,
+        is_active=is_active,
+    )
+
+
 def make_rental_rate(
     facility_id: UUID | None = None,
     billing_unit: str = RentalRateBillingUnit.HOURLY.value,
@@ -73,22 +98,27 @@ def make_rental_rate(
     is_active: bool = True,
     is_default: bool = False,
     rate_id: UUID | None = None,
+    template_id: UUID | None = None,
     applicability: dict | None = None,
 ) -> RentalRateResult:
+    resolved_template_id = template_id or new_uuid()
     return RentalRateResult(
         id=rate_id or new_uuid(),
-        facility_id=facility_id or new_uuid(),
-        billing_unit=billing_unit,
+        facility_id=facility_id,
+        template_id=resolved_template_id,
         unit_amount=unit_amount,
         currency="CAD",
-        is_default=is_default,
         is_active=is_active,
+        template_name=billing_unit,
+        billing_unit=billing_unit,
         applicability=applicability,
+        is_default=is_default,
+        template_is_active=True,
     )
 
 
 def make_hourly_and_daily_rates(
-    facility_id: UUID,
+    facility_id: UUID | None = None,
     hourly_amount: Decimal = Decimal("10"),
     daily_amount: Decimal = Decimal("200"),
 ) -> list[RentalRateResult]:
@@ -173,8 +203,12 @@ def make_preview_quote_result(
             PreviewQuoteRoomLineResult(
                 facility_id=facility_id,
                 billed_hours=Decimal("2"),
-                pricing_tier_used=RentalRateBillingUnit.HOURLY.value,
-                rental_rate_id=new_uuid(),
+                rental_rate_name="Hourly",
+                billing_unit=RentalRateBillingUnit.HOURLY.value,
+                unit_amount=Decimal("10"),
+                currency="CAD",
+                applicability=None,
+                is_default=True,
                 line_subtotal=quoted_amount,
             ),
         ],
@@ -244,12 +278,28 @@ def make_create_slot_template_command(
     )
 
 
-def make_create_rental_rate_command(facility_id: UUID) -> CreateRentalRateCommand:
+def make_create_rental_rate_template_command(
+    name: str = "Hourly",
+) -> CreateRentalRateTemplateCommand:
+    return CreateRentalRateTemplateCommand(
+        name=name,
+        billing_unit=RentalRateBillingUnit.HOURLY,
+        unit_amount=Decimal("30"),
+        currency="CAD",
+        is_default=True,
+        is_active=True,
+        applicability={"all": [{"op": "hours_lt", "value": 5}]},
+    )
+
+
+def make_create_rental_rate_command(
+    facility_id: UUID,
+    template_id: UUID | None = None,
+) -> CreateRentalRateCommand:
     return CreateRentalRateCommand(
         facility_id=facility_id,
-        unit_amount=Decimal("10"),
-        billing_unit=RentalRateBillingUnit.HOURLY,
-        translations=[make_translation(name="Hourly Rate")],
+        template_id=template_id or new_uuid(),
+        is_active=True,
     )
 
 

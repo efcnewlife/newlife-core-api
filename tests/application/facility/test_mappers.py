@@ -142,29 +142,34 @@ def test_preview_quote_result_to_api():
             PreviewQuoteRoomLineResult(
                 facility_id=facility_id,
                 billed_hours=Decimal("6"),
-                pricing_tier_used=RentalRateBillingUnit.DAILY_FLAT.value,
+                rental_rate_name="Daily flat",
+                billing_unit=RentalRateBillingUnit.DAILY_FLAT.value,
+                unit_amount=Decimal("100"),
+                currency="CAD",
+                applicability={"all": [{"op": "hours_gte", "value": 5}]},
+                is_default=False,
                 line_subtotal=Decimal("100"),
             ),
         ],
     )
     api = preview_quote_result_to_api(result)
     assert api.quoted_amount == Decimal("85")
-    assert api.room_lines[0].pricing_tier_used == RentalRateBillingUnit.DAILY_FLAT.value
+    assert api.room_lines[0].billing_unit == RentalRateBillingUnit.DAILY_FLAT.value
+    assert api.room_lines[0].rental_rate_name == "Daily flat"
 
 
 def test_create_rental_rate_to_command():
     facility_id = uuid4()
-    locale_id = uuid4()
+    template_id = uuid4()
     model = AdminRentalRateCreate(
         facility_id=facility_id,
-        billing_unit=RentalRateBillingUnit.HOURLY,
-        unit_amount=Decimal("15"),
-        translations=[AdminFacilityTranslationInput(locale_id=locale_id, name="Hourly Rate")],
+        template_id=template_id,
+        is_active=True,
     )
     command = create_rental_rate_to_command(model)
     assert command.facility_id == facility_id
-    assert command.unit_amount == Decimal("15")
-    assert command.translations[0].locale_id == locale_id
+    assert command.template_id == template_id
+    assert command.is_active is True
 
 
 def test_create_room_slot_template_to_command():

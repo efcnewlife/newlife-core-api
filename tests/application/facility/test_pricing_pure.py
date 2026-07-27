@@ -4,6 +4,8 @@ Pure pricing logic tests (no async, no DB).
 from decimal import Decimal
 from uuid import uuid4
 
+import pytest
+
 from portal.application.facility.pricing_service import PricingService
 from portal.domain.facility.constants import RentalRateBillingUnit
 from portal.infrastructure.persistence.repositories.facility.rental_repository import RentalRepository
@@ -84,3 +86,19 @@ def test_compute_line_subtotal_per_slot_and_flat_per_booking():
     )
     assert per_slot == Decimal("50")
     assert flat == Decimal("75")
+
+
+@pytest.mark.asyncio
+async def test_list_active_rates_returns_only_room_bindings():
+    from tests.fixtures.facility.stubs import StubRentalRepository
+
+    facility_id = uuid4()
+    room_rate = make_rental_rate(facility_id=facility_id, unit_amount=Decimal("50"))
+    rental = StubRentalRepository(rates_by_facility={facility_id: [room_rate]})
+    bound = await rental.list_active_rates_for_facility(facility_id)
+    assert len(bound) == 1
+    assert bound[0].unit_amount == Decimal("50")
+
+    empty_room = uuid4()
+    fallback = await rental.list_active_rates_for_facility(empty_room)
+    assert fallback == []

@@ -3,13 +3,13 @@ Facility booking models.
 """
 import sqlalchemy as sa
 from sqlalchemy import Column
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 
 from portal.domain.facility.constants import BookingSlotStatus, BookingStatus
 from portal.libs.database.orm import ModelBase
 from portal.models.auth.user import AuthUser
-from portal.models.facility.rental import FacilityRentalRate, FacilityRentalSurcharge
+from portal.models.facility.rental import FacilityRentalSurcharge
 from portal.models.facility.room import FacilityRoom
 from portal.models.mixins import AuditCreatedMixin, AuditMixin, DeletedMixin, RemarkMixin
 
@@ -133,18 +133,16 @@ class FacilityBookingRoom(ModelBase, AuditMixin):
     start_at = Column(sa.DateTime(timezone=True), nullable=False, comment="Room interval start (UTC)")
     end_at = Column(sa.DateTime(timezone=True), nullable=False, comment="Room interval end (UTC)")
     billed_hours = Column(sa.Numeric(8, 2), comment="Billed hours for this room line")
-    pricing_tier_used = Column(sa.String(32), comment="Pricing tier used (hourly or daily_flat)")
-    rental_rate_id = Column(
-        UUID,
-        sa.ForeignKey(FacilityRentalRate.id, ondelete="SET NULL"),
-        nullable=True,
-        comment="Applied rental rate row",
-    )
+    rental_rate_name = Column(sa.String(255), comment="Snapshot: rule display name")
+    billing_unit = Column(sa.String(32), comment="Snapshot: billing unit used")
+    unit_amount = Column(sa.Numeric(12, 2), comment="Snapshot: unit amount used")
+    currency = Column(sa.String(8), comment="Snapshot: currency used")
+    applicability = Column(JSONB, comment="Snapshot: applicability rule used")
+    is_default = Column(sa.Boolean, comment="Snapshot: whether rule was marked default")
     line_subtotal = Column(sa.Numeric(12, 2), comment="Pre-discount room line subtotal")
 
     booking = relationship("FacilityBooking", back_populates="booking_rooms", passive_deletes=True)
     room = relationship("FacilityRoom", passive_deletes=True)
-    rental_rate = relationship("FacilityRentalRate", passive_deletes=True)
 
 
 class FacilityBookingSlot(ModelBase, AuditMixin):

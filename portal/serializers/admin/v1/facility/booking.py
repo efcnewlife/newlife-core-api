@@ -24,7 +24,7 @@ class AdminBookingQuery(GenericQueryBaseModel):
 
 
 class AdminBookingRoomLine(UUIDBaseModel):
-    """Booking room line."""
+    """Booking room line with rule snapshot."""
 
     facility_id: UUID = Field(..., serialization_alias="facilityId")
     facility_name: Optional[str] = Field(default=None, serialization_alias="facilityName")
@@ -33,8 +33,12 @@ class AdminBookingRoomLine(UUIDBaseModel):
     start_at: datetime = Field(..., serialization_alias="startAt")
     end_at: datetime = Field(..., serialization_alias="endAt")
     billed_hours: Optional[Decimal] = Field(default=None, serialization_alias="billedHours")
-    pricing_tier_used: Optional[str] = Field(default=None, serialization_alias="pricingTierUsed")
-    rental_rate_id: Optional[UUID] = Field(default=None, serialization_alias="rentalRateId")
+    rental_rate_name: Optional[str] = Field(default=None, serialization_alias="rentalRateName")
+    billing_unit: Optional[str] = Field(default=None, serialization_alias="billingUnit")
+    unit_amount: Optional[Decimal] = Field(default=None, serialization_alias="unitAmount")
+    currency: Optional[str] = Field(default=None)
+    applicability: Optional[dict] = Field(default=None)
+    is_default: Optional[bool] = Field(default=None, serialization_alias="isDefault")
     line_subtotal: Optional[Decimal] = Field(default=None, serialization_alias="lineSubtotal")
 
 

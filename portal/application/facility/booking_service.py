@@ -170,8 +170,12 @@ class BookingService:
                     start_at=start_at,
                     end_at=end_at,
                     billed_hours=quoted_line.billed_hours,
-                    pricing_tier_used=quoted_line.pricing_tier_used,
-                    rental_rate_id=quoted_line.rental_rate_id,
+                    rental_rate_name=quoted_line.rental_rate_name,
+                    billing_unit=quoted_line.billing_unit,
+                    unit_amount=quoted_line.unit_amount,
+                    currency=quoted_line.currency,
+                    applicability=quoted_line.applicability,
+                    is_default=quoted_line.is_default,
                     line_subtotal=quoted_line.line_subtotal,
                 )
             )
@@ -305,8 +309,12 @@ class BookingService:
                     start_at=start_at,
                     end_at=end_at,
                     billed_hours=quoted_line.billed_hours,
-                    pricing_tier_used=quoted_line.pricing_tier_used,
-                    rental_rate_id=quoted_line.rental_rate_id,
+                    rental_rate_name=quoted_line.rental_rate_name,
+                    billing_unit=quoted_line.billing_unit,
+                    unit_amount=quoted_line.unit_amount,
+                    currency=quoted_line.currency,
+                    applicability=quoted_line.applicability,
+                    is_default=quoted_line.is_default,
                     line_subtotal=quoted_line.line_subtotal,
                 )
             )

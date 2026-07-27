@@ -23,6 +23,7 @@ class Resource(Enum):
     FACILITY_ROOM_SLOT_TEMPLATE = "facility:room_slot_template"
     FACILITY_ROOM_BLACKOUT = "facility:room_blackout"
     FACILITY_RENTAL_RATE = "facility:rental_rate"
+    FACILITY_RENTAL_RATE_TEMPLATE = "facility:rental_rate_template"
     FACILITY_BOOKING = "facility:booking"
     FACILITY_BOOKING_OVERRIDE_LOG = "facility:booking_override_log"
     MINISTRY_MINISTRY = "ministry:ministry"
@@ -72,6 +73,7 @@ class Permission:
     FACILITY_ROOM_SLOT_TEMPLATE = PermissionCode(Resource.FACILITY_ROOM_SLOT_TEMPLATE)
     FACILITY_ROOM_BLACKOUT = PermissionCode(Resource.FACILITY_ROOM_BLACKOUT)
     FACILITY_RENTAL_RATE = PermissionCode(Resource.FACILITY_RENTAL_RATE)
+    FACILITY_RENTAL_RATE_TEMPLATE = PermissionCode(Resource.FACILITY_RENTAL_RATE_TEMPLATE)
     FACILITY_BOOKING = PermissionCode(Resource.FACILITY_BOOKING)
     FACILITY_BOOKING_OVERRIDE_LOG = PermissionCode(Resource.FACILITY_BOOKING_OVERRIDE_LOG)
     MINISTRY_MINISTRY = PermissionCode(Resource.MINISTRY_MINISTRY)
