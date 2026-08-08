@@ -5,7 +5,7 @@ import uuid
 from typing import Annotated
 
 from dependency_injector.wiring import inject, Provide
-from fastapi import Depends, HTTPException, Query, status
+from fastapi import Depends, Query, status
 
 from portal.application.facility.booking_service import BookingService
 from portal.application.facility.mappers import (
@@ -13,6 +13,8 @@ from portal.application.facility.mappers import (
     booking_page_to_api,
     booking_pages_query_to_command,
     cancel_booking_to_command,
+    create_booking_to_command,
+    create_id_result_to_api,
     update_booking_to_command,
 )
 from portal.container import Container
@@ -20,11 +22,13 @@ from portal.libs.consts.permission import Permission
 from portal.routers.auth_router import AuthRouter
 from portal.serializers.admin.v1.facility.booking import (
     AdminBookingCancel,
+    AdminBookingCreate,
     AdminBookingDetail,
     AdminBookingPages,
     AdminBookingQuery,
     AdminBookingUpdate,
 )
+from portal.serializers.mixins.model_mixins import UUIDBaseModel
 
 router: AuthRouter = AuthRouter(is_admin=True)
 
@@ -42,6 +46,21 @@ async def get_booking_pages(
 ):
     result = await booking_service.get_booking_pages(command=booking_pages_query_to_command(query_model))
     return booking_page_to_api(result)
+
+
+@router.post(
+    path="",
+    status_code=status.HTTP_201_CREATED,
+    response_model=UUIDBaseModel,
+    permissions=[Permission.FACILITY_BOOKING.create],
+)
+@inject
+async def create_booking(
+    body: AdminBookingCreate,
+    booking_service: BookingService = Depends(Provide[Container.booking_service]),
+):
+    result = await booking_service.create_booking(command=create_booking_to_command(body))
+    return create_id_result_to_api(result)
 
 
 @router.get(

@@ -552,6 +552,32 @@ def override_log_pages_query_to_command(model) -> "OverrideLogPagesQueryCommand"
     )
 
 
+def create_booking_to_command(model) -> "CreateBookingCommand":
+    from portal.application.facility.commands import BookingRoomLineCommand, CreateBookingCommand
+    from portal.serializers.admin.v1.facility.booking import AdminBookingCreate
+
+    if not isinstance(model, AdminBookingCreate):
+        raise TypeError("Expected AdminBookingCreate")
+    return CreateBookingCommand(
+        user_id=model.user_id,
+        start_at=model.start_at,
+        end_at=model.end_at,
+        is_mission_aligned=model.is_mission_aligned,
+        ministry_id=model.ministry_id,
+        rooms=[
+            BookingRoomLineCommand(
+                facility_id=room.facility_id,
+                start_at=room.start_at,
+                end_at=room.end_at,
+                sequence=room.sequence,
+            )
+            for room in model.rooms
+        ],
+        surcharge_codes=model.surcharge_codes,
+        remark=model.remark,
+    )
+
+
 def update_booking_to_command(model) -> "UpdateBookingCommand":
     from portal.application.facility.commands import BookingRoomLineCommand, UpdateBookingCommand
     from portal.serializers.admin.v1.facility.booking import AdminBookingUpdate

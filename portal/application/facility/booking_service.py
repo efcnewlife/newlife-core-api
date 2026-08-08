@@ -17,6 +17,7 @@ from portal.application.facility.commands import (
 from portal.application.facility.pricing_service import PricingService
 from portal.application.facility.results import BookingDetailResult, BookingListItemResult, BookingPageResult
 from portal.application.org.results import CreateIdResult
+from portal.application.system.setting_service import SettingService
 from portal.domain.facility.constants import (
     BookingSlotStatus,
     BookingStatus,
@@ -46,12 +47,14 @@ class BookingService:
         rental_repository: RentalRepository,
         ministry_repository: MinistryRepository,
         room_blackout_repository: RoomBlackoutRepository,
+        setting_service: SettingService,
     ):
         self._repository = booking_repository
         self._pricing_service = pricing_service
         self._rental_repository = rental_repository
         self._ministry_repository = ministry_repository
         self._blackout_repository = room_blackout_repository
+        self._setting_service = setting_service
         self._req_ctx: Optional[RequestContext] = get_request_context()
         self._user_ctx: Optional[UserContext] = get_user_context()
 
@@ -112,6 +115,7 @@ class BookingService:
         if len(command.rooms) > max_rooms_int:
             raise BadRequestException(detail=f"At most {max_rooms_int} rooms per booking")
 
+        local_tz = await self._setting_service.get_facility_timezone()
         for line in command.rooms:
             start_at = line.start_at or command.start_at
             end_at = line.end_at or command.end_at
@@ -126,6 +130,7 @@ class BookingService:
                 facility_id=line.facility_id,
                 start_at=start_at,
                 end_at=end_at,
+                tz=local_tz,
             ):
                 raise BadRequestException(detail=f"Room {line.facility_id} is closed for the selected time")
 
@@ -218,11 +223,12 @@ class BookingService:
             raise BadRequestException(detail="end_at must be after start_at")
         if not command.rooms:
             raise BadRequestException(detail="At least one room is required")
-        user_id = self._user_ctx.user_id if self._user_ctx else None
-        if not user_id:
+        operator_id = self._user_ctx.user_id if self._user_ctx else None
+        if not operator_id:
             raise ForbiddenException(detail="Authenticated user required")
+        booker_id = command.user_id or operator_id
 
-        await self._validate_ministry_booking_gate(command.ministry_id)
+        await self._validate_ministry_booking_gate(command.ministry_id, booker_id=booker_id)
 
         max_rooms = await self._rental_repository.get_policy_amount(
             RentalPolicySettingKey.MAX_ROOMS_PER_BOOKING,
@@ -232,6 +238,7 @@ class BookingService:
         if len(command.rooms) > max_rooms_int:
             raise BadRequestException(detail=f"At most {max_rooms_int} rooms per booking")
 
+        local_tz = await self._setting_service.get_facility_timezone()
         for line in command.rooms:
             start_at = line.start_at or command.start_at
             end_at = line.end_at or command.end_at
@@ -245,6 +252,7 @@ class BookingService:
                 facility_id=line.facility_id,
                 start_at=start_at,
                 end_at=end_at,
+                tz=local_tz,
             ):
                 raise BadRequestException(detail=f"Room {line.facility_id} is closed for the selected time")
 
@@ -275,7 +283,7 @@ class BookingService:
         await self._repository.insert_booking(
             dict(
                 id=booking_id,
-                user_id=user_id,
+                user_id=booker_id,
                 facility_id=primary_facility_id,
                 ministry_id=command.ministry_id,
                 booking_type=BookingType.ONE_TIME.value,
@@ -351,13 +359,19 @@ class BookingService:
             raise ForbiddenException(detail="Cannot cancel another user's booking")
         await self.cancel_booking(booking_id, command)
 
-    async def _validate_ministry_booking_gate(self, ministry_id: Optional[UUID]) -> None:
+    async def _validate_ministry_booking_gate(
+        self,
+        ministry_id: Optional[UUID],
+        booker_id: Optional[UUID] = None,
+    ) -> None:
         if ministry_id is None:
             return
         status = await self._ministry_repository.get_status(ministry_id)
         if status != MinistryStatus.ACTIVE.value:
             raise BadRequestException(detail="Ministry must be active for booking")
-        user_id = self._user_ctx.user_id if self._user_ctx else None
+        user_id = booker_id if booker_id is not None else (
+            self._user_ctx.user_id if self._user_ctx else None
+        )
         if not user_id:
             raise ForbiddenException(detail="Authenticated user required for ministry booking")
         if not await self._ministry_repository.is_user_booking_member(ministry_id, user_id):

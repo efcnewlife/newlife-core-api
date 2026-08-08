@@ -271,6 +271,7 @@ class StubBookingRepository:
         self.has_overlap = has_overlap
         self.detail = detail
         self.cancel_calls: list[dict] = []
+        self.insert_calls: list[dict] = []
         self.update_header_calls: list[dict] = []
         self.replace_rooms_calls: list = []
         self.replace_slots_calls: list = []
@@ -294,6 +295,9 @@ class StubBookingRepository:
         exclude_booking_id: UUID | None = None,
     ) -> bool:
         return self.has_overlap
+
+    async def insert_booking(self, payload: dict) -> None:
+        self.insert_calls.append(payload)
 
     async def cancel_booking(
         self,
@@ -470,7 +474,7 @@ class StubRoomBlackoutRepository:
     async def list_active_for_room_day(self, facility_id, target_date):
         return list(self.for_room_day)
 
-    async def has_blackout_overlap(self, facility_id, start_at, end_at) -> bool:
+    async def has_blackout_overlap(self, facility_id, start_at, end_at, tz) -> bool:
         return self.has_overlap
 
     async def get_by_id(self, blackout_id):
@@ -506,12 +510,15 @@ class StubMinistryRepository:
         ministry_by_id: dict[UUID, MinistryDetailResult] | None = None,
         insert_raises_unique: bool = False,
         update_affected: int = 1,
+        booking_member_user_ids: set[UUID] | None = None,
     ):
         self.ministry_by_id = ministry_by_id or {}
         self.insert_raises_unique = insert_raises_unique
         self.update_affected = update_affected
+        self.booking_member_user_ids = booking_member_user_ids
         self.insert_calls: list[dict] = []
         self.replace_members_calls: list[dict] = []
+        self.membership_check_calls: list[dict] = []
 
     async def get_by_id(self, ministry_id: UUID) -> MinistryDetailResult | None:
         return self.ministry_by_id.get(ministry_id)
@@ -544,7 +551,10 @@ class StubMinistryRepository:
         return getattr(ministry, "status", None) if ministry else None
 
     async def is_user_booking_member(self, ministry_id: UUID, user_id: UUID) -> bool:
-        return True
+        self.membership_check_calls.append(dict(ministry_id=ministry_id, user_id=user_id))
+        if self.booking_member_user_ids is None:
+            return True
+        return user_id in self.booking_member_user_ids
 
     async def fetch_active_locale_ids(self, locale_ids: list[UUID]) -> list[UUID]:
         return locale_ids

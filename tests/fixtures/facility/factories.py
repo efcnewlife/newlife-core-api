@@ -7,6 +7,7 @@ from uuid import UUID, uuid4
 
 from portal.application.facility.commands import (
     BookingRoomLineCommand,
+    CreateBookingCommand,
     CreateDiscountRuleCommand,
     CreateMinistryCommand,
     CreateRentalRateCommand,
@@ -314,6 +315,25 @@ def make_update_booking_command(
     return UpdateBookingCommand(
         start_at=start,
         end_at=end,
+        rooms=[BookingRoomLineCommand(facility_id=room_id, sequence=0)],
+    )
+
+
+def make_create_booking_command(
+    facility_id: UUID | None = None,
+    start_at: datetime | None = None,
+    end_at: datetime | None = None,
+    user_id: UUID | None = None,
+    ministry_id: UUID | None = None,
+) -> CreateBookingCommand:
+    room_id = facility_id or new_uuid()
+    start = start_at or datetime(2026, 5, 1, 10, 0, tzinfo=timezone.utc)
+    end = end_at or datetime(2026, 5, 1, 14, 0, tzinfo=timezone.utc)
+    return CreateBookingCommand(
+        start_at=start,
+        end_at=end,
+        user_id=user_id,
+        ministry_id=ministry_id,
         rooms=[BookingRoomLineCommand(facility_id=room_id, sequence=0)],
     )
 

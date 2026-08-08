@@ -11,8 +11,10 @@ from portal.application.facility.booking_service import BookingService
 from portal.application.facility.commands import BookingRoomLineCommand, CancelBookingCommand
 from portal.application.facility.results import BookingDetailResult
 from portal.domain.facility.constants import RentalPolicySettingKey
-from portal.exceptions.responses import BadRequestException, NotFoundException
+from portal.exceptions.responses import BadRequestException, ForbiddenException, NotFoundException
 from tests.fixtures.facility.factories import (
+    make_create_booking_command,
+    make_ministry_detail,
     make_preview_quote_result,
     make_update_booking_command,
     new_uuid,
@@ -24,6 +26,22 @@ from tests.fixtures.facility.stubs import (
     StubRentalRepository,
     StubRoomBlackoutRepository,
 )
+from tests.fixtures.system.stubs import StubSettingService
+
+
+def _user_ctx(monkeypatch, *, user_id=None):
+    user_id = user_id or uuid4()
+
+    class UserCtx:
+        pass
+
+    ctx = UserCtx()
+    ctx.user_id = user_id
+    monkeypatch.setattr(
+        "portal.application.facility.booking_service.get_user_context",
+        lambda: ctx,
+    )
+    return ctx
 
 
 def _booking_service(
@@ -31,14 +49,16 @@ def _booking_service(
     rental_stub: StubRentalRepository | None = None,
     pricing_stub: StubPricingService | None = None,
     blackout_stub: StubRoomBlackoutRepository | None = None,
+    ministry_stub: StubMinistryRepository | None = None,
 ) -> BookingService:
     quote = make_preview_quote_result(quoted_amount=Decimal("150"), discount_percent=Decimal("10"))
     return BookingService(
         booking_stub,
         pricing_stub or StubPricingService(quote),
         rental_stub or StubRentalRepository(),
-        StubMinistryRepository(),
+        ministry_stub or StubMinistryRepository(),
         blackout_stub or StubRoomBlackoutRepository(),
+        StubSettingService(),
     )
 
 
@@ -152,3 +172,111 @@ def test_billed_hours_rounds_to_two_decimal_places():
     start = datetime(2026, 5, 1, 10, 0, tzinfo=timezone.utc)
     end = datetime(2026, 5, 1, 12, 0, tzinfo=timezone.utc)
     assert BookingService._billed_hours(start, end) == Decimal("2.00")
+
+
+@pytest.mark.asyncio
+async def test_create_booking_requires_authenticated_user(monkeypatch):
+    monkeypatch.setattr(
+        "portal.application.facility.booking_service.get_user_context",
+        lambda: None,
+    )
+    service = _booking_service(StubBookingRepository())
+    with pytest.raises(ForbiddenException, match="Authenticated user required"):
+        await service.create_booking(make_create_booking_command())
+
+
+@pytest.mark.asyncio
+async def test_create_booking_uses_command_booker_when_set(monkeypatch):
+    operator_id = uuid4()
+    booker_id = uuid4()
+    _user_ctx(monkeypatch, user_id=operator_id)
+    stub = StubBookingRepository()
+    service = _booking_service(stub)
+    result = await service.create_booking(make_create_booking_command(user_id=booker_id))
+    assert result.id is not None
+    assert stub.insert_calls[0]["user_id"] == booker_id
+    assert stub.insert_calls[0]["user_id"] != operator_id
+    assert stub.insert_calls[0]["status"] == "confirmed"
+    assert stub.insert_calls[0]["booking_type"] == "one_time"
+    assert len(stub.replace_rooms_calls[0]) == 1
+
+
+@pytest.mark.asyncio
+async def test_create_booking_uses_user_context_when_booker_omitted(monkeypatch):
+    operator_id = uuid4()
+    _user_ctx(monkeypatch, user_id=operator_id)
+    stub = StubBookingRepository()
+    service = _booking_service(stub)
+    await service.create_booking(make_create_booking_command())
+    assert stub.insert_calls[0]["user_id"] == operator_id
+
+
+@pytest.mark.asyncio
+async def test_create_booking_ministry_membership_checked_on_booker(monkeypatch):
+    operator_id = uuid4()
+    booker_id = uuid4()
+    ministry = make_ministry_detail()
+    _user_ctx(monkeypatch, user_id=operator_id)
+    ministry_stub = StubMinistryRepository(
+        ministry_by_id={ministry.id: ministry},
+        booking_member_user_ids={booker_id},
+    )
+    stub = StubBookingRepository()
+    service = _booking_service(stub, ministry_stub=ministry_stub)
+    await service.create_booking(
+        make_create_booking_command(user_id=booker_id, ministry_id=ministry.id)
+    )
+    assert ministry_stub.membership_check_calls[0]["user_id"] == booker_id
+
+
+@pytest.mark.asyncio
+async def test_create_booking_rejects_when_booker_not_ministry_member(monkeypatch):
+    operator_id = uuid4()
+    booker_id = uuid4()
+    ministry = make_ministry_detail()
+    _user_ctx(monkeypatch, user_id=operator_id)
+    ministry_stub = StubMinistryRepository(
+        ministry_by_id={ministry.id: ministry},
+        booking_member_user_ids={operator_id},
+    )
+    service = _booking_service(StubBookingRepository(), ministry_stub=ministry_stub)
+    with pytest.raises(ForbiddenException, match="not a ministry owner"):
+        await service.create_booking(
+            make_create_booking_command(user_id=booker_id, ministry_id=ministry.id)
+        )
+
+
+@pytest.mark.asyncio
+async def test_create_booking_slot_overlap_conflict(monkeypatch):
+    _user_ctx(monkeypatch)
+    service = _booking_service(StubBookingRepository(has_overlap=True))
+    with pytest.raises(BadRequestException, match="scheduling conflict"):
+        await service.create_booking(make_create_booking_command())
+
+
+@pytest.mark.asyncio
+async def test_create_booking_blackout_conflict(monkeypatch):
+    _user_ctx(monkeypatch)
+    service = _booking_service(
+        StubBookingRepository(has_overlap=False),
+        blackout_stub=StubRoomBlackoutRepository(has_overlap=True),
+    )
+    with pytest.raises(BadRequestException, match="closed for the selected time"):
+        await service.create_booking(make_create_booking_command())
+
+
+@pytest.mark.asyncio
+async def test_create_booking_max_rooms_exceeded(monkeypatch):
+    _user_ctx(monkeypatch)
+    room_ids = [new_uuid(), new_uuid(), new_uuid()]
+    rental = StubRentalRepository(
+        policy_amounts={(RentalPolicySettingKey.MAX_ROOMS_PER_BOOKING.value, None): Decimal("2")},
+    )
+    command = make_create_booking_command()
+    command.rooms = [
+        BookingRoomLineCommand(facility_id=room_id, sequence=idx)
+        for idx, room_id in enumerate(room_ids)
+    ]
+    service = _booking_service(StubBookingRepository(), rental)
+    with pytest.raises(BadRequestException, match="At most 2"):
+        await service.create_booking(command)

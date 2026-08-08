@@ -152,6 +152,8 @@ class BookingRepository:
                 FacilityBooking.cancelled_at,
                 FacilityBooking.cancel_reason,
                 FacilityBooking.remark,
+                FacilityBooking.created_by_id,
+                FacilityBooking.created_by,
             )
             .select_from(FacilityBooking)
             .join(AuthUser, AuthUser.id == FacilityBooking.user_id)

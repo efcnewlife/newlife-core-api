@@ -366,6 +366,8 @@ class BookingDetailResult(UUIDBaseModel):
     cancelled_at: Optional[datetime] = Field(default=None)
     cancel_reason: Optional[str] = Field(default=None)
     remark: Optional[str] = Field(default=None)
+    created_by_id: Optional[UUID] = Field(default=None)
+    created_by: Optional[str] = Field(default=None)
     rooms: list[BookingRoomLineResult] = Field(default_factory=list)
     slots: list[BookingSlotResult] = Field(default_factory=list)
 

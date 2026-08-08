@@ -97,17 +97,32 @@ class AdminBookingDetail(AdminBookingListItem):
     cancelled_at: Optional[datetime] = Field(default=None, serialization_alias="cancelledAt")
     cancel_reason: Optional[str] = Field(default=None, serialization_alias="cancelReason")
     remark: Optional[str] = Field(default=None)
+    created_by_id: Optional[UUID] = Field(default=None, serialization_alias="createdById")
+    created_by: Optional[str] = Field(default=None, serialization_alias="createdBy")
     rooms: list[AdminBookingRoomLine] = Field(default_factory=list)
     slots: list[AdminBookingSlot] = Field(default_factory=list)
 
 
 class AdminBookingRoomInput(BaseModel):
-    """Room line for booking update."""
+    """Room line for booking update/create."""
 
     facility_id: UUID = Field(...)
     start_at: Optional[datetime] = Field(default=None)
     end_at: Optional[datetime] = Field(default=None)
     sequence: int = Field(default=0)
+
+
+class AdminBookingCreate(BaseModel):
+    """Admin create booking on behalf of a Booker."""
+
+    user_id: UUID = Field(..., description="Booker user id")
+    start_at: datetime = Field(...)
+    end_at: datetime = Field(...)
+    is_mission_aligned: bool = Field(default=False)
+    ministry_id: Optional[UUID] = Field(default=None)
+    rooms: list[AdminBookingRoomInput] = Field(default_factory=list)
+    surcharge_codes: list[str] = Field(default_factory=list)
+    remark: Optional[str] = Field(default=None)
 
 
 class AdminBookingUpdate(BaseModel):

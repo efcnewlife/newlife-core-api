@@ -274,6 +274,7 @@ class CreateBookingCommand(BaseModel):
     end_at: datetime = Field(...)
     is_mission_aligned: bool = Field(default=False)
     ministry_id: Optional[UUID] = Field(default=None)
+    user_id: Optional[UUID] = Field(default=None, description="Booker; omit to use UserContext")
     rooms: list[BookingRoomLineCommand] = Field(default_factory=list)
     surcharge_codes: list[str] = Field(default_factory=list)
     remark: Optional[str] = Field(default=None)
