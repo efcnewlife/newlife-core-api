@@ -2,8 +2,10 @@
 .vscode
 .cursor
 .tmp
-docs
+.scratch
 temp
+docs
+!docs/adr
 
 ### Python template
 # Byte-compiled / optimized / DLL files
