@@ -1,10 +1,11 @@
 """
 Facility booking admin application service.
 """
-from datetime import datetime, timezone
+from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 from uuid import UUID, uuid4
+from zoneinfo import ZoneInfo
 
 from portal.application.facility.commands import (
     BookingPagesQueryCommand,
@@ -19,12 +20,18 @@ from portal.application.facility.results import BookingDetailResult, BookingList
 from portal.application.org.results import CreateIdResult
 from portal.application.system.setting_service import SettingService
 from portal.domain.facility.constants import (
+    BookingErrorCode,
     BookingSlotStatus,
     BookingStatus,
     BookingType,
     RentalPolicySettingKey,
 )
-from portal.exceptions.responses import BadRequestException, ForbiddenException, NotFoundException
+from portal.exceptions.responses import (
+    BadRequestException,
+    ConflictErrorException,
+    ForbiddenException,
+    NotFoundException,
+)
 from portal.infrastructure.persistence.repositories.facility.booking_repository import BookingRepository
 from portal.infrastructure.persistence.repositories.facility.rental_repository import RentalRepository
 from portal.infrastructure.persistence.repositories.facility.room_blackout_repository import (
@@ -119,20 +126,13 @@ class BookingService:
         for line in command.rooms:
             start_at = line.start_at or command.start_at
             end_at = line.end_at or command.end_at
-            if await self._repository.has_confirmed_slot_overlap(
+            await self._raise_if_room_unavailable(
                 facility_id=line.facility_id,
                 start_at=start_at,
                 end_at=end_at,
+                local_tz=local_tz,
                 exclude_booking_id=booking_id,
-            ):
-                raise BadRequestException(detail=f"Room {line.facility_id} has a scheduling conflict")
-            if await self._blackout_repository.has_blackout_overlap(
-                facility_id=line.facility_id,
-                start_at=start_at,
-                end_at=end_at,
-                tz=local_tz,
-            ):
-                raise BadRequestException(detail=f"Room {line.facility_id} is closed for the selected time")
+            )
 
         quote_lines = []
         for line in command.rooms:
@@ -242,19 +242,12 @@ class BookingService:
         for line in command.rooms:
             start_at = line.start_at or command.start_at
             end_at = line.end_at or command.end_at
-            if await self._repository.has_confirmed_slot_overlap(
+            await self._raise_if_room_unavailable(
                 facility_id=line.facility_id,
                 start_at=start_at,
                 end_at=end_at,
-            ):
-                raise BadRequestException(detail=f"Room {line.facility_id} has a scheduling conflict")
-            if await self._blackout_repository.has_blackout_overlap(
-                facility_id=line.facility_id,
-                start_at=start_at,
-                end_at=end_at,
-                tz=local_tz,
-            ):
-                raise BadRequestException(detail=f"Room {line.facility_id} is closed for the selected time")
+                local_tz=local_tz,
+            )
 
         quote_lines = []
         for line in command.rooms:
@@ -358,6 +351,37 @@ class BookingService:
         if owner_id != user_id:
             raise ForbiddenException(detail="Cannot cancel another user's booking")
         await self.cancel_booking(booking_id, command)
+
+    async def _raise_if_room_unavailable(
+        self,
+        facility_id: UUID,
+        start_at: datetime,
+        end_at: datetime,
+        local_tz: ZoneInfo,
+        exclude_booking_id: Optional[UUID] = None,
+    ) -> None:
+        if await self._repository.has_confirmed_slot_overlap(
+            facility_id=facility_id,
+            start_at=start_at,
+            end_at=end_at,
+            exclude_booking_id=exclude_booking_id,
+        ):
+            raise ConflictErrorException(
+                detail=f"Room {facility_id} has a scheduling conflict",
+                error_code=BookingErrorCode.SCHEDULING_CONFLICT.value,
+                context={"facility_id": str(facility_id)},
+            )
+        if await self._blackout_repository.has_blackout_overlap(
+            facility_id=facility_id,
+            start_at=start_at,
+            end_at=end_at,
+            tz=local_tz,
+        ):
+            raise BadRequestException(
+                detail=f"Room {facility_id} is closed for the selected time",
+                error_code=BookingErrorCode.ROOM_BLACKOUT.value,
+                context={"facility_id": str(facility_id)},
+            )
 
     async def _validate_ministry_booking_gate(
         self,

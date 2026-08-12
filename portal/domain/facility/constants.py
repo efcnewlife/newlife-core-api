@@ -88,3 +88,10 @@ class RoomBlackoutKind(str, Enum):
 
     ONE_OFF = "one_off"
     RECURRING = "recurring"
+
+
+class BookingErrorCode(str, Enum):
+    """Machine-readable booking create/update error codes for clients."""
+
+    SCHEDULING_CONFLICT = "FACILITY_BOOKING_SCHEDULING_CONFLICT"
+    ROOM_BLACKOUT = "FACILITY_BOOKING_ROOM_BLACKOUT"

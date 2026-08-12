@@ -11,7 +11,12 @@ from portal.application.facility.booking_service import BookingService
 from portal.application.facility.commands import BookingRoomLineCommand, CancelBookingCommand
 from portal.application.facility.results import BookingDetailResult
 from portal.domain.facility.constants import RentalPolicySettingKey
-from portal.exceptions.responses import BadRequestException, ForbiddenException, NotFoundException
+from portal.exceptions.responses import (
+    BadRequestException,
+    ConflictErrorException,
+    ForbiddenException,
+    NotFoundException,
+)
 from tests.fixtures.facility.factories import (
     make_create_booking_command,
     make_ministry_detail,
@@ -96,8 +101,10 @@ async def test_update_booking_invalid_time_range():
         end_at=datetime(2026, 5, 1, 10, 0, tzinfo=timezone.utc),
     )
     service = _booking_service(StubBookingRepository())
-    with pytest.raises(BadRequestException, match="end_at"):
+    with pytest.raises(BadRequestException) as exc_info:
         await service.update_booking(uuid4(), command)
+    assert "end_at" in str(exc_info.value.detail)
+    assert getattr(exc_info.value, "error_code", None) is None
 
 
 @pytest.mark.asyncio
@@ -121,8 +128,10 @@ async def test_update_booking_max_rooms_exceeded():
         for idx, room_id in enumerate(room_ids)
     ]
     service = _booking_service(StubBookingRepository(), rental)
-    with pytest.raises(BadRequestException, match="At most 2"):
+    with pytest.raises(BadRequestException) as exc_info:
         await service.update_booking(uuid4(), command)
+    assert "At most 2" in str(exc_info.value.detail)
+    assert getattr(exc_info.value, "error_code", None) is None
 
 
 @pytest.mark.asyncio
@@ -130,8 +139,13 @@ async def test_update_booking_slot_overlap_conflict():
     room_id = new_uuid()
     stub = StubBookingRepository(has_overlap=True)
     service = _booking_service(stub)
-    with pytest.raises(BadRequestException, match="scheduling conflict"):
+    with pytest.raises(ConflictErrorException) as exc_info:
         await service.update_booking(uuid4(), make_update_booking_command(facility_id=room_id))
+    exc = exc_info.value
+    assert exc.status_code == 409
+    assert exc.error_code == "FACILITY_BOOKING_SCHEDULING_CONFLICT"
+    assert exc.context == {"facility_id": str(room_id)}
+    assert "scheduling conflict" in str(exc.detail)
 
 
 @pytest.mark.asyncio
@@ -139,8 +153,13 @@ async def test_update_booking_blackout_conflict():
     room_id = new_uuid()
     stub = StubBookingRepository(has_overlap=False)
     service = _booking_service(stub, blackout_stub=StubRoomBlackoutRepository(has_overlap=True))
-    with pytest.raises(BadRequestException, match="closed for the selected time"):
+    with pytest.raises(BadRequestException) as exc_info:
         await service.update_booking(uuid4(), make_update_booking_command(facility_id=room_id))
+    exc = exc_info.value
+    assert exc.status_code == 400
+    assert exc.error_code == "FACILITY_BOOKING_ROOM_BLACKOUT"
+    assert exc.context == {"facility_id": str(room_id)}
+    assert "closed for the selected time" in str(exc.detail)
 
 
 @pytest.mark.asyncio
@@ -249,20 +268,32 @@ async def test_create_booking_rejects_when_booker_not_ministry_member(monkeypatc
 @pytest.mark.asyncio
 async def test_create_booking_slot_overlap_conflict(monkeypatch):
     _user_ctx(monkeypatch)
+    room_id = new_uuid()
     service = _booking_service(StubBookingRepository(has_overlap=True))
-    with pytest.raises(BadRequestException, match="scheduling conflict"):
-        await service.create_booking(make_create_booking_command())
+    with pytest.raises(ConflictErrorException) as exc_info:
+        await service.create_booking(make_create_booking_command(facility_id=room_id))
+    exc = exc_info.value
+    assert exc.status_code == 409
+    assert exc.error_code == "FACILITY_BOOKING_SCHEDULING_CONFLICT"
+    assert exc.context == {"facility_id": str(room_id)}
+    assert "scheduling conflict" in str(exc.detail)
 
 
 @pytest.mark.asyncio
 async def test_create_booking_blackout_conflict(monkeypatch):
     _user_ctx(monkeypatch)
+    room_id = new_uuid()
     service = _booking_service(
         StubBookingRepository(has_overlap=False),
         blackout_stub=StubRoomBlackoutRepository(has_overlap=True),
     )
-    with pytest.raises(BadRequestException, match="closed for the selected time"):
-        await service.create_booking(make_create_booking_command())
+    with pytest.raises(BadRequestException) as exc_info:
+        await service.create_booking(make_create_booking_command(facility_id=room_id))
+    exc = exc_info.value
+    assert exc.status_code == 400
+    assert exc.error_code == "FACILITY_BOOKING_ROOM_BLACKOUT"
+    assert exc.context == {"facility_id": str(room_id)}
+    assert "closed for the selected time" in str(exc.detail)
 
 
 @pytest.mark.asyncio
@@ -278,5 +309,43 @@ async def test_create_booking_max_rooms_exceeded(monkeypatch):
         for idx, room_id in enumerate(room_ids)
     ]
     service = _booking_service(StubBookingRepository(), rental)
-    with pytest.raises(BadRequestException, match="At most 2"):
+    with pytest.raises(BadRequestException) as exc_info:
         await service.create_booking(command)
+    assert "At most 2" in str(exc_info.value.detail)
+    assert getattr(exc_info.value, "error_code", None) is None
+
+
+@pytest.mark.asyncio
+async def test_create_booking_invalid_time_range_has_no_error_code(monkeypatch):
+    _user_ctx(monkeypatch)
+    command = make_create_booking_command(
+        start_at=datetime(2026, 5, 1, 14, 0, tzinfo=timezone.utc),
+        end_at=datetime(2026, 5, 1, 10, 0, tzinfo=timezone.utc),
+    )
+    service = _booking_service(StubBookingRepository())
+    with pytest.raises(BadRequestException) as exc_info:
+        await service.create_booking(command)
+    assert "end_at" in str(exc_info.value.detail)
+    assert getattr(exc_info.value, "error_code", None) is None
+
+
+@pytest.mark.asyncio
+async def test_create_booking_scheduling_conflict_is_first_fail(monkeypatch):
+    _user_ctx(monkeypatch)
+    first_room_id = new_uuid()
+    second_room_id = new_uuid()
+
+    class FirstRoomOverlapRepository(StubBookingRepository):
+        async def has_confirmed_slot_overlap(self, facility_id, start_at, end_at, exclude_booking_id=None):
+            return facility_id == first_room_id
+
+    command = make_create_booking_command(facility_id=first_room_id)
+    command.rooms = [
+        BookingRoomLineCommand(facility_id=first_room_id, sequence=0),
+        BookingRoomLineCommand(facility_id=second_room_id, sequence=1),
+    ]
+    service = _booking_service(FirstRoomOverlapRepository())
+    with pytest.raises(ConflictErrorException) as exc_info:
+        await service.create_booking(command)
+    assert exc_info.value.context == {"facility_id": str(first_room_id)}
+    assert exc_info.value.error_code == "FACILITY_BOOKING_SCHEDULING_CONFLICT"
