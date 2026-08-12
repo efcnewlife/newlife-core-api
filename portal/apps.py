@@ -99,6 +99,10 @@ def _setup_exception_handlers(application: FastAPI) -> None:
             await session.rollback()
         content = defaultdict()
         content["detail"] = exc.detail
+        if exc.error_code:
+            content["error_code"] = exc.error_code
+        if exc.context:
+            content["context"] = exc.context
         if settings.is_dev:
             content["debug_detail"] = exc.debug_detail
             content["url"] = str(request.url)
