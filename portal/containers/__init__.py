@@ -49,6 +49,7 @@ class RootContainer(containers.DeclarativeContainer):
     microsoft_auth_service = admin.microsoft_auth_service
     member_web_app_registry = admin.member_web_app_registry
     locale_service = admin.locale_service
+    setting_service = admin.setting_service
     permission_service = admin.permission_service
     resource_service = admin.resource_service
     role_service = admin.role_service

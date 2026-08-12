@@ -11,6 +11,7 @@ from portal.application.auth.microsoft_auth_service import MicrosoftAuthService
 from portal.application.auth.refresh_token_service import RefreshTokenService
 from portal.application.auth.user_read_service import UserReadService
 from portal.application.locale.locale_service import LocaleService
+from portal.application.system.setting_service import SettingService
 from portal.application.rbac.permission_service import PermissionService
 from portal.application.rbac.resource_service import ResourceService
 from portal.application.rbac.role_service import RoleService
@@ -18,11 +19,13 @@ from portal.application.rbac.verb_service import VerbService
 from portal.infrastructure.cache.locale_cache import LocaleCache
 from portal.infrastructure.cache.permission_cache import PermissionCache
 from portal.infrastructure.cache.role_cache import RoleCache
+from portal.infrastructure.cache.setting_cache import SettingCache
 from portal.infrastructure.cache.verb_list_cache import VerbListCache
 from portal.infrastructure.persistence.repositories.locale_repository import LocaleRepository
 from portal.infrastructure.persistence.repositories.permission_repository import PermissionRepository
 from portal.infrastructure.persistence.repositories.resource_repository import ResourceRepository
 from portal.infrastructure.persistence.repositories.role_repository import RoleRepository
+from portal.infrastructure.persistence.repositories.system.setting_repository import SettingRepository
 from portal.infrastructure.persistence.repositories.user_repository import UserRepository
 from portal.infrastructure.persistence.repositories.verb_repository import VerbRepository
 from portal.libs.authorization.permission_checker import PermissionChecker
@@ -65,6 +68,20 @@ class AdminContainer(containers.DeclarativeContainer):
         LocaleService,
         locale_repository=locale_repository,
         locale_cache=locale_cache,
+    )
+
+    setting_repository = providers.Factory(
+        SettingRepository,
+        session=core.request_session,
+    )
+    setting_cache = providers.Factory(
+        SettingCache,
+        redis_client=core.redis_client,
+    )
+    setting_service = providers.Factory(
+        SettingService,
+        setting_repository=setting_repository,
+        setting_cache=setting_cache,
     )
 
     permission_repository = providers.Factory(
@@ -163,7 +180,11 @@ class AdminContainer(containers.DeclarativeContainer):
         redis_client=core.redis_client,
     )
 
-    facility = providers.Container(FacilityContainer, core=core)
+    facility = providers.Container(
+        FacilityContainer,
+        core=core,
+        setting_service=setting_service,
+    )
     org = providers.Container(OrgContainer, core=core)
     content = providers.Container(
         ContentContainer,

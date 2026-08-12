@@ -19,6 +19,7 @@ class Resource(Enum):
     SYSTEM_ROLE = "system:role"
     SYSTEM_USER = "system:user"
     SYSTEM_LOG = "system:log"
+    SYSTEM_SETTING = "system:setting"
     FACILITY_ROOM = "facility:room"
     FACILITY_ROOM_SLOT_TEMPLATE = "facility:room_slot_template"
     FACILITY_ROOM_BLACKOUT = "facility:room_blackout"
@@ -69,6 +70,7 @@ class Permission:
     SYSTEM_ROLE = PermissionCode(Resource.SYSTEM_ROLE)
     SYSTEM_USER = PermissionCode(Resource.SYSTEM_USER)
     SYSTEM_LOG = PermissionCode(Resource.SYSTEM_LOG)
+    SYSTEM_SETTING = PermissionCode(Resource.SYSTEM_SETTING)
     FACILITY_ROOM = PermissionCode(Resource.FACILITY_ROOM)
     FACILITY_ROOM_SLOT_TEMPLATE = PermissionCode(Resource.FACILITY_ROOM_SLOT_TEMPLATE)
     FACILITY_ROOM_BLACKOUT = PermissionCode(Resource.FACILITY_ROOM_BLACKOUT)

@@ -22,6 +22,8 @@ from tests.fixtures.facility.stubs import (
     StubRoomRepository,
     StubRoomSlotTemplateRepository,
 )
+from tests.fixtures.system.stubs import StubSettingService
+
 
 
 class _StubRoomRepository(StubRoomRepository):
@@ -97,6 +99,7 @@ async def test_availability_excludes_blackout_overlap():
         StubBookingRepository(has_overlap=False),
         StubMinistryRepository(),
         StubRoomBlackoutRepository(for_room_day=blackouts),
+        StubSettingService(),
     )
     # 2026-07-20 is Monday
     result = await service.get_rooms_availability(

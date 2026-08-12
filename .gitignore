@@ -3,6 +3,7 @@
 .cursor
 .tmp
 .scratch
+example
 temp
 docs/*
 !docs/adr/

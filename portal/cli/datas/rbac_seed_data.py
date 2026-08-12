@@ -290,13 +290,35 @@ resources = [
         "pid": SYSTEM_PARENT_ID,
     },
     {
+        "code": "system:setting",
+        "name": "System Settings",
+        "key": "SYSTEM_SETTING",
+        "icon": "MdSettings",
+        "path": "/system/settings",
+        "type": ResourceType.SYSTEM.value,
+        "sequence": 9,
+        "is_visible": True,
+        "translations": _with_locale_values(
+            {"zh-TW": "系統設定", "zh-CN": "系统设置", "en": "System Settings"}
+        ),
+        "description": "Manage system runtime settings",
+        "description_translations": _with_locale_descriptions(
+            {
+                "zh-TW": "管理系統動態設定",
+                "zh-CN": "管理系统动态设置",
+                "en": "Manage system runtime settings",
+            }
+        ),
+        "pid": SYSTEM_PARENT_ID,
+    },
+    {
         "code": "content:file",
         "name": "File",
         "key": "CONTENT_FILE",
         "icon": "MdPermMedia",
         "path": "/content/files",
         "type": ResourceType.GENERAL.value,
-        "sequence": 9,
+        "sequence": 10,
         "translations": _with_locale_values(
             {"zh-TW": "檔案管理", "zh-CN": "文件管理", "en": "File"}
         ),

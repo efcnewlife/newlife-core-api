@@ -1,9 +1,10 @@
 """
 Facility booking repository.
 """
+import json
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Optional
+from typing import Any, Optional
 from uuid import UUID
 
 import sqlalchemy as sa
@@ -17,7 +18,6 @@ from portal.application.facility.results import (
 )
 from portal.domain.facility.constants import BookingSlotStatus, BookingStatus
 from portal.libs.database import Session
-from portal.libs.database.execute_result import affected_rows
 from portal.models import (
     AuthUser,
     AuthUserProfile,
@@ -28,6 +28,7 @@ from portal.models import (
     FacilityRoom,
     FacilityRoomTranslation,
 )
+from portal.models.mixins.context import apply_audit_fields_to_rows
 
 
 class BookingRepository:
@@ -38,6 +39,13 @@ class BookingRepository:
 
     def __init__(self, session: Session):
         self._session = session
+
+    @staticmethod
+    def _serialize_jsonb(value: Any) -> Any:
+        """asyncpg JSONB bind expects a JSON text string, not a raw Python dict/list."""
+        if value is None or isinstance(value, str):
+            return value
+        return json.dumps(value)
 
     @classmethod
     def _display_name_expr(cls):
@@ -124,7 +132,63 @@ class BookingRepository:
             .offset(model.page * model.page_size)
             .fetchpages(no_order_by=False, as_model=BookingListItemResult)
         )
-        return items or [], count
+        items = items or []
+        if items:
+            names_by_booking_id = await self._fetch_facility_names_by_booking_ids(
+                [item.id for item in items],
+                locale_id,
+            )
+            items = [
+                item.model_copy(
+                    update={
+                        "facility_names": names_by_booking_id.get(item.id)
+                        or ([item.facility_name] if item.facility_name else []),
+                    }
+                )
+                for item in items
+            ]
+        return items, count
+
+    async def _fetch_facility_names_by_booking_ids(
+        self,
+        booking_ids: list[UUID],
+        locale_id: Optional[UUID],
+    ) -> dict[UUID, list[str]]:
+        if not booking_ids:
+            return {}
+        room_name = FacilityRoom.code
+        if locale_id:
+            room_name = sa.func.coalesce(
+                sa.select(FacilityRoomTranslation.name)
+                .where(
+                    FacilityRoomTranslation.room_id == FacilityRoom.id,
+                    FacilityRoomTranslation.locale_id == locale_id,
+                )
+                .limit(1)
+                .scalar_subquery(),
+                FacilityRoom.code,
+            )
+        rows = await (
+            self._session.select(
+                FacilityBookingRoom.facility_booking_id,
+                room_name.label("facility_name"),
+            )
+            .select_from(FacilityBookingRoom)
+            .join(FacilityRoom, FacilityRoom.id == FacilityBookingRoom.facility_id)
+            .where(FacilityBookingRoom.facility_booking_id.in_(booking_ids))
+            .order_by(
+                FacilityBookingRoom.facility_booking_id.asc(),
+                FacilityBookingRoom.sequence.asc(),
+            )
+            .fetch()
+        )
+        result: dict[UUID, list[str]] = {}
+        for row in rows or []:
+            booking_id = row["facility_booking_id"]
+            name = row["facility_name"]
+            if name:
+                result.setdefault(booking_id, []).append(str(name))
+        return result
 
     async def get_detail(self, booking_id: UUID, locale_id: Optional[UUID]) -> Optional[BookingDetailResult]:
         row = await (
@@ -276,14 +340,14 @@ class BookingRepository:
                 cancel_reason=cancel_reason,
             )
             .where(FacilityBooking.id == booking_id)
-            .execute_rowcount()
+            .execute()
         )
         if cancel_slots:
             await (
                 self._session.update(FacilityBookingSlot)
                 .values(status=BookingSlotStatus.CANCELLED.value)
                 .where(FacilityBookingSlot.facility_booking_id == booking_id)
-                .execute_rowcount()
+                .execute()
             )
 
     async def update_booking_header(
@@ -295,7 +359,7 @@ class BookingRepository:
             self._session.update(FacilityBooking)
             .values(**values)
             .where(FacilityBooking.id == booking_id)
-            .execute_rowcount()
+            .execute()
         )
 
     async def replace_booking_rooms(
@@ -306,10 +370,19 @@ class BookingRepository:
         await (
             self._session.delete(FacilityBookingRoom)
             .where(FacilityBookingRoom.facility_booking_id == booking_id)
-            .execute_rowcount()
+            .execute()
         )
         if room_rows:
-            await self._session.insert(FacilityBookingRoom).values(room_rows).execute_rowcount()
+            prepared_rows = apply_audit_fields_to_rows(
+                [
+                    {
+                        **row,
+                        "applicability": self._serialize_jsonb(row.get("applicability")),
+                    }
+                    for row in room_rows
+                ]
+            )
+            await self._session.insert(FacilityBookingRoom).values(prepared_rows).execute()
 
     async def replace_booking_slots(
         self,
@@ -319,10 +392,11 @@ class BookingRepository:
         await (
             self._session.delete(FacilityBookingSlot)
             .where(FacilityBookingSlot.facility_booking_id == booking_id)
-            .execute_rowcount()
+            .execute()
         )
         if slot_rows:
-            await self._session.insert(FacilityBookingSlot).values(slot_rows).execute_rowcount()
+            prepared_slot_rows = apply_audit_fields_to_rows(slot_rows)
+            await self._session.insert(FacilityBookingSlot).values(prepared_slot_rows).execute()
 
     async def insert_booking(self, payload: dict) -> None:
         await self._session.insert(FacilityBooking).values(payload).execute()

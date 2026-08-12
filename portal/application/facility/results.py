@@ -311,6 +311,11 @@ class BookingRoomLineResult(UUIDBaseModel):
     is_default: Optional[bool] = Field(default=None)
     line_subtotal: Optional[Decimal] = Field(default=None)
 
+    @field_validator("applicability", mode="before")
+    @classmethod
+    def parse_applicability_from_db(cls, value: Any) -> Optional[dict]:
+        return coerce_applicability_from_db(value)
+
 
 class BookingSlotResult(UUIDBaseModel):
     """Booking slot row."""
@@ -329,6 +334,7 @@ class BookingListItemResult(UUIDBaseModel):
     user_display_name: Optional[str] = Field(default=None)
     facility_id: Optional[UUID] = Field(default=None)
     facility_name: Optional[str] = Field(default=None)
+    facility_names: list[str] = Field(default_factory=list)
     booking_type: str = Field(...)
     start_at: datetime = Field(...)
     end_at: datetime = Field(...)

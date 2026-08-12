@@ -1,0 +1,3 @@
+"""
+System test fixtures package.
+"""

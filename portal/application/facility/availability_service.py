@@ -13,6 +13,7 @@ from portal.application.facility.results import (
     RoomAvailabilityResult,
     TimeSlotResult,
 )
+from portal.application.system.setting_service import SettingService
 from portal.exceptions.responses import BadRequestException, ForbiddenException
 from portal.infrastructure.persistence.repositories.facility.booking_repository import BookingRepository
 from portal.infrastructure.persistence.repositories.facility.room_repository import RoomRepository
@@ -28,8 +29,6 @@ from portal.libs.contexts.request_context import RequestContext, get_request_con
 from portal.libs.contexts.user_context import UserContext, get_user_context
 from portal.libs.tracing.distributed_trace import distributed_trace
 
-LOCAL_TZ = ZoneInfo("America/Toronto")
-
 
 class AvailabilityService:
     """Compute room availability for a calendar date."""
@@ -41,12 +40,14 @@ class AvailabilityService:
         booking_repository: BookingRepository,
         ministry_repository: MinistryRepository,
         room_blackout_repository: RoomBlackoutRepository,
+        setting_service: SettingService,
     ):
         self._room_repository = room_repository
         self._slot_template_repository = room_slot_template_repository
         self._booking_repository = booking_repository
         self._ministry_repository = ministry_repository
         self._blackout_repository = room_blackout_repository
+        self._setting_service = setting_service
         self._req_ctx: Optional[RequestContext] = get_request_context()
         self._user_ctx: Optional[UserContext] = get_user_context()
 
@@ -68,17 +69,18 @@ class AvailabilityService:
             raise ForbiddenException(detail="User is not a ministry owner")
 
     @staticmethod
-    def _combine_local(day: date, value: time) -> datetime:
-        return datetime.combine(day, value, tzinfo=LOCAL_TZ).astimezone(timezone.utc)
+    def _combine_local(day: date, value: time, tz: ZoneInfo) -> datetime:
+        return datetime.combine(day, value, tzinfo=tz).astimezone(timezone.utc)
 
     @staticmethod
-    def _format_local(dt: datetime) -> str:
-        local = dt.astimezone(LOCAL_TZ)
+    def _format_local(dt: datetime, tz: ZoneInfo) -> str:
+        local = dt.astimezone(tz)
         return local.strftime("%H:%M")
 
     @distributed_trace()
     async def get_rooms_availability(self, command: RoomAvailabilityQueryCommand) -> RoomAvailabilityListResult:
         await self._validate_ministry_gate(command.ministry_id)
+        local_tz = await self._setting_service.get_facility_timezone()
         day = command.target_date
         day_of_week = day.weekday()
         rooms = await self._room_repository.list_active(self._resolved_locale_id())
@@ -95,12 +97,12 @@ class AvailabilityService:
                 if template.effective_to and day > template.effective_to:
                     continue
                 duration = max(15, int(template.slot_duration_minutes or 60))
-                cursor = self._combine_local(day, template.start_time)
-                window_end = self._combine_local(day, template.end_time)
+                cursor = self._combine_local(day, template.start_time, local_tz)
+                window_end = self._combine_local(day, template.end_time, local_tz)
                 while cursor + timedelta(minutes=duration) <= window_end:
                     slot_end = cursor + timedelta(minutes=duration)
-                    local_start = cursor.astimezone(LOCAL_TZ).time()
-                    local_end = slot_end.astimezone(LOCAL_TZ).time()
+                    local_start = cursor.astimezone(local_tz).time()
+                    local_end = slot_end.astimezone(local_tz).time()
                     if self._blackout_repository.slot_overlaps_blackouts(blackouts, local_start, local_end):
                         cursor = slot_end
                         continue
@@ -111,10 +113,10 @@ class AvailabilityService:
                     )
                     if not overlap:
                         slot = TimeSlotResult(
-                            start=self._format_local(cursor),
-                            end=self._format_local(slot_end),
+                            start=self._format_local(cursor, local_tz),
+                            end=self._format_local(slot_end, local_tz),
                         )
-                        local_hour = cursor.astimezone(LOCAL_TZ).hour
+                        local_hour = cursor.astimezone(local_tz).hour
                         if local_hour < 12:
                             am_slots.append(slot)
                         else:

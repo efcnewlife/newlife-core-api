@@ -13,6 +13,7 @@ from .seed_ministry_type import seed_ministry_types_process
 from .seed_target_audience import seed_target_audiences_process
 from .seed_facility_rental import seed_facility_rental_process
 from .seed_facility_slots import seed_facility_slots_process
+from .seed_system_settings import seed_system_settings_process
 from .sync_microsoft_users import sync_microsoft_users_process
 
 
@@ -130,6 +131,12 @@ def seed_facility_rental_cmd(force: bool, reset: bool):
 def seed_facility_slots_cmd(force: bool):
     """Seed demo room slot templates and blackouts for existing rooms."""
     seed_facility_slots_process(force=force)
+
+
+@cli.command(name="seed-system-settings")
+def seed_system_settings_cmd():
+    """Seed system settings (insert-if-missing; never overwrite existing values)."""
+    seed_system_settings_process()
 
 
 @cli.command(name="sync-microsoft-users")

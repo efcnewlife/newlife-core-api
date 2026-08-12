@@ -58,6 +58,7 @@ from .org import (
     OrgTargetAudienceTranslation,
 )
 from .system_locale import SystemLocale
+from .system_setting import SystemSetting
 
 __all__ = [
     # audit
@@ -79,6 +80,8 @@ __all__ = [
     "AuthRolePermission",
     # locale
     "SystemLocale",
+    # system setting
+    "SystemSetting",
     # auth
     "AuthDevice",
     "AuthRefreshToken",

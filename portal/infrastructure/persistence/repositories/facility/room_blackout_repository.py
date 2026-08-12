@@ -15,8 +15,6 @@ from portal.libs.database import Session
 from portal.libs.database.execute_result import affected_rows
 from portal.models import FacilityRoomBlackout
 
-LOCAL_TZ = ZoneInfo("America/Toronto")
-
 
 class RoomBlackoutRepository:
     """SQLAlchemy-backed room blackout repository."""
@@ -274,10 +272,11 @@ class RoomBlackoutRepository:
         facility_id: UUID,
         start_at: datetime,
         end_at: datetime,
+        tz: ZoneInfo,
     ) -> bool:
-        """Return True when [start_at, end_at) overlaps an active blackout in Toronto local time."""
-        local_start = start_at.astimezone(LOCAL_TZ)
-        local_end = end_at.astimezone(LOCAL_TZ)
+        """Return True when [start_at, end_at) overlaps an active blackout in the given local zone."""
+        local_start = start_at.astimezone(tz)
+        local_end = end_at.astimezone(tz)
         if local_start.date() != local_end.date():
             # Cross-midnight bookings are out of scope; treat as overlapping any blackout on either day.
             days = {local_start.date(), local_end.date()}

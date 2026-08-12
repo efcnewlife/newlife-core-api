@@ -14,6 +14,7 @@ from .facility import router as facility_router
 from .ministry import router as ministry_router
 from .org import router as org_router
 from .content import router as content_router
+from .system import router as system_router
 
 router = AuthRouter(
     dependencies=[
@@ -32,3 +33,4 @@ router.include_router(facility_router, prefix="/facility")
 router.include_router(ministry_router, prefix="/ministry")
 router.include_router(org_router, prefix="/org")
 router.include_router(content_router, prefix="/content")
+router.include_router(system_router, prefix="/system")

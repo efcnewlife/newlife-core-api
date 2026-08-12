@@ -31,6 +31,7 @@ class FacilityContainer(containers.DeclarativeContainer):
     """Facility booking admin services and repositories."""
 
     core = providers.DependenciesContainer()
+    setting_service = providers.Dependency()
 
     room_repository = providers.Factory(
         RoomRepository,
@@ -100,6 +101,7 @@ class FacilityContainer(containers.DeclarativeContainer):
         rental_repository=rental_repository,
         ministry_repository=ministry_repository,
         room_blackout_repository=room_blackout_repository,
+        setting_service=setting_service,
     )
     availability_service = providers.Factory(
         AvailabilityService,
@@ -108,6 +110,7 @@ class FacilityContainer(containers.DeclarativeContainer):
         booking_repository=booking_repository,
         ministry_repository=ministry_repository,
         room_blackout_repository=room_blackout_repository,
+        setting_service=setting_service,
     )
     override_log_service = providers.Factory(
         OverrideLogService,
