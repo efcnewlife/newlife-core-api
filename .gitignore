@@ -4,8 +4,9 @@
 .tmp
 .scratch
 temp
-docs
-!docs/adr
+docs/*
+!docs/adr/
+!docs/agents/
 
 ### Python template
 # Byte-compiled / optimized / DLL files
