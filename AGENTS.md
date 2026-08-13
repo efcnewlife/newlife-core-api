@@ -1,4 +1,4 @@
-# AGENT.md — AI Entry Guide for newlife-core-api
+# AGENTS.md — AI Entry Guide for newlife-core-api
 
 This document helps AI agents quickly understand the **NewLife Core API** codebase: architecture, conventions, and where to make changes. For diagrams and extended narrative, see [`README.md`](README.md). For enforceable coding rules, see [`.cursor/rules/standard.mdc`](.cursor/rules/standard.mdc).
 
