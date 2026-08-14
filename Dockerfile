@@ -1,29 +1,23 @@
 FROM python:3.14-alpine
+
+COPY --from=ghcr.io/astral-sh/uv:0.12.4 /uv /uvx /bin/
+
 # .build-deps build-base libffi-dev git rust cargo openssl-dev
 RUN apk add --update --no-cache --virtual .build-deps build-base libffi-dev
 
 ENV \
   PYTHONUNBUFFERED=1 \
   PYTHONDONTWRITEBYTECODE=1 \
-  PIP_DISABLE_PIP_VERSION_CHECK=on \
-  PIP_DEFAULT_TIMEOUT=100 \
-  POETRY_VERSION=2.1.4 \
-  POETRY_HOME="/opt/poetry" \
-  POETRY_NO_INTERACTION=1 \
-  POETRY_VIRTUALENVS_CREATE=false \
-  POETRY_CACHE_DIR="/opt/poetry_cache"
-
-ENV PATH="$POETRY_HOME/bin:$PATH"
-
-RUN pip install --upgrade pip \
-  && pip install --no-cache-dir "poetry==$POETRY_VERSION"
+  UV_COMPILE_BYTECODE=1 \
+  UV_LINK_MODE=copy \
+  UV_PYTHON_DOWNLOADS=never \
+  PATH="/app/.venv/bin:$PATH"
 
 WORKDIR /app
 
 COPY . /app/
 
-RUN poetry config virtualenvs.create false \
-  && poetry install --without dev --no-ansi --no-root
+RUN uv sync --frozen --no-dev --no-install-project
 
 RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
 USER appuser

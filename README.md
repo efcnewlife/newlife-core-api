@@ -312,13 +312,13 @@ flowchart LR
 - **Authentication**: JWT
 - **Authorization**: RBAC (Role-Based Access Control)
 - **Containerization**: Docker
-- **Package Manager**: Poetry
+- **Package Manager**: uv
 - **Database Migration**: Alembic
-- **Python Version**: 3.13+
+- **Python Version**: 3.14+
 
 ## Prerequisites
 
-- Python 3.13+
+- Python 3.14+
 - PostgreSQL 17
 - Redis 7
 - Docker
@@ -327,35 +327,29 @@ flowchart LR
 
 > All setup commands should be run in the root directory of the project.
 
-### 1. Install Poetry
+### 1. Install uv
 
-[Poetry Installation Guide](https://python-poetry.org/docs/#system-requirements)
+[uv installation](https://docs.astral.sh/uv/getting-started/installation/)
 
-### 2. Install pyenv (Recommended | Optional)
+This project requires uv `>=0.12.4,<0.13` (see `[tool.uv] required-version`).
+
+### 2. Install pyenv (Optional)
 
 [pyenv Installation Guide](https://github.com/pyenv/pyenv#installation)
 
-#### Install Python 3.13
+uv reads `.python-version` (`3.14`). pyenv is optional interpreter management only.
+
+#### Install Python 3.14
 
 ```bash
-pyenv install 3.13.x  # Replace x with the version you want to install
-pyenv local 3.13.x   # Replace x with the version you installed
+pyenv install 3.14.x  # Replace x with the version you want to install
+pyenv local 3.14.x   # Replace x with the version you installed
 ```
 
 ### 3. Install Dependencies
 
-#### Using pyenv
-
 ```bash
-pyenv local 3.13.x   # Replace x with the version you installed
-poetry env use 3.13.x # Replace x with the version you installed
-poetry install
-```
-
-#### Without pyenv
-
-```bash
-poetry install
+uv sync
 ```
 
 ### 4. Environment Setup
@@ -409,13 +403,13 @@ docker compose up -d
 > Refer to [Alembic(First Migration)](https://alembic.sqlalchemy.org/en/latest/tutorial.html#running-our-first-migration)
 
 ```shell
-poetry run alembic upgrade head
+uv run alembic upgrade head
 ```
 
 #### Create Migration
 
 ```shell
-poetry run alembic revision --autogenerate -m "{your message}"
+uv run alembic revision --autogenerate -m "{your message}"
 ```
 
 #### Upgrade Migration
@@ -423,7 +417,7 @@ poetry run alembic revision --autogenerate -m "{your message}"
 > Refer to [Alembic(Partial Revision Identifiers)](https://alembic.sqlalchemy.org/en/latest/tutorial.html#partial-revision-identifiers)
 
 ```shell
-poetry run alembic upgrade {revision}
+uv run alembic upgrade {revision}
 ```
 
 #### Downgrade Migration
@@ -431,18 +425,18 @@ poetry run alembic upgrade {revision}
 > Refer to [Alembic(Relative Migration Identifiers)](https://alembic.sqlalchemy.org/en/latest/tutorial.html#relative-migration-identifiers)
 
 ```shell
-poetry run alembic downgrade -1
+uv run alembic downgrade -1
 ```
 or
 ```shell
-poetry run alembic downgrade {revision}
+uv run alembic downgrade {revision}
 ```
 
 #### Get Current Version
 
 > Refer to [Alembic(Getting Information)](https://alembic.sqlalchemy.org/en/latest/tutorial.html#getting-information)
 ```shell
-poetry run alembic current
+uv run alembic current
 ```
 
 #### Show Migration History
@@ -450,11 +444,11 @@ poetry run alembic current
 > Refer to [Alembic(Viewing History Ranges)](https://alembic.sqlalchemy.org/en/latest/tutorial.html#viewing-history-ranges)
 
 ```shell
-poetry run alembic history
+uv run alembic history
 ```
 or
 ```shell
-poetry run alembic history --verbose
+uv run alembic history --verbose
 ```
 
 ### 7. Project initialization (CLI)
@@ -462,7 +456,7 @@ poetry run alembic history --verbose
 After migrations, seed baseline data and create the first admin account. Run all commands from the project root:
 
 ```shell
-poetry run python -m portal.cli.main --help
+uv run python -m portal.cli.main --help
 ```
 
 #### Recommended order (fresh database)
@@ -471,24 +465,24 @@ Prerequisites: `.env` configured, Docker services running, and `alembic upgrade 
 
 ```shell
 # 1. Supported locales (en, zh-TW, zh-CN)
-poetry run python -m portal.cli.main init-locales
+uv run python -m portal.cli.main init-locales
 
 # 2. RBAC catalog (verbs, resources, permissions, admin role)
-poetry run python -m portal.cli.main init-rbac
+uv run python -m portal.cli.main init-rbac
 
 # 3. First portal admin (interactive prompts)
-poetry run python -m portal.cli.main create-superuser
+uv run python -m portal.cli.main create-superuser
 
 # 4. Optional: org position seed data
-poetry run python -m portal.cli.main seed-positions
+uv run python -m portal.cli.main seed-positions
 
 # 5. Optional: ministry catalog seed data (before creating ministries)
-poetry run python -m portal.cli.main seed-ministry-types
-poetry run python -m portal.cli.main seed-target-audiences
+uv run python -m portal.cli.main seed-ministry-types
+uv run python -m portal.cli.main seed-target-audiences
 
 # 6. Optional: facility rooms/rates, then demo slot templates + blackouts
-poetry run python -m portal.cli.main seed-facility-rental
-poetry run python -m portal.cli.main seed-facility-slots
+uv run python -m portal.cli.main seed-facility-rental
+uv run python -m portal.cli.main seed-facility-slots
 ```
 
 | Command | Purpose |
@@ -514,10 +508,10 @@ Notes:
 
 ```shell
 # development (with reload)
-poetry run uvicorn portal.main:app --reload
+uv run uvicorn portal.main:app --reload
 
 # or
-poetry run python -m portal
+uv run python -m portal
 ```
 
 ### Output example
