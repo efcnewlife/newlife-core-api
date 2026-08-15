@@ -1,6 +1,7 @@
 """
 Member web app registration (Origin -> app_code).
 """
+
 from dataclasses import dataclass
 from typing import Optional
 from urllib.parse import urlparse

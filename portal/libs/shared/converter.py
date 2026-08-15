@@ -1,28 +1,20 @@
 """
 Converter class for converting various data types.
 """
+
 import re
 import uuid
-from datetime import datetime, date
+from datetime import date, datetime
 from decimal import Decimal
-from typing import TypeVar, Union, Any
+from typing import Any, TypeVar, Union
 
-from portal.exceptions.validation_errors import (
-    IntError,
-    FloatError,
-    BoolError,
-    DateError,
-    DateTimeError,
-    UUIDError,
-    ListError,
-)
+from portal.exceptions.validation_errors import BoolError, DateError, DateTimeError, FloatError, IntError, ListError, UUIDError
 from portal.libs.shared import validator
 
 T = TypeVar('T')
 
 
 class Converter:
-
     @classmethod
     def to_int(cls, value: Union[str, int, float], default: int = None, raise_error: bool = False):
         """
@@ -162,6 +154,4 @@ class Converter:
         return value
 
 
-__all__ = [
-    "Converter",
-]
+__all__ = ["Converter"]

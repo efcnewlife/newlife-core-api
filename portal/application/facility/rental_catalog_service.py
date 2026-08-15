@@ -1,6 +1,7 @@
 """
 Facility rental catalog application service (discounts, surcharges, policy).
 """
+
 import uuid
 from uuid import UUID
 
@@ -48,13 +49,7 @@ class RentalCatalogService:
         rule_id = uuid.uuid4()
         try:
             await self._repository.insert_discount_rule(
-                {
-                    "id": rule_id,
-                    "code": command.code,
-                    "percent_off": command.percent_off,
-                    "is_active": command.is_active,
-                    "description": command.description,
-                }
+                {"id": rule_id, "code": command.code, "percent_off": command.percent_off, "is_active": command.is_active, "description": command.description}
             )
         except ApiBaseException:
             raise
@@ -67,13 +62,7 @@ class RentalCatalogService:
     @distributed_trace()
     async def update_discount_rule(self, rule_id: UUID, command: UpdateDiscountRuleCommand) -> None:
         affected = await self._repository.update_discount_rule(
-            rule_id,
-            {
-                "code": command.code,
-                "percent_off": command.percent_off,
-                "is_active": command.is_active,
-                "description": command.description,
-            },
+            rule_id, {"code": command.code, "percent_off": command.percent_off, "is_active": command.is_active, "description": command.description}
         )
         if affected == 0:
             raise NotFoundException(detail=f"Discount rule {rule_id} not found")
@@ -156,12 +145,7 @@ class RentalCatalogService:
     @distributed_trace()
     async def update_policy_setting(self, setting_id: UUID, command: UpdatePolicySettingCommand) -> None:
         affected = await self._repository.update_policy_setting(
-            setting_id,
-            {
-                "amount": command.amount,
-                "currency": command.currency,
-                "is_active": command.is_active,
-            },
+            setting_id, {"amount": command.amount, "currency": command.currency, "is_active": command.is_active}
         )
         if affected == 0:
             raise NotFoundException(detail=f"Policy setting {setting_id} not found")

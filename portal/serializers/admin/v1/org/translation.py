@@ -1,6 +1,7 @@
 """
 Org translation serializers.
 """
+
 from typing import Optional
 from uuid import UUID
 
@@ -24,11 +25,7 @@ class AdminOrgTranslationItem(BaseModel):
     name: str = Field(..., description="Name")
     description: Optional[str] = Field(None, description="Description")
     remark: Optional[str] = Field(None, description="Remark")
-    schedule_note: Optional[str] = Field(
-        None,
-        serialization_alias="scheduleNote",
-        description="Schedule supplement note",
-    )
+    schedule_note: Optional[str] = Field(None, serialization_alias="scheduleNote", description="Schedule supplement note")
 
 
 class AdminPositionTranslationInput(BaseModel):
@@ -49,9 +46,7 @@ class AdminPositionTranslationItem(BaseModel):
     remark: Optional[str] = Field(None, description="Remark")
 
 
-def validate_unique_org_locale_ids(
-    translations: Optional[list[AdminOrgTranslationInput]],
-) -> Optional[list[AdminOrgTranslationInput]]:
+def validate_unique_org_locale_ids(translations: Optional[list[AdminOrgTranslationInput]]) -> Optional[list[AdminOrgTranslationInput]]:
     if not translations:
         return translations
     locale_ids = [item.locale_id for item in translations]
@@ -60,9 +55,7 @@ def validate_unique_org_locale_ids(
     return translations
 
 
-def validate_unique_position_locale_ids(
-    translations: Optional[list[AdminPositionTranslationInput]],
-) -> Optional[list[AdminPositionTranslationInput]]:
+def validate_unique_position_locale_ids(translations: Optional[list[AdminPositionTranslationInput]]) -> Optional[list[AdminPositionTranslationInput]]:
     if not translations:
         return translations
     locale_ids = [item.locale_id for item in translations]

@@ -1,6 +1,7 @@
 """
 Ministry admin API serializers.
 """
+
 from datetime import date, datetime, time
 from typing import Optional
 from uuid import UUID
@@ -10,11 +11,7 @@ from pydantic import BaseModel, Field, field_validator
 from portal.domain.facility.constants import DayOfWeek
 from portal.domain.org.constants import MinistryMemberRole
 from portal.serializers.admin.v1.ministry_catalog import AdminMinistryTypeItem, AdminTargetAudienceItem
-from portal.serializers.admin.v1.org.translation import (
-    AdminOrgTranslationInput,
-    AdminOrgTranslationItem,
-    validate_unique_org_locale_ids,
-)
+from portal.serializers.admin.v1.org.translation import AdminOrgTranslationInput, AdminOrgTranslationItem, validate_unique_org_locale_ids
 from portal.serializers.mixins import PaginationBaseResponseModel
 from portal.serializers.mixins.model_mixins import UUIDBaseModel
 
@@ -49,11 +46,7 @@ class AdminMinistryScheduleItem(BaseModel):
     """Ministry schedule response item."""
 
     id: Optional[UUID] = Field(default=None, description="Schedule ID")
-    days_of_week: list[int] = Field(
-        default_factory=list,
-        serialization_alias="daysOfWeek",
-        description="ISO weekdays 0-6",
-    )
+    days_of_week: list[int] = Field(default_factory=list, serialization_alias="daysOfWeek", description="ISO weekdays 0-6")
     start_time: Optional[time] = Field(None, serialization_alias="startTime", description="Start time")
     end_time: Optional[time] = Field(None, serialization_alias="endTime", description="End time")
     effective_from: Optional[date] = Field(None, serialization_alias="effectiveFrom", description="Effective from")
@@ -78,11 +71,7 @@ class AdminMinistryMemberItem(BaseModel):
     email: Optional[str] = Field(None, description="Member email")
     display_name: Optional[str] = Field(None, serialization_alias="displayName", description="Member display name")
     remark: Optional[str] = Field(default=None, description="Member remark")
-    contact_email: Optional[str] = Field(
-        None,
-        serialization_alias="contactEmail",
-        description="Public contact email override",
-    )
+    contact_email: Optional[str] = Field(None, serialization_alias="contactEmail", description="Public contact email override")
 
 
 class AdminMinistryBase(UUIDBaseModel):
@@ -90,37 +79,17 @@ class AdminMinistryBase(UUIDBaseModel):
 
     name: Optional[str] = Field(None, description="Ministry name")
     status: str = Field(..., description="Lifecycle status")
-    has_priority_booking: bool = Field(
-        False,
-        serialization_alias="hasPriorityBooking",
-        description="Priority booking flag",
-    )
+    has_priority_booking: bool = Field(False, serialization_alias="hasPriorityBooking", description="Priority booking flag")
     is_active: bool = Field(True, serialization_alias="isActive", description="Active flag")
-    ministry_type: Optional[AdminMinistryTypeItem] = Field(
-        None,
-        serialization_alias="ministryType",
-        description="Ministry type",
-    )
-    target_audiences: list[AdminTargetAudienceItem] = Field(
-        default_factory=list,
-        serialization_alias="targetAudiences",
-        description="Target audiences",
-    )
+    ministry_type: Optional[AdminMinistryTypeItem] = Field(None, serialization_alias="ministryType", description="Ministry type")
+    target_audiences: list[AdminTargetAudienceItem] = Field(default_factory=list, serialization_alias="targetAudiences", description="Target audiences")
 
 
 class AdminMinistryDetail(AdminMinistryBase):
     """Ministry detail."""
 
-    owner_position_id: Optional[UUID] = Field(
-        None,
-        serialization_alias="ownerPositionId",
-        description="Owning position ID",
-    )
-    ministry_type_id: Optional[UUID] = Field(
-        None,
-        serialization_alias="ministryTypeId",
-        description="Ministry type ID",
-    )
+    owner_position_id: Optional[UUID] = Field(None, serialization_alias="ownerPositionId", description="Owning position ID")
+    ministry_type_id: Optional[UUID] = Field(None, serialization_alias="ministryTypeId", description="Ministry type ID")
     sequence: Optional[float] = Field(None, description="Sort sequence")
     submitted_at: Optional[datetime] = Field(None, serialization_alias="submittedAt", description="Submitted at")
     submitted_by_id: Optional[UUID] = Field(None, serialization_alias="submittedById", description="Submitted by")
@@ -128,11 +97,7 @@ class AdminMinistryDetail(AdminMinistryBase):
     approved_by_id: Optional[UUID] = Field(None, serialization_alias="approvedById", description="Approved by")
     rejected_at: Optional[datetime] = Field(None, serialization_alias="rejectedAt", description="Rejected at")
     rejected_by_id: Optional[UUID] = Field(None, serialization_alias="rejectedById", description="Rejected by")
-    rejection_reason: Optional[str] = Field(
-        None,
-        serialization_alias="rejectionReason",
-        description="Rejection reason",
-    )
+    rejection_reason: Optional[str] = Field(None, serialization_alias="rejectionReason", description="Rejection reason")
     created_at: Optional[datetime] = Field(None, serialization_alias="createAt", description="Created at")
     created_by: Optional[str] = Field(None, serialization_alias="createdBy", description="Created by")
     updated_at: Optional[datetime] = Field(None, serialization_alias="updateAt", description="Updated at")
@@ -140,11 +105,7 @@ class AdminMinistryDetail(AdminMinistryBase):
     delete_reason: Optional[str] = Field(None, serialization_alias="deleteReason", description="Delete reason")
     translations: list[AdminOrgTranslationItem] = Field(default_factory=list, description="Translations")
     members: list[AdminMinistryMemberItem] = Field(default_factory=list, description="Ministry members")
-    target_audiences: list[AdminTargetAudienceItem] = Field(
-        default_factory=list,
-        serialization_alias="targetAudiences",
-        description="Target audiences",
-    )
+    target_audiences: list[AdminTargetAudienceItem] = Field(default_factory=list, serialization_alias="targetAudiences", description="Target audiences")
     schedules: list[AdminMinistryScheduleItem] = Field(default_factory=list, description="Schedules")
 
 

@@ -1,18 +1,19 @@
 """
 Refresh Token Provider: issue, rotate, revoke, verify
 """
+
 import hashlib
 import secrets
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
+from portal.application.auth.results import RefreshTokenData
 from portal.config import settings
 from portal.exceptions.responses import RefreshTokenInvalidException
-from portal.libs.contexts.request_context import get_request_context, RequestContext
+from portal.libs.contexts.request_context import RequestContext, get_request_context
 from portal.libs.database import Session
 from portal.libs.logger import logger
-from portal.models import AuthRefreshToken, AuthDevice
-from portal.application.auth.results import RefreshTokenData
+from portal.models import AuthDevice, AuthRefreshToken
 
 
 class RefreshTokenProvider:
@@ -32,12 +33,7 @@ class RefreshTokenProvider:
     def _generate_token(self) -> str:
         return secrets.token_urlsafe(self._secrets_length)
 
-    async def issue(
-        self,
-        user_id: UUID,
-        device_id: UUID,
-        family_id: UUID
-    ) -> str:
+    async def issue(self, user_id: UUID, device_id: UUID, family_id: UUID) -> str:
         """
 
         :param user_id:
@@ -55,20 +51,8 @@ class RefreshTokenProvider:
             # Upsert device info - if device_id already exists, update last seen; otherwise insert new
             await (
                 self._session.insert(AuthDevice)
-                .values(
-                    id=device_id,
-                    user_id=user_id,
-                    last_ip=ip,
-                    last_user_agent=user_agent
-                )
-                .on_conflict_do_update(
-                    index_elements=["id"],
-                    set_={
-                        "last_seen_at": now,
-                        "last_ip": ip,
-                        "last_user_agent": user_agent,
-                    }
-                )
+                .values(id=device_id, user_id=user_id, last_ip=ip, last_user_agent=user_agent)
+                .on_conflict_do_update(index_elements=["id"], set_={"last_seen_at": now, "last_ip": ip, "last_user_agent": user_agent})
                 .execute()
             )
             rt_data: RefreshTokenData = RefreshTokenData(
@@ -81,11 +65,7 @@ class RefreshTokenProvider:
                 ip=ip,
                 user_agent=user_agent,
             )
-            await (
-                self._session.insert(AuthRefreshToken)
-                .values(rt_data.model_dump(exclude_none=True))
-                .execute()
-            )
+            await self._session.insert(AuthRefreshToken).values(rt_data.model_dump(exclude_none=True)).execute()
         except Exception as e:
             raise e
         else:
@@ -95,9 +75,9 @@ class RefreshTokenProvider:
         """Rotate refresh token; detect reuse and revoke family on reuse."""
         now = datetime.now(timezone.utc)
         token_hash = self._hash_token(token=refresh_token)
-        rt_data: RefreshTokenData = await self._session.select(AuthRefreshToken).where(
-            AuthRefreshToken.token_hash == token_hash
-        ).fetchrow(as_model=RefreshTokenData)
+        rt_data: RefreshTokenData = (
+            await self._session.select(AuthRefreshToken).where(AuthRefreshToken.token_hash == token_hash).fetchrow(as_model=RefreshTokenData)
+        )
         if not rt_data:
             raise RefreshTokenInvalidException()
 
@@ -127,7 +107,7 @@ class RefreshTokenProvider:
                 revoked_at=None,
                 revoked_reason=None,
                 ip=self._req_ctx.ip or self._req_ctx.client_ip or None,
-                user_agent=user_agent
+                user_agent=user_agent,
             )
             # Update device last seen
             if rt_data.device_id:
@@ -155,12 +135,7 @@ class RefreshTokenProvider:
     async def revoke_family(self, family_id: UUID, reason: str = "Manual Revoke") -> None:
         now = datetime.now(timezone.utc)
         try:
-            await (
-                self._session.update(AuthRefreshToken)
-                .where(AuthRefreshToken.family_id == family_id)
-                .values(revoked_at=now, revoked_reason=reason)
-                .execute()
-            )
+            await self._session.update(AuthRefreshToken).where(AuthRefreshToken.family_id == family_id).values(revoked_at=now, revoked_reason=reason).execute()
         except Exception as e:
             raise e
         else:
@@ -175,9 +150,7 @@ class RefreshTokenProvider:
         """
         token_hash = self._hash_token(token=token)
         rt_data: RefreshTokenData = await (
-            self._session.select(AuthRefreshToken)
-            .where(AuthRefreshToken.token_hash == token_hash)
-            .fetchrow(as_model=RefreshTokenData)
+            self._session.select(AuthRefreshToken).where(AuthRefreshToken.token_hash == token_hash).fetchrow(as_model=RefreshTokenData)
         )
         if not rt_data:
             return False
@@ -186,12 +159,7 @@ class RefreshTokenProvider:
             return True
         try:
             now = datetime.now(timezone.utc)
-            await (
-                self._session.update(AuthRefreshToken)
-                .where(AuthRefreshToken.id == rt_data.id)
-                .values(revoked_at=now, revoked_reason="Logout")
-                .execute()
-            )
+            await self._session.update(AuthRefreshToken).where(AuthRefreshToken.id == rt_data.id).values(revoked_at=now, revoked_reason="Logout").execute()
         except Exception as e:
             raise e
         else:

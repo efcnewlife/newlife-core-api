@@ -1,6 +1,7 @@
 """
 Tests for UserReadService.
 """
+
 from uuid import uuid4
 
 import pytest
@@ -43,14 +44,7 @@ async def test_get_user_detail_by_id_returns_none_when_missing():
 @pytest.mark.asyncio
 async def test_get_user_detail_by_id_returns_user():
     user_id = uuid4()
-    detail = UserDetail(
-        id=user_id,
-        email="user@example.com",
-        verified=True,
-        is_active=True,
-        is_superuser=False,
-        is_admin=False,
-    )
+    detail = UserDetail(id=user_id, email="user@example.com", verified=True, is_active=True, is_superuser=False, is_admin=False)
     repo = StubUserRepository(detail=detail)
     service = UserReadService(repo)
     result = await service.get_user_detail_by_id(user_id)
@@ -61,15 +55,7 @@ async def test_get_user_detail_by_id_returns_user():
 @pytest.mark.asyncio
 async def test_get_user_sensitive_by_email():
     user_id = uuid4()
-    sensitive = UserSensitive(
-        id=user_id,
-        email="admin@example.com",
-        verified=True,
-        is_active=True,
-        is_superuser=False,
-        is_admin=True,
-        password_hash="hash",
-    )
+    sensitive = UserSensitive(id=user_id, email="admin@example.com", verified=True, is_active=True, is_superuser=False, is_admin=True, password_hash="hash")
     repo = StubUserRepository(sensitive=sensitive)
     service = UserReadService(repo)
     result = await service.get_user_sensitive_by_email("admin@example.com")

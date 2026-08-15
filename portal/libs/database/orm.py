@@ -1,6 +1,7 @@
 """
 ModelBase class for SQLAlchemy ORM
 """
+
 import re
 import uuid
 from typing import Optional, Tuple
@@ -81,6 +82,7 @@ def merge_table_args(*args) -> Optional[tuple]:
 
 class Base(DeclarativeBase):
     """Base"""
+
     metadata = MetaData(
         naming_convention={
             "ix": "ix_%(table_name)s_%(column_0_N_name)s",
@@ -103,11 +105,7 @@ class Base(DeclarativeBase):
         Table name is snake_case class name.
         If it starts with "<schema>_", that prefix is removed.
         """
-        _, table = split_schema_and_tablename(
-            class_name=cls.__name__,
-            module_name=cls.__module__,
-            class_schema=getattr(cls, "__schema__", None),
-        )
+        _, table = split_schema_and_tablename(class_name=cls.__name__, module_name=cls.__module__, class_schema=getattr(cls, "__schema__", None))
         return table
 
     @declared_attr
@@ -116,11 +114,7 @@ class Base(DeclarativeBase):
 
         :return:
         """
-        schema, _ = split_schema_and_tablename(
-            class_name=cls.__name__,
-            module_name=cls.__module__,
-            class_schema=getattr(cls, "__schema__", None),
-        )
+        schema, _ = split_schema_and_tablename(class_name=cls.__name__, module_name=cls.__module__, class_schema=getattr(cls, "__schema__", None))
         base_args = {"schema": schema}
         extra_args = getattr(cls, "__extra_table_args__", None)
         return merge_table_args(base_args, extra_args)
@@ -128,6 +122,7 @@ class Base(DeclarativeBase):
 
 class ModelBase(Base):
     """ModelBase"""
+
     __abstract__ = True
     id = Column(UUID, server_default=sa.text("uuidv7()"), primary_key=True, comment="Primary Key")
 

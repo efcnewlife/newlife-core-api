@@ -1,6 +1,7 @@
 """
 System setting seed use case for CLI (insert-if-missing).
 """
+
 import json
 
 import click
@@ -33,15 +34,6 @@ class SystemSettingSeedService:
             await self._session.insert(SystemSetting).values(**insert_row).execute()
             inserted += 1
         await self._session.commit()
-        click.echo(
-            click.style(
-                f"System settings seeded. inserted={inserted} skipped={len(seed_rows) - inserted}",
-                fg="bright_green",
-            )
-        )
-        logger.info(
-            "System setting seed completed. inserted=%s skipped=%s",
-            inserted,
-            len(seed_rows) - inserted,
-        )
+        click.echo(click.style(f"System settings seeded. inserted={inserted} skipped={len(seed_rows) - inserted}", fg="bright_green"))
+        logger.info("System setting seed completed. inserted=%s skipped=%s", inserted, len(seed_rows) - inserted)
         return inserted

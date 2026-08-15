@@ -1,6 +1,7 @@
 """
 Auth application read models and token payloads.
 """
+
 from datetime import datetime
 from typing import Optional
 from uuid import UUID

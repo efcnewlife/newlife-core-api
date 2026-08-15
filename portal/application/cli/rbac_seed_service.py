@@ -1,32 +1,28 @@
 """
 RBAC seed use case for CLI.
 """
+
 import time
 from typing import Any, Optional
 
 import click
 
-from portal.libs.database import Session
+from portal.cli.datas.rbac_seed_data import SUPPORTED_LOCALES, parent_resources, resources, seed_verbs
 from portal.libs.consts.enums import ResourceType
+from portal.libs.database import Session
 from portal.libs.logger import logger
 from portal.models import (
-    SystemLocale,
-    AuthRole,
-    AuthRoleTranslation,
-    AuthResource,
-    AuthResourceTranslation,
-    AuthVerb,
-    AuthVerbTranslation,
     AuthPermission,
     AuthPermissionTranslation,
+    AuthResource,
+    AuthResourceTranslation,
+    AuthRole,
     AuthRolePermission,
+    AuthRoleTranslation,
     AuthUserRole,
-)
-from portal.cli.datas.rbac_seed_data import (
-    SUPPORTED_LOCALES,
-    seed_verbs,
-    parent_resources,
-    resources,
+    AuthVerb,
+    AuthVerbTranslation,
+    SystemLocale,
 )
 
 
@@ -98,12 +94,7 @@ async def run_rbac_seed(session: Session):
                 return str(locale_row["id"])
         return None
 
-    def _locale_text(
-        entry: dict[str, Any],
-        locale_code: str,
-        fallback_field: str,
-        translation_key: str = "translations",
-    ) -> str:
+    def _locale_text(entry: dict[str, Any], locale_code: str, fallback_field: str, translation_key: str = "translations") -> str:
         translations = entry.get(translation_key) or {}
         fallback_value = entry.get(fallback_field) or ""
         return translations.get(locale_code) or translations.get("en") or fallback_value
@@ -127,13 +118,9 @@ async def run_rbac_seed(session: Session):
         verbs = seed_verbs
         for v in verbs:
             await (
-                session
-                .insert(AuthVerb)
+                session.insert(AuthVerb)
                 .values(action=v["action"], is_active=True)
-                .on_conflict_do_update(
-                    index_elements=["action"],
-                    set_=dict(is_active=True),
-                )
+                .on_conflict_do_update(index_elements=["action"], set_=dict(is_active=True))
                 .execute()
             )
 
@@ -143,8 +130,7 @@ async def run_rbac_seed(session: Session):
             parent_sequence = _build_resource_sequence(pr.get("sequence"))
             parent_is_visible = bool(pr.get("is_visible", True))
             await (
-                session
-                .insert(AuthResource)
+                session.insert(AuthResource)
                 .values(
                     id=pr.get("id"),
                     code=pr["code"],
@@ -165,7 +151,7 @@ async def run_rbac_seed(session: Session):
                         sequence=parent_sequence,
                         type=pr.get("type", ResourceType.GENERAL.value),
                         is_visible=parent_is_visible,
-                    )
+                    ),
                 )
                 .execute()
             )
@@ -176,8 +162,7 @@ async def run_rbac_seed(session: Session):
             resource_sequence = _build_resource_sequence(r.get("sequence"))
             resource_is_visible = bool(r.get("is_visible", True))
             await (
-                session
-                .insert(AuthResource)
+                session.insert(AuthResource)
                 .values(
                     code=r["code"],
                     key=r.get("key", r["code"]),
@@ -198,29 +183,22 @@ async def run_rbac_seed(session: Session):
                         sequence=resource_sequence,
                         type=resource_type_value,
                         is_visible=resource_is_visible,
-                    )
+                    ),
                 )
                 .execute()
             )
 
         # 4) Fetch current verbs/resources for id mapping
         locale_rows = await (
-            session
-            .select(SystemLocale.id, SystemLocale.language_code, SystemLocale.script_code, SystemLocale.region_code)
+            session.select(SystemLocale.id, SystemLocale.language_code, SystemLocale.script_code, SystemLocale.region_code)
             .where(SystemLocale.is_deleted == False)
             .where(SystemLocale.is_active == True)
             .fetch()
         )
-        locale_id_map = {
-            locale_code: _resolve_locale_id(locale_rows=locale_rows, target_locale=locale_code)
-            for locale_code in SUPPORTED_LOCALES
-        }
+        locale_id_map = {locale_code: _resolve_locale_id(locale_rows=locale_rows, target_locale=locale_code) for locale_code in SUPPORTED_LOCALES}
         missing_locales = [locale_code for locale_code, locale_id in locale_id_map.items() if not locale_id]
         if missing_locales:
-            raise ValueError(
-                "Missing locales required by RBAC seed: "
-                f"{', '.join(missing_locales)}. Run `init-locales` first."
-            )
+            raise ValueError(f"Missing locales required by RBAC seed: {', '.join(missing_locales)}. Run `init-locales` first.")
 
         verb_rows = await session.select(AuthVerb).fetch()
         resource_rows = await session.select(AuthResource).fetch()
@@ -238,13 +216,9 @@ async def run_rbac_seed(session: Session):
                     continue
                 localized_name = _locale_text(entry=v, locale_code=locale_code, fallback_field="display_name")
                 await (
-                    session
-                    .insert(AuthVerbTranslation)
+                    session.insert(AuthVerbTranslation)
                     .values(verb_id=verb_id, locale_id=locale_id, name=localized_name)
-                    .on_conflict_do_update(
-                        index_elements=["verb_id", "locale_id"],
-                        set_=dict(name=localized_name),
-                    )
+                    .on_conflict_do_update(index_elements=["verb_id", "locale_id"], set_=dict(name=localized_name))
                     .execute()
                 )
 
@@ -261,24 +235,12 @@ async def run_rbac_seed(session: Session):
                     continue
                 localized_name = _locale_text(entry=seed_item, locale_code=locale_code, fallback_field="name")
                 localized_description = _locale_text(
-                    entry=seed_item,
-                    locale_code=locale_code,
-                    fallback_field="description",
-                    translation_key="description_translations",
+                    entry=seed_item, locale_code=locale_code, fallback_field="description", translation_key="description_translations"
                 )
                 await (
-                    session
-                    .insert(AuthResourceTranslation)
-                    .values(
-                        resource_id=resource_row["id"],
-                        locale_id=locale_id,
-                        name=localized_name,
-                        description=localized_description,
-                    )
-                    .on_conflict_do_update(
-                        index_elements=["resource_id", "locale_id"],
-                        set_=dict(name=localized_name, description=localized_description),
-                    )
+                    session.insert(AuthResourceTranslation)
+                    .values(resource_id=resource_row["id"], locale_id=locale_id, name=localized_name, description=localized_description)
+                    .on_conflict_do_update(index_elements=["resource_id", "locale_id"], set_=dict(name=localized_name, description=localized_description))
                     .execute()
                 )
 
@@ -289,37 +251,17 @@ async def run_rbac_seed(session: Session):
             for action, verb_id in action_to_verb_id.items():
                 code = f"{res_code}:{action}"
                 await (
-                    session
-                    .insert(AuthPermission)
-                    .values(
-                        code=code,
-                        resource_id=res["id"],
-                        verb_id=verb_id,
-                        is_active=True,
-                    )
-                    .on_conflict_do_update(
-                        index_elements=["code"],
-                        set_=dict(
-                            is_active=True,
-                        )
-                    )
+                    session.insert(AuthPermission)
+                    .values(code=code, resource_id=res["id"], verb_id=verb_id, is_active=True)
+                    .on_conflict_do_update(index_elements=["code"], set_=dict(is_active=True))
                     .execute()
                 )
 
         # 6) Roles: keep only one role `admin`
         # Delete all roles (cascades will clean associations)
-        await (
-            session
-            .delete(AuthRole)
-            .execute()
-        )
+        await session.delete(AuthRole).execute()
         # Insert fresh `admin` role
-        await (
-            session
-            .insert(AuthRole)
-            .values(code='admin', is_active=True)
-            .execute()
-        )
+        await session.insert(AuthRole).values(code='admin', is_active=True).execute()
 
         # Permissions lookup
         perm_rows = await session.select(AuthPermission).fetch()
@@ -342,31 +284,18 @@ async def run_rbac_seed(session: Session):
                 verb_name = _locale_text(entry=seed_verb, locale_code=locale_code, fallback_field="display_name")
                 localized_permission_name = f"{resource_name} {verb_name}".strip()
                 resource_description = _locale_text(
-                    entry=seed_resource,
-                    locale_code=locale_code,
-                    fallback_field="description",
-                    translation_key="description_translations",
+                    entry=seed_resource, locale_code=locale_code, fallback_field="description", translation_key="description_translations"
                 )
                 localized_permission_description = (
-                    f"{resource_description} ({verb_name})".strip()
-                    if resource_description
-                    else f"Permission for {permission_code}"
+                    f"{resource_description} ({verb_name})".strip() if resource_description else f"Permission for {permission_code}"
                 )
                 await (
-                    session
-                    .insert(AuthPermissionTranslation)
+                    session.insert(AuthPermissionTranslation)
                     .values(
-                        permission_id=permission_row["id"],
-                        locale_id=locale_id,
-                        name=localized_permission_name,
-                        description=localized_permission_description,
+                        permission_id=permission_row["id"], locale_id=locale_id, name=localized_permission_name, description=localized_permission_description
                     )
                     .on_conflict_do_update(
-                        index_elements=["permission_id", "locale_id"],
-                        set_=dict(
-                            name=localized_permission_name,
-                            description=localized_permission_description,
-                        ),
+                        index_elements=["permission_id", "locale_id"], set_=dict(name=localized_permission_name, description=localized_permission_description)
                     )
                     .execute()
                 )
@@ -375,31 +304,18 @@ async def run_rbac_seed(session: Session):
         excluded_prefixes = ("system:resource:", "system:verb:", "system:fcm_device:", "comms:notification")
 
         # Fetch admin role id
-        admin_row = await (
-            session
-            .select(AuthRole)
-            .where(AuthRole.code == 'admin')
-            .fetchrow()
-        )
+        admin_row = await session.select(AuthRole).where(AuthRole.code == 'admin').fetchrow()
         if admin_row:
-            role_name_map = {
-                "zh-TW": "系統管理員",
-                "zh-CN": "系统管理员",
-                "en": "Administrator",
-            }
+            role_name_map = {"zh-TW": "系統管理員", "zh-CN": "系统管理员", "en": "Administrator"}
             for locale_code in SUPPORTED_LOCALES:
                 locale_id = locale_id_map.get(locale_code)
                 if not locale_id:
                     continue
                 role_name = role_name_map.get(locale_code) or role_name_map["en"]
                 await (
-                    session
-                    .insert(AuthRoleTranslation)
+                    session.insert(AuthRoleTranslation)
                     .values(role_id=admin_row["id"], locale_id=locale_id, name=role_name)
-                    .on_conflict_do_update(
-                        index_elements=["role_id", "locale_id"],
-                        set_=dict(name=role_name),
-                    )
+                    .on_conflict_do_update(index_elements=["role_id", "locale_id"], set_=dict(name=role_name))
                     .execute()
                 )
 
@@ -409,8 +325,7 @@ async def run_rbac_seed(session: Session):
                 if p_code.startswith(excluded_prefixes):
                     continue
                 await (
-                    session
-                    .insert(AuthRolePermission)
+                    session.insert(AuthRolePermission)
                     .values(role_id=admin_row["id"], permission_id=perm_row["id"])
                     .on_conflict_do_nothing(index_elements=["role_id", "permission_id"])
                     .execute()

@@ -1,6 +1,7 @@
 """
 Facility booking override audit log repository (read-only).
 """
+
 from typing import Optional
 from uuid import UUID
 
@@ -18,30 +19,20 @@ class OverrideLogRepository:
     def __init__(self, session: Session):
         self._session = session
 
-    async def fetch_pages(
-        self,
-        model: OverrideLogPagesQueryCommand,
-        locale_id: Optional[UUID],
-    ) -> tuple[list[OverrideLogResult], int]:
+    async def fetch_pages(self, model: OverrideLogPagesQueryCommand, locale_id: Optional[UUID]) -> tuple[list[OverrideLogResult], int]:
         room_name = FacilityRoom.code
         if locale_id:
             from portal.models import FacilityRoomTranslation
 
             room_name = sa.func.coalesce(
                 sa.select(FacilityRoomTranslation.name)
-                .where(
-                    FacilityRoomTranslation.room_id == FacilityRoom.id,
-                    FacilityRoomTranslation.locale_id == locale_id,
-                )
+                .where(FacilityRoomTranslation.room_id == FacilityRoom.id, FacilityRoomTranslation.locale_id == locale_id)
                 .limit(1)
                 .scalar_subquery(),
                 FacilityRoom.code,
             )
 
-        overridden_by_name = sa.func.coalesce(
-            AuthUserProfile.preferred_name,
-            AuthUser.email,
-        )
+        overridden_by_name = sa.func.coalesce(AuthUserProfile.preferred_name, AuthUser.email)
 
         items, count = await (
             self._session.select(
@@ -62,16 +53,11 @@ class OverrideLogRepository:
             .outerjoin(AuthUserProfile, AuthUserProfile.user_id == AuthUser.id)
             .outerjoin(FacilityRoom, FacilityRoom.id == FacilityBookingOverrideLog.facility_id)
             .where(model.facility_id, lambda: FacilityBookingOverrideLog.facility_id == model.facility_id)
-            .where(
-                model.overridden_by_id,
-                lambda: FacilityBookingOverrideLog.overridden_by_id == model.overridden_by_id,
-            )
+            .where(model.overridden_by_id, lambda: FacilityBookingOverrideLog.overridden_by_id == model.overridden_by_id)
             .where(model.date_from, lambda: FacilityBookingOverrideLog.created_at >= model.date_from)
             .where(model.date_to, lambda: FacilityBookingOverrideLog.created_at <= model.date_to)
             .order_by_with(
-                tables=[FacilityBookingOverrideLog],
-                order_by=model.order_by or "created_at",
-                descending=model.descending if model.order_by else True,
+                tables=[FacilityBookingOverrideLog], order_by=model.order_by or "created_at", descending=model.descending if model.order_by else True
             )
             .limit(model.page_size)
             .offset(model.page * model.page_size)

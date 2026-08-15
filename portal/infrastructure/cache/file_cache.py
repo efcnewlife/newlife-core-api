@@ -1,6 +1,7 @@
 """
 Redis cache for file signed URLs and association invalidation.
 """
+
 from uuid import UUID
 
 from redis.asyncio import Redis
@@ -18,21 +19,11 @@ class FileCache:
 
     @staticmethod
     def signed_url_key(file_id: UUID) -> str:
-        return (
-            CacheKeys(resource="file")
-            .add_attribute("signed_url")
-            .add_attribute(str(file_id))
-            .build()
-        )
+        return CacheKeys(resource="file").add_attribute("signed_url").add_attribute(str(file_id)).build()
 
     @staticmethod
     def resource_association_key(resource_id: UUID) -> str:
-        return (
-            CacheKeys(resource="file")
-            .add_attribute("resource_association")
-            .add_attribute(str(resource_id))
-            .build()
-        )
+        return CacheKeys(resource="file").add_attribute("resource_association").add_attribute(str(resource_id)).build()
 
     async def get_signed_url(self, file_id: UUID) -> str | None:
         value = await self._redis.get(self.signed_url_key(file_id))

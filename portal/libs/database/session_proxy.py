@@ -1,8 +1,8 @@
 import asyncio
-from typing import Optional, Any, Callable
+from typing import Any, Callable, Optional
 
-from portal.libs.database import Session
 from portal.libs.contexts.request_session_context import get_request_session
+from portal.libs.database import Session
 
 
 class SessionProxy:
@@ -25,10 +25,9 @@ class SessionProxy:
         session = self._resolve()
         attr = getattr(session, name)
         if asyncio.iscoroutinefunction(attr):
+
             async def _wrapped(*args, **kwargs):
                 return await attr(*args, **kwargs)
 
             return _wrapped
         return attr
-
-

@@ -1,6 +1,7 @@
 """
 Member-facing org API serializers.
 """
+
 from typing import Optional
 from uuid import UUID
 
@@ -14,11 +15,7 @@ class ApiOrgMinistryItem(UUIDBaseModel):
 
     name: Optional[str] = Field(None, description="Ministry name")
     status: str = Field(..., description="Lifecycle status")
-    has_priority_booking: bool = Field(
-        False,
-        serialization_alias="hasPriorityBooking",
-        description="Priority booking flag",
-    )
+    has_priority_booking: bool = Field(False, serialization_alias="hasPriorityBooking", description="Priority booking flag")
 
 
 class ApiOrgMinistryList(BaseModel):
@@ -34,11 +31,7 @@ class ApiAssignablePositionItem(UUIDBaseModel):
     team: Optional[str] = Field(None, description="Team label")
     office: Optional[str] = Field(None, description="Office label")
     name: Optional[str] = Field(None, description="Position name")
-    incumbent_user_id: Optional[UUID] = Field(
-        None,
-        serialization_alias="incumbentUserId",
-        description="Incumbent user ID",
-    )
+    incumbent_user_id: Optional[UUID] = Field(None, serialization_alias="incumbentUserId", description="Incumbent user ID")
 
 
 class ApiAssignablePositionList(BaseModel):

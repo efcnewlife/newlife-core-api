@@ -1,6 +1,7 @@
 """
 Tests for LoginService.
 """
+
 from uuid import uuid4
 
 import pytest
@@ -69,15 +70,7 @@ async def test_login_with_password_invalid_credentials():
 @pytest.mark.asyncio
 async def test_login_with_password_success(monkeypatch):
     user_id = uuid4()
-    user = UserSensitive(
-        id=user_id,
-        email="admin@example.com",
-        verified=True,
-        is_active=True,
-        is_superuser=False,
-        is_admin=True,
-        password_hash="hashed",
-    )
+    user = UserSensitive(id=user_id, email="admin@example.com", verified=True, is_active=True, is_superuser=False, is_admin=True, password_hash="hashed")
     repo = StubUserRepository(user=user)
     service = LoginService(
         user_repository=repo,
@@ -87,9 +80,7 @@ async def test_login_with_password_success(monkeypatch):
         role_service=StubRoleService(),
         permission_service=StubPermissionService(),
     )
-    result = await service.login_with_password(
-        LoginCommand(email="admin@example.com", password="secret"),
-    )
+    result = await service.login_with_password(LoginCommand(email="admin@example.com", password="secret"))
     assert result.token.access_token == "access-token"
     assert result.admin.email == "admin@example.com"
     assert len(repo.last_login_updates) == 1

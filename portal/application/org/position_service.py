@@ -1,6 +1,7 @@
 """
 Position application service.
 """
+
 import uuid
 from typing import Any, Optional
 from uuid import UUID
@@ -14,12 +15,7 @@ from portal.application.org.commands import (
     PositionTranslationCommand,
     UpdatePositionCommand,
 )
-from portal.application.org.results import (
-    AssignablePositionResult,
-    CreateIdResult,
-    PositionDetailResult,
-    PositionPageResult,
-)
+from portal.application.org.results import AssignablePositionResult, CreateIdResult, PositionDetailResult, PositionPageResult
 from portal.exceptions.responses import ApiBaseException, BadRequestException, ConflictErrorException, NotFoundException
 from portal.infrastructure.persistence.repositories.org.position_repository import PositionRepository
 from portal.libs.contexts.request_context import RequestContext, get_request_context
@@ -38,22 +34,12 @@ class PositionService:
             return self._req_ctx.resolved_locale_id
         return None
 
-    def _build_translation_payloads(
-        self,
-        command: CreatePositionCommand | UpdatePositionCommand,
-    ) -> list[dict[str, Any]]:
+    def _build_translation_payloads(self, command: CreatePositionCommand | UpdatePositionCommand) -> list[dict[str, Any]]:
         translation_payloads = command.translations or []
         team = command.team.value
         office = command.office.value
         return [
-            dict(
-                locale_id=item.locale_id,
-                team=team,
-                office=office,
-                name=item.name,
-                description=item.description,
-                remark=item.remark,
-            )
+            dict(locale_id=item.locale_id, team=team, office=office, name=item.name, description=item.description, remark=item.remark)
             for item in translation_payloads
         ]
 
@@ -73,16 +59,8 @@ class PositionService:
         return PositionPageResult(page=command.page, page_size=command.page_size, total=count, items=items)
 
     @distributed_trace()
-    async def get_position_by_id(
-        self,
-        position_id: UUID,
-        all_locales: bool = False,
-    ) -> Optional[PositionDetailResult]:
-        return await self._repository.get_by_id(
-            position_id,
-            self._resolved_locale_id(),
-            all_locales=all_locales,
-        )
+    async def get_position_by_id(self, position_id: UUID, all_locales: bool = False) -> Optional[PositionDetailResult]:
+        return await self._repository.get_by_id(position_id, self._resolved_locale_id(), all_locales=all_locales)
 
     @distributed_trace()
     async def list_assignable(self) -> list[AssignablePositionResult]:
@@ -95,12 +73,7 @@ class PositionService:
         if not translation_payloads:
             raise BadRequestException(detail="translations are required")
         try:
-            payload = {
-                "id": position_id,
-                "code": command.code,
-                "can_own_ministry": command.can_own_ministry,
-                "is_active": command.is_active,
-            }
+            payload = {"id": position_id, "code": command.code, "can_own_ministry": command.can_own_ministry, "is_active": command.is_active}
             if command.sequence is not None:
                 payload["sequence"] = command.sequence
             await self._repository.insert_position(payload)
@@ -117,10 +90,7 @@ class PositionService:
     async def update_position(self, position_id: UUID, command: UpdatePositionCommand) -> None:
         if not await self._repository.get_by_id(position_id):
             raise NotFoundException(detail=f"Position {position_id} not found")
-        values = {
-            "can_own_ministry": command.can_own_ministry,
-            "is_active": command.is_active,
-        }
+        values = {"can_own_ministry": command.can_own_ministry, "is_active": command.is_active}
         if command.sequence is not None:
             values["sequence"] = command.sequence
         affected = await self._repository.update_position(position_id, values)
@@ -150,8 +120,4 @@ class PositionService:
     async def assign_position(self, position_id: UUID, command: AssignPositionCommand) -> None:
         if not await self._repository.get_by_id(position_id):
             raise NotFoundException(detail=f"Position {position_id} not found")
-        await self._repository.assign_incumbent(
-            position_id=position_id,
-            user_id=command.user_id,
-            start_at=command.start_at,
-        )
+        await self._repository.assign_incumbent(position_id=position_id, user_id=command.user_id, start_at=command.start_at)

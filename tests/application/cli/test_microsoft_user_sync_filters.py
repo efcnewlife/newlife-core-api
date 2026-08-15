@@ -1,22 +1,14 @@
 """
 Tests for Microsoft user sync service-account heuristics.
 """
+
 import pytest
 
-from portal.application.cli.microsoft_user_sync_filters import (
-    classify_service_account,
-    is_syncable_person,
-)
+from portal.application.cli.microsoft_user_sync_filters import classify_service_account, is_syncable_person
 from portal.providers.ms_graph.models import GraphUserRecord
 
 
-def _record(
-    *,
-    email: str,
-    given_name: str,
-    surname: str,
-    display_name: str | None = None,
-) -> GraphUserRecord:
+def _record(*, email: str, given_name: str, surname: str, display_name: str | None = None) -> GraphUserRecord:
     return GraphUserRecord(
         object_id=email.split("@", 1)[0],
         email=email,
@@ -40,18 +32,8 @@ def _record(
         ("chinese.fellowship@efcnewlife.org", "Chinese Fellowship", "EFCNL", "Chinese Fellowship EFCNL"),
     ],
 )
-def test_classify_service_account_detects_functional_mailboxes(
-    email: str,
-    given_name: str,
-    surname: str,
-    display_name: str,
-):
-    record = _record(
-        email=email,
-        given_name=given_name,
-        surname=surname,
-        display_name=display_name,
-    )
+def test_classify_service_account_detects_functional_mailboxes(email: str, given_name: str, surname: str, display_name: str):
+    record = _record(email=email, given_name=given_name, surname=surname, display_name=display_name)
     assert classify_service_account(record, email) is not None
 
 

@@ -1,6 +1,7 @@
 """
 Locale repository implementation.
 """
+
 from portal.domain.locale.entities import Locale
 from portal.libs.database import Session
 from portal.models import SystemLocale

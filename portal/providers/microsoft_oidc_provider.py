@@ -1,6 +1,7 @@
 """
 Verify Microsoft Entra ID (v2) ID tokens using JWKS.
 """
+
 from typing import Any, Optional
 
 import jwt
@@ -19,9 +20,7 @@ class MicrosoftOidcProvider:
         self._jwks_url: Optional[str] = None
         self._jwks_client: Optional[PyJWKClient] = None
         if self._tenant_id:
-            self._jwks_url = (
-                f"https://login.microsoftonline.com/{self._tenant_id}/discovery/v2.0/keys"
-            )
+            self._jwks_url = f"https://login.microsoftonline.com/{self._tenant_id}/discovery/v2.0/keys"
             self._jwks_client = PyJWKClient(self._jwks_url, cache_keys=True)
 
     def is_configured(self) -> bool:

@@ -1,6 +1,7 @@
 """
 Content file models for uploaded file metadata and resource associations.
 """
+
 import sqlalchemy as sa
 from sqlalchemy import Column, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
@@ -13,18 +14,11 @@ from portal.models.mixins import AuditMixin, RemarkMixin, SortableMixin
 class ContentFile(ModelBase, AuditMixin, RemarkMixin):
     """Uploaded file metadata."""
 
-    __extra_table_args__ = (
-        sa.UniqueConstraint("bucket", "key"),
-    )
+    __extra_table_args__ = (sa.UniqueConstraint("bucket", "key"),)
 
     original_name = Column(sa.String(255), nullable=False, comment="Original filename as uploaded")
     key = Column(sa.String(512), nullable=False, index=True, comment="Storage object key (path)")
-    storage = Column(
-        sa.String(16),
-        nullable=False,
-        default="azure_blob",
-        comment="Storage backend, e.g., azure_blob, s3",
-    )
+    storage = Column(sa.String(16), nullable=False, default="azure_blob", comment="Storage backend, e.g., azure_blob, s3")
     bucket = Column(sa.String(128), nullable=False, comment="Container or bucket name")
     region = Column(sa.String(32), nullable=False, comment="Storage region")
     content_type = Column(sa.String(128), nullable=True, comment="MIME type")
@@ -35,36 +29,15 @@ class ContentFile(ModelBase, AuditMixin, RemarkMixin):
     width = Column(sa.Integer, nullable=True, comment="Image width in pixels")
     height = Column(sa.Integer, nullable=True, comment="Image height in pixels")
     duration_seconds = Column(sa.Float, nullable=True, comment="Media duration in seconds")
-    status = Column(
-        sa.Integer,
-        nullable=False,
-        default=FileStatus.UPLOADING,
-        comment="File status, refer to FileStatus enum",
-    )
+    status = Column(sa.Integer, nullable=False, default=FileStatus.UPLOADING, comment="File status, refer to FileStatus enum")
     version = Column(sa.Integer, nullable=False, default=1, comment="File version number")
-    is_public = Column(
-        sa.Boolean,
-        server_default=sa.text("false"),
-        nullable=False,
-        comment="Whether the file is public",
-    )
+    is_public = Column(sa.Boolean, server_default=sa.text("false"), nullable=False, comment="Whether the file is public")
     source = Column(sa.Integer, nullable=True, comment="Upload source, refer to FileUploadSource")
 
 
 class ContentFileAssociation(ModelBase, SortableMixin):
     """Link files to domain resources."""
 
-    file_id = Column(
-        UUID,
-        ForeignKey(ContentFile.id, ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-        comment="File ID",
-    )
+    file_id = Column(UUID, ForeignKey(ContentFile.id, ondelete="CASCADE"), nullable=False, index=True, comment="File ID")
     resource_id = Column(UUID, nullable=False, index=True, comment="Resource ID")
-    resource_name = Column(
-        sa.String(32),
-        nullable=False,
-        index=True,
-        comment="Resource name (default table name)",
-    )
+    resource_name = Column(sa.String(32), nullable=False, index=True, comment="Resource name (default table name)")

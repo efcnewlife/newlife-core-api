@@ -1,6 +1,7 @@
 """
 Target audience assignment validation helpers.
 """
+
 from uuid import UUID
 
 from portal.application.org.results import TargetAudienceResult
@@ -8,10 +9,7 @@ from portal.domain.org.catalog_codes import TARGET_AUDIENCE_ALL_AGES
 from portal.exceptions.responses import BadRequestException
 
 
-def validate_target_audience_ids(
-    audience_ids: list[UUID],
-    active_audiences: list[TargetAudienceResult],
-) -> None:
+def validate_target_audience_ids(audience_ids: list[UUID], active_audiences: list[TargetAudienceResult]) -> None:
     if not audience_ids:
         return
     active_by_id = {item.id: item for item in active_audiences}

@@ -1,23 +1,15 @@
 """
 FileService unit tests with stub ports.
 """
+
 from uuid import uuid4
 
 import pytest
 from azure.core.exceptions import AzureError
 
-from portal.application.content.commands import (
-    BulkDeleteFilesCommand,
-    FilePagesQueryCommand,
-    UpdateFileAssociationCommand,
-    UploadFileCommand,
-)
+from portal.application.content.commands import BulkDeleteFilesCommand, FilePagesQueryCommand, UpdateFileAssociationCommand, UploadFileCommand
 from portal.application.content.file_service import FileService
-from portal.application.content.results import (
-    FileBaseResult,
-    FileDetailResult,
-    FileGridItemResult,
-)
+from portal.application.content.results import FileBaseResult, FileDetailResult, FileGridItemResult
 from portal.domain.content.constants import FileStatus, FileUploadSource
 from portal.exceptions.responses import ApiBaseException, BadRequestException
 
@@ -54,21 +46,12 @@ class StubFileRepository:
         items = [f for f in self.files.values() if f.status != FileStatus.DELETED]
         images = [f for f in items if f.content_type and f.content_type.startswith("image/")]
         files = [f for f in items if not f.content_type or not f.content_type.startswith("image/")]
-        images_stats = FileCategoryStatsResult(
-            count=len(images),
-            size_bytes=sum(f.size_bytes or 0 for f in images),
-        )
-        files_stats = FileCategoryStatsResult(
-            count=len(files),
-            size_bytes=sum(f.size_bytes or 0 for f in files),
-        )
+        images_stats = FileCategoryStatsResult(count=len(images), size_bytes=sum(f.size_bytes or 0 for f in images))
+        files_stats = FileCategoryStatsResult(count=len(files), size_bytes=sum(f.size_bytes or 0 for f in files))
         return FileSummaryResult(
             images=images_stats,
             files=files_stats,
-            total=FileCategoryStatsResult(
-                count=images_stats.count + files_stats.count,
-                size_bytes=images_stats.size_bytes + files_stats.size_bytes,
-            ),
+            total=FileCategoryStatsResult(count=images_stats.count + files_stats.count, size_bytes=images_stats.size_bytes + files_stats.size_bytes),
         )
 
     async def get_by_id(self, file_id):
@@ -82,12 +65,7 @@ class StubFileRepository:
 
     async def get_by_md5_size_content_type(self, checksum_md5, size_bytes, content_type):
         for item in self.files.values():
-            if (
-                item.checksum_md5 == checksum_md5
-                and item.size_bytes == size_bytes
-                and item.content_type == content_type
-                and item.status != FileStatus.DELETED
-            ):
+            if item.checksum_md5 == checksum_md5 and item.size_bytes == size_bytes and item.content_type == content_type and item.status != FileStatus.DELETED:
                 return item
         return None
 
@@ -262,12 +240,7 @@ async def test_upload_file_success():
     service = _make_service(repo=repo, storage=storage, audit=audit)
 
     result = await service.upload_file(
-        UploadFileCommand(
-            filename="photo.png",
-            content=_png_bytes(),
-            content_type="image/png",
-            upload_source=FileUploadSource.ADMIN,
-        )
+        UploadFileCommand(filename="photo.png", content=_png_bytes(), content_type="image/png", upload_source=FileUploadSource.ADMIN)
     )
 
     assert result.duplicate is None
@@ -300,13 +273,7 @@ async def test_upload_file_duplicate_returns_existing():
     storage = StubFileStorage()
     service = _make_service(repo=repo, storage=storage)
 
-    result = await service.upload_file(
-        UploadFileCommand(
-            filename="photo.png",
-            content=content,
-            content_type="image/png",
-        )
-    )
+    result = await service.upload_file(UploadFileCommand(filename="photo.png", content=content, content_type="image/png"))
 
     assert result.id == existing_id
     assert result.duplicate is True
@@ -320,13 +287,7 @@ async def test_upload_file_storage_failure_leaves_uploading():
     service = _make_service(repo=repo, storage=storage)
 
     with pytest.raises(ApiBaseException) as exc_info:
-        await service.upload_file(
-            UploadFileCommand(
-                filename="photo.png",
-                content=_png_bytes(),
-                content_type="image/png",
-            )
-        )
+        await service.upload_file(UploadFileCommand(filename="photo.png", content=_png_bytes(), content_type="image/png"))
 
     assert exc_info.value.status_code == 503
     assert len(repo.insert_calls) == 1
@@ -338,13 +299,7 @@ async def test_delete_files_success():
     repo = StubFileRepository()
     file_id = uuid4()
     repo.files[file_id] = FileDetailResult(
-        id=file_id,
-        original_name="a.png",
-        key="original_files/dev/a.png",
-        storage="azure_blob",
-        bucket="files",
-        region="eastus",
-        status=FileStatus.UPLOADED,
+        id=file_id, original_name="a.png", key="original_files/dev/a.png", storage="azure_blob", bucket="files", region="eastus", status=FileStatus.UPLOADED
     )
     storage = StubFileStorage()
     cache = StubFileCache()
@@ -369,13 +324,7 @@ async def test_get_file_pages_attaches_signed_urls():
     repo = StubFileRepository()
     file_id = uuid4()
     repo.files[file_id] = FileDetailResult(
-        id=file_id,
-        original_name="a.png",
-        key="original_files/dev/a.png",
-        storage="azure_blob",
-        bucket="files",
-        region="eastus",
-        status=FileStatus.UPLOADED,
+        id=file_id, original_name="a.png", key="original_files/dev/a.png", storage="azure_blob", bucket="files", region="eastus", status=FileStatus.UPLOADED
     )
     service = _make_service(repo=repo)
 
@@ -394,13 +343,7 @@ async def test_update_file_association_replaces_and_invalidates_cache():
     resource_id = uuid4()
     file_id = uuid4()
 
-    await service.update_file_association(
-        UpdateFileAssociationCommand(
-            file_ids=[file_id],
-            resource_id=resource_id,
-            resource_name="room",
-        )
-    )
+    await service.update_file_association(UpdateFileAssociationCommand(file_ids=[file_id], resource_id=resource_id, resource_name="room"))
 
     assert repo.associations[resource_id] == [file_id]
     assert resource_id in cache.invalidated_associations

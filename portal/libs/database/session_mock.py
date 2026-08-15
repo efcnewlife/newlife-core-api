@@ -4,8 +4,8 @@ import hashlib
 import inspect
 import json
 import uuid
-from typing import Union, Callable, Type, Any, Optional
-from unittest.mock import MagicMock, AsyncMock
+from typing import Any, Callable, Optional, Type, Union
+from unittest.mock import AsyncMock, MagicMock
 
 import sqlalchemy as sa
 from pydantic import BaseModel
@@ -13,7 +13,7 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.dialects.postgresql.dml import Insert as PgInsert
 
 from portal.libs.database import Session
-from portal.libs.database.aio_orm import _Select, _Update, _Delete, _Insert, TableTypes
+from portal.libs.database.aio_orm import TableTypes, _Delete, _Insert, _Select, _Update
 
 
 def md5_encrypt(text: str, salt: str = ''):
@@ -125,14 +125,7 @@ class InsertMock(_Insert):
 
 
 class SessionMock(Session):
-    def __init__(
-        self,
-        timeout: float = None,
-        echo: bool = None,
-        loop: asyncio.AbstractEventLoop = None,
-        use_poll: bool = None,
-        raise_on_unmatch: bool = False
-    ):
+    def __init__(self, timeout: float = None, echo: bool = None, loop: asyncio.AbstractEventLoop = None, use_poll: bool = None, raise_on_unmatch: bool = False):
         super().__init__(timeout, echo, loop, use_poll)
         self._statement_mocks: dict[str, MagicMock] = {}
         self._raise_on_unmatch = raise_on_unmatch

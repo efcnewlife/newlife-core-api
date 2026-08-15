@@ -1,6 +1,7 @@
 """
 Facility booking override audit log read service.
 """
+
 from typing import Optional
 from uuid import UUID
 
@@ -26,9 +27,4 @@ class OverrideLogService:
     @distributed_trace()
     async def get_override_log_pages(self, command: OverrideLogPagesQueryCommand) -> OverrideLogPageResult:
         items, count = await self._repository.fetch_pages(command, self._resolved_locale_id())
-        return OverrideLogPageResult(
-            page=command.page,
-            page_size=command.page_size,
-            total=count,
-            items=items,
-        )
+        return OverrideLogPageResult(page=command.page, page_size=command.page_size, total=count, items=items)

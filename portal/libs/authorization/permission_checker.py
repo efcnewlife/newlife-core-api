@@ -1,17 +1,18 @@
 """
 Permission Checker Service
 """
-from typing import Optional, List
+
+from typing import List, Optional
 from uuid import UUID
 
 from redis.asyncio import Redis
 
 from portal.config import settings
 from portal.exceptions.responses import UnauthorizedException
+from portal.infrastructure.cache.permission_cache import PermissionCache
 from portal.libs.consts.cache_keys import CacheKeys
 from portal.libs.contexts.user_context import UserContext, get_user_context
 from portal.libs.database import RedisPool
-from portal.infrastructure.cache.permission_cache import PermissionCache
 
 
 class PermissionChecker:
@@ -96,4 +97,3 @@ class PermissionChecker:
         key = PermissionCache.permission_key(user_id)
         permission_codes = await self._redis.hkeys(key)
         return [code.decode() if isinstance(code, bytes) else code for code in permission_codes]
-

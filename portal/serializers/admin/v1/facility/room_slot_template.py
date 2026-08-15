@@ -1,6 +1,7 @@
 """
 Room slot template serializers.
 """
+
 from datetime import date, datetime, time
 from typing import Optional
 from uuid import UUID
@@ -33,11 +34,7 @@ class AdminRoomSlotTemplateItem(UUIDBaseModel):
 
     facility_id: UUID = Field(..., serialization_alias="facilityId", description="Room ID")
     name: str = Field(..., description="Template name")
-    days_of_week: list[int] = Field(
-        ...,
-        serialization_alias="daysOfWeek",
-        description="ISO weekdays 0-6 (Monday-Sunday)",
-    )
+    days_of_week: list[int] = Field(..., serialization_alias="daysOfWeek", description="ISO weekdays 0-6 (Monday-Sunday)")
     start_time: time = Field(..., serialization_alias="startTime", description="Start time")
     end_time: time = Field(..., serialization_alias="endTime", description="End time")
     slot_duration_minutes: int = Field(..., serialization_alias="slotDurationMinutes", description="Slot duration")

@@ -1,6 +1,7 @@
 """
 Admin refresh token and logout application service.
 """
+
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -12,8 +13,8 @@ from portal.application.rbac.permission_service import PermissionService
 from portal.application.rbac.role_service import RoleService
 from portal.config import settings
 from portal.domain.auth.member_web_app import MemberWebAppRegistry
-from portal.exceptions.responses import ForbiddenException, RefreshTokenInvalidException, UnauthorizedException
 from portal.domain.auth.ports import UserRepositoryPort
+from portal.exceptions.responses import ForbiddenException, RefreshTokenInvalidException, UnauthorizedException
 from portal.libs.consts.enums import AccessTokenAudType
 from portal.libs.tracing.distributed_trace import distributed_trace
 from portal.providers.jwt_provider import JWTProvider
@@ -61,25 +62,13 @@ class RefreshTokenService:
 
         token_user = normalize_user_for_token(user)
         roles = await self._role_service.init_user_roles_cache(token_user, self._expires_in)
-        permissions = await self._permission_service.init_user_permissions_cache(
-            token_user,
-            self._expires_in,
-        )
+        permissions = await self._permission_service.init_user_permissions_cache(token_user, self._expires_in)
 
         access_token = self._jwt_provider.create_access_token(
-            user=token_user,
-            family_id=rt_data.family_id,
-            roles=roles,
-            permissions=permissions,
-            aud_type=AccessTokenAudType.ADMIN,
+            user=token_user, family_id=rt_data.family_id, roles=roles, permissions=permissions, aud_type=AccessTokenAudType.ADMIN
         )
         expires_in = settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60
-        return TokenResult(
-            access_token=access_token,
-            refresh_token=new_refresh,
-            token_type="bearer",
-            expires_in=expires_in,
-        )
+        return TokenResult(access_token=access_token, refresh_token=new_refresh, token_type="bearer", expires_in=expires_in)
 
     @distributed_trace()
     async def refresh_member_token(self, command: RefreshTokenCommand) -> TokenResult:
@@ -108,47 +97,27 @@ class RefreshTokenService:
 
         token_user = normalize_user_for_token(user)
         access_token = self._jwt_provider.create_access_token(
-            user=token_user,
-            family_id=rt_data.family_id,
-            aud_type=AccessTokenAudType.USER,
-            azp=bound_app_code,
+            user=token_user, family_id=rt_data.family_id, aud_type=AccessTokenAudType.USER, azp=bound_app_code
         )
         expires_in = settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60
-        return TokenResult(
-            access_token=access_token,
-            refresh_token=new_refresh,
-            token_type="bearer",
-            expires_in=expires_in,
-        )
+        return TokenResult(access_token=access_token, refresh_token=new_refresh, token_type="bearer", expires_in=expires_in)
 
     @distributed_trace()
     async def logout(self, command: LogoutCommand) -> None:
-        payload: Optional[AccessTokenPayload] = self._jwt_provider.verify_token(
-            token=command.access_token,
-            is_admin=True,
-        )
+        payload: Optional[AccessTokenPayload] = self._jwt_provider.verify_token(token=command.access_token, is_admin=True)
         if payload and payload.exp:
             exp_dt = datetime.fromtimestamp(payload.exp, tz=timezone.utc)
             await self._token_blacklist_provider.add_to_blacklist(command.access_token, exp_dt)
         if command.refresh_token:
-            await self._refresh_token_provider.revoke_by_token(
-                command.refresh_token,
-                revoke_family=True,
-            )
+            await self._refresh_token_provider.revoke_by_token(command.refresh_token, revoke_family=True)
 
     @distributed_trace()
     async def logout_member(self, command: LogoutCommand) -> None:
-        payload: Optional[AccessTokenPayload] = self._jwt_provider.verify_token(
-            token=command.access_token,
-            is_admin=False,
-        )
+        payload: Optional[AccessTokenPayload] = self._jwt_provider.verify_token(token=command.access_token, is_admin=False)
         if payload and payload.exp:
             exp_dt = datetime.fromtimestamp(payload.exp, tz=timezone.utc)
             await self._token_blacklist_provider.add_to_blacklist(command.access_token, exp_dt)
             if payload.family_id and self._member_refresh_app_binding_provider:
                 await self._member_refresh_app_binding_provider.clear(payload.family_id)
         if command.refresh_token:
-            await self._refresh_token_provider.revoke_by_token(
-                command.refresh_token,
-                revoke_family=True,
-            )
+            await self._refresh_token_provider.revoke_by_token(command.refresh_token, revoke_family=True)

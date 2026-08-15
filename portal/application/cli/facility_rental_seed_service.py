@@ -3,6 +3,7 @@ Facility rental seed use case for CLI (rooms, templates, discounts, surcharges, 
 
 Seed creates rate templates only; rooms are not bound to rates (pricing falls back to active templates).
 """
+
 import json
 import uuid
 from decimal import Decimal
@@ -27,8 +28,8 @@ from portal.models import (
     FacilityRentalRateTemplate,
     FacilityRentalSurcharge,
     FacilityRoom,
-    FacilityRoomSlotTemplate,
     FacilityRoomBlackout,
+    FacilityRoomSlotTemplate,
     FacilityRoomTranslation,
     SystemLocale,
 )
@@ -82,13 +83,7 @@ def _resolve_locale_id(locale_rows: list[dict[str, Any]], locale_code: str) -> O
 
 
 async def _upsert_translations(
-    session: Session,
-    *,
-    locale_rows: list[dict[str, Any]],
-    translations: dict[str, dict[str, str]],
-    translation_model: type,
-    fk_field: str,
-    fk_value: UUID,
+    session: Session, *, locale_rows: list[dict[str, Any]], translations: dict[str, dict[str, str]], translation_model: type, fk_field: str, fk_value: UUID
 ) -> None:
     for locale_code, translation in (translations or {}).items():
         locale_id = _resolve_locale_id(locale_rows, locale_code)
@@ -97,23 +92,13 @@ async def _upsert_translations(
             continue
         await (
             session.insert(translation_model)
-            .values(
-                id=uuid.uuid4(),
-                **{fk_field: fk_value, "locale_id": locale_id, "name": translation["name"]},
-            )
-            .on_conflict_do_update(
-                index_elements=[fk_field, "locale_id"],
-                set_=dict(name=translation["name"]),
-            )
+            .values(id=uuid.uuid4(), **{fk_field: fk_value, "locale_id": locale_id, "name": translation["name"]})
+            .on_conflict_do_update(index_elements=[fk_field, "locale_id"], set_=dict(name=translation["name"]))
             .execute()
         )
 
 
-async def _upsert_room(
-    session: Session,
-    row: dict[str, Any],
-    locale_rows: list[dict[str, Any]],
-) -> UUID:
+async def _upsert_room(session: Session, row: dict[str, Any], locale_rows: list[dict[str, Any]]) -> UUID:
     room_id = uuid.uuid4()
     await (
         session.insert(FacilityRoom)
@@ -127,20 +112,11 @@ async def _upsert_room(
         )
         .on_conflict_do_update(
             index_elements=["code"],
-            set_=dict(
-                room_number=row.get("room_number"),
-                capacity=row.get("capacity"),
-                is_active=row.get("is_active", True),
-                sequence=row.get("sequence"),
-            ),
+            set_=dict(room_number=row.get("room_number"), capacity=row.get("capacity"), is_active=row.get("is_active", True), sequence=row.get("sequence")),
         )
         .execute()
     )
-    existing_id = await (
-        session.select(FacilityRoom.id)
-        .where(FacilityRoom.code == row["code"])
-        .fetchval()
-    )
+    existing_id = await session.select(FacilityRoom.id).where(FacilityRoom.code == row["code"]).fetchval()
     room_id = existing_id or room_id
     await _upsert_translations(
         session,
@@ -157,13 +133,9 @@ async def _upsert_template(session: Session, row: dict[str, Any]) -> UUID:
     try:
         validated_applicability = parse_applicability(row.get("applicability"))
     except (ValidationError, ValueError) as error:
-        raise click.ClickException(
-            f"Invalid applicability for template {row.get('name')}: {error}"
-        ) from error
+        raise click.ClickException(f"Invalid applicability for template {row.get('name')}: {error}") from error
 
-    applicability_bind = (
-        json.dumps(validated_applicability) if validated_applicability is not None else None
-    )
+    applicability_bind = json.dumps(validated_applicability) if validated_applicability is not None else None
     template_id = uuid.uuid4()
     unit_amount = row.get("unit_amount") if row.get("unit_amount") is not None else Decimal("30.00")
     currency = row.get("currency") or "CAD"
@@ -206,20 +178,9 @@ async def _upsert_template(session: Session, row: dict[str, Any]) -> UUID:
 async def _upsert_discount(session: Session, row: dict[str, Any]) -> None:
     await (
         session.insert(FacilityRentalDiscountRule)
-        .values(
-            id=uuid.uuid4(),
-            code=row["code"],
-            percent_off=row["percent_off"],
-            is_active=row.get("is_active", True),
-            description=row.get("description"),
-        )
+        .values(id=uuid.uuid4(), code=row["code"], percent_off=row["percent_off"], is_active=row.get("is_active", True), description=row.get("description"))
         .on_conflict_do_update(
-            index_elements=["code"],
-            set_=dict(
-                percent_off=row["percent_off"],
-                is_active=row.get("is_active", True),
-                description=row.get("description"),
-            ),
+            index_elements=["code"], set_=dict(percent_off=row["percent_off"], is_active=row.get("is_active", True), description=row.get("description"))
         )
         .execute()
     )
@@ -253,22 +214,13 @@ async def _upsert_surcharge(session: Session, row: dict[str, Any]) -> None:
     )
 
 
-async def _upsert_policy_setting(
-    session: Session,
-    row: dict[str, Any],
-    room_ids_by_code: dict[str, UUID],
-) -> None:
+async def _upsert_policy_setting(session: Session, row: dict[str, Any], room_ids_by_code: dict[str, UUID]) -> None:
     facility_code = row.get("facility_code")
     facility_id: Optional[UUID] = None
     if facility_code:
         facility_id = room_ids_by_code.get(facility_code)
         if not facility_id:
-            click.echo(
-                click.style(
-                    f"Skip policy {row['setting_key']}: room code {facility_code} not found",
-                    fg="yellow",
-                )
-            )
+            click.echo(click.style(f"Skip policy {row['setting_key']}: room code {facility_code} not found", fg="yellow"))
             return
 
     query = (
@@ -282,30 +234,12 @@ async def _upsert_policy_setting(
         query = query.where(FacilityRentalPolicySetting.facility_id == facility_id)
     existing_id = await query.fetchval()
 
-    values = dict(
-        amount=row["amount"],
-        currency=row.get("currency", "CAD"),
-        is_active=row.get("is_active", True),
-    )
+    values = dict(amount=row["amount"], currency=row.get("currency", "CAD"), is_active=row.get("is_active", True))
     if existing_id:
-        await (
-            session.update(FacilityRentalPolicySetting)
-            .values(**values)
-            .where(FacilityRentalPolicySetting.id == existing_id)
-            .execute()
-        )
+        await session.update(FacilityRentalPolicySetting).values(**values).where(FacilityRentalPolicySetting.id == existing_id).execute()
         return
 
-    await (
-        session.insert(FacilityRentalPolicySetting)
-        .values(
-            id=uuid.uuid4(),
-            setting_key=row["setting_key"],
-            facility_id=facility_id,
-            **values,
-        )
-        .execute()
-    )
+    await session.insert(FacilityRentalPolicySetting).values(id=uuid.uuid4(), setting_key=row["setting_key"], facility_id=facility_id, **values).execute()
 
 
 async def run_facility_rental_seed(
@@ -328,12 +262,7 @@ async def run_facility_rental_seed(
         click.echo(click.style("Cleared.", fg="yellow"))
 
     locale_rows = await (
-        session.select(
-            SystemLocale.id,
-            SystemLocale.language_code,
-            SystemLocale.region_code,
-            SystemLocale.script_code,
-        )
+        session.select(SystemLocale.id, SystemLocale.language_code, SystemLocale.region_code, SystemLocale.script_code)
         .where(SystemLocale.is_active == True)
         .where(SystemLocale.is_deleted == False)
         .fetch()

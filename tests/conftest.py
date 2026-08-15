@@ -1,6 +1,7 @@
 """
 Pytest: ensure project root is on sys.path when running from repo root.
 """
+
 import sys
 from pathlib import Path
 

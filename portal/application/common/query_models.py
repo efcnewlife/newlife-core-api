@@ -1,6 +1,7 @@
 """
 Shared query and delete command models for application services.
 """
+
 import uuid
 from typing import Optional
 
@@ -43,10 +44,7 @@ class GenericQueryBaseModel(OrderByQueryBaseModel, DeleteQueryBaseModel, Keyword
 class DetailQueryModel(BaseModel):
     """Single-entity detail query parameters."""
 
-    all_locales: bool = Field(
-        False,
-        description="When true, return translations for all locales instead of the resolved locale only",
-    )
+    all_locales: bool = Field(False, description="When true, return translations for all locales instead of the resolved locale only")
 
 
 class DeleteBaseModel(BaseModel):

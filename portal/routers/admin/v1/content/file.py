@@ -1,6 +1,7 @@
 """
 Admin content file API routes.
 """
+
 from typing import Annotated
 
 from dependency_injector.wiring import Provide, inject
@@ -35,15 +36,7 @@ from portal.serializers.admin.v1.file import (
 
 router: AuthRouter = AuthRouter(is_admin=True)
 
-IMAGE_ALLOWED_TYPES = [
-    "image/apng",
-    "image/avif",
-    "image/gif",
-    "image/jpeg",
-    "image/png",
-    "image/svg+xml",
-    "image/webp",
-]
+IMAGE_ALLOWED_TYPES = ["image/apng", "image/avif", "image/gif", "image/jpeg", "image/png", "image/svg+xml", "image/webp"]
 
 FILE_ALLOWED_TYPES = [
     "application/pdf",
@@ -58,10 +51,7 @@ FILE_ALLOWED_TYPES = [
     "text/plain",
 ]
 
-ALLOWED_TYPES_BY_CATEGORY = {
-    MediaCategory.IMAGES: IMAGE_ALLOWED_TYPES,
-    MediaCategory.FILES: FILE_ALLOWED_TYPES,
-}
+ALLOWED_TYPES_BY_CATEGORY = {MediaCategory.IMAGES: IMAGE_ALLOWED_TYPES, MediaCategory.FILES: FILE_ALLOWED_TYPES}
 
 
 def _validate_upload_file(file: UploadFile, media_category: MediaCategory) -> UploadFile:
@@ -69,31 +59,16 @@ def _validate_upload_file(file: UploadFile, media_category: MediaCategory) -> Up
     return FileValidation(allowed_types=allowed_types)(file)
 
 
-@router.get(
-    path="/pages",
-    status_code=status.HTTP_200_OK,
-    response_model=AdminFilePages,
-    permissions=[Permission.CONTENT_FILE.read],
-)
+@router.get(path="/pages", status_code=status.HTTP_200_OK, response_model=AdminFilePages, permissions=[Permission.CONTENT_FILE.read])
 @inject
-async def get_file_pages(
-    query_model: Annotated[AdminFileQuery, Query()],
-    file_service: FileService = Depends(Provide[Container.file_service]),
-):
+async def get_file_pages(query_model: Annotated[AdminFileQuery, Query()], file_service: FileService = Depends(Provide[Container.file_service])):
     result = await file_service.get_file_pages(command=pages_query_to_command(query_model))
     return file_page_result_to_api(result)
 
 
-@router.get(
-    path="/summary",
-    status_code=status.HTTP_200_OK,
-    response_model=AdminFileSummary,
-    permissions=[Permission.CONTENT_FILE.read],
-)
+@router.get(path="/summary", status_code=status.HTTP_200_OK, response_model=AdminFileSummary, permissions=[Permission.CONTENT_FILE.read])
 @inject
-async def get_file_summary(
-    file_service: FileService = Depends(Provide[Container.file_service]),
-):
+async def get_file_summary(file_service: FileService = Depends(Provide[Container.file_service])):
     result = await file_service.get_file_summary()
     return file_summary_result_to_api(result)
 
@@ -107,9 +82,7 @@ async def get_file_summary(
 )
 @inject
 async def upload_file(
-    file: UploadFile,
-    media_category: MediaCategory = Query(default=MediaCategory.IMAGES),
-    file_service: FileService = Depends(Provide[Container.file_service]),
+    file: UploadFile, media_category: MediaCategory = Query(default=MediaCategory.IMAGES), file_service: FileService = Depends(Provide[Container.file_service])
 ):
     validated_file = _validate_upload_file(file, media_category)
     command = await upload_file_to_command(validated_file, upload_source=FileUploadSource.ADMIN)
@@ -118,10 +91,7 @@ async def upload_file(
 
 
 @router.post(
-    path="/batch_upload",
-    status_code=status.HTTP_201_CREATED,
-    response_model=AdminBatchFileUploadResponseModel,
-    permissions=[Permission.CONTENT_FILE.create],
+    path="/batch_upload", status_code=status.HTTP_201_CREATED, response_model=AdminBatchFileUploadResponseModel, permissions=[Permission.CONTENT_FILE.create]
 )
 @inject
 async def upload_multiple_files(
@@ -143,9 +113,6 @@ async def upload_multiple_files(
     permissions=[Permission.CONTENT_FILE.delete],
 )
 @inject
-async def delete_files(
-    model: AdminFileBulkAction,
-    file_service: FileService = Depends(Provide[Container.file_service]),
-):
+async def delete_files(model: AdminFileBulkAction, file_service: FileService = Depends(Provide[Container.file_service])):
     result = await file_service.delete_files(command=bulk_action_to_command(model))
     return bulk_delete_result_to_api(result)

@@ -1,6 +1,7 @@
 """
 Heuristics to exclude shared mailboxes and service accounts from directory sync.
 """
+
 import re
 from typing import Optional
 
@@ -8,20 +9,7 @@ from portal.providers.ms_graph.models import GraphUserRecord
 
 # Surnames commonly used on functional accounts (from tenant export review).
 BLOCKED_SURNAME_TOKENS: frozenset[str] = frozenset(
-    {
-        "nl",
-        "efcnl",
-        "efc nl",
-        "it",
-        "creative team",
-        "youth group",
-        "school",
-        "new life",
-        "newlife",
-        "efc new life",
-        "efc newlife",
-        "efcnewlife",
-    }
+    {"nl", "efcnl", "efc nl", "it", "creative team", "youth group", "school", "new life", "newlife", "efc new life", "efc newlife", "efcnewlife"}
 )
 
 # Functional mailbox local-parts (exact match, before @).
@@ -49,31 +37,13 @@ BLOCKED_EMAIL_LOCAL_EXACT: frozenset[str] = frozenset(
 )
 
 # Functional mailbox local-part prefixes.
-BLOCKED_EMAIL_LOCAL_PREFIXES: tuple[str, ...] = (
-    "uploader",
-    "pictures",
-    "video",
-    "efcnl_",
-    "office_",
-    "website.",
-    "chinese.",
-    "english.",
-    "signage.",
-)
+BLOCKED_EMAIL_LOCAL_PREFIXES: tuple[str, ...] = ("uploader", "pictures", "video", "efcnl_", "office_", "website.", "chinese.", "english.", "signage.")
 
 # Regex for numbered service accounts: uploader2_ct, video1, bak1, pictures1.
-BLOCKED_EMAIL_LOCAL_PATTERN = re.compile(
-    r"^(uploader\d|pictures\d|video\d|bak\d)",
-    re.IGNORECASE,
-)
+BLOCKED_EMAIL_LOCAL_PATTERN = re.compile(r"^(uploader\d|pictures\d|video\d|bak\d)", re.IGNORECASE)
 
 # Display / preferred name hints on shared or test mailboxes.
-BLOCKED_DISPLAY_KEYWORDS: tuple[str, ...] = (
-    "service account",
-    "test account",
-    "church secretary",
-    "yearbook",
-)
+BLOCKED_DISPLAY_KEYWORDS: tuple[str, ...] = ("service account", "test account", "church secretary", "yearbook")
 
 
 def email_local_part(email: str) -> str:

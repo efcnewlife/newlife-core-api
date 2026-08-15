@@ -68,9 +68,7 @@ def build_request(headers: list[tuple[bytes, bytes]], app: Starlette) -> Request
 
 @pytest.mark.asyncio
 async def test_parse_accept_language_order():
-    parsed = CoreRequestMiddleware._parse_accept_language(
-        "fr-CH, fr;q=0.9, en;q=0.8, de;q=0.7, *;q=0.5"
-    )
+    parsed = CoreRequestMiddleware._parse_accept_language("fr-CH, fr;q=0.9, en;q=0.8, de;q=0.7, *;q=0.5")
     assert parsed == ["fr-ch", "fr", "en", "de", "*"]
 
 
@@ -82,17 +80,11 @@ async def test_locale_detector_exact_match():
             "active_locales": ["en-US", "fr-CH"],
             "default_locale": "en-US",
             "normalized_map": {"en-us": "en-US", "fr-ch": "fr-CH"},
-            "normalized_id_map": {
-                "en-us": "00000000-0000-0000-0000-000000000001",
-                "fr-ch": "00000000-0000-0000-0000-000000000002",
-            },
+            "normalized_id_map": {"en-us": "00000000-0000-0000-0000-000000000001", "fr-ch": "00000000-0000-0000-0000-000000000002"},
         },
         language_map={"fr": ["fr-CH"]},
     )
-    resolved_code, resolved_id, candidates = await middleware.locale_detector(
-        "fr-CH, en;q=0.8",
-        locale_service=handler,
-    )
+    resolved_code, resolved_id, candidates = await middleware.locale_detector("fr-CH, en;q=0.8", locale_service=handler)
     assert resolved_code == "fr-CH"
     assert resolved_id == UUID("00000000-0000-0000-0000-000000000002")
     assert candidates == ["fr-ch", "en"]
@@ -106,17 +98,11 @@ async def test_locale_detector_language_fallback():
             "active_locales": ["en-US", "fr-CH"],
             "default_locale": "en-US",
             "normalized_map": {"en-us": "en-US", "fr-ch": "fr-CH"},
-            "normalized_id_map": {
-                "en-us": "00000000-0000-0000-0000-000000000001",
-                "fr-ch": "00000000-0000-0000-0000-000000000002",
-            },
+            "normalized_id_map": {"en-us": "00000000-0000-0000-0000-000000000001", "fr-ch": "00000000-0000-0000-0000-000000000002"},
         },
         language_map={"fr": ["fr-CH"]},
     )
-    resolved_code, resolved_id, _ = await middleware.locale_detector(
-        "fr-FR, en;q=0.8",
-        locale_service=handler,
-    )
+    resolved_code, resolved_id, _ = await middleware.locale_detector("fr-FR, en;q=0.8", locale_service=handler)
     assert resolved_code == "fr-CH"
     assert resolved_id == UUID("00000000-0000-0000-0000-000000000002")
 
@@ -129,17 +115,11 @@ async def test_locale_detector_wildcard_fallback_to_default():
             "active_locales": ["en-US", "fr-CH"],
             "default_locale": "en-US",
             "normalized_map": {"en-us": "en-US", "fr-ch": "fr-CH"},
-            "normalized_id_map": {
-                "en-us": "00000000-0000-0000-0000-000000000001",
-                "fr-ch": "00000000-0000-0000-0000-000000000002",
-            },
+            "normalized_id_map": {"en-us": "00000000-0000-0000-0000-000000000001", "fr-ch": "00000000-0000-0000-0000-000000000002"},
         },
         language_map={},
     )
-    resolved_code, resolved_id, _ = await middleware.locale_detector(
-        "*;q=0.1",
-        locale_service=handler,
-    )
+    resolved_code, resolved_id, _ = await middleware.locale_detector("*;q=0.1", locale_service=handler)
     assert resolved_code == "en-US"
     assert resolved_id == UUID("00000000-0000-0000-0000-000000000001")
 
@@ -165,14 +145,7 @@ async def test_dispatch_sets_resolved_locale_in_request_context():
         captured["accept_language"] = req_ctx.headers.accept_language
         return Response("ok")
 
-    request = build_request(
-        headers=[
-            (b"host", b"testserver"),
-            (b"user-agent", b"pytest"),
-            (b"accept-language", b"en-US,en;q=0.9"),
-        ],
-        app=app,
-    )
+    request = build_request(headers=[(b"host", b"testserver"), (b"user-agent", b"pytest"), (b"accept-language", b"en-US,en;q=0.9")], app=app)
 
     response = await middleware.dispatch(request=request, call_next=call_next)
     assert response.status_code == 200

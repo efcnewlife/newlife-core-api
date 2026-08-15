@@ -1,6 +1,7 @@
 """
 RentalCatalogService unit tests.
 """
+
 from uuid import uuid4
 
 import pytest
@@ -66,10 +67,6 @@ async def test_delete_surcharge_not_found():
 async def test_update_surcharge_not_found():
     stub = StubRentalRepository(update_surcharge_affected=0)
     service = RentalCatalogService(stub)
-    command = UpdateSurchargeCommand(
-        code="audio",
-        charge_type="flat",
-        unit_amount=10,
-    )
+    command = UpdateSurchargeCommand(code="audio", charge_type="flat", unit_amount=10)
     with pytest.raises(NotFoundException):
         await service.update_surcharge(uuid4(), command)

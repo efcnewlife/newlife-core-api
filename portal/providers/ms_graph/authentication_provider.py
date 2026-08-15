@@ -1,21 +1,16 @@
 """Custom authentication provider for Microsoft Graph."""
+
 from typing import Any
 
 from azure.core.exceptions import ClientAuthenticationError
 from kiota_abstractions.request_information import RequestInformation
-from kiota_authentication_azure.azure_identity_authentication_provider import (
-    AzureIdentityAuthenticationProvider,
-)
+from kiota_authentication_azure.azure_identity_authentication_provider import AzureIdentityAuthenticationProvider
 
 
 class CustomAzureIdentityAuthenticationProvider(AzureIdentityAuthenticationProvider):
     """Azure identity auth provider that raises RuntimeError on failure."""
 
-    async def authenticate_request(
-        self,
-        request: RequestInformation,
-        additional_authentication_context: dict[str, Any] | None = None,
-    ) -> None:
+    async def authenticate_request(self, request: RequestInformation, additional_authentication_context: dict[str, Any] | None = None) -> None:
         if additional_authentication_context is None:
             additional_authentication_context = {}
         try:

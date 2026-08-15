@@ -1,6 +1,7 @@
 """
 System setting domain entities.
 """
+
 from typing import Any
 
 import ujson

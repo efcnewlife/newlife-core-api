@@ -1,6 +1,7 @@
 """
 Password Provider for DI using cryptography (PBKDF2HMAC) with embedded salt.
 """
+
 import base64
 import hmac
 import re
@@ -55,9 +56,8 @@ class PasswordProvider:
         if not re.search(r"[!@#$%^&*(),.?\":{}|<>_\-\\\[\]/~`+=]", password):
             errors.append("請至少包含一個特殊字元 (如 !@#$%^&* 等)。")
 
-        is_valid = (len(errors) == 0)
+        is_valid = len(errors) == 0
         return is_valid
-
 
     def _generate_salt_bytes(self) -> bytes:
         """Generate random salt bytes."""
@@ -70,12 +70,7 @@ class PasswordProvider:
         :param salt_bytes:
         :return:
         """
-        kdf = PBKDF2HMAC(
-            algorithm=self.__HASH_ALGORITHM,
-            length=self.__FIXED_DERIVED_KEY_LENGTH,
-            salt=salt_bytes,
-            iterations=self.__PBKDF2_ITERATIONS,
-        )
+        kdf = PBKDF2HMAC(algorithm=self.__HASH_ALGORITHM, length=self.__FIXED_DERIVED_KEY_LENGTH, salt=salt_bytes, iterations=self.__PBKDF2_ITERATIONS)
         return kdf.derive(password.encode("utf-8"))
 
     def _build_payload(self, salt_bytes: bytes, derived_key: bytes) -> bytes:
@@ -122,15 +117,10 @@ class PasswordProvider:
             if version != self.__FORMAT_VERSION:
                 return False
             iterations = int.from_bytes(payload[1:5], "big")
-            salt_bytes = payload[5:5 + self.__SALT_NUM_BYTES]
-            expected_key = payload[5 + self.__SALT_NUM_BYTES:]
+            salt_bytes = payload[5 : 5 + self.__SALT_NUM_BYTES]
+            expected_key = payload[5 + self.__SALT_NUM_BYTES :]
             # Derive key with same length as expected
-            kdf = PBKDF2HMAC(
-                algorithm=self.__HASH_ALGORITHM,
-                length=len(expected_key),
-                salt=salt_bytes,
-                iterations=iterations,
-            )
+            kdf = PBKDF2HMAC(algorithm=self.__HASH_ALGORITHM, length=len(expected_key), salt=salt_bytes, iterations=iterations)
             derived_key = kdf.derive(password.encode("utf-8"))
             return hmac.compare_digest(derived_key, expected_key)
         except Exception:

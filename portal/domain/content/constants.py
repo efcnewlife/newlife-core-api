@@ -1,6 +1,7 @@
 """
 Content domain constants and enums.
 """
+
 from enum import IntEnum, StrEnum
 
 CONTENT_FILE_TABLE = "file"

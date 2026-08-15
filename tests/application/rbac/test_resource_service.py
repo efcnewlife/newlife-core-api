@@ -1,25 +1,21 @@
 """
 Tests for ResourceService.
 """
+
 from uuid import uuid4
 
 import pytest
 
-from portal.application.rbac.results import ResourceListResult
+from portal.application.rbac.commands import ResourceListQueryCommand
 from portal.application.rbac.resource_service import ResourceService
+from portal.application.rbac.results import ResourceListResult
 from portal.domain.rbac.entities import ResourceItem
 from portal.exceptions.responses import NotFoundException, UnauthorizedException
 from portal.libs.consts.enums import ResourceType
-from portal.application.rbac.commands import ResourceListQueryCommand
 
 
 class StubResourceRepository:
-    def __init__(
-        self,
-        menu_items=None,
-        user_items=None,
-        detail=None,
-    ):
+    def __init__(self, menu_items=None, user_items=None, detail=None):
         self._menu_items = menu_items or []
         self._user_items = user_items or []
         self._detail = detail
@@ -53,10 +49,7 @@ def _admin_user_ctx(monkeypatch, *, user_id=None, is_admin=True, is_superuser=Fa
     ctx.user_id = user_id
     ctx.is_admin = is_admin
     ctx.is_superuser = is_superuser
-    monkeypatch.setattr(
-        "portal.application.rbac.resource_service.get_user_context",
-        lambda: ctx,
-    )
+    monkeypatch.setattr("portal.application.rbac.resource_service.get_user_context", lambda: ctx)
     return ctx
 
 
@@ -70,10 +63,7 @@ async def test_get_resources_raises_unauthorized_for_non_admin(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_get_resource_raises_not_found(monkeypatch):
-    monkeypatch.setattr(
-        "portal.application.rbac.resource_service.get_request_context",
-        lambda: None,
-    )
+    monkeypatch.setattr("portal.application.rbac.resource_service.get_request_context", lambda: None)
     service = ResourceService(StubResourceRepository(detail=None), StubRbacAuditService())
     with pytest.raises(NotFoundException):
         await service.get_resource(resource_id=uuid4())

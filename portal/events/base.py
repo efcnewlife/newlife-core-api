@@ -14,6 +14,7 @@ class BaseEvent(BaseModel, ABC):
     """
     Base class for all events
     """
+
     event_id: UUID = Field(default_factory=uuid4)
     event_type: str = Field(default="")
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

@@ -1,6 +1,7 @@
 """
 System setting test stubs.
 """
+
 from zoneinfo import ZoneInfo
 
 

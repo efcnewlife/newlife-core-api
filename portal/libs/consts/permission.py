@@ -1,11 +1,13 @@
 """
 Permission constants - Template: System resources only
 """
+
 from enum import Enum
 
 
 class Verb(Enum):
     """Verb enum"""
+
     READ = "read"
     CREATE = "create"
     UPDATE = "update"
@@ -14,6 +16,7 @@ class Verb(Enum):
 
 class Resource(Enum):
     """Resource enum"""
+
     SYSTEM_PERMISSION = "system:permission"
     SYSTEM_RESOURCE = "system:resource"
     SYSTEM_ROLE = "system:role"

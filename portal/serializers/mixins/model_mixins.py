@@ -1,6 +1,7 @@
 """
 API-layer Pydantic mixins for serializers (camelCase via Field on concrete models).
 """
+
 from datetime import datetime
 from typing import Optional
 from uuid import UUID
@@ -27,10 +28,7 @@ class JSONStringMixinModel(BaseModel):
 class SortableMixinModel(BaseModel):
     """Sortable entity mixin."""
 
-    sequence: Optional[int] = Field(
-        default=None,
-        description="Display sort, small to large, positive sort, default value current timestamp",
-    )
+    sequence: Optional[int] = Field(default=None, description="Display sort, small to large, positive sort, default value current timestamp")
 
 
 class AuditMixinModel(BaseModel):

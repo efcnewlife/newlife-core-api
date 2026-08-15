@@ -1,6 +1,7 @@
 """
 Superuser seed use case for CLI.
 """
+
 from typing import Any, Optional
 from uuid import uuid4
 
@@ -20,13 +21,7 @@ class SuperuserSeedService:
         self._session = session
         self._password_provider = password_provider
 
-    async def run(
-        self,
-        email: str,
-        password: str,
-        first_name: str,
-        last_name: str,
-    ) -> Optional[Any]:
+    async def run(self, email: str, password: str, first_name: str, last_name: str) -> Optional[Any]:
         """
         Create a superuser when one does not already exist for the email.
         :param email:
@@ -51,58 +46,27 @@ class SuperuserSeedService:
         first_name = first_name[:64]
         last_name = last_name[:64]
 
-        existing_user_id = await (
-            self._session
-            .select(AuthUser.id)
-            .where(AuthUser.email == normalized_email)
-            .fetchval()
-        )
+        existing_user_id = await self._session.select(AuthUser.id).where(AuthUser.email == normalized_email).fetchval()
 
         if existing_user_id:
-            return await (
-                self._session
-                .select(AuthUser)
-                .where(AuthUser.id == existing_user_id)
-                .fetchrow()
-            )
+            return await self._session.select(AuthUser).where(AuthUser.id == existing_user_id).fetchrow()
 
         password_hash = self._password_provider.hash_password(password)
         user_id = uuid4()
 
         await (
-            self._session
-            .insert(AuthUser)
-            .values(
-                id=user_id,
-                email=normalized_email,
-                password_hash=password_hash,
-                verified=True,
-                is_active=True,
-                is_superuser=True,
-                is_admin=True,
-            )
+            self._session.insert(AuthUser)
+            .values(id=user_id, email=normalized_email, password_hash=password_hash, verified=True, is_active=True, is_superuser=True, is_admin=True)
             .execute()
         )
 
         await (
-            self._session
-            .insert(AuthUserProfile)
-            .values(
-                id=uuid4(),
-                user_id=user_id,
-                first_name=first_name,
-                last_name=last_name,
-                gender=Gender.UNKNOWN.value,
-            )
+            self._session.insert(AuthUserProfile)
+            .values(id=uuid4(), user_id=user_id, first_name=first_name, last_name=last_name, gender=Gender.UNKNOWN.value)
             .execute()
         )
 
         await self._session.commit()
 
         click.echo(f"Superuser created: {normalized_email}")
-        return await (
-            self._session
-            .select(AuthUser)
-            .where(AuthUser.id == user_id)
-            .fetchrow()
-        )
+        return await self._session.select(AuthUser).where(AuthUser.id == user_id).fetchrow()

@@ -1,6 +1,7 @@
 """
 System setting application results.
 """
+
 from typing import Any
 
 from pydantic import BaseModel, Field

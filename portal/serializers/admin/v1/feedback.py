@@ -1,20 +1,22 @@
 """
 Feedback serializers (Admin)
 """
+
 from datetime import datetime
 from typing import Optional
 
 from pydantic import BaseModel, Field
 
 from portal.libs.consts.enums import FeedbackStatus
-from portal.serializers.mixins.model_mixins import UUIDBaseModel
 from portal.serializers.mixins import GenericQueryBaseModel, PaginationBaseResponseModel
+from portal.serializers.mixins.model_mixins import UUIDBaseModel
 
 
 class AdminFeedbackQuery(GenericQueryBaseModel):
     """
     Feedback query model
     """
+
     status: Optional[int] = Field(default=None, description="Feedback status (int value)")
 
 
@@ -22,6 +24,7 @@ class AdminFeedbackBase(UUIDBaseModel):
     """
     Feedback base model
     """
+
     name: str = Field(..., description="Name")
     email: Optional[str] = Field(default=None, description="Email")
     status: int = Field(default=FeedbackStatus.PENDING.value, description="Status")
@@ -32,11 +35,13 @@ class AdminFeedbackBase(UUIDBaseModel):
 
 class AdminFeedbackItem(AdminFeedbackBase):
     """Feedback item"""
+
     message: Optional[str] = Field(None, description="Message")
 
 
 class AdminFeedbackDetail(AdminFeedbackItem):
     """Feedback detail"""
+
     description: Optional[str] = Field(default=None, description="Description")
 
 
@@ -46,6 +51,7 @@ class AdminFeedbackPages(PaginationBaseResponseModel):
 
 class AdminFeedbackUpdate(BaseModel):
     """Update feedback status"""
+
     remark: Optional[str] = Field(default=None, description="Remark")
     description: Optional[str] = Field(default=None, description="Description")
     status: FeedbackStatus = Field(..., description="Status (int value)")

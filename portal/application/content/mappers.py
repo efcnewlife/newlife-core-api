@@ -1,13 +1,10 @@
 """
 Map between content file API serializers and application commands/results.
 """
+
 from fastapi import UploadFile
 
-from portal.application.content.commands import (
-    BulkDeleteFilesCommand,
-    FilePagesQueryCommand,
-    UploadFileCommand,
-)
+from portal.application.content.commands import BulkDeleteFilesCommand, FilePagesQueryCommand, UploadFileCommand
 from portal.application.content.results import (
     BatchUploadFilesResult,
     BulkDeleteFilesResult,
@@ -35,23 +32,14 @@ from portal.serializers.admin.v1.file import (
 from portal.serializers.mixins.model_mixins import UUIDBaseModel
 
 
-async def upload_file_to_command(
-    upload_file: UploadFile,
-    upload_source: FileUploadSource = FileUploadSource.ADMIN,
-) -> UploadFileCommand:
+async def upload_file_to_command(upload_file: UploadFile, upload_source: FileUploadSource = FileUploadSource.ADMIN) -> UploadFileCommand:
     content = await upload_file.read()
     return UploadFileCommand(
-        filename=upload_file.filename or "unknown_file",
-        content=content,
-        content_type=upload_file.content_type,
-        upload_source=upload_source,
+        filename=upload_file.filename or "unknown_file", content=content, content_type=upload_file.content_type, upload_source=upload_source
     )
 
 
-async def upload_files_to_commands(
-    upload_files: list[UploadFile],
-    upload_source: FileUploadSource = FileUploadSource.ADMIN,
-) -> list[UploadFileCommand]:
+async def upload_files_to_commands(upload_files: list[UploadFile], upload_source: FileUploadSource = FileUploadSource.ADMIN) -> list[UploadFileCommand]:
     commands: list[UploadFileCommand] = []
     for upload_file in upload_files:
         commands.append(await upload_file_to_command(upload_file, upload_source=upload_source))
@@ -104,27 +92,17 @@ def file_grid_item_to_api(result: FileGridItemResult) -> AdminFileGridItem:
 
 
 def file_category_stats_to_api(result: FileCategoryStatsResult) -> AdminFileCategoryStats:
-    return AdminFileCategoryStats(
-        count=result.count,
-        size_bytes=result.size_bytes,
-    )
+    return AdminFileCategoryStats(count=result.count, size_bytes=result.size_bytes)
 
 
 def file_summary_result_to_api(result: FileSummaryResult) -> AdminFileSummary:
     return AdminFileSummary(
-        images=file_category_stats_to_api(result.images),
-        files=file_category_stats_to_api(result.files),
-        total=file_category_stats_to_api(result.total),
+        images=file_category_stats_to_api(result.images), files=file_category_stats_to_api(result.files), total=file_category_stats_to_api(result.total)
     )
 
 
 def file_page_result_to_api(result: FilePageResult) -> AdminFilePages:
-    return AdminFilePages(
-        page=result.page,
-        page_size=result.page_size,
-        total=result.total,
-        items=[file_grid_item_to_api(item) for item in result.items],
-    )
+    return AdminFilePages(page=result.page, page_size=result.page_size, total=result.total, items=[file_grid_item_to_api(item) for item in result.items])
 
 
 def upload_file_result_to_api(result: UploadFileResult) -> AdminFileUploadResponseModel:
@@ -134,10 +112,7 @@ def upload_file_result_to_api(result: UploadFileResult) -> AdminFileUploadRespon
 def batch_upload_result_to_api(result: BatchUploadFilesResult) -> AdminBatchFileUploadResponseModel:
     return AdminBatchFileUploadResponseModel(
         uploaded_files=[UUIDBaseModel(id=item.id) for item in result.uploaded_files],
-        failed_files=[
-            AdminFailedUploadFile(filename=item.filename, error=item.error)
-            for item in result.failed_files
-        ],
+        failed_files=[AdminFailedUploadFile(filename=item.filename, error=item.error) for item in result.failed_files],
     )
 
 
@@ -145,7 +120,4 @@ def bulk_delete_result_to_api(result: BulkDeleteFilesResult) -> AdminBulkActionR
     failed_items = None
     if result.failed_items:
         failed_items = [file_base_result_to_api(item) for item in result.failed_items]
-    return AdminBulkActionResponseModel(
-        success_count=result.success_count,
-        failed_items=failed_items,
-    )
+    return AdminBulkActionResponseModel(success_count=result.success_count, failed_items=failed_items)

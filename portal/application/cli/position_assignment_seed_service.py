@@ -3,6 +3,7 @@ Position assignment seed use case for CLI.
 
 Binds existing users (by email) to org positions (by code) as incumbents.
 """
+
 from typing import Any
 
 import click
@@ -29,45 +30,20 @@ async def run_position_assignment_seed(session: Session, rows: list[dict[str, An
         if not email or not codes:
             continue
 
-        user_id = await (
-            session.select(AuthUser.id)
-            .where(AuthUser.email == email)
-            .fetchval()
-        )
+        user_id = await session.select(AuthUser.id).where(AuthUser.email == email).fetchval()
         if not user_id:
             skipped_missing_user += 1
-            click.echo(
-                click.style(
-                    f"Skip: user not found for email {email}",
-                    fg="yellow",
-                )
-            )
+            click.echo(click.style(f"Skip: user not found for email {email}", fg="yellow"))
             continue
 
         for code in codes:
-            position_id = await (
-                session.select(OrgPosition.id)
-                .where(OrgPosition.code == code)
-                .where(OrgPosition.is_deleted == False)
-                .fetchval()
-            )
+            position_id = await session.select(OrgPosition.id).where(OrgPosition.code == code).where(OrgPosition.is_deleted == False).fetchval()
             if not position_id:
-                raise ValueError(
-                    f"Position code {code!r} not found. Run seed-positions first."
-                )
+                raise ValueError(f"Position code {code!r} not found. Run seed-positions first.")
             await repository.assign_incumbent(position_id=position_id, user_id=user_id)
             assigned += 1
             click.echo(f"Assigned {email} -> {code}")
 
     await session.commit()
-    click.echo(
-        click.style(
-            f"Done: assigned={assigned}, skipped_missing_user={skipped_missing_user}",
-            fg="green",
-        )
-    )
-    logger.info(
-        "Position assignment seed completed: assigned=%s skipped_missing_user=%s",
-        assigned,
-        skipped_missing_user,
-    )
+    click.echo(click.style(f"Done: assigned={assigned}, skipped_missing_user={skipped_missing_user}", fg="green"))
+    logger.info("Position assignment seed completed: assigned=%s skipped_missing_user=%s", assigned, skipped_missing_user)

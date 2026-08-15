@@ -1,6 +1,7 @@
 """
 Facility slot template and blackout seed use case for CLI.
 """
+
 import uuid
 from typing import Any, Optional
 from uuid import UUID
@@ -14,11 +15,7 @@ from portal.models import FacilityRoom, FacilityRoomBlackout, FacilityRoomSlotTe
 
 
 async def _load_room_ids_by_code(session: Session) -> dict[str, UUID]:
-    rows = await (
-        session.select(FacilityRoom.id, FacilityRoom.code)
-        .where(FacilityRoom.is_deleted == False)
-        .fetch()
-    )
+    rows = await session.select(FacilityRoom.id, FacilityRoom.code).where(FacilityRoom.is_deleted == False).fetch()
     result: dict[str, UUID] = {}
     for row in rows or []:
         code = row["code"] if isinstance(row, dict) else row.code
@@ -30,24 +27,11 @@ async def _load_room_ids_by_code(session: Session) -> dict[str, UUID]:
 async def _clear_seed_rows(session: Session) -> None:
     """Hard-delete only demo rows whose name starts with the seed prefix."""
     pattern = f"{SEED_NAME_PREFIX}%"
-    await (
-        session.delete(FacilityRoomBlackout)
-        .where(FacilityRoomBlackout.name.like(pattern))
-        .execute()
-    )
-    await (
-        session.delete(FacilityRoomSlotTemplate)
-        .where(FacilityRoomSlotTemplate.name.like(pattern))
-        .execute()
-    )
+    await session.delete(FacilityRoomBlackout).where(FacilityRoomBlackout.name.like(pattern)).execute()
+    await session.delete(FacilityRoomSlotTemplate).where(FacilityRoomSlotTemplate.name.like(pattern)).execute()
 
 
-async def run_facility_slot_seed(
-    session: Session,
-    *,
-    slot_rows: list[dict[str, Any]],
-    blackout_rows: list[dict[str, Any]],
-) -> None:
+async def run_facility_slot_seed(session: Session, *, slot_rows: list[dict[str, Any]], blackout_rows: list[dict[str, Any]]) -> None:
     """
     Replace ``seed:``-prefixed slot templates and blackouts, then insert demo rows.
 
@@ -65,12 +49,7 @@ async def run_facility_slot_seed(
         facility_id = room_ids.get(room_code)
         if facility_id is None:
             skipped_codes.add(room_code)
-            click.echo(
-                click.style(
-                    f"Skip slot template {row['name']!r}: room code {room_code!r} not found",
-                    fg="yellow",
-                )
-            )
+            click.echo(click.style(f"Skip slot template {row['name']!r}: room code {room_code!r} not found", fg="yellow"))
             continue
         await (
             session.insert(FacilityRoomSlotTemplate)
@@ -97,12 +76,7 @@ async def run_facility_slot_seed(
             facility_id = room_ids.get(room_code)
             if facility_id is None:
                 skipped_codes.add(room_code)
-                click.echo(
-                    click.style(
-                        f"Skip blackout {row['name']!r}: room code {room_code!r} not found",
-                        fg="yellow",
-                    )
-                )
+                click.echo(click.style(f"Skip blackout {row['name']!r}: room code {room_code!r} not found", fg="yellow"))
                 continue
         await (
             session.insert(FacilityRoomBlackout)
@@ -125,10 +99,7 @@ async def run_facility_slot_seed(
         blackouts_inserted += 1
 
     await session.commit()
-    summary = (
-        f"Facility slot seed done: {slots_inserted} slot template(s), "
-        f"{blackouts_inserted} blackout(s)"
-    )
+    summary = f"Facility slot seed done: {slots_inserted} slot template(s), {blackouts_inserted} blackout(s)"
     if skipped_codes:
         summary += f"; skipped room codes: {', '.join(sorted(skipped_codes))}"
     click.echo(click.style(summary, fg="green"))

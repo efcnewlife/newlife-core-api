@@ -1,6 +1,7 @@
 """
 Handler for AdminOperationLogEvent: insert audit log row.
 """
+
 import json
 from typing import Any, Optional
 from uuid import UUID

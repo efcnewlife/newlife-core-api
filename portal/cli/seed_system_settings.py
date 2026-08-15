@@ -1,6 +1,7 @@
 """
 System setting seed CLI.
 """
+
 import asyncio
 
 import click

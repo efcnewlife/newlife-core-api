@@ -1,6 +1,7 @@
 """
 Bitmask helpers for ISO weekday selection (Monday=0 through Sunday=6).
 """
+
 from portal.domain.facility.constants import DayOfWeek
 
 VALID_DAY_MASK = (1 << 7) - 1  # bits 0-6

@@ -1,19 +1,14 @@
 """
 Facility rental pricing service.
 """
-from decimal import Decimal, ROUND_HALF_UP
+
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Optional
 from uuid import UUID
 
 from portal.application.facility.commands import PreviewQuoteCommand
 from portal.application.facility.results import PreviewQuoteResult, PreviewQuoteRoomLineResult, RentalRateResult
-from portal.domain.facility.constants import (
-    BookingType,
-    RentalDiscountCode,
-    RentalPolicySettingKey,
-    RentalRateBillingUnit,
-    RentalSurchargeChargeType,
-)
+from portal.domain.facility.constants import BookingType, RentalDiscountCode, RentalPolicySettingKey, RentalRateBillingUnit, RentalSurchargeChargeType
 from portal.exceptions.responses import BadRequestException
 from portal.infrastructure.persistence.repositories.facility.rental_repository import RentalRepository
 from portal.infrastructure.persistence.repositories.facility.room_repository import RoomRepository
@@ -26,11 +21,7 @@ MONEY_QUANT = Decimal("0.01")
 class PricingService:
     """Rental quote calculation per booking room lines."""
 
-    def __init__(
-        self,
-        rental_repository: RentalRepository,
-        room_repository: RoomRepository,
-    ):
+    def __init__(self, rental_repository: RentalRepository, room_repository: RoomRepository):
         self._rental_repository = rental_repository
         self._room_repository = room_repository
 
@@ -38,35 +29,16 @@ class PricingService:
     def _quantize(amount: Decimal) -> Decimal:
         return amount.quantize(MONEY_QUANT, rounding=ROUND_HALF_UP)
 
-    async def _resolve_rate_for_room(
-        self,
-        facility_id: UUID,
-        billed_hours: Decimal,
-        as_of_date,
-    ) -> Optional[RentalRateResult]:
-        room_rates = await self._rental_repository.list_active_rates_for_facility(
-            facility_id=facility_id,
-            as_of_date=as_of_date,
-        )
+    async def _resolve_rate_for_room(self, facility_id: UUID, billed_hours: Decimal, as_of_date) -> Optional[RentalRateResult]:
+        room_rates = await self._rental_repository.list_active_rates_for_facility(facility_id=facility_id, as_of_date=as_of_date)
         if room_rates:
-            rate, _tier = self._rental_repository.pick_rate_for_line(
-                rates=room_rates,
-                billed_hours=billed_hours,
-                allow_first_active=False,
-            )
+            rate, _tier = self._rental_repository.pick_rate_for_line(rates=room_rates, billed_hours=billed_hours, allow_first_active=False)
             if rate:
                 return rate
 
         templates = await self._rental_repository.list_templates(active_only=True)
-        candidates = [
-            self._rental_repository.template_to_rate_candidate(template)
-            for template in templates
-        ]
-        rate, _tier = self._rental_repository.pick_rate_for_line(
-            rates=candidates,
-            billed_hours=billed_hours,
-            allow_first_active=True,
-        )
+        candidates = [self._rental_repository.template_to_rate_candidate(template) for template in templates]
+        rate, _tier = self._rental_repository.pick_rate_for_line(rates=candidates, billed_hours=billed_hours, allow_first_active=True)
         return rate
 
     @distributed_trace()
@@ -87,11 +59,7 @@ class PricingService:
             if line.billed_hours <= 0:
                 raise BadRequestException(detail="billed_hours must be positive")
 
-            rate = await self._resolve_rate_for_room(
-                facility_id=line.facility_id,
-                billed_hours=line.billed_hours,
-                as_of_date=command.as_of_date,
-            )
+            rate = await self._resolve_rate_for_room(facility_id=line.facility_id, billed_hours=line.billed_hours, as_of_date=command.as_of_date)
             if not rate:
                 raise BadRequestException(detail=f"No active rental rate for room {line.facility_id}")
 
@@ -163,15 +131,9 @@ class PricingService:
         return amount * billed_hours
 
     async def _resolve_minimum_fee(self, facility_id: UUID) -> Decimal:
-        amount = await self._rental_repository.get_policy_amount(
-            RentalPolicySettingKey.MINIMUM_FEE_GYM,
-            facility_id,
-        )
+        amount = await self._rental_repository.get_policy_amount(RentalPolicySettingKey.MINIMUM_FEE_GYM, facility_id)
         if amount is None:
-            amount = await self._rental_repository.get_policy_amount(
-                RentalPolicySettingKey.MINIMUM_FEE_DEFAULT,
-                facility_id,
-            )
+            amount = await self._rental_repository.get_policy_amount(RentalPolicySettingKey.MINIMUM_FEE_DEFAULT, facility_id)
         if amount is None:
             return DEFAULT_MINIMUM_FEE
         return amount

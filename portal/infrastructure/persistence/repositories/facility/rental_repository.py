@@ -1,6 +1,7 @@
 """
 Facility rental catalog repository.
 """
+
 from datetime import date
 from decimal import Decimal
 from typing import Any, Optional
@@ -9,25 +10,13 @@ from uuid import UUID
 import sqlalchemy as sa
 from asyncpg import UniqueViolationError
 
-from portal.application.facility.results import (
-    DiscountRuleResult,
-    PolicySettingResult,
-    RentalRateResult,
-    RentalRateTemplateResult,
-    SurchargeResult,
-)
+from portal.application.facility.results import DiscountRuleResult, PolicySettingResult, RentalRateResult, RentalRateTemplateResult, SurchargeResult
 from portal.application.rbac.commands import PagesQueryCommand
 from portal.domain.facility.constants import RentalPolicySettingKey, RentalRateBillingUnit
 from portal.domain.facility.rate_applicability import RateSelectionContext, matches_applicability
 from portal.libs.database import Session
 from portal.libs.database.execute_result import affected_rows
-from portal.models import (
-    FacilityRentalDiscountRule,
-    FacilityRentalPolicySetting,
-    FacilityRentalRate,
-    FacilityRentalRateTemplate,
-    FacilityRentalSurcharge,
-)
+from portal.models import FacilityRentalDiscountRule, FacilityRentalPolicySetting, FacilityRentalRate, FacilityRentalRateTemplate, FacilityRentalSurcharge
 
 
 class RentalRepository:
@@ -57,10 +46,7 @@ class RentalRepository:
                 FacilityRentalRateTemplate.is_active.label("template_is_active"),
             )
             .select_from(FacilityRentalRate)
-            .join(
-                FacilityRentalRateTemplate,
-                FacilityRentalRateTemplate.id == FacilityRentalRate.template_id,
-            )
+            .join(FacilityRentalRateTemplate, FacilityRentalRateTemplate.id == FacilityRentalRate.template_id)
         )
 
     def _template_select(self):
@@ -80,24 +66,14 @@ class RentalRepository:
             FacilityRentalRateTemplate.delete_reason,
         )
 
-    async def fetch_template_pages(
-        self,
-        model: PagesQueryCommand,
-    ) -> tuple[list[RentalRateTemplateResult], int]:
+    async def fetch_template_pages(self, model: PagesQueryCommand) -> tuple[list[RentalRateTemplateResult], int]:
         query = (
             self._template_select()
             .where(FacilityRentalRateTemplate.is_deleted == model.deleted)
-            .where(
-                model.keyword,
-                lambda: FacilityRentalRateTemplate.name.ilike(f"%{model.keyword}%"),
-            )
+            .where(model.keyword, lambda: FacilityRentalRateTemplate.name.ilike(f"%{model.keyword}%"))
         )
         items, count = await (
-            query.order_by_with(
-                tables=[FacilityRentalRateTemplate],
-                order_by=model.order_by,
-                descending=model.descending,
-            )
+            query.order_by_with(tables=[FacilityRentalRateTemplate], order_by=model.order_by, descending=model.descending)
             .limit(model.page_size)
             .offset(model.page * model.page_size)
             .fetchpages(no_order_by=False, as_model=RentalRateTemplateResult)
@@ -108,9 +84,7 @@ class RentalRepository:
         query = self._template_select().where(FacilityRentalRateTemplate.is_deleted == False)
         if active_only:
             query = query.where(FacilityRentalRateTemplate.is_active == True)
-        items: list[RentalRateTemplateResult] = await query.order_by(
-            FacilityRentalRateTemplate.name
-        ).fetch(as_model=RentalRateTemplateResult)
+        items: list[RentalRateTemplateResult] = await query.order_by(FacilityRentalRateTemplate.name).fetch(as_model=RentalRateTemplateResult)
         return items or []
 
     async def get_template_by_id(self, template_id: UUID) -> Optional[RentalRateTemplateResult]:
@@ -160,64 +134,38 @@ class RentalRepository:
             .execute()
         )
 
-    async def fetch_rate_pages(
-        self,
-        model: PagesQueryCommand,
-        facility_id: Optional[UUID] = None,
-    ) -> tuple[list[RentalRateResult], int]:
+    async def fetch_rate_pages(self, model: PagesQueryCommand, facility_id: Optional[UUID] = None) -> tuple[list[RentalRateResult], int]:
         query = (
             self._rate_select()
             .where(FacilityRentalRate.is_deleted == model.deleted)
             .where(
                 model.keyword,
                 lambda: sa.or_(
-                    FacilityRentalRateTemplate.name.ilike(f"%{model.keyword}%"),
-                    FacilityRentalRateTemplate.billing_unit.ilike(f"%{model.keyword}%"),
+                    FacilityRentalRateTemplate.name.ilike(f"%{model.keyword}%"), FacilityRentalRateTemplate.billing_unit.ilike(f"%{model.keyword}%")
                 ),
             )
         )
         if facility_id is not None:
             query = query.where(FacilityRentalRate.facility_id == facility_id)
         items, count = await (
-            query.order_by_with(
-                tables=[FacilityRentalRate, FacilityRentalRateTemplate],
-                order_by=model.order_by,
-                descending=model.descending,
-            )
+            query.order_by_with(tables=[FacilityRentalRate, FacilityRentalRateTemplate], order_by=model.order_by, descending=model.descending)
             .limit(model.page_size)
             .offset(model.page * model.page_size)
             .fetchpages(no_order_by=False, as_model=RentalRateResult)
         )
         return items or [], count
 
-    async def list_rates(
-        self,
-        facility_id: Optional[UUID],
-    ) -> list[RentalRateResult]:
-        query = (
-            self._rate_select()
-            .where(FacilityRentalRate.is_deleted == False)
-            .where(FacilityRentalRate.is_active == True)
-        )
+    async def list_rates(self, facility_id: Optional[UUID]) -> list[RentalRateResult]:
+        query = self._rate_select().where(FacilityRentalRate.is_deleted == False).where(FacilityRentalRate.is_active == True)
         if facility_id is not None:
             query = query.where(FacilityRentalRate.facility_id == facility_id)
-        items: list[RentalRateResult] = await query.order_by(
-            FacilityRentalRateTemplate.name
-        ).fetch(as_model=RentalRateResult)
+        items: list[RentalRateResult] = await query.order_by(FacilityRentalRateTemplate.name).fetch(as_model=RentalRateResult)
         return items or []
 
     async def get_rate_by_id(self, rate_id: UUID) -> Optional[RentalRateResult]:
-        return await (
-            self._rate_select()
-            .where(FacilityRentalRate.id == rate_id)
-            .fetchrow(as_model=RentalRateResult)
-        )
+        return await self._rate_select().where(FacilityRentalRate.id == rate_id).fetchrow(as_model=RentalRateResult)
 
-    async def list_active_rates_for_facility(
-        self,
-        facility_id: UUID,
-        as_of_date: Optional[date],
-    ) -> list[RentalRateResult]:
+    async def list_active_rates_for_facility(self, facility_id: UUID, as_of_date: Optional[date]) -> list[RentalRateResult]:
         """Return active room bindings for the facility (price from joined template)."""
         _ = as_of_date
         room_rows: list[RentalRateResult] = await (
@@ -262,23 +210,13 @@ class RentalRepository:
         return affected_rows(result)
 
     async def delete_rate_soft(self, rate_id: UUID, reason: Optional[str]) -> None:
-        await (
-            self._session.update(FacilityRentalRate)
-            .values(is_deleted=True, delete_reason=reason)
-            .where(FacilityRentalRate.id == rate_id)
-            .execute()
-        )
+        await self._session.update(FacilityRentalRate).values(is_deleted=True, delete_reason=reason).where(FacilityRentalRate.id == rate_id).execute()
 
     async def delete_rate_hard(self, rate_id: UUID) -> None:
         await self._session.delete(FacilityRentalRate).where(FacilityRentalRate.id == rate_id).execute()
 
     async def restore_rate(self, rate_id: UUID) -> None:
-        await (
-            self._session.update(FacilityRentalRate)
-            .values(is_deleted=False, delete_reason=None)
-            .where(FacilityRentalRate.id == rate_id)
-            .execute()
-        )
+        await self._session.update(FacilityRentalRate).values(is_deleted=False, delete_reason=None).where(FacilityRentalRate.id == rate_id).execute()
 
     async def list_discount_rules(self) -> list[DiscountRuleResult]:
         items: list[DiscountRuleResult] = await (
@@ -406,15 +344,8 @@ class RentalRepository:
             FacilityRentalPolicySetting.updated_at,
         ).where(FacilityRentalPolicySetting.is_deleted == False)
         if facility_id is not None:
-            query = query.where(
-                sa.or_(
-                    FacilityRentalPolicySetting.facility_id == facility_id,
-                    FacilityRentalPolicySetting.facility_id.is_(None),
-                )
-            )
-        items: list[PolicySettingResult] = await query.order_by(
-            FacilityRentalPolicySetting.setting_key
-        ).fetch(as_model=PolicySettingResult)
+            query = query.where(sa.or_(FacilityRentalPolicySetting.facility_id == facility_id, FacilityRentalPolicySetting.facility_id.is_(None)))
+        items: list[PolicySettingResult] = await query.order_by(FacilityRentalPolicySetting.setting_key).fetch(as_model=PolicySettingResult)
         return items or []
 
     async def get_policy_setting_by_id(self, setting_id: UUID) -> Optional[PolicySettingResult]:
@@ -434,11 +365,7 @@ class RentalRepository:
             .fetchrow(as_model=PolicySettingResult)
         )
 
-    async def get_policy_amount(
-        self,
-        setting_key: RentalPolicySettingKey,
-        facility_id: Optional[UUID],
-    ) -> Optional[Decimal]:
+    async def get_policy_amount(self, setting_key: RentalPolicySettingKey, facility_id: Optional[UUID]) -> Optional[Decimal]:
         if facility_id:
             facility_amount = await (
                 self._session.select(FacilityRentalPolicySetting.amount)
@@ -472,11 +399,7 @@ class RentalRepository:
         )
         return affected_rows(result)
 
-    async def get_active_discount_percent(
-        self,
-        booking_type: str,
-        is_mission_aligned: bool,
-    ) -> Decimal:
+    async def get_active_discount_percent(self, booking_type: str, is_mission_aligned: bool) -> Decimal:
         rules = await self.list_discount_rules()
         active = {rule.code: rule for rule in rules if rule.is_active}
         if is_mission_aligned and "mission_aligned" in {code for code in active}:
@@ -491,17 +414,9 @@ class RentalRepository:
         return Decimal("0")
 
     @staticmethod
-    def pick_rate_for_line(
-        rates: list[RentalRateResult],
-        billed_hours: Decimal,
-        allow_first_active: bool = True,
-    ) -> tuple[Optional[RentalRateResult], str]:
+    def pick_rate_for_line(rates: list[RentalRateResult], billed_hours: Decimal, allow_first_active: bool = True) -> tuple[Optional[RentalRateResult], str]:
         ctx = RateSelectionContext(billed_hours=billed_hours)
-        eligible = [
-            rate
-            for rate in rates
-            if rate.is_active and matches_applicability(rate.applicability, ctx)
-        ]
+        eligible = [rate for rate in rates if rate.is_active and matches_applicability(rate.applicability, ctx)]
         if not eligible:
             default_rate = next((rate for rate in rates if rate.is_default and rate.is_active), None)
             if default_rate:

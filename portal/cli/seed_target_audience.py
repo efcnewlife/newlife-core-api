@@ -1,6 +1,7 @@
 """
 Target audience seed CLI commands.
 """
+
 import asyncio
 
 import click
@@ -39,12 +40,7 @@ async def seed_target_audiences() -> None:
 def seed_target_audiences_process(*, force: bool = False) -> None:
     """Synchronous entry to run target audience seed."""
     if not settings.IS_DEV and not force:
-        click.echo(
-            click.style(
-                f"seed-target-audiences is blocked when ENV={settings.ENV!r}. Pass --force to proceed.",
-                fg="red",
-            )
-        )
+        click.echo(click.style(f"seed-target-audiences is blocked when ENV={settings.ENV!r}. Pass --force to proceed.", fg="red"))
         raise SystemExit(1)
 
     if not force:

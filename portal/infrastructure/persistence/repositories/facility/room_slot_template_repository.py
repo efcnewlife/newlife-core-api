@@ -1,6 +1,7 @@
 """
 Facility room slot template repository.
 """
+
 from datetime import date, time
 from typing import Any, Optional
 from uuid import UUID
@@ -39,27 +40,16 @@ class RoomSlotTemplateRepository:
             FacilityRoomSlotTemplate.delete_reason,
         )
 
-    async def fetch_pages(
-        self,
-        model: PagesQueryCommand,
-        facility_id: Optional[UUID] = None,
-    ) -> tuple[list[RoomSlotTemplateResult], int]:
+    async def fetch_pages(self, model: PagesQueryCommand, facility_id: Optional[UUID] = None) -> tuple[list[RoomSlotTemplateResult], int]:
         query = (
             self._base_select()
             .where(FacilityRoomSlotTemplate.is_deleted == model.deleted)
-            .where(
-                model.keyword,
-                lambda: FacilityRoomSlotTemplate.name.ilike(f"%{model.keyword}%"),
-            )
+            .where(model.keyword, lambda: FacilityRoomSlotTemplate.name.ilike(f"%{model.keyword}%"))
         )
         if facility_id:
             query = query.where(FacilityRoomSlotTemplate.facility_id == facility_id)
         items, count = await (
-            query.order_by_with(
-                tables=[FacilityRoomSlotTemplate],
-                order_by=model.order_by,
-                descending=model.descending,
-            )
+            query.order_by_with(tables=[FacilityRoomSlotTemplate], order_by=model.order_by, descending=model.descending)
             .limit(model.page_size)
             .offset(model.page * model.page_size)
             .fetchpages(no_order_by=False, as_model=RoomSlotTemplateResult)
@@ -77,11 +67,7 @@ class RoomSlotTemplateRepository:
         return items or []
 
     async def get_by_id(self, template_id: UUID) -> Optional[RoomSlotTemplateResult]:
-        return await (
-            self._base_select()
-            .where(FacilityRoomSlotTemplate.id == template_id)
-            .fetchrow(as_model=RoomSlotTemplateResult)
-        )
+        return await self._base_select().where(FacilityRoomSlotTemplate.id == template_id).fetchrow(as_model=RoomSlotTemplateResult)
 
     async def insert_template(self, payload: dict[str, Any]) -> None:
         await self._session.insert(FacilityRoomSlotTemplate).values(payload).execute()
@@ -105,11 +91,7 @@ class RoomSlotTemplateRepository:
         )
 
     async def delete_hard(self, template_id: UUID) -> None:
-        await (
-            self._session.delete(FacilityRoomSlotTemplate)
-            .where(FacilityRoomSlotTemplate.id == template_id)
-            .execute()
-        )
+        await self._session.delete(FacilityRoomSlotTemplate).where(FacilityRoomSlotTemplate.id == template_id).execute()
 
     async def restore_template(self, template_id: UUID) -> None:
         await (
@@ -120,12 +102,7 @@ class RoomSlotTemplateRepository:
         )
 
     @staticmethod
-    def effective_dates_overlap(
-        left_from: Optional[date],
-        left_to: Optional[date],
-        right_from: Optional[date],
-        right_to: Optional[date],
-    ) -> bool:
+    def effective_dates_overlap(left_from: Optional[date], left_to: Optional[date], right_from: Optional[date], right_to: Optional[date]) -> bool:
         """Return True when two optional effective date ranges overlap."""
         if left_from and right_to and left_from > right_to:
             return False
@@ -134,19 +111,11 @@ class RoomSlotTemplateRepository:
         return True
 
     @staticmethod
-    def time_ranges_overlap(
-        left_start: time,
-        left_end: time,
-        right_start: time,
-        right_end: time,
-    ) -> bool:
+    def time_ranges_overlap(left_start: time, left_end: time, right_start: time, right_end: time) -> bool:
         return left_start < right_end and right_start < left_end
 
     async def list_active_overlapping_candidates(
-        self,
-        facility_id: UUID,
-        days_of_week_mask: int,
-        exclude_template_id: Optional[UUID] = None,
+        self, facility_id: UUID, days_of_week_mask: int, exclude_template_id: Optional[UUID] = None
     ) -> list[RoomSlotTemplateResult]:
         """
         Active templates for overlap validation on same room and shared weekday(s).
@@ -156,20 +125,14 @@ class RoomSlotTemplateRepository:
             .where(FacilityRoomSlotTemplate.is_deleted == False)
             .where(FacilityRoomSlotTemplate.is_active == True)
             .where(FacilityRoomSlotTemplate.facility_id == facility_id)
-            .where(
-                (FacilityRoomSlotTemplate.days_of_week_mask.op("&")(days_of_week_mask)) != 0
-            )
+            .where((FacilityRoomSlotTemplate.days_of_week_mask.op("&")(days_of_week_mask)) != 0)
         )
         if exclude_template_id:
             query = query.where(FacilityRoomSlotTemplate.id != exclude_template_id)
         items: list[RoomSlotTemplateResult] = await query.fetch(as_model=RoomSlotTemplateResult)
         return items or []
 
-    async def list_active_for_day(
-        self,
-        facility_id: UUID,
-        day_of_week: int,
-    ) -> list[RoomSlotTemplateResult]:
+    async def list_active_for_day(self, facility_id: UUID, day_of_week: int) -> list[RoomSlotTemplateResult]:
         """Active templates that apply on a given ISO weekday."""
         day_bit = 1 << day_of_week
         items: list[RoomSlotTemplateResult] = await (

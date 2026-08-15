@@ -15,6 +15,7 @@ Otherwise in-memory limiters are used (per-process).
 
 Configuration file location: env/rate_limiters.yaml
 """
+
 from fastapi import Depends, Request
 from fastapi.exceptions import HTTPException
 from fastapi_limiter.depends import RateLimiter
@@ -47,21 +48,9 @@ def create_rate_limiters(config: RateLimiterConfig) -> list:
     :return: Rate limiters list
     """
     return [
-        Depends(
-            RateLimiter(
-                limiter=Limiter(Rate(config.short.times, Duration.SECOND * config.short.seconds))
-            )
-        ),
-        Depends(
-            RateLimiter(
-                limiter=Limiter(Rate(config.medium.times, Duration.SECOND * config.medium.seconds))
-            )
-        ),
-        Depends(
-            RateLimiter(
-                limiter=Limiter(Rate(config.long.times, Duration.SECOND * config.long.seconds))
-            )
-        ),
+        Depends(RateLimiter(limiter=Limiter(Rate(config.short.times, Duration.SECOND * config.short.seconds)))),
+        Depends(RateLimiter(limiter=Limiter(Rate(config.medium.times, Duration.SECOND * config.medium.seconds)))),
+        Depends(RateLimiter(limiter=Limiter(Rate(config.long.times, Duration.SECOND * config.long.seconds)))),
     ]
 
 
@@ -75,18 +64,13 @@ def get_rate_limiters_config(config_type: str = "default") -> RateLimiterConfig:
     if not settings.RATE_LIMITERS_CONFIG:
         # If configuration is not loaded, return default value
         from portal.libs.rate_limit.config import RateLimitWindow
+
         return RateLimiterConfig(
-            short=RateLimitWindow(times=3, seconds=1),
-            medium=RateLimitWindow(times=20, seconds=30),
-            long=RateLimitWindow(times=400, seconds=3600),
+            short=RateLimitWindow(times=3, seconds=1), medium=RateLimitWindow(times=20, seconds=30), long=RateLimitWindow(times=400, seconds=3600)
         )
 
     # Get configuration by configuration type
-    config_map = {
-        "default": settings.RATE_LIMITERS_CONFIG.default,
-        "read": settings.RATE_LIMITERS_CONFIG.read,
-        "write": settings.RATE_LIMITERS_CONFIG.write,
-    }
+    config_map = {"default": settings.RATE_LIMITERS_CONFIG.default, "read": settings.RATE_LIMITERS_CONFIG.read, "write": settings.RATE_LIMITERS_CONFIG.write}
 
     return config_map.get(config_type, settings.RATE_LIMITERS_CONFIG.default)
 
@@ -106,25 +90,15 @@ async def create_redis_rate_limiters(redis) -> dict[str, list[Limiter]]:
     for config_type in ("default", "read", "write"):
         config = get_rate_limiters_config(config_type)
         short_bucket = await RedisBucket.init(  # noqa
-            [Rate(config.short.times, Duration.SECOND * config.short.seconds)],
-            redis,
-            f"{prefix}_{config_type}_short",
+            [Rate(config.short.times, Duration.SECOND * config.short.seconds)], redis, f"{prefix}_{config_type}_short"
         )
         medium_bucket = await RedisBucket.init(  # noqa
-            [Rate(config.medium.times, Duration.SECOND * config.medium.seconds)],
-            redis,
-            f"{prefix}_{config_type}_medium",
+            [Rate(config.medium.times, Duration.SECOND * config.medium.seconds)], redis, f"{prefix}_{config_type}_medium"
         )
         long_bucket = await RedisBucket.init(  # noqa
-            [Rate(config.long.times, Duration.SECOND * config.long.seconds)],
-            redis,
-            f"{prefix}_{config_type}_long",
+            [Rate(config.long.times, Duration.SECOND * config.long.seconds)], redis, f"{prefix}_{config_type}_long"
         )
-        result[config_type] = [
-            Limiter(short_bucket),
-            Limiter(medium_bucket),
-            Limiter(long_bucket),
-        ]
+        result[config_type] = [Limiter(short_bucket), Limiter(medium_bucket), Limiter(long_bucket)]
 
     return result
 
@@ -155,11 +129,7 @@ def _get_rate_limiters_dependencies() -> tuple[list, list, list]:
     Uses Redis-backed dependency when REDIS_URL is set, otherwise in-memory limiters.
     """
     if settings.REDIS_URL:
-        return (
-            [Depends(RedisRateLimiterDependency("default"))],
-            [Depends(RedisRateLimiterDependency("read"))],
-            [Depends(RedisRateLimiterDependency("write"))],
-        )
+        return ([Depends(RedisRateLimiterDependency("default"))], [Depends(RedisRateLimiterDependency("read"))], [Depends(RedisRateLimiterDependency("write"))])
     return (
         create_rate_limiters(get_rate_limiters_config("default")),
         create_rate_limiters(get_rate_limiters_config("read")),

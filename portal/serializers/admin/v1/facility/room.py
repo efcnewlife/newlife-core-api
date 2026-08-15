@@ -1,17 +1,14 @@
 """
 Facility room serializers.
 """
+
 from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
 
-from portal.serializers.admin.v1.facility.translation import (
-    AdminFacilityTranslationInput,
-    AdminFacilityTranslationItem,
-    validate_unique_facility_locale_ids,
-)
+from portal.serializers.admin.v1.facility.translation import AdminFacilityTranslationInput, AdminFacilityTranslationItem, validate_unique_facility_locale_ids
 from portal.serializers.mixins import PaginationBaseResponseModel
 from portal.serializers.mixins.model_mixins import UUIDBaseModel
 

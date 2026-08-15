@@ -2,23 +2,16 @@ import uuid
 from typing import Optional
 from uuid import UUID
 
-from dependency_injector.wiring import inject, Provide
+from dependency_injector.wiring import Provide, inject
 from fastapi import Request
 from fastapi.datastructures import Headers
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from portal.container import Container
-from portal.application.locale.locale_service import LocaleService
-from portal.libs.contexts.request_context import (
-    RequestContext,
-    set_request_context,
-    reset_request_context,
-)
-from portal.libs.contexts.request_session_context import (
-    set_request_session,
-    reset_request_session,
-)
 from portal.application.auth.results import HeaderInfo
+from portal.application.locale.locale_service import LocaleService
+from portal.container import Container
+from portal.libs.contexts.request_context import RequestContext, reset_request_context, set_request_context
+from portal.libs.contexts.request_session_context import reset_request_session, set_request_session
 
 
 def _resolve_ip(request: Request) -> str | None:
@@ -84,11 +77,7 @@ class CoreRequestMiddleware(BaseHTTPMiddleware):
         return language_code, script_code, region_code
 
     @classmethod
-    def _match_locale_by_language_script(
-        cls,
-        locale_codes: list[str],
-        script_code: str,
-    ) -> Optional[str]:
+    def _match_locale_by_language_script(cls, locale_codes: list[str], script_code: str) -> Optional[str]:
         for locale_code in locale_codes:
             parts = cls._normalize_locale_code(locale_code).split("-")
             if len(parts) >= 3 and parts[1] == script_code:
@@ -96,11 +85,7 @@ class CoreRequestMiddleware(BaseHTTPMiddleware):
         return None
 
     @classmethod
-    def _match_locale_by_language_region(
-        cls,
-        locale_codes: list[str],
-        region_code: str,
-    ) -> Optional[str]:
+    def _match_locale_by_language_region(cls, locale_codes: list[str], region_code: str) -> Optional[str]:
         for locale_code in locale_codes:
             parts = cls._normalize_locale_code(locale_code).split("-")
             if len(parts) >= 3 and parts[2] == region_code:
@@ -162,12 +147,9 @@ class CoreRequestMiddleware(BaseHTTPMiddleware):
             origin=headers.get("origin"),
         )
 
-
     @inject
     async def locale_detector(
-        self,
-        accept_language: Optional[str],
-        locale_service: LocaleService = Provide[Container.locale_service],
+        self, accept_language: Optional[str], locale_service: LocaleService = Provide[Container.locale_service]
     ) -> tuple[Optional[str], Optional[UUID], list[str]]:
         """
 

@@ -2,19 +2,10 @@
 Base Constants
 """
 
-BEARER_AUTH = {
-    "BearerAuth": []
-}
+BEARER_AUTH = {"BearerAuth": []}
 
-ROUTER_SECURITY = [
-    BEARER_AUTH,
-]
+ROUTER_SECURITY = [BEARER_AUTH]
 
-BEARER_AUTH_SCHEME = {
-    "type": "http",
-    "scheme": "bearer"
-}
+BEARER_AUTH_SCHEME = {"type": "http", "scheme": "bearer"}
 
-SECURITY_SCHEMES = {
-    "BearerAuth": BEARER_AUTH_SCHEME,
-}
+SECURITY_SCHEMES = {"BearerAuth": BEARER_AUTH_SCHEME}

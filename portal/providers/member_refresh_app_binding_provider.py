@@ -1,6 +1,7 @@
 """
 Bind refresh-token families to member web app codes (Redis; avoids DB migration).
 """
+
 from uuid import UUID
 
 from redis.asyncio import Redis

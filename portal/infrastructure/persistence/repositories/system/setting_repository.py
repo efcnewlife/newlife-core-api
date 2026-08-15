@@ -1,6 +1,7 @@
 """
 System setting repository.
 """
+
 import json
 from typing import Any, Optional
 from uuid import UUID
@@ -40,39 +41,19 @@ class SettingRepository:
             SystemSetting.delete_reason,
         )
 
-    async def get_by_id(
-        self,
-        setting_id: UUID,
-        *,
-        include_deleted: bool = False,
-    ) -> Optional[Setting]:
+    async def get_by_id(self, setting_id: UUID, *, include_deleted: bool = False) -> Optional[Setting]:
         query = self._base_select().where(SystemSetting.id == setting_id)
         if not include_deleted:
             query = query.where(SystemSetting.is_deleted == False)
         return await query.fetchrow(as_model=Setting)
 
-    async def get_by_namespace_key(
-        self,
-        namespace: str,
-        setting_key: str,
-        *,
-        include_deleted: bool = False,
-    ) -> Optional[Setting]:
-        query = (
-            self._base_select()
-            .where(SystemSetting.namespace == namespace)
-            .where(SystemSetting.setting_key == setting_key)
-        )
+    async def get_by_namespace_key(self, namespace: str, setting_key: str, *, include_deleted: bool = False) -> Optional[Setting]:
+        query = self._base_select().where(SystemSetting.namespace == namespace).where(SystemSetting.setting_key == setting_key)
         if not include_deleted:
             query = query.where(SystemSetting.is_deleted == False)
         return await query.fetchrow(as_model=Setting)
 
-    async def list_settings(
-        self,
-        namespace: Optional[str] = None,
-        *,
-        deleted: bool = False,
-    ) -> list[Setting]:
+    async def list_settings(self, namespace: Optional[str] = None, *, deleted: bool = False) -> list[Setting]:
         query = (
             self._base_select()
             .where(SystemSetting.is_deleted == deleted)
@@ -82,21 +63,12 @@ class SettingRepository:
         items: list[Setting] = await query.fetch(as_model=Setting)
         return items or []
 
-    async def update_value(
-        self,
-        setting_id: UUID,
-        value: Any,
-        remark: Optional[str] = None,
-    ) -> int:
+    async def update_value(self, setting_id: UUID, value: Any, remark: Optional[str] = None) -> int:
         values: dict[str, Any] = {"value": self._serialize_jsonb(value)}
         if remark is not None:
             values["remark"] = remark
         result = await (
-            self._session.update(SystemSetting)
-            .values(**values)
-            .where(SystemSetting.id == setting_id)
-            .where(SystemSetting.is_deleted == False)
-            .execute()
+            self._session.update(SystemSetting).values(**values).where(SystemSetting.id == setting_id).where(SystemSetting.is_deleted == False).execute()
         )
         return affected_rows(result)
 
@@ -128,11 +100,7 @@ class SettingRepository:
         return affected_rows(result)
 
     async def delete_hard(self, setting_id: UUID) -> int:
-        result = await (
-            self._session.delete(SystemSetting)
-            .where(SystemSetting.id == setting_id)
-            .execute()
-        )
+        result = await self._session.delete(SystemSetting).where(SystemSetting.id == setting_id).execute()
         return affected_rows(result)
 
     async def restore(self, setting_ids: list[UUID]) -> int:

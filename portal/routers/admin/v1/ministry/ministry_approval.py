@@ -1,9 +1,10 @@
 """
 Ministry approval admin API routes.
 """
+
 from typing import Annotated
 
-from dependency_injector.wiring import inject, Provide
+from dependency_injector.wiring import Provide, inject
 from fastapi import Depends, Query, status
 
 from portal.application.org.mappers import ministry_page_to_api, pages_query_to_command
@@ -11,18 +12,13 @@ from portal.application.org.ministry_approval_service import MinistryApprovalSer
 from portal.container import Container
 from portal.libs.consts.permission import Permission
 from portal.routers.auth_router import AuthRouter
-from portal.serializers.mixins import GenericQueryBaseModel
 from portal.serializers.admin.v1.ministry import AdminMinistryPages
+from portal.serializers.mixins import GenericQueryBaseModel
 
 router: AuthRouter = AuthRouter(is_admin=True)
 
 
-@router.get(
-    path="/pages",
-    status_code=status.HTTP_200_OK,
-    response_model=AdminMinistryPages,
-    permissions=[Permission.MINISTRY_APPROVAL.read],
-)
+@router.get(path="/pages", status_code=status.HTTP_200_OK, response_model=AdminMinistryPages, permissions=[Permission.MINISTRY_APPROVAL.read])
 @inject
 async def get_pending_approval_pages(
     query_model: Annotated[GenericQueryBaseModel, Query()],

@@ -1,8 +1,9 @@
 """
 Task concurrency
 """
+
 import asyncio
-from typing import List, Union, Coroutine
+from typing import Coroutine, List, Union
 
 CONCURRENT_NUMBER = 10
 semaphore = asyncio.Semaphore(CONCURRENT_NUMBER)

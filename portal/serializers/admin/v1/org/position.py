@@ -1,6 +1,7 @@
 """
 Org position serializers.
 """
+
 from datetime import datetime
 from typing import Optional
 from uuid import UUID
@@ -8,11 +9,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field, field_validator
 
 from portal.domain.org.constants import PositionOffice, PositionTeam
-from portal.serializers.admin.v1.org.translation import (
-    AdminPositionTranslationInput,
-    AdminPositionTranslationItem,
-    validate_unique_position_locale_ids,
-)
+from portal.serializers.admin.v1.org.translation import AdminPositionTranslationInput, AdminPositionTranslationItem, validate_unique_position_locale_ids
 from portal.serializers.mixins import PaginationBaseResponseModel
 from portal.serializers.mixins.model_mixins import UUIDBaseModel
 
@@ -38,16 +35,8 @@ class AdminPositionDetail(AdminPositionBase):
     updated_by: Optional[str] = Field(None, serialization_alias="updatedBy", description="Updated by")
     delete_reason: Optional[str] = Field(None, serialization_alias="deleteReason", description="Delete reason")
     translations: list[AdminPositionTranslationItem] = Field(default_factory=list, description="Translations")
-    current_user_id: Optional[UUID] = Field(
-        None,
-        serialization_alias="currentUserId",
-        description="Current incumbent user ID",
-    )
-    current_user_display_name: Optional[str] = Field(
-        None,
-        serialization_alias="currentUserDisplayName",
-        description="Current incumbent display name",
-    )
+    current_user_id: Optional[UUID] = Field(None, serialization_alias="currentUserId", description="Current incumbent user ID")
+    current_user_display_name: Optional[str] = Field(None, serialization_alias="currentUserDisplayName", description="Current incumbent display name")
 
 
 class AdminPositionPages(PaginationBaseResponseModel):
@@ -102,16 +91,8 @@ class AdminAssignablePositionItem(UUIDBaseModel):
     team: Optional[PositionTeam] = Field(None, description="Team code")
     office: Optional[PositionOffice] = Field(None, description="Office code")
     name: Optional[str] = Field(None, description="Position name")
-    incumbent_user_id: Optional[UUID] = Field(
-        None,
-        serialization_alias="incumbentUserId",
-        description="Incumbent user ID",
-    )
-    incumbent_display_name: Optional[str] = Field(
-        None,
-        serialization_alias="incumbentDisplayName",
-        description="Incumbent display name",
-    )
+    incumbent_user_id: Optional[UUID] = Field(None, serialization_alias="incumbentUserId", description="Incumbent user ID")
+    incumbent_display_name: Optional[str] = Field(None, serialization_alias="incumbentDisplayName", description="Incumbent display name")
 
 
 class AdminAssignablePositionList(BaseModel):

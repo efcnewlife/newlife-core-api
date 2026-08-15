@@ -1,6 +1,7 @@
 """
 User read service for auth middleware and token validation.
 """
+
 from typing import Optional
 from uuid import UUID
 

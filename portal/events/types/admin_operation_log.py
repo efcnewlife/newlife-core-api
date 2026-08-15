@@ -1,11 +1,12 @@
 """
 Admin operation audit log event (persisted to PortalLog by event handler).
 """
+
 from typing import Any, Optional
 from uuid import UUID
 
-from portal.libs.consts.enums import OperationType
 from portal.events.base import BaseEvent
+from portal.libs.consts.enums import OperationType
 
 
 class AdminOperationLogEvent(BaseEvent):

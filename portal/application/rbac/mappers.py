@@ -1,9 +1,11 @@
 """
 Map between API serializers and application commands/results.
 """
+
 from uuid import UUID
 
 from portal.application.rbac.commands import (
+    AdminUserPagesQueryCommand,
     AssignRolePermissionsCommand,
     BindUserRolesCommand,
     BulkIdsCommand,
@@ -15,7 +17,6 @@ from portal.application.rbac.commands import (
     CreateResourceCommand,
     CreateRoleCommand,
     DeleteCommand,
-    AdminUserPagesQueryCommand,
     PagesQueryCommand,
     PermissionPagesQueryCommand,
     ResourceListQueryCommand,
@@ -42,7 +43,6 @@ from portal.application.rbac.results import (
     RolePageResult,
     VerbListResult,
 )
-from portal.serializers.mixins.model_mixins import UUIDBaseModel
 from portal.serializers.admin.v1.permission import (
     AdminPermissionBulkAction,
     AdminPermissionCreate,
@@ -64,14 +64,8 @@ from portal.serializers.admin.v1.resource import (
     AdminResourceTreeItem,
     AdminResourceUpdate,
 )
-from portal.serializers.admin.v1.role import (
-    AdminRoleCreate,
-    AdminRoleList,
-    AdminRolePages,
-    AdminRolePermissionAssign,
-    AdminRoleTableItem,
-    AdminRoleUpdate,
-)
+from portal.serializers.admin.v1.role import AdminRoleCreate, AdminRoleList, AdminRolePages, AdminRolePermissionAssign, AdminRoleTableItem, AdminRoleUpdate
+from portal.serializers.admin.v1.translation import AdminTranslationInput
 from portal.serializers.admin.v1.user import (
     AdminBindRole,
     AdminChangePassword,
@@ -84,34 +78,21 @@ from portal.serializers.admin.v1.user import (
     AdminUserRoles,
     AdminUserUpdate,
 )
-from portal.serializers.admin.v1.translation import AdminTranslationInput
 from portal.serializers.admin.v1.verb import AdminVerbItem, AdminVerbList
 from portal.serializers.mixins import DeleteBaseModel, GenericQueryBaseModel
 from portal.serializers.mixins.base import DeleteQueryBaseModel
+from portal.serializers.mixins.model_mixins import UUIDBaseModel
 
 
 def _translation_commands(translations: list[AdminTranslationInput] | None) -> list[TranslationCommand] | None:
     if translations is None:
         return None
-    return [
-        TranslationCommand(
-            locale_id=item.locale_id,
-            name=item.name,
-            description=item.description,
-            remark=item.remark,
-        )
-        for item in translations
-    ]
+    return [TranslationCommand(locale_id=item.locale_id, name=item.name, description=item.description, remark=item.remark) for item in translations]
 
 
 def pages_query_to_command(model: GenericQueryBaseModel) -> PagesQueryCommand:
     return PagesQueryCommand(
-        page=model.page,
-        page_size=model.page_size,
-        order_by=model.order_by,
-        descending=model.descending,
-        deleted=model.deleted,
-        keyword=model.keyword,
+        page=model.page, page_size=model.page_size, order_by=model.order_by, descending=model.descending, deleted=model.deleted, keyword=model.keyword
     )
 
 
@@ -201,12 +182,7 @@ def change_resource_parent_to_command(model: AdminResourceChangeParent) -> Chang
 
 
 def change_resource_sequence_to_command(model: AdminResourceChangeSequence) -> ChangeResourceSequenceCommand:
-    return ChangeResourceSequenceCommand(
-        id=model.id,
-        sequence=model.sequence,
-        another_id=model.another_id,
-        another_sequence=model.another_sequence,
-    )
+    return ChangeResourceSequenceCommand(id=model.id, sequence=model.sequence, another_id=model.another_id, another_sequence=model.another_sequence)
 
 
 def resource_list_query_to_command(model: DeleteQueryBaseModel) -> ResourceListQueryCommand:
@@ -246,11 +222,7 @@ def update_admin_user_to_command(model: AdminUserUpdate) -> UpdateAdminUserComma
 
 
 def change_password_to_command(model: AdminChangePassword) -> ChangePasswordCommand:
-    return ChangePasswordCommand(
-        old_password=model.old_password,
-        new_password=model.new_password,
-        new_password_confirm=model.new_password_confirm,
-    )
+    return ChangePasswordCommand(old_password=model.old_password, new_password=model.new_password, new_password_confirm=model.new_password_confirm)
 
 
 def bind_user_roles_to_command(model: AdminBindRole) -> BindUserRolesCommand:
@@ -262,26 +234,13 @@ def bulk_ids_to_command(model: AdminUserBulkAction) -> BulkIdsCommand:
 
 
 def verb_list_result_to_api(result: VerbListResult) -> AdminVerbList:
-    items = [
-        AdminVerbItem(
-            id=item.id,
-            action=item.action,
-            name=item.name,
-            description=item.description,
-        )
-        for item in result.items
-    ]
+    items = [AdminVerbItem(id=item.id, action=item.action, name=item.name, description=item.description) for item in result.items]
     return AdminVerbList(items=items or None)
 
 
 def role_page_result_to_api(result: RolePageResult) -> AdminRolePages:
     items = [AdminRoleTableItem.model_validate(item.model_dump()) for item in result.items]
-    return AdminRolePages(
-        page=result.page,
-        page_size=result.page_size,
-        total=result.total,
-        items=items or None,
-    )
+    return AdminRolePages(page=result.page, page_size=result.page_size, total=result.total, items=items or None)
 
 
 def role_list_result_to_api(result: RoleListResult) -> AdminRoleList:
@@ -313,12 +272,7 @@ def admin_user_page_result_to_api(result: AdminUserPageResult) -> AdminUserPages
     from portal.serializers.admin.v1.user import AdminUserTableItem
 
     items = [AdminUserTableItem.model_validate(item.model_dump()) for item in result.items]
-    return AdminUserPages(
-        page=result.page,
-        page_size=result.page_size,
-        total=result.total,
-        items=items or None,
-    )
+    return AdminUserPages(page=result.page, page_size=result.page_size, total=result.total, items=items or None)
 
 
 def admin_user_list_result_to_api(result: AdminUserListResult) -> AdminUserList:
@@ -386,12 +340,7 @@ def permission_page_result_to_api(result: PermissionPageResult) -> AdminPermissi
     from portal.serializers.admin.v1.permission import AdminPermissionPageItem
 
     items = [AdminPermissionPageItem.model_validate(item.model_dump()) for item in result.items]
-    return AdminPermissionPage(
-        page=result.page,
-        page_size=result.page_size,
-        total=result.total,
-        items=items or None,
-    )
+    return AdminPermissionPage(page=result.page, page_size=result.page_size, total=result.total, items=items or None)
 
 
 def permission_list_result_to_api(result: PermissionListResult) -> AdminPermissionList:

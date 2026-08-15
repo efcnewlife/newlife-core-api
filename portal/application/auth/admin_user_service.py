@@ -1,6 +1,7 @@
 """
 Admin user application service.
 """
+
 import uuid
 from typing import Optional
 from uuid import UUID
@@ -16,19 +17,10 @@ from portal.application.rbac.commands import (
     UpdateAdminUserCommand,
 )
 from portal.application.rbac.permission_service import PermissionService
-from portal.application.rbac.results import (
-    AdminUserDetailResult,
-    AdminUserListResult,
-    AdminUserPageResult,
-    AdminUserRolesResult,
-    CreateIdResult,
-)
+from portal.application.rbac.results import AdminUserDetailResult, AdminUserListResult, AdminUserPageResult, AdminUserRolesResult, CreateIdResult
 from portal.application.rbac.role_service import RoleService
-from portal.exceptions.responses import (
-    UnauthorizedException,
-    BadRequestException,
-)
 from portal.domain.auth.ports import UserRepositoryPort
+from portal.exceptions.responses import BadRequestException, UnauthorizedException
 from portal.libs.contexts.user_context import UserContext, get_user_context
 from portal.providers.password_provider import PasswordProvider
 
@@ -37,11 +29,7 @@ class AdminUserService:
     """Admin user CRUD and role binding use cases."""
 
     def __init__(
-        self,
-        user_repository: UserRepositoryPort,
-        password_provider: PasswordProvider,
-        role_service: RoleService,
-        permission_service: PermissionService,
+        self, user_repository: UserRepositoryPort, password_provider: PasswordProvider, role_service: RoleService, permission_service: PermissionService
     ):
         self._repository = user_repository
         self._password_provider = password_provider
@@ -57,12 +45,7 @@ class AdminUserService:
 
     async def get_user_pages(self, command: AdminUserPagesQueryCommand) -> AdminUserPageResult:
         items, count = await self._repository.get_user_pages(command)
-        return AdminUserPageResult(
-            page=command.page,
-            page_size=command.page_size,
-            total=count,
-            items=items,
-        )
+        return AdminUserPageResult(page=command.page, page_size=command.page_size, total=count, items=items)
 
     async def get_user_list(self, keyword: Optional[str] = None) -> AdminUserListResult:
         users = await self._repository.get_user_list(keyword=keyword)
@@ -89,11 +72,7 @@ class AdminUserService:
             raise BadRequestException(detail="Password is not valid")
         user_id = uuid.uuid4()
         password_hash = self._password_provider.hash_password(command.password)
-        return await self._repository.create_user(
-            user_id=user_id,
-            model=command,
-            password_hash=password_hash,
-        )
+        return await self._repository.create_user(user_id=user_id, model=command, password_hash=password_hash)
 
     async def update_current_user(self, command: UpdateAdminUserCommand) -> None:
         if not self._user_ctx or not self._user_ctx.user_id:
@@ -140,7 +119,4 @@ class AdminUserService:
             raise UnauthorizedException(detail="Unauthorized")
         if not await self._repository.locale_exists(preferred_locale_id):
             raise BadRequestException(detail="Preferred language is invalid")
-        await self._repository.update_preferred_locale(
-            user_id=self._user_ctx.user_id,
-            preferred_locale_id=preferred_locale_id,
-        )
+        await self._repository.update_preferred_locale(user_id=self._user_ctx.user_id, preferred_locale_id=preferred_locale_id)

@@ -8,13 +8,13 @@ from portal.config import settings
 from portal.libs.database import PostgresConnection, RedisPool, Session
 from portal.libs.database.session_proxy import SessionProxy
 from portal.providers.jwt_provider import JWTProvider
+from portal.providers.member_refresh_app_binding_provider import MemberRefreshAppBindingProvider
 from portal.providers.microsoft_graph_provider import MicrosoftGraphProvider
 from portal.providers.microsoft_oidc_provider import MicrosoftOidcProvider
 from portal.providers.ms_graph.container import MSGraphContainer
 from portal.providers.password_provider import PasswordProvider
 from portal.providers.refresh_token_provider import RefreshTokenProvider
 from portal.providers.token_blacklist_provider import TokenBlacklistProvider
-from portal.providers.member_refresh_app_binding_provider import MemberRefreshAppBindingProvider
 
 
 class CoreContainer(containers.DeclarativeContainer):
@@ -29,27 +29,12 @@ class CoreContainer(containers.DeclarativeContainer):
 
     redis_client = providers.Singleton(RedisPool)
 
-    token_blacklist_provider = providers.Factory(
-        TokenBlacklistProvider,
-        redis_client=redis_client,
-    )
-    member_refresh_app_binding_provider = providers.Factory(
-        MemberRefreshAppBindingProvider,
-        redis_client=redis_client,
-    )
-    jwt_provider = providers.Singleton(
-        JWTProvider,
-        token_blacklist_provider=token_blacklist_provider,
-    )
+    token_blacklist_provider = providers.Factory(TokenBlacklistProvider, redis_client=redis_client)
+    member_refresh_app_binding_provider = providers.Factory(MemberRefreshAppBindingProvider, redis_client=redis_client)
+    jwt_provider = providers.Singleton(JWTProvider, token_blacklist_provider=token_blacklist_provider)
     password_provider = providers.Singleton(PasswordProvider)
-    refresh_token_provider = providers.Factory(
-        RefreshTokenProvider,
-        session=request_session,
-    )
+    refresh_token_provider = providers.Factory(RefreshTokenProvider, session=request_session)
     microsoft_oidc_provider = providers.Singleton(MicrosoftOidcProvider)
 
     ms_graph = providers.Container(MSGraphContainer)
-    microsoft_graph_provider = providers.Singleton(
-        MicrosoftGraphProvider,
-        users_factory=ms_graph.users.provider,
-    )
+    microsoft_graph_provider = providers.Singleton(MicrosoftGraphProvider, users_factory=ms_graph.users.provider)

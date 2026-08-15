@@ -1,6 +1,7 @@
 """
 Constants for Cache keys
 """
+
 from portal.config import settings
 
 
@@ -8,6 +9,7 @@ class CacheExpiry:
     """
     Cache expiry times in seconds
     """
+
     HOUR = 3600
     DAY = 86400
     WEEK = 604800

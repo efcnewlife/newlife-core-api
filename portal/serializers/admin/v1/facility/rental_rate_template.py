@@ -1,6 +1,7 @@
 """
 Rental rate template serializers.
 """
+
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional
@@ -50,10 +51,7 @@ class AdminRentalRateTemplateWrite(BaseModel):
     """Rental rate template write."""
 
     name: str = Field(..., description="Display name")
-    billing_unit: RentalRateBillingUnit = Field(
-        RentalRateBillingUnit.HOURLY,
-        description="Billing unit",
-    )
+    billing_unit: RentalRateBillingUnit = Field(RentalRateBillingUnit.HOURLY, description="Billing unit")
     applicability: Optional[dict] = Field(None, description="JSON applicability rule; null = always eligible")
     unit_amount: Decimal = Field(..., description="Default unit price")
     currency: str = Field("CAD", description="Currency code")

@@ -1,32 +1,26 @@
 """
 Admin login and profile application service.
 """
+
 from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID, uuid4
 
 from portal.application.auth.commands import LoginCommand, LoginWithoutValidateCommand
 from portal.application.auth.mappers import normalize_user_for_token
-from portal.application.auth.results import (
-    AdminProfileResult,
-    LoginResult,
-    MemberLoginResult,
-    MemberProfileResult,
-    TokenResult,
-    UserSensitive,
-)
+from portal.application.auth.results import AdminProfileResult, LoginResult, MemberLoginResult, MemberProfileResult, TokenResult, UserSensitive
 from portal.application.rbac.permission_service import PermissionService
 from portal.application.rbac.role_service import RoleService
 from portal.config import settings
-from portal.exceptions.responses import UnauthorizedException
 from portal.domain.auth.ports import UserRepositoryPort
+from portal.exceptions.responses import UnauthorizedException
 from portal.libs.consts.enums import AccessTokenAudType
 from portal.libs.contexts.user_context import UserContext, get_user_context
 from portal.libs.tracing.distributed_trace import distributed_trace
 from portal.providers.jwt_provider import JWTProvider
+from portal.providers.member_refresh_app_binding_provider import MemberRefreshAppBindingProvider
 from portal.providers.password_provider import PasswordProvider
 from portal.providers.refresh_token_provider import RefreshTokenProvider
-from portal.providers.member_refresh_app_binding_provider import MemberRefreshAppBindingProvider
 
 
 class LoginService:
@@ -67,36 +61,20 @@ class LoginService:
 
         token_user = normalize_user_for_token(user)
         roles = await self._role_service.init_user_roles_cache(token_user, self._expires_in)
-        permissions = await self._permission_service.init_user_permissions_cache(
-            token_user,
-            self._expires_in,
-        )
+        permissions = await self._permission_service.init_user_permissions_cache(token_user, self._expires_in)
 
         family_id = uuid4()
         device_id = uuid4()
         access_token = self._jwt_provider.create_access_token(
-            user=token_user,
-            family_id=family_id,
-            roles=roles,
-            permissions=permissions,
-            aud_type=AccessTokenAudType.ADMIN,
+            user=token_user, family_id=family_id, roles=roles, permissions=permissions, aud_type=AccessTokenAudType.ADMIN
         )
-        refresh_token = await self._refresh_token_provider.issue(
-            user_id=user.id,
-            device_id=device_id,
-            family_id=family_id,
-        )
+        refresh_token = await self._refresh_token_provider.issue(user_id=user.id, device_id=device_id, family_id=family_id)
 
         now = datetime.now(timezone.utc)
         await self._repository.update_last_login_at(user_id=user.id, last_login_at=now)
 
         expires_in = settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60
-        token = TokenResult(
-            access_token=access_token,
-            refresh_token=refresh_token,
-            token_type="bearer",
-            expires_in=expires_in,
-        )
+        token = TokenResult(access_token=access_token, refresh_token=refresh_token, token_type="bearer", expires_in=expires_in)
         admin = AdminProfileResult(
             id=user.id,
             email=user.email or "",
@@ -119,17 +97,8 @@ class LoginService:
         token_user = normalize_user_for_token(user)
         family_id = uuid4()
         device_id = uuid4()
-        access_token = self._jwt_provider.create_access_token(
-            user=token_user,
-            family_id=family_id,
-            aud_type=AccessTokenAudType.USER,
-            azp=app_code,
-        )
-        refresh_token = await self._refresh_token_provider.issue(
-            user_id=user.id,
-            device_id=device_id,
-            family_id=family_id,
-        )
+        access_token = self._jwt_provider.create_access_token(user=token_user, family_id=family_id, aud_type=AccessTokenAudType.USER, azp=app_code)
+        refresh_token = await self._refresh_token_provider.issue(user_id=user.id, device_id=device_id, family_id=family_id)
         if self._member_refresh_app_binding_provider:
             await self._member_refresh_app_binding_provider.bind(family_id, app_code)
 
@@ -137,12 +106,7 @@ class LoginService:
         await self._repository.update_last_login_at(user_id=user.id, last_login_at=now)
 
         expires_in = settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60
-        token = TokenResult(
-            access_token=access_token,
-            refresh_token=refresh_token,
-            token_type="bearer",
-            expires_in=expires_in,
-        )
+        token = TokenResult(access_token=access_token, refresh_token=refresh_token, token_type="bearer", expires_in=expires_in)
         member = MemberProfileResult(
             id=user.id,
             email=user.email or "",
@@ -196,11 +160,7 @@ class LoginService:
         )
 
     @distributed_trace()
-    async def login_without_validate(
-        self,
-        command: LoginWithoutValidateCommand,
-        device_id: UUID,
-    ) -> LoginResult:
+    async def login_without_validate(self, command: LoginWithoutValidateCommand, device_id: UUID) -> LoginResult:
         """
         Dev-only login that skips password validation.
         :param command:
@@ -215,35 +175,19 @@ class LoginService:
 
         token_user = normalize_user_for_token(user)
         roles = await self._role_service.init_user_roles_cache(token_user, self._expires_in)
-        permissions = await self._permission_service.init_user_permissions_cache(
-            token_user,
-            self._expires_in,
-        )
+        permissions = await self._permission_service.init_user_permissions_cache(token_user, self._expires_in)
 
         family_id = uuid4()
         access_token = self._jwt_provider.create_access_token(
-            user=token_user,
-            family_id=family_id,
-            roles=roles,
-            permissions=permissions,
-            aud_type=AccessTokenAudType.ADMIN,
+            user=token_user, family_id=family_id, roles=roles, permissions=permissions, aud_type=AccessTokenAudType.ADMIN
         )
-        refresh_token = await self._refresh_token_provider.issue(
-            user_id=user.id,
-            device_id=device_id,
-            family_id=family_id,
-        )
+        refresh_token = await self._refresh_token_provider.issue(user_id=user.id, device_id=device_id, family_id=family_id)
 
         now = datetime.now(timezone.utc)
         await self._repository.update_last_login_at(user_id=user.id, last_login_at=now)
 
         expires_in = settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60
-        token = TokenResult(
-            access_token=access_token,
-            refresh_token=refresh_token,
-            token_type="bearer",
-            expires_in=expires_in,
-        )
+        token = TokenResult(access_token=access_token, refresh_token=refresh_token, token_type="bearer", expires_in=expires_in)
         admin = AdminProfileResult(
             id=user.id,
             email=user.email or "",

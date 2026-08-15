@@ -1,5 +1,5 @@
 import re
-from datetime import datetime, date
+from datetime import date, datetime
 from decimal import Decimal
 
 # integer
@@ -42,6 +42,7 @@ def is_uuid(value: str):
     if value is None:
         return False
     import uuid
+
     if isinstance(value, uuid.UUID):
         return True
     if not isinstance(value, str):

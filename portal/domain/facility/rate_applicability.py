@@ -1,6 +1,7 @@
 """
 Declarative JSON applicability rules for FacilityRentalRate selection (hours-only v1).
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -49,10 +50,7 @@ class HoursRangeRule(BaseModel):
         return self
 
 
-LeafRule = Annotated[
-    Union[HoursGteRule, HoursLtRule, HoursRangeRule],
-    Field(discriminator="op"),
-]
+LeafRule = Annotated[Union[HoursGteRule, HoursLtRule, HoursRangeRule], Field(discriminator="op")]
 
 
 class AllRule(BaseModel):
@@ -75,10 +73,7 @@ class NotRule(BaseModel):
     model_config = {"populate_by_name": True}
 
 
-RuleNode = Annotated[
-    Union[LeafRule, AllRule, AnyRule, NotRule],
-    Field(),
-]
+RuleNode = Annotated[Union[LeafRule, AllRule, AnyRule, NotRule], Field()]
 
 # Rebuild forward refs for recursive models.
 AllRule.model_rebuild()

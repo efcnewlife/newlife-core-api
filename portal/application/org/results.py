@@ -1,6 +1,7 @@
 """
 Organization application results.
 """
+
 from datetime import date, datetime, time
 from typing import Optional
 from uuid import UUID

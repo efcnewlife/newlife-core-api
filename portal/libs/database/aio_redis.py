@@ -1,6 +1,7 @@
 """
 AioRedis
 """
+
 from redis.asyncio import Redis, from_url
 
 from portal.config import settings
@@ -20,11 +21,6 @@ class RedisPool:
         """
         if self._redis:
             return self._redis
-        session = from_url(
-            url=self._uri,
-            db=db,
-            encoding="utf-8",
-            decode_responses=True
-        )
+        session = from_url(url=self._uri, db=db, encoding="utf-8", decode_responses=True)
         self._redis = session
         return session

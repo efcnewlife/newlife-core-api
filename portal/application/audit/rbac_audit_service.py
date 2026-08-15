@@ -1,6 +1,7 @@
 """
 RBAC audit logging via background events.
 """
+
 import dataclasses
 from datetime import date, datetime, time
 from decimal import Decimal
@@ -61,10 +62,7 @@ class RbacAuditService:
         return str(value)
 
     @staticmethod
-    def compute_changed_fields_shallow(
-        old_data: dict[str, Any],
-        new_data: dict[str, Any],
-    ) -> list[dict[str, Any]]:
+    def compute_changed_fields_shallow(old_data: dict[str, Any], new_data: dict[str, Any]) -> list[dict[str, Any]]:
         """
         First-level diff between two dicts (already normalized).
         """
@@ -93,35 +91,22 @@ class RbacAuditService:
             resolved_old_data = old_data
             resolved_new_data = new_data
             resolved_changed_fields = changed_fields
-            if (
-                changed_fields is None
-                and isinstance(old_data, dict)
-                and isinstance(new_data, dict)
-            ):
+            if changed_fields is None and isinstance(old_data, dict) and isinstance(new_data, dict):
                 try:
                     resolved_old_data = self.normalize_for_audit_json(old_data)
                     resolved_new_data = self.normalize_for_audit_json(new_data)
                     if isinstance(resolved_old_data, dict) and isinstance(resolved_new_data, dict):
-                        resolved_changed_fields = self.compute_changed_fields_shallow(
-                            resolved_old_data,
-                            resolved_new_data,
-                        )
+                        resolved_changed_fields = self.compute_changed_fields_shallow(resolved_old_data, resolved_new_data)
                     else:
                         resolved_old_data = old_data
                         resolved_new_data = new_data
                         resolved_changed_fields = None
-                        logger.warning(
-                            "audit_log_payload normalize did not return dict for old/new; "
-                            "falling back to raw payloads without changed_fields"
-                        )
+                        logger.warning("audit_log_payload normalize did not return dict for old/new; falling back to raw payloads without changed_fields")
                 except Exception:
                     resolved_old_data = old_data
                     resolved_new_data = new_data
                     resolved_changed_fields = None
-                    logger.exception(
-                        "audit_log_payload normalize or diff failed; "
-                        "falling back to raw payloads without changed_fields"
-                    )
+                    logger.exception("audit_log_payload normalize or diff failed; falling back to raw payloads without changed_fields")
             user_ctx = get_user_context()
             created_by = user_ctx.username if user_ctx and user_ctx.username else None
             created_by_id = user_ctx.user_id if user_ctx and user_ctx.user_id else None

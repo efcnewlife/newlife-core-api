@@ -1,8 +1,9 @@
 """
 Authentication and Authorization Router
 """
+
 import inspect
-from typing import List, Optional, Callable, Type
+from typing import Callable, List, Optional, Type
 
 from fastapi import APIRouter
 from fastapi.routing import APIRoute
@@ -30,7 +31,7 @@ class AuthRouter(APIRouter):
         is_admin: Optional[bool] = False,
         allow_superuser: Optional[bool] = False,
         *args,
-        **kwargs
+        **kwargs,
     ):
         """
         Initialize AuthRouter
@@ -83,17 +84,10 @@ class AuthRouter(APIRouter):
         try:
             sig = inspect.signature(route_class.__init__)
             return "auth_config" in sig.parameters
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return False
 
-    def _add_route_with_auth(
-        self,
-        method: str,
-        path: str,
-        endpoint: Callable,
-        auth_config: Optional[AuthConfig],
-        **kwargs
-    ):
+    def _add_route_with_auth(self, method: str, path: str, endpoint: Callable, auth_config: Optional[AuthConfig], **kwargs):
         """
         Add route with authentication and authorization configuration
         :param method: HTTP method
@@ -119,12 +113,7 @@ class AuthRouter(APIRouter):
 
         # Call add_api_route with auth_config
         self.add_api_route(
-            path=path,
-            endpoint=endpoint,
-            methods=[method],
-            route_class_override=route_class_override or self.route_class,
-            openapi_extra=openapi_extra,
-            **kwargs
+            path=path, endpoint=endpoint, methods=[method], route_class_override=route_class_override or self.route_class, openapi_extra=openapi_extra, **kwargs
         )
 
     def get(
@@ -135,7 +124,7 @@ class AuthRouter(APIRouter):
         require_auth: Optional[bool] = None,
         is_admin: Optional[bool] = None,
         allow_superuser: Optional[bool] = None,
-        **kwargs
+        **kwargs,
     ):
         """
         Add GET route with authentication and authorization
@@ -157,15 +146,9 @@ class AuthRouter(APIRouter):
                     require_all=require_all if require_all is not None else self._require_all,
                     require_auth=require_auth if require_auth is not None else self._require_auth,
                     is_admin=is_admin if is_admin is not None else self._is_admin,
-                    allow_superuser=allow_superuser if allow_superuser is not None else self._allow_superuser
+                    allow_superuser=allow_superuser if allow_superuser is not None else self._allow_superuser,
                 )
-            self._add_route_with_auth(
-                method="GET",
-                path=path,
-                endpoint=func,
-                auth_config=auth_config,
-                **kwargs
-            )
+            self._add_route_with_auth(method="GET", path=path, endpoint=func, auth_config=auth_config, **kwargs)
             return func
 
         return decorator
@@ -178,7 +161,7 @@ class AuthRouter(APIRouter):
         require_auth: Optional[bool] = None,
         is_admin: Optional[bool] = None,
         allow_superuser: Optional[bool] = None,
-        **kwargs
+        **kwargs,
     ):
         """
         Add POST route with authentication and authorization
@@ -200,15 +183,9 @@ class AuthRouter(APIRouter):
                     require_all=require_all if require_all is not None else self._require_all,
                     require_auth=require_auth if require_auth is not None else self._require_auth,
                     is_admin=is_admin if is_admin is not None else self._is_admin,
-                    allow_superuser=allow_superuser if allow_superuser is not None else self._allow_superuser
+                    allow_superuser=allow_superuser if allow_superuser is not None else self._allow_superuser,
                 )
-            self._add_route_with_auth(
-                method="POST",
-                path=path,
-                endpoint=func,
-                auth_config=auth_config,
-                **kwargs
-            )
+            self._add_route_with_auth(method="POST", path=path, endpoint=func, auth_config=auth_config, **kwargs)
             return func
 
         return decorator
@@ -221,7 +198,7 @@ class AuthRouter(APIRouter):
         require_auth: Optional[bool] = None,
         is_admin: Optional[bool] = None,
         allow_superuser: Optional[bool] = None,
-        **kwargs
+        **kwargs,
     ):
         """
         Add PUT route with authentication and authorization
@@ -243,15 +220,9 @@ class AuthRouter(APIRouter):
                     require_all=require_all if require_all is not None else self._require_all,
                     require_auth=require_auth if require_auth is not None else self._require_auth,
                     is_admin=is_admin if is_admin is not None else self._is_admin,
-                    allow_superuser=allow_superuser if allow_superuser is not None else self._allow_superuser
+                    allow_superuser=allow_superuser if allow_superuser is not None else self._allow_superuser,
                 )
-            self._add_route_with_auth(
-                method="PUT",
-                path=path,
-                endpoint=func,
-                auth_config=auth_config,
-                **kwargs
-            )
+            self._add_route_with_auth(method="PUT", path=path, endpoint=func, auth_config=auth_config, **kwargs)
             return func
 
         return decorator
@@ -264,7 +235,7 @@ class AuthRouter(APIRouter):
         require_auth: Optional[bool] = None,
         is_admin: Optional[bool] = None,
         allow_superuser: Optional[bool] = None,
-        **kwargs
+        **kwargs,
     ):
         """
         Add DELETE route with authentication and authorization
@@ -286,15 +257,9 @@ class AuthRouter(APIRouter):
                     require_all=require_all if require_all is not None else self._require_all,
                     require_auth=require_auth if require_auth is not None else self._require_auth,
                     is_admin=is_admin if is_admin is not None else self._is_admin,
-                    allow_superuser=allow_superuser if allow_superuser is not None else self._allow_superuser
+                    allow_superuser=allow_superuser if allow_superuser is not None else self._allow_superuser,
                 )
-            self._add_route_with_auth(
-                method="DELETE",
-                path=path,
-                endpoint=func,
-                auth_config=auth_config,
-                **kwargs
-            )
+            self._add_route_with_auth(method="DELETE", path=path, endpoint=func, auth_config=auth_config, **kwargs)
             return func
 
         return decorator
@@ -307,7 +272,7 @@ class AuthRouter(APIRouter):
         require_auth: Optional[bool] = None,
         is_admin: Optional[bool] = None,
         allow_superuser: Optional[bool] = None,
-        **kwargs
+        **kwargs,
     ):
         """
         Add PATCH route with authentication and authorization
@@ -329,15 +294,9 @@ class AuthRouter(APIRouter):
                     require_all=require_all if require_all is not None else self._require_all,
                     require_auth=require_auth if require_auth is not None else self._require_auth,
                     is_admin=is_admin if is_admin is not None else self._is_admin,
-                    allow_superuser=allow_superuser if allow_superuser is not None else self._allow_superuser
+                    allow_superuser=allow_superuser if allow_superuser is not None else self._allow_superuser,
                 )
-            self._add_route_with_auth(
-                method="PATCH",
-                path=path,
-                endpoint=func,
-                auth_config=auth_config,
-                **kwargs
-            )
+            self._add_route_with_auth(method="PATCH", path=path, endpoint=func, auth_config=auth_config, **kwargs)
             return func
 
         return decorator

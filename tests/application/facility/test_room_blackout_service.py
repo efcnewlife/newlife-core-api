@@ -1,14 +1,15 @@
 """
 RoomBlackoutService unit tests.
 """
+
 from datetime import date, time
 from uuid import uuid4
 
 import pytest
 
 from portal.application.facility.commands import CreateRoomBlackoutCommand
-from portal.application.facility.room_blackout_service import RoomBlackoutService
 from portal.application.facility.results import RoomBlackoutResult
+from portal.application.facility.room_blackout_service import RoomBlackoutService
 from portal.domain.facility.constants import RoomBlackoutKind
 from portal.exceptions.responses import BadRequestException, NotFoundException
 from tests.fixtures.facility.factories import new_uuid
@@ -16,10 +17,7 @@ from tests.fixtures.facility.stubs import StubRoomBlackoutRepository, StubRoomRe
 
 
 def _service(blackout_stub, room_ids=None):
-    return RoomBlackoutService(
-        blackout_stub,
-        StubRoomRepository(existing_ids=room_ids or set()),
-    )
+    return RoomBlackoutService(blackout_stub, StubRoomRepository(existing_ids=room_ids or set()))
 
 
 def _one_off_command(facility_id=None, **overrides):

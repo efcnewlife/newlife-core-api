@@ -1,6 +1,7 @@
 """
 Microsoft Graph user directory sync use case for CLI.
 """
+
 import json
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -24,9 +25,7 @@ from portal.providers.ms_graph.models import GraphUserRecord
 
 SYNC_EMAIL_DOMAIN = "efcnewlife.org"
 DEFAULT_SYNC_FILTER = (
-    "userType eq 'Member' and accountEnabled eq true "
-    f"and endsWith(userPrincipalName,'@{SYNC_EMAIL_DOMAIN}') "
-    "and givenName ne null and surname ne null"
+    f"userType eq 'Member' and accountEnabled eq true and endsWith(userPrincipalName,'@{SYNC_EMAIL_DOMAIN}') and givenName ne null and surname ne null"
 )
 DRY_RUN_OUTPUT_ROOT = Path("temp") / "microsoft_user_sync"
 
@@ -95,12 +94,7 @@ def graph_user_to_dict(record: GraphUserRecord) -> dict[str, Any]:
     }
 
 
-def write_dry_run_output(
-    stats: MicrosoftUserSyncStats,
-    *,
-    output_dir: Path,
-    filter_expr: str,
-) -> Path:
+def write_dry_run_output(stats: MicrosoftUserSyncStats, *, output_dir: Path, filter_expr: str) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
     summary = {
         "dry_run": True,
@@ -115,43 +109,23 @@ def write_dry_run_output(
         "skipped_service_account": stats.skipped_service_account,
         "errors": stats.errors,
     }
-    (output_dir / "summary.json").write_text(
-        json.dumps(summary, indent=2, ensure_ascii=False) + "\n",
-        encoding="utf-8",
-    )
-    (output_dir / "actions.json").write_text(
-        json.dumps(stats.dry_run_actions, indent=2, ensure_ascii=False) + "\n",
-        encoding="utf-8",
-    )
+    (output_dir / "summary.json").write_text(json.dumps(summary, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    (output_dir / "actions.json").write_text(json.dumps(stats.dry_run_actions, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     return output_dir
 
 
 class MicrosoftUserSyncService:
     """Sync Entra users into auth tables."""
 
-    def __init__(
-        self,
-        session: Session,
-        user_repository: UserRepositoryPort,
-        graph_provider: MicrosoftGraphProvider,
-    ):
+    def __init__(self, session: Session, user_repository: UserRepositoryPort, graph_provider: MicrosoftGraphProvider):
         self._session = session
         self._repository = user_repository
         self._graph_provider = graph_provider
 
     @distributed_trace()
-    async def run(
-        self,
-        *,
-        dry_run: bool = False,
-        filter_expr: Optional[str] = None,
-        dry_run_output_dir: Optional[Path] = None,
-    ) -> MicrosoftUserSyncStats:
+    async def run(self, *, dry_run: bool = False, filter_expr: Optional[str] = None, dry_run_output_dir: Optional[Path] = None) -> MicrosoftUserSyncStats:
         if not self._graph_provider.is_configured():
-            raise RuntimeError(
-                "Microsoft Graph is not configured. Set AZURE_TENANT_ID, "
-                "AZURE_APP_CLIENT_ID, and AZURE_APP_CLIENT_SECRET."
-            )
+            raise RuntimeError("Microsoft Graph is not configured. Set AZURE_TENANT_ID, AZURE_APP_CLIENT_ID, and AZURE_APP_CLIENT_SECRET.")
         if not settings.AZURE_TENANT_ID:
             raise RuntimeError("AZURE_TENANT_ID is required for directory sync")
 
@@ -162,12 +136,7 @@ class MicrosoftUserSyncService:
         async for record in self._graph_provider.list_users(filter_expr=odata_filter):
             stats.total_fetched += 1
             try:
-                await self._sync_one(
-                    record=record,
-                    tenant_id=tenant_id,
-                    dry_run=dry_run,
-                    stats=stats,
-                )
+                await self._sync_one(record=record, tenant_id=tenant_id, dry_run=dry_run, stats=stats)
             except Exception as error:
                 message = f"Failed to sync user {record.object_id}: {error}"
                 logger.exception(message)
@@ -176,11 +145,7 @@ class MicrosoftUserSyncService:
         if dry_run:
             await self._session.rollback()
             output_dir = dry_run_output_dir or default_dry_run_output_dir()
-            write_dry_run_output(
-                stats,
-                output_dir=output_dir,
-                filter_expr=odata_filter,
-            )
+            write_dry_run_output(stats, output_dir=output_dir, filter_expr=odata_filter)
             stats.dry_run_output_dir = str(output_dir.resolve())
         else:
             await self._session.commit()
@@ -200,10 +165,7 @@ class MicrosoftUserSyncService:
         preferred_name: Optional[str] = None,
         skip_reason: Optional[str] = None,
     ) -> None:
-        payload: dict[str, Any] = {
-            "action": action,
-            "graph_user": graph_user_to_dict(record),
-        }
+        payload: dict[str, Any] = {"action": action, "graph_user": graph_user_to_dict(record)}
         if skip_reason:
             payload["skip_reason"] = skip_reason
         if email is not None:
@@ -221,22 +183,10 @@ class MicrosoftUserSyncService:
                 "preferred_name": preferred_name,
             }
         if action in ("update", "link"):
-            payload["profile"] = {
-                "first_name": first_name,
-                "last_name": last_name,
-                "preferred_name": preferred_name,
-                "is_active": record.account_enabled,
-            }
+            payload["profile"] = {"first_name": first_name, "last_name": last_name, "preferred_name": preferred_name, "is_active": record.account_enabled}
         stats.dry_run_actions.append(payload)
 
-    async def _sync_one(
-        self,
-        *,
-        record: GraphUserRecord,
-        tenant_id: UUID,
-        dry_run: bool,
-        stats: MicrosoftUserSyncStats,
-    ) -> None:
+    async def _sync_one(self, *, record: GraphUserRecord, tenant_id: UUID, dry_run: bool, stats: MicrosoftUserSyncStats) -> None:
         email = resolve_sync_email(record)
         if not email:
             stats.skipped_no_email += 1
@@ -258,48 +208,22 @@ class MicrosoftUserSyncService:
                 stats.skipped_service_account += 1
                 action = "skip_service_account"
             if dry_run:
-                self._append_dry_run_action(
-                    stats,
-                    action,
-                    record,
-                    email=email,
-                    skip_reason=skip_reason,
-                )
+                self._append_dry_run_action(stats, action, record, email=email, skip_reason=skip_reason)
             return
 
         first_name, last_name, preferred_name = profile_fields_from_graph_user(record)
-        additional_data = {
-            "email": email,
-            "name": record.display_name,
-            "user_principal_name": record.user_principal_name,
-            "user_type": record.user_type,
-        }
+        additional_data = {"email": email, "name": record.display_name, "user_principal_name": record.user_principal_name, "user_type": record.user_type}
 
-        user_id = await self._repository.get_user_id_by_third_party(
-            ThirdPartyProvider.MICROSOFT,
-            record.object_id,
-        )
+        user_id = await self._repository.get_user_id_by_third_party(ThirdPartyProvider.MICROSOFT, record.object_id)
 
         if user_id:
             if dry_run:
                 stats.updated += 1
                 self._append_dry_run_action(
-                    stats,
-                    "update",
-                    record,
-                    email=email,
-                    user_id=user_id,
-                    first_name=first_name,
-                    last_name=last_name,
-                    preferred_name=preferred_name,
+                    stats, "update", record, email=email, user_id=user_id, first_name=first_name, last_name=last_name, preferred_name=preferred_name
                 )
                 return
-            await self._repository.update_directory_user_profile(
-                user_id=user_id,
-                first_name=first_name,
-                last_name=last_name,
-                preferred_name=preferred_name,
-            )
+            await self._repository.update_directory_user_profile(user_id=user_id, first_name=first_name, last_name=last_name, preferred_name=preferred_name)
             await self._repository.update_user_active_flag(user_id, record.account_enabled)
             await self._repository.upsert_auth_user_third_party(
                 user_id=user_id,
@@ -316,29 +240,14 @@ class MicrosoftUserSyncService:
             if dry_run:
                 stats.linked += 1
                 self._append_dry_run_action(
-                    stats,
-                    "link",
-                    record,
-                    email=email,
-                    user_id=existing.id,
-                    first_name=first_name,
-                    last_name=last_name,
-                    preferred_name=preferred_name,
+                    stats, "link", record, email=email, user_id=existing.id, first_name=first_name, last_name=last_name, preferred_name=preferred_name
                 )
                 return
             if not await self._repository.user_profile_exists(existing.id):
-                await self._repository.create_user_profile(
-                    user_id=existing.id,
-                    first_name=first_name,
-                    last_name=last_name,
-                    preferred_name=preferred_name,
-                )
+                await self._repository.create_user_profile(user_id=existing.id, first_name=first_name, last_name=last_name, preferred_name=preferred_name)
             else:
                 await self._repository.update_directory_user_profile(
-                    user_id=existing.id,
-                    first_name=first_name,
-                    last_name=last_name,
-                    preferred_name=preferred_name,
+                    user_id=existing.id, first_name=first_name, last_name=last_name, preferred_name=preferred_name
                 )
             await self._repository.update_user_active_flag(existing.id, record.account_enabled)
             await self._repository.upsert_auth_user_third_party(
@@ -353,15 +262,7 @@ class MicrosoftUserSyncService:
 
         if dry_run:
             stats.created += 1
-            self._append_dry_run_action(
-                stats,
-                "create",
-                record,
-                email=email,
-                first_name=first_name,
-                last_name=last_name,
-                preferred_name=preferred_name,
-            )
+            self._append_dry_run_action(stats, "create", record, email=email, first_name=first_name, last_name=last_name, preferred_name=preferred_name)
             return
 
         new_user_id = uuid4()
@@ -395,16 +296,8 @@ async def run_microsoft_user_sync(
     filter_expr: Optional[str] = None,
     dry_run_output_dir: Optional[Path] = None,
 ) -> MicrosoftUserSyncStats:
-    service = MicrosoftUserSyncService(
-        session=session,
-        user_repository=user_repository,
-        graph_provider=graph_provider,
-    )
-    stats = await service.run(
-        dry_run=dry_run,
-        filter_expr=filter_expr,
-        dry_run_output_dir=dry_run_output_dir,
-    )
+    service = MicrosoftUserSyncService(session=session, user_repository=user_repository, graph_provider=graph_provider)
+    stats = await service.run(dry_run=dry_run, filter_expr=filter_expr, dry_run_output_dir=dry_run_output_dir)
     click.echo(
         click.style(
             "Microsoft user sync "
@@ -418,21 +311,10 @@ async def run_microsoft_user_sync(
         )
     )
     if dry_run and stats.dry_run_output_dir:
-        click.echo(
-            click.style(
-                f"Dry-run report written to {stats.dry_run_output_dir}",
-                fg="cyan",
-            )
-        )
+        click.echo(click.style(f"Dry-run report written to {stats.dry_run_output_dir}", fg="cyan"))
     if stats.errors:
         click.echo(click.style(f"Errors: {len(stats.errors)}", fg="red"))
         for message in stats.errors:
             click.echo(click.style(f"  - {message}", fg="red"))
-    logger.info(
-        "Microsoft user sync completed: fetched=%s created=%s updated=%s linked=%s",
-        stats.total_fetched,
-        stats.created,
-        stats.updated,
-        stats.linked,
-    )
+    logger.info("Microsoft user sync completed: fetched=%s created=%s updated=%s linked=%s", stats.total_fetched, stats.created, stats.updated, stats.linked)
     return stats

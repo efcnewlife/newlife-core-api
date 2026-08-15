@@ -1,6 +1,7 @@
 """
 Tests for MicrosoftAuthService profile bootstrap on login.
 """
+
 from uuid import uuid4
 
 import pytest
@@ -10,7 +11,6 @@ from portal.application.auth.microsoft_auth_service import MicrosoftAuthService
 from portal.application.auth.microsoft_profile_mapper import profile_fields_from_microsoft_claims
 from portal.application.auth.results import AdminProfileResult, LoginResult, TokenResult, UserSensitive
 from portal.exceptions.responses import UnauthorizedException
-
 
 SAMPLE_CLAIMS = {
     "email": "jay.hsia@efcnewlife.org",
@@ -64,11 +64,7 @@ class StubLoginService:
                 preferred_locale_id=user.preferred_locale_id,
                 last_login_at=user.last_login_at,
             ),
-            token=TokenResult(
-                access_token="access",
-                refresh_token="refresh",
-                expires_in=3600,
-            ),
+            token=TokenResult(access_token="access", refresh_token="refresh", expires_in=3600),
         )
 
 
@@ -93,13 +89,7 @@ class StubUserRepository:
     async def create_user_profile(self, user_id, first_name, last_name, preferred_name=None):
         self.profile_created.append((user_id, first_name, last_name, preferred_name))
         self._with_profile = True
-        self._account = self._account.model_copy(
-            update={
-                "first_name": first_name,
-                "last_name": last_name,
-                "preferred_name": preferred_name,
-            }
-        )
+        self._account = self._account.model_copy(update={"first_name": first_name, "last_name": last_name, "preferred_name": preferred_name})
 
     async def upsert_auth_user_third_party(self, **kwargs):
         self.third_party_upserts.append(kwargs)
@@ -111,20 +101,9 @@ class StubUserRepository:
 @pytest.mark.asyncio
 async def test_microsoft_login_creates_profile_when_missing():
     user_id = uuid4()
-    account = UserSensitive(
-        id=user_id,
-        email="jay.hsia@efcnewlife.org",
-        verified=True,
-        is_active=True,
-        is_admin=True,
-        is_superuser=False,
-    )
+    account = UserSensitive(id=user_id, email="jay.hsia@efcnewlife.org", verified=True, is_active=True, is_admin=True, is_superuser=False)
     repo = StubUserRepository(account=account, with_profile=False)
-    service = MicrosoftAuthService(
-        user_repository=repo,
-        microsoft_oidc_provider=StubMicrosoftOidcProvider(),
-        login_service=StubLoginService(),
-    )
+    service = MicrosoftAuthService(user_repository=repo, microsoft_oidc_provider=StubMicrosoftOidcProvider(), login_service=StubLoginService())
 
     result = await service.microsoft_login(MicrosoftLoginCommand(id_token="token"))
 
@@ -144,15 +123,7 @@ async def test_microsoft_login_rejects_unknown_user():
             return None
 
     service = MicrosoftAuthService(
-        user_repository=EmptyRepo(
-            account=UserSensitive(
-                id=uuid4(),
-                email="missing@example.com",
-                verified=True,
-                is_active=True,
-                is_admin=True,
-            ),
-        ),
+        user_repository=EmptyRepo(account=UserSensitive(id=uuid4(), email="missing@example.com", verified=True, is_active=True, is_admin=True)),
         microsoft_oidc_provider=StubMicrosoftOidcProvider(),
         login_service=StubLoginService(),
     )

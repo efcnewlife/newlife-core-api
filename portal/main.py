@@ -1,8 +1,9 @@
 """
 main application - Template
 """
-from pathlib import Path
+
 import secrets
+from pathlib import Path
 
 from fastapi import Depends, HTTPException, status
 from fastapi.responses import HTMLResponse
@@ -23,11 +24,7 @@ def _verify_docs_access(credentials: HTTPBasicCredentials) -> None:
     is_valid_password = secrets.compare_digest(credentials.password, settings.DOCS_BASIC_AUTH_PASSWORD)
     if is_valid_username and is_valid_password:
         return
-    raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Invalid basic auth credentials.",
-        headers={"WWW-Authenticate": "Basic"},
-    )
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid basic auth credentials.", headers={"WWW-Authenticate": "Basic"})
 
 
 def _render_docs_scope_html() -> str:

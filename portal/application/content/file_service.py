@@ -1,6 +1,7 @@
 """
 Content file application service.
 """
+
 import asyncio
 import base64
 import hashlib
@@ -17,12 +18,7 @@ from azure.core.exceptions import AzureError
 from fastapi import status
 from PIL import Image
 
-from portal.application.content.commands import (
-    BulkDeleteFilesCommand,
-    FilePagesQueryCommand,
-    UpdateFileAssociationCommand,
-    UploadFileCommand,
-)
+from portal.application.content.commands import BulkDeleteFilesCommand, FilePagesQueryCommand, UpdateFileAssociationCommand, UploadFileCommand
 from portal.application.content.results import (
     BatchUploadFilesResult,
     BulkDeleteFilesResult,
@@ -47,13 +43,7 @@ from portal.libs.tracing.distributed_trace import distributed_trace
 class FileService:
     """Admin content file use cases."""
 
-    def __init__(
-        self,
-        file_repository: FileRepositoryPort,
-        file_storage: FileStoragePort,
-        file_cache: FileCachePort,
-        rbac_audit_service: RbacAuditPort,
-    ):
+    def __init__(self, file_repository: FileRepositoryPort, file_storage: FileStoragePort, file_cache: FileCachePort, rbac_audit_service: RbacAuditPort):
         self._repository = file_repository
         self._storage = file_storage
         self._cache = file_cache
@@ -65,12 +55,7 @@ class FileService:
         urls = await asyncio.gather(*[self.get_signed_url(file=item) for item in items])
         for item, url in zip(items, urls):
             item.url = url
-        return FilePageResult(
-            page=command.page,
-            page_size=command.page_size,
-            total=count,
-            items=items,
-        )
+        return FilePageResult(page=command.page, page_size=command.page_size, total=count, items=items)
 
     @distributed_trace()
     async def get_file_summary(self) -> FileSummaryResult:
@@ -100,11 +85,7 @@ class FileService:
                     pass
 
             if command.check_duplicates:
-                existing = await self._check_duplicate(
-                    file_content=file_content,
-                    content_type=content_type,
-                    file_size=file_size,
-                )
+                existing = await self._check_duplicate(file_content=file_content, content_type=content_type, file_size=file_size)
                 if existing:
                     return UploadFileResult(id=existing.id, duplicate=True)
 
@@ -150,25 +131,16 @@ class FileService:
             await self._repository.update_status(file_id, FileStatus.UPLOADED)
         except AzureError as exc:
             raise ApiBaseException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Azure Blob Storage service unavailable",
-                debug_detail=str(exc),
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Azure Blob Storage service unavailable", debug_detail=str(exc)
             ) from exc
         except UniqueViolationError as exc:
-            raise ConflictErrorException(
-                detail="File already exists",
-                debug_detail=str(exc),
-            ) from exc
+            raise ConflictErrorException(detail="File already exists", debug_detail=str(exc)) from exc
         except BadRequestException:
             raise
         except ApiBaseException:
             raise
         except Exception as exc:
-            raise ApiBaseException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="File upload failed",
-                debug_detail=str(exc),
-            ) from exc
+            raise ApiBaseException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="File upload failed", debug_detail=str(exc)) from exc
         else:
             self._audit.create_log(
                 OperationType.CREATE,
@@ -186,10 +158,7 @@ class FileService:
             return UploadFileResult(id=file_id)
 
     @distributed_trace()
-    async def upload_multiple_files(
-        self,
-        commands: list[UploadFileCommand],
-    ) -> BatchUploadFilesResult:
+    async def upload_multiple_files(self, commands: list[UploadFileCommand]) -> BatchUploadFilesResult:
         uploaded_files: list[UUIDBaseModel] = []
         failed_files: list[FailedUploadFileResult] = []
         for command in commands:
@@ -197,16 +166,8 @@ class FileService:
                 result = await self.upload_file(command)
                 uploaded_files.append(UUIDBaseModel(id=result.id))
             except Exception as exc:
-                failed_files.append(
-                    FailedUploadFileResult(
-                        filename=command.filename or "unknown_file",
-                        error=str(exc),
-                    )
-                )
-        return BatchUploadFilesResult(
-            uploaded_files=uploaded_files,
-            failed_files=failed_files,
-        )
+                failed_files.append(FailedUploadFileResult(filename=command.filename or "unknown_file", error=str(exc)))
+        return BatchUploadFilesResult(uploaded_files=uploaded_files, failed_files=failed_files)
 
     @distributed_trace()
     async def delete_files(self, command: BulkDeleteFilesCommand) -> BulkDeleteFilesResult:
@@ -220,16 +181,10 @@ class FileService:
             success_keys = await self._storage.delete_objects(keys)
         except AzureError as exc:
             raise ApiBaseException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Azure Blob Storage service unavailable",
-                debug_detail=str(exc),
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Azure Blob Storage service unavailable", debug_detail=str(exc)
             ) from exc
 
-        failed_items = [
-            file_key_mapping[key]
-            for key in keys
-            if key not in success_keys and key in file_key_mapping
-        ]
+        failed_items = [file_key_mapping[key] for key in keys if key not in success_keys and key in file_key_mapping]
         if success_keys:
             await self._repository.mark_deleted_by_keys(success_keys)
             for key in success_keys:
@@ -237,24 +192,14 @@ class FileService:
                 if file_item:
                     await self._cache.invalidate_signed_url(file_item.id)
             self._audit.create_log(
-                OperationType.DELETE,
-                operation_code=CONTENT_FILE_TABLE,
-                old_data={"file_keys": success_keys},
-                new_data={"status": FileStatus.DELETED.value},
+                OperationType.DELETE, operation_code=CONTENT_FILE_TABLE, old_data={"file_keys": success_keys}, new_data={"status": FileStatus.DELETED.value}
             )
-        return BulkDeleteFilesResult(
-            success_count=len(success_keys),
-            failed_items=failed_items or None,
-        )
+        return BulkDeleteFilesResult(success_count=len(success_keys), failed_items=failed_items or None)
 
     @distributed_trace()
     async def update_file_association(self, command: UpdateFileAssociationCommand) -> None:
         try:
-            await self._repository.replace_associations(
-                resource_id=command.resource_id,
-                resource_name=command.resource_name,
-                file_ids=command.file_ids,
-            )
+            await self._repository.replace_associations(resource_id=command.resource_id, resource_name=command.resource_name, file_ids=command.file_ids)
         finally:
             await self._cache.invalidate_resource_association(command.resource_id)
 
@@ -267,10 +212,7 @@ class FileService:
         return files
 
     @distributed_trace()
-    async def get_signed_urls_by_resource_ids(
-        self,
-        resource_ids: list[UUID],
-    ) -> dict[UUID, list[str]]:
+    async def get_signed_urls_by_resource_ids(self, resource_ids: list[UUID]) -> dict[UUID, list[str]]:
         unique_ids = list(set(resource_ids))
         if not unique_ids:
             return {}
@@ -284,12 +226,7 @@ class FileService:
         return url_by_resource
 
     @distributed_trace()
-    async def get_signed_url(
-        self,
-        file_id: Optional[UUID] = None,
-        file: Optional[FileBaseResult] = None,
-        expiration: Optional[int] = None,
-    ) -> Optional[str]:
+    async def get_signed_url(self, file_id: Optional[UUID] = None, file: Optional[FileBaseResult] = None, expiration: Optional[int] = None) -> Optional[str]:
         expiry = expiration if expiration is not None else settings.SIGNED_URL_EXPIRY_SECONDS
         if file is None:
             if file_id is None:
@@ -302,27 +239,14 @@ class FileService:
         if cached:
             return cached
 
-        url = await self._storage.generate_signed_read_url(
-            key=file.key,
-            bucket=file.bucket,
-            expiry_seconds=expiry,
-        )
+        url = await self._storage.generate_signed_read_url(key=file.key, bucket=file.bucket, expiry_seconds=expiry)
         await self._cache.set_signed_url(file.id, url, expiry)
         return url
 
-    async def _check_duplicate(
-        self,
-        file_content: bytes,
-        content_type: str,
-        file_size: int,
-    ) -> Optional[FileDetailResult]:
+    async def _check_duplicate(self, file_content: bytes, content_type: str, file_size: int) -> Optional[FileDetailResult]:
         sha256_hash = hashlib.sha256(file_content).hexdigest()
         existing = await self._repository.get_by_sha256(sha256_hash)
         if existing:
             return existing
         md5_hash = hashlib.md5(file_content).hexdigest()
-        return await self._repository.get_by_md5_size_content_type(
-            checksum_md5=md5_hash,
-            size_bytes=file_size,
-            content_type=content_type,
-        )
+        return await self._repository.get_by_md5_size_content_type(checksum_md5=md5_hash, size_bytes=file_size, content_type=content_type)

@@ -1,9 +1,11 @@
 """
 Authentication and Authorization Route
 """
-from typing import Optional, Callable
+
+from typing import Callable, Optional
 
 from fastapi import Request, Response
+
 from portal.libs.authorization.auth_config import AuthConfig
 from portal.route_classes.log_route import LogRoute
 

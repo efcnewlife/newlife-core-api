@@ -1,6 +1,7 @@
 """
 Room blackout serializers.
 """
+
 from datetime import date, datetime, time
 from typing import Optional
 from uuid import UUID
@@ -36,11 +37,7 @@ class AdminRoomBlackoutItem(UUIDBaseModel):
     reason: str = Field(..., description="Admin-only reason")
     kind: str = Field(..., description="one_off or recurring")
     blackout_date: Optional[date] = Field(None, serialization_alias="blackoutDate", description="One-off date")
-    days_of_week: Optional[list[int]] = Field(
-        None,
-        serialization_alias="daysOfWeek",
-        description="ISO weekdays 0-6 for recurring",
-    )
+    days_of_week: Optional[list[int]] = Field(None, serialization_alias="daysOfWeek", description="ISO weekdays 0-6 for recurring")
     start_time: time = Field(..., serialization_alias="startTime", description="Start time")
     end_time: time = Field(..., serialization_alias="endTime", description="End time")
     is_active: bool = Field(True, serialization_alias="isActive", description="Active flag")

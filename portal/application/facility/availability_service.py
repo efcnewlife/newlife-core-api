@@ -1,30 +1,22 @@
 """
 Member room availability application service.
 """
+
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Optional
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from portal.application.facility.commands import RoomAvailabilityQueryCommand
-from portal.application.facility.results import (
-    DayAvailabilityResult,
-    RoomAvailabilityListResult,
-    RoomAvailabilityResult,
-    TimeSlotResult,
-)
+from portal.application.facility.results import DayAvailabilityResult, RoomAvailabilityListResult, RoomAvailabilityResult, TimeSlotResult
 from portal.application.system.setting_service import SettingService
+from portal.domain.org.constants import MinistryStatus
 from portal.exceptions.responses import BadRequestException, ForbiddenException
 from portal.infrastructure.persistence.repositories.facility.booking_repository import BookingRepository
+from portal.infrastructure.persistence.repositories.facility.room_blackout_repository import RoomBlackoutRepository
 from portal.infrastructure.persistence.repositories.facility.room_repository import RoomRepository
-from portal.infrastructure.persistence.repositories.facility.room_blackout_repository import (
-    RoomBlackoutRepository,
-)
-from portal.infrastructure.persistence.repositories.facility.room_slot_template_repository import (
-    RoomSlotTemplateRepository,
-)
+from portal.infrastructure.persistence.repositories.facility.room_slot_template_repository import RoomSlotTemplateRepository
 from portal.infrastructure.persistence.repositories.org.ministry_repository import MinistryRepository
-from portal.domain.org.constants import MinistryStatus
 from portal.libs.contexts.request_context import RequestContext, get_request_context
 from portal.libs.contexts.user_context import UserContext, get_user_context
 from portal.libs.tracing.distributed_trace import distributed_trace
@@ -106,16 +98,9 @@ class AvailabilityService:
                     if self._blackout_repository.slot_overlaps_blackouts(blackouts, local_start, local_end):
                         cursor = slot_end
                         continue
-                    overlap = await self._booking_repository.has_confirmed_slot_overlap(
-                        facility_id=room.id,
-                        start_at=cursor,
-                        end_at=slot_end,
-                    )
+                    overlap = await self._booking_repository.has_confirmed_slot_overlap(facility_id=room.id, start_at=cursor, end_at=slot_end)
                     if not overlap:
-                        slot = TimeSlotResult(
-                            start=self._format_local(cursor, local_tz),
-                            end=self._format_local(slot_end, local_tz),
-                        )
+                        slot = TimeSlotResult(start=self._format_local(cursor, local_tz), end=self._format_local(slot_end, local_tz))
                         local_hour = cursor.astimezone(local_tz).hour
                         if local_hour < 12:
                             am_slots.append(slot)

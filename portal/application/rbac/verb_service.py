@@ -1,6 +1,7 @@
 """
 Verb list application service.
 """
+
 from typing import Optional
 from uuid import UUID
 
@@ -13,11 +14,7 @@ from portal.libs.tracing.distributed_trace import distributed_trace
 class VerbService:
     """Load localized verb list with Redis caching."""
 
-    def __init__(
-        self,
-        verb_repository: VerbRepositoryPort,
-        verb_list_cache: VerbListCachePort,
-    ):
+    def __init__(self, verb_repository: VerbRepositoryPort, verb_list_cache: VerbListCachePort):
         self._verb_repository = verb_repository
         self._verb_list_cache = verb_list_cache
         self._req_ctx: Optional[RequestContext] = get_request_context()

@@ -1,6 +1,7 @@
 """
 Admin facility rental rate template API routes.
 """
+
 import uuid
 from typing import Annotated
 
@@ -36,56 +37,32 @@ router: AuthRouter = AuthRouter(is_admin=True)
 
 
 @router.get(
-    path="/pages",
-    status_code=status.HTTP_200_OK,
-    response_model=AdminRentalRateTemplatePages,
-    permissions=[Permission.FACILITY_RENTAL_RATE_TEMPLATE.read],
+    path="/pages", status_code=status.HTTP_200_OK, response_model=AdminRentalRateTemplatePages, permissions=[Permission.FACILITY_RENTAL_RATE_TEMPLATE.read]
 )
 @inject
 async def get_rental_rate_template_pages(
     query_model: Annotated[AdminRentalRateTemplateQuery, Query()],
-    rental_rate_template_service: RentalRateTemplateService = Depends(
-        Provide[Container.rental_rate_template_service]
-    ),
+    rental_rate_template_service: RentalRateTemplateService = Depends(Provide[Container.rental_rate_template_service]),
 ):
-    result = await rental_rate_template_service.get_template_pages(
-        command=pages_query_to_command(query_model)
-    )
+    result = await rental_rate_template_service.get_template_pages(command=pages_query_to_command(query_model))
     return rental_rate_template_page_to_api(result)
 
 
 @router.get(
-    path="/list",
-    status_code=status.HTTP_200_OK,
-    response_model=AdminRentalRateTemplateList,
-    permissions=[Permission.FACILITY_RENTAL_RATE_TEMPLATE.read],
+    path="/list", status_code=status.HTTP_200_OK, response_model=AdminRentalRateTemplateList, permissions=[Permission.FACILITY_RENTAL_RATE_TEMPLATE.read]
 )
 @inject
-async def get_rental_rate_template_list(
-    rental_rate_template_service: RentalRateTemplateService = Depends(
-        Provide[Container.rental_rate_template_service]
-    ),
-):
+async def get_rental_rate_template_list(rental_rate_template_service: RentalRateTemplateService = Depends(Provide[Container.rental_rate_template_service])):
     result = await rental_rate_template_service.get_template_list()
     return rental_rate_template_list_to_api(result)
 
 
-@router.post(
-    path="",
-    status_code=status.HTTP_201_CREATED,
-    response_model=UUIDBaseModel,
-    permissions=[Permission.FACILITY_RENTAL_RATE_TEMPLATE.create],
-)
+@router.post(path="", status_code=status.HTTP_201_CREATED, response_model=UUIDBaseModel, permissions=[Permission.FACILITY_RENTAL_RATE_TEMPLATE.create])
 @inject
 async def create_rental_rate_template(
-    model: AdminRentalRateTemplateCreate,
-    rental_rate_template_service: RentalRateTemplateService = Depends(
-        Provide[Container.rental_rate_template_service]
-    ),
+    model: AdminRentalRateTemplateCreate, rental_rate_template_service: RentalRateTemplateService = Depends(Provide[Container.rental_rate_template_service])
 ):
-    result = await rental_rate_template_service.create_template(
-        command=create_rental_rate_template_to_command(model)
-    )
+    result = await rental_rate_template_service.create_template(command=create_rental_rate_template_to_command(model))
     return create_id_result_to_api(result)
 
 
@@ -97,10 +74,7 @@ async def create_rental_rate_template(
 )
 @inject
 async def get_rental_rate_template(
-    template_id: uuid.UUID,
-    rental_rate_template_service: RentalRateTemplateService = Depends(
-        Provide[Container.rental_rate_template_service]
-    ),
+    template_id: uuid.UUID, rental_rate_template_service: RentalRateTemplateService = Depends(Provide[Container.rental_rate_template_service])
 ):
     result = await rental_rate_template_service.get_template_by_id(template_id=template_id)
     if not result:
@@ -108,54 +82,29 @@ async def get_rental_rate_template(
     return rental_rate_template_to_api(result)
 
 
-@router.put(
-    path="/{template_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-    permissions=[Permission.FACILITY_RENTAL_RATE_TEMPLATE.modify],
-)
+@router.put(path="/{template_id}", status_code=status.HTTP_204_NO_CONTENT, permissions=[Permission.FACILITY_RENTAL_RATE_TEMPLATE.modify])
 @inject
 async def update_rental_rate_template(
     template_id: uuid.UUID,
     model: AdminRentalRateTemplateUpdate,
-    rental_rate_template_service: RentalRateTemplateService = Depends(
-        Provide[Container.rental_rate_template_service]
-    ),
+    rental_rate_template_service: RentalRateTemplateService = Depends(Provide[Container.rental_rate_template_service]),
 ):
-    await rental_rate_template_service.update_template(
-        template_id=template_id,
-        command=update_rental_rate_template_to_command(model),
-    )
+    await rental_rate_template_service.update_template(template_id=template_id, command=update_rental_rate_template_to_command(model))
 
 
-@router.delete(
-    path="/{template_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-    permissions=[Permission.FACILITY_RENTAL_RATE_TEMPLATE.delete],
-)
+@router.delete(path="/{template_id}", status_code=status.HTTP_204_NO_CONTENT, permissions=[Permission.FACILITY_RENTAL_RATE_TEMPLATE.delete])
 @inject
 async def delete_rental_rate_template(
     template_id: uuid.UUID,
     model: DeleteBaseModel,
-    rental_rate_template_service: RentalRateTemplateService = Depends(
-        Provide[Container.rental_rate_template_service]
-    ),
+    rental_rate_template_service: RentalRateTemplateService = Depends(Provide[Container.rental_rate_template_service]),
 ):
-    await rental_rate_template_service.delete_template(
-        template_id=template_id,
-        command=delete_model_to_command(model),
-    )
+    await rental_rate_template_service.delete_template(template_id=template_id, command=delete_model_to_command(model))
 
 
-@router.put(
-    path="/{template_id}/restore",
-    status_code=status.HTTP_204_NO_CONTENT,
-    permissions=[Permission.FACILITY_RENTAL_RATE_TEMPLATE.modify],
-)
+@router.put(path="/{template_id}/restore", status_code=status.HTTP_204_NO_CONTENT, permissions=[Permission.FACILITY_RENTAL_RATE_TEMPLATE.modify])
 @inject
 async def restore_rental_rate_template(
-    template_id: uuid.UUID,
-    rental_rate_template_service: RentalRateTemplateService = Depends(
-        Provide[Container.rental_rate_template_service]
-    ),
+    template_id: uuid.UUID, rental_rate_template_service: RentalRateTemplateService = Depends(Provide[Container.rental_rate_template_service])
 ):
     await rental_rate_template_service.restore_template(template_id=template_id)

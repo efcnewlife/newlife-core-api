@@ -1,16 +1,14 @@
 """
 Facility booking application results.
 """
-from datetime import date as DateType, datetime, time
+
+from datetime import date as DateType
+from datetime import datetime, time
 from decimal import Decimal
 from typing import Any, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
-
-from portal.domain.common.mixins import JsonStringParseModel, UUIDBaseModel
-from portal.domain.facility.constants import RentalRateBillingUnit
-from portal.domain.facility.rate_applicability import coerce_applicability_from_db
 
 from portal.application.org.results import (
     CreateIdResult,
@@ -20,6 +18,9 @@ from portal.application.org.results import (
     MinistryPageResult,
     TranslationItemResult,
 )
+from portal.domain.common.mixins import JsonStringParseModel, UUIDBaseModel
+from portal.domain.facility.constants import RentalRateBillingUnit
+from portal.domain.facility.rate_applicability import coerce_applicability_from_db
 
 
 class RoomListItemResult(UUIDBaseModel):
@@ -355,10 +356,7 @@ class BookingDetailResult(UUIDBaseModel):
     booking_type: str = Field(...)
     start_at: datetime = Field(...)
     end_at: datetime = Field(...)
-    recurrence_rule: Optional[str] = Field(
-        default=None,
-        description="iCal RRULE string (RFC 5545); series anchor is start_at",
-    )
+    recurrence_rule: Optional[str] = Field(default=None, description="iCal RRULE string (RFC 5545); series anchor is start_at")
     recurrence_end_at: Optional[datetime] = Field(default=None, description="Recurrence series end")
     status: str = Field(...)
     is_mission_aligned: bool = Field(default=False)

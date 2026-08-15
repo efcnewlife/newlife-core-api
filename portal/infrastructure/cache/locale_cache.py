@@ -1,6 +1,7 @@
 """
 Redis snapshot cache for locale resolution.
 """
+
 import json
 from typing import Any
 
@@ -56,18 +57,9 @@ class LocaleCache:
         norm_id_raw = await self._redis.hgetall(self._get_locale_norm_id_key())
 
         active_locales = sorted([self._decode_redis_value(v) for v in active_raw]) if active_raw else []
-        meta = (
-            {self._decode_redis_value(k): self._decode_redis_value(v) for k, v in meta_raw.items()}
-            if meta_raw else {}
-        )
-        normalized_map = (
-            {self._decode_redis_value(k): self._decode_redis_value(v) for k, v in norm_raw.items()}
-            if norm_raw else {}
-        )
-        normalized_id_map = (
-            {self._decode_redis_value(k): self._decode_redis_value(v) for k, v in norm_id_raw.items()}
-            if norm_id_raw else {}
-        )
+        meta = {self._decode_redis_value(k): self._decode_redis_value(v) for k, v in meta_raw.items()} if meta_raw else {}
+        normalized_map = {self._decode_redis_value(k): self._decode_redis_value(v) for k, v in norm_raw.items()} if norm_raw else {}
+        normalized_id_map = {self._decode_redis_value(k): self._decode_redis_value(v) for k, v in norm_id_raw.items()} if norm_id_raw else {}
         default_locale = meta.get("default_locale") or None
         meta_active_locales = meta.get("active_locales_json")
         if meta_active_locales:
@@ -138,13 +130,7 @@ class LocaleCache:
         locale_norm_id_key = self._get_locale_norm_id_key()
         locale_lang_keys_set_key = self._get_locale_lang_keys_set_key()
         language_keys = await self._redis.smembers(locale_lang_keys_set_key)
-        delete_keys = [
-            locale_active_key,
-            locale_meta_key,
-            locale_norm_key,
-            locale_norm_id_key,
-            locale_lang_keys_set_key,
-        ]
+        delete_keys = [locale_active_key, locale_meta_key, locale_norm_key, locale_norm_id_key, locale_lang_keys_set_key]
         if language_keys:
             delete_keys.extend(self._decode_redis_value(v) for v in language_keys)
         await self._redis.delete(*delete_keys)

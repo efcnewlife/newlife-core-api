@@ -1,28 +1,17 @@
 """
 Facility room blackout application service.
 """
+
 import uuid
 from typing import Optional
 from uuid import UUID
 
-from portal.application.facility.commands import (
-    CreateRoomBlackoutCommand,
-    DeleteCommand,
-    PagesQueryCommand,
-    UpdateRoomBlackoutCommand,
-)
-from portal.application.facility.results import (
-    CreateIdResult,
-    RoomBlackoutListResult,
-    RoomBlackoutPageResult,
-    RoomBlackoutResult,
-)
+from portal.application.facility.commands import CreateRoomBlackoutCommand, DeleteCommand, PagesQueryCommand, UpdateRoomBlackoutCommand
+from portal.application.facility.results import CreateIdResult, RoomBlackoutListResult, RoomBlackoutPageResult, RoomBlackoutResult
 from portal.domain.facility.constants import RoomBlackoutKind
 from portal.domain.facility.days_of_week_mask import days_to_mask
 from portal.exceptions.responses import BadRequestException, NotFoundException
-from portal.infrastructure.persistence.repositories.facility.room_blackout_repository import (
-    RoomBlackoutRepository,
-)
+from portal.infrastructure.persistence.repositories.facility.room_blackout_repository import RoomBlackoutRepository
 from portal.infrastructure.persistence.repositories.facility.room_repository import RoomRepository
 from portal.libs.tracing.distributed_trace import distributed_trace
 
@@ -30,11 +19,7 @@ from portal.libs.tracing.distributed_trace import distributed_trace
 class RoomBlackoutService:
     """Admin room blackout use cases."""
 
-    def __init__(
-        self,
-        room_blackout_repository: RoomBlackoutRepository,
-        room_repository: RoomRepository,
-    ):
+    def __init__(self, room_blackout_repository: RoomBlackoutRepository, room_repository: RoomRepository):
         self._repository = room_blackout_repository
         self._room_repository = room_repository
 
@@ -86,19 +71,12 @@ class RoomBlackoutService:
         if not command.is_active:
             return
         candidates = await self._repository.list_active_overlapping_candidates(
-            facility_id=command.facility_id,
-            kind=kind,
-            exclude_blackout_id=exclude_blackout_id,
+            facility_id=command.facility_id, kind=kind, exclude_blackout_id=exclude_blackout_id
         )
         for candidate in candidates:
             if not self._repository.scopes_overlap(command.facility_id, candidate.facility_id):
                 continue
-            if not self._repository.time_ranges_overlap(
-                command.start_time,
-                command.end_time,
-                candidate.start_time,
-                candidate.end_time,
-            ):
+            if not self._repository.time_ranges_overlap(command.start_time, command.end_time, candidate.start_time, candidate.end_time):
                 continue
             if kind == RoomBlackoutKind.ONE_OFF.value:
                 if candidate.blackout_date != command.blackout_date:
@@ -108,23 +86,12 @@ class RoomBlackoutService:
                     continue
                 if (candidate.days_of_week_mask & days_of_week_mask) == 0:
                     continue
-                if not self._repository.effective_dates_overlap(
-                    command.effective_from,
-                    command.effective_to,
-                    candidate.effective_from,
-                    candidate.effective_to,
-                ):
+                if not self._repository.effective_dates_overlap(command.effective_from, command.effective_to, candidate.effective_from, candidate.effective_to):
                     continue
-            raise BadRequestException(
-                detail="Blackout overlaps an existing active blackout for the same scope and time",
-            )
+            raise BadRequestException(detail="Blackout overlaps an existing active blackout for the same scope and time")
 
     def _to_payload(
-        self,
-        command: CreateRoomBlackoutCommand | UpdateRoomBlackoutCommand,
-        kind: str,
-        days_of_week_mask: Optional[int],
-        blackout_id: Optional[UUID] = None,
+        self, command: CreateRoomBlackoutCommand | UpdateRoomBlackoutCommand, kind: str, days_of_week_mask: Optional[int], blackout_id: Optional[UUID] = None
     ) -> dict:
         payload = {
             "facility_id": command.facility_id,
@@ -144,18 +111,9 @@ class RoomBlackoutService:
         return payload
 
     @distributed_trace()
-    async def get_blackout_pages(
-        self,
-        command: PagesQueryCommand,
-        facility_id: Optional[UUID] = None,
-    ) -> RoomBlackoutPageResult:
+    async def get_blackout_pages(self, command: PagesQueryCommand, facility_id: Optional[UUID] = None) -> RoomBlackoutPageResult:
         items, count = await self._repository.fetch_pages(command, facility_id)
-        return RoomBlackoutPageResult(
-            page=command.page,
-            page_size=command.page_size,
-            total=count,
-            items=items,
-        )
+        return RoomBlackoutPageResult(page=command.page, page_size=command.page_size, total=count, items=items)
 
     @distributed_trace()
     async def get_blackout_list(self, facility_id: Optional[UUID]) -> RoomBlackoutListResult:
@@ -172,9 +130,7 @@ class RoomBlackoutService:
         kind, days_of_week_mask = self._validate_command(command)
         await self._assert_no_overlap(command, kind, days_of_week_mask)
         blackout_id = uuid.uuid4()
-        await self._repository.insert_blackout(
-            self._to_payload(command, kind, days_of_week_mask, blackout_id=blackout_id)
-        )
+        await self._repository.insert_blackout(self._to_payload(command, kind, days_of_week_mask, blackout_id=blackout_id))
         return CreateIdResult(id=blackout_id)
 
     @distributed_trace()
@@ -185,10 +141,7 @@ class RoomBlackoutService:
         await self._assert_room_exists(command.facility_id)
         kind, days_of_week_mask = self._validate_command(command)
         await self._assert_no_overlap(command, kind, days_of_week_mask, exclude_blackout_id=blackout_id)
-        affected = await self._repository.update_blackout(
-            blackout_id,
-            self._to_payload(command, kind, days_of_week_mask),
-        )
+        affected = await self._repository.update_blackout(blackout_id, self._to_payload(command, kind, days_of_week_mask))
         if affected == 0:
             raise NotFoundException(detail=f"Blackout {blackout_id} not found")
 

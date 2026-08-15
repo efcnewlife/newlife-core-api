@@ -2,30 +2,30 @@ import asyncio
 import inspect
 import re
 import uuid
-from datetime import datetime, date
+from datetime import date, datetime
 from enum import Enum, StrEnum
-from typing import List, Callable, overload, Tuple, Union, TypeVar, Type, Any, Optional
+from typing import Any, Callable, List, Optional, Tuple, Type, TypeVar, Union, overload
 
 import asyncpg
 import sqlalchemy as sa
 from asyncpg import Record
 from asyncpg.transaction import TransactionState
 from pydantic import BaseModel
-from sqlalchemy import String, Numeric, Integer, Float, Boolean, DateTime, Date, ColumnExpressionArgument, Column
+from sqlalchemy import Boolean, Column, ColumnExpressionArgument, Date, DateTime, Float, Integer, Numeric, String
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.dialects.postgresql.dml import Insert as PgInsert
 from sqlalchemy.dialects.postgresql.base import PGCompiler
+from sqlalchemy.dialects.postgresql.dml import Insert as PgInsert
 from sqlalchemy.orm import Query, aliased
 from sqlalchemy.sql import FromClause
-from sqlalchemy.sql.dml import Update, Delete, Insert
+from sqlalchemy.sql.dml import Delete, Insert, Update
 from sqlalchemy.sql.selectable import ScalarSelect
 
 from portal.config import settings
-from portal.libs.database.aio_pg import PostgresConnection, ConnectionType
+from portal.libs.database.aio_pg import ConnectionType, PostgresConnection
 from portal.libs.database.orm import Base, ModelBase
 from portal.libs.logger import logger
-from portal.libs.shared import Converter, Assert, validator
+from portal.libs.shared import Assert, Converter, validator
 
 dialect = postgresql.dialect()
 
@@ -38,6 +38,7 @@ TableTypes = Union["Table", Type[sa.Table], Type[Base], Type[ModelBase]]
 
 class FetchMethod(StrEnum):
     """Fetch Method"""
+
     FETCH = "fetch"
     FETCH_VAL = "fetch_val"
     FETCH_ROW = "fetch_row"
@@ -65,23 +66,15 @@ def _format_dict(item: Record, as_model: Type[BaseModel] = None):
 def _format_where(clauses: tuple) -> Union[tuple, ColumnExpressionArgument]:
     Assert.is_not_null(clauses, "clauses")
     if len(clauses) > 2:
-        raise TypeError(
-            "There are too many where condition parameters, "
-            "please use multiple where for multiple conditions or "
-            "use or_, and_ for splicing"
-        )
+        raise TypeError("There are too many where condition parameters, please use multiple where for multiple conditions or use or_, and_ for splicing")
     if len(clauses) == 2:
         where_clause = condition_clause(clauses[0], clauses[1])
     else:
         where_clause = clauses[0]
     return where_clause
 
-def _get_order_by(
-    tables: Union[Type, List[Type], None],
-    order_by: str,
-    descending=True,
-    **map_columns
-):
+
+def _get_order_by(tables: Union[Type, List[Type], None], order_by: str, descending=True, **map_columns):
     """
     获取排序字段
     :param tables:
@@ -132,7 +125,6 @@ def _get_order_by(
     return ordered_items
 
 
-
 class _Insert:
     def __init__(self, insert: PgInsert, session: "Session"):
         self._insert = insert
@@ -154,28 +146,11 @@ class _Insert:
         return self
 
     def on_conflict_do_nothing(self, constraint=None, index_elements=None, index_where=None):
-        self._insert = self._insert.on_conflict_do_nothing(
-            constraint=constraint,
-            index_elements=index_elements,
-            index_where=index_where
-        )
+        self._insert = self._insert.on_conflict_do_nothing(constraint=constraint, index_elements=index_elements, index_where=index_where)
         return self
 
-    def on_conflict_do_update(
-        self,
-        constraint=None,
-        index_elements=None,
-        index_where=None,
-        set_=None,
-        where=None
-    ):
-        self._insert = self._insert.on_conflict_do_update(
-            constraint=constraint,
-            index_elements=index_elements,
-            index_where=index_where,
-            set_=set_,
-            where=where
-        )
+    def on_conflict_do_update(self, constraint=None, index_elements=None, index_where=None, set_=None, where=None):
+        self._insert = self._insert.on_conflict_do_update(constraint=constraint, index_elements=index_elements, index_where=index_where, set_=set_, where=where)
         return self
 
     async def execute(self):
@@ -263,24 +238,14 @@ class _Select:
             self._select = self._select.filter(where_clause)
         return self
 
-    def join(
-        self,
-        right: Union[FromClause, sa.Table],
-        onclause: Optional[FromClause] = None,
-        full: bool = False
-    ):
+    def join(self, right: Union[FromClause, sa.Table], onclause: Optional[FromClause] = None, full: bool = False):
         if onclause is None:
             self._select = self._select.join(right, full=full)
         else:
             self._select = self._select.join(right, onclause, full=full)
         return self
 
-    def outerjoin(
-        self,
-        right: Union[FromClause, sa.Table],
-        onclause: Optional[FromClause] = None,
-        full: bool = False
-    ):
+    def outerjoin(self, right: Union[FromClause, sa.Table], onclause: Optional[FromClause] = None, full: bool = False):
         """
         :param right:
         :param onclause:
@@ -293,13 +258,7 @@ class _Select:
             self._select = self._select.outerjoin(right, onclause, full=full)
         return self
 
-    def dynamic_join(
-        self,
-        condition: Union[Callable, bool],
-        right: Union[FromClause, sa.Table],
-        onclause: Optional[FromClause] = None,
-        full: bool = False
-    ):
+    def dynamic_join(self, condition: Union[Callable, bool], right: Union[FromClause, sa.Table], onclause: Optional[FromClause] = None, full: bool = False):
         """
         :param full:
         :param onclause:
@@ -316,11 +275,7 @@ class _Select:
         return self.join(right, onclause, full=full)
 
     def dynamic_outerjoin(
-        self,
-        condition: Union[Callable, bool],
-        right: Union[FromClause, sa.Table],
-        onclause: Optional[FromClause] = None,
-        full: bool = False
+        self, condition: Union[Callable, bool], right: Union[FromClause, sa.Table], onclause: Optional[FromClause] = None, full: bool = False
     ):
         """
         :param condition:
@@ -593,57 +548,37 @@ def validate(columns: dict, data: dict, is_update: bool = False, is_insert: bool
             value = value.value
         if isinstance(column.type, Integer):
             if not validator.is_int(value):
-                errors.append(
-                    f"The format of the field '{column.name}' is invalid, "
-                    f"the value '{value}' must be an integer"
-                )
+                errors.append(f"The format of the field '{column.name}' is invalid, the value '{value}' must be an integer")
             else:
                 data[column.name] = Converter.to_int(value)
         elif isinstance(column.type, Numeric) or isinstance(column.type, Float):
             if not validator.is_number(value):
-                errors.append(
-                    f"The format of the field '{column.name}' is invalid, "
-                    f"the value '{value}' must be a number"
-                )
+                errors.append(f"The format of the field '{column.name}' is invalid, the value '{value}' must be a number")
             else:
                 data[column.name] = Converter.to_float(value)
         elif isinstance(column.type, Boolean):
             if not validator.is_bool(value):
-                errors.append(
-                    f"The format of the field '{column.name}' is invalid, "
-                    f"the value '{value}' must be a boolean"
-                )
+                errors.append(f"The format of the field '{column.name}' is invalid, the value '{value}' must be a boolean")
             else:
                 data[column.name] = Converter.to_bool(value)
         elif isinstance(column.type, DateTime):
             if not validator.is_datetime(value):
-                errors.append(
-                    f"The format of the field '{column.name}' is invalid, "
-                    f"the value '{value}' must be a date format yyyy-MM-dd HH:mm:ss"
-                )
+                errors.append(f"The format of the field '{column.name}' is invalid, the value '{value}' must be a date format yyyy-MM-dd HH:mm:ss")
             else:
                 data[column.name] = Converter.to_datetime(value)
         elif isinstance(column.type, Date):
             if not validator.is_date(value):
-                errors.append(
-                    f"The format of the field '{column.name}' is invalid, "
-                    f"the value '{value}' must be in the date format yyyy-MM-dd"
-                )
+                errors.append(f"The format of the field '{column.name}' is invalid, the value '{value}' must be in the date format yyyy-MM-dd")
             else:
                 data[column.name] = Converter.to_date(value)
         elif isinstance(column.type, UUID):
             if not validator.is_uuid(value):
-                errors.append(
-                    f"The format of the field '{column.name}' is invalid, "
-                    f"the value '{value}' must be a UUID"
-                )
+                errors.append(f"The format of the field '{column.name}' is invalid, the value '{value}' must be a UUID")
         elif isinstance(column.type, String):
             s_value = str(value)
             if column.type and column.type.length and len(s_value) > column.type.length:
                 errors.append(
-                    f"The format of the field '{column.name}' is invalid, "
-                    f"the value '{value}' must be less than or equal "
-                    f"to {column.type.length} characters"
+                    f"The format of the field '{column.name}' is invalid, the value '{value}' must be less than or equal to {column.type.length} characters"
                 )
             data[column.name] = s_value
     if errors:
@@ -677,7 +612,7 @@ class Session(ISession):
         echo: bool = None,
         loop: asyncio.AbstractEventLoop = None,
         use_poll: bool = None,
-        postgres_connection: PostgresConnection = None
+        postgres_connection: PostgresConnection = None,
     ):
         if use_poll is None:
             self._use_pool = settings.DATABASE_POOL
@@ -723,18 +658,13 @@ class Session(ISession):
             # logger.debug(f"use poll:{self._use_pool}")
             if self._use_pool:
                 if self._pool is None:
-                    self._pool = await self._postgres_connection.create_connection(
-                        connection_type=ConnectionType.POOL,
-                        command_timeout=self._timeout
-                    )
+                    self._pool = await self._postgres_connection.create_connection(connection_type=ConnectionType.POOL, command_timeout=self._timeout)
                 if self._conn is None or self._conn.is_closed():
                     self._conn = await self._pool.acquire(timeout=60)
             else:
                 if self._conn is None or self._conn.is_closed():
                     self._conn = await self._postgres_connection.create_connection(
-                        connection_type=ConnectionType.DEFAULT,
-                        command_timeout=self._timeout,
-                        loop=self._loop
+                        connection_type=ConnectionType.DEFAULT, command_timeout=self._timeout, loop=self._loop
                     )
             self._is_closed = False
         except asyncpg.InterfaceError as e:
@@ -743,9 +673,7 @@ class Session(ISession):
             self._retry_count += 1
             if self._retry_count > 1800:
                 raise e
-            logger.debug(
-                f"Reconnect after 1 second after the database connection is disconnected ({e})"
-            )
+            logger.debug(f"Reconnect after 1 second after the database connection is disconnected ({e})")
             await asyncio.sleep(1)
             await self._ensure_connection(False)
         except Exception as e:
@@ -761,10 +689,7 @@ class Session(ISession):
             if self._echo and params:
                 index = 1
                 for p in params:
-                    raw_sql = re.sub(
-                        fr"\${index}(\D:?)", fr"{convert_literal_value(p)}\g<1>",
-                        raw_sql
-                    )
+                    raw_sql = re.sub(rf"\${index}(\D:?)", rf"{convert_literal_value(p)}\g<1>", raw_sql)
                     index += 1
         else:
             result: PGCompiler = statement.compile(dialect=postgresql.dialect(), compile_kwargs={"render_postcompile": True})
@@ -777,12 +702,7 @@ class Session(ISession):
             if result.params:
                 data = result.params.copy()
                 if is_update or is_insert:
-                    validate(
-                        columns=statement.table.columns,
-                        data=data,
-                        is_update=is_update,
-                        is_insert=is_insert
-                    )
+                    validate(columns=statement.table.columns, data=data, is_update=is_update, is_insert=is_insert)
                 for name, value in data.items():
                     sql = sql.replace(f"%({name})s", f"${index}")
                     if self._echo:
@@ -798,13 +718,7 @@ class Session(ISession):
             logger.debug(str.rjust("", 100, "-"))
         return sql, params
 
-    async def execute(
-        self,
-        statement,
-        *params,
-        append_statement: str = None,
-        timeout: float = None
-    ):
+    async def execute(self, statement, *params, append_statement: str = None, timeout: float = None):
         try:
             await self._locker.acquire()
             await self._ensure_connection(False)
@@ -843,13 +757,7 @@ class Session(ISession):
                 filtered_columns.append(column)
         return _Select(filtered_columns, table, self)
 
-    async def fetch(
-        self,
-        statement,
-        *params,
-        timeout: float = None,
-        as_model: Type[BaseModel] = None
-    ) -> List[T]:
+    async def fetch(self, statement, *params, timeout: float = None, as_model: Type[BaseModel] = None) -> List[T]:
         """
         :param statement:
         :param params:
@@ -859,14 +767,7 @@ class Session(ISession):
         """
         return await self._fetch(FetchMethod.FETCH, statement, params, timeout=timeout, as_model=as_model)
 
-    async def fetchgroup(
-        self,
-        statement,
-        *params,
-        timeout: float = None,
-        groupby: str,
-        as_model: Type[BaseModel] = None
-    ):
+    async def fetchgroup(self, statement, *params, timeout: float = None, groupby: str, as_model: Type[BaseModel] = None):
         """
 
         :param statement:
@@ -877,6 +778,7 @@ class Session(ISession):
         :return:
         """
         import itertools
+
         items = await self.fetch(statement, *params, timeout=timeout, as_model=as_model)
         if as_model:
             return itertools.groupby(items, key=lambda item: getattr(item, groupby))
@@ -900,15 +802,7 @@ class Session(ISession):
         rows = await self._conn.fetch(sql, *params, timeout=timeout)
         return [_format_value(item[0]) for item in rows]
 
-    async def fetchdict(
-        self,
-        statement,
-        *params,
-        timeout: float = None,
-        key: str,
-        value: str = None,
-        as_model: Type[BaseModel] = None
-    ) -> dict:
+    async def fetchdict(self, statement, *params, timeout: float = None, key: str, value: str = None, as_model: Type[BaseModel] = None) -> dict:
         Assert.is_not_null(key, "key")
         items = await self.fetch(statement, *params, timeout=timeout, as_model=as_model)
         results = {}
@@ -930,13 +824,7 @@ class Session(ISession):
         return results
 
     async def _fetch(
-        self,
-        method: FetchMethod,
-        statement,
-        params,
-        append_statement: str = None,
-        timeout: float = None,
-        as_model: Type[BaseModel] = None
+        self, method: FetchMethod, statement, params, append_statement: str = None, timeout: float = None, as_model: Type[BaseModel] = None
     ) -> Union[List[T], T, dict, str, int]:
         try:
             await self._locker.acquire()
@@ -960,14 +848,7 @@ class Session(ISession):
         finally:
             self._locker.release()
 
-    async def copy_records_to_table(
-        self,
-        table_name: str, *,
-        records,
-        columns=None,
-        schema_name: str = None,
-        timeout: int = None
-    ):
+    async def copy_records_to_table(self, table_name: str, *, records, columns=None, schema_name: str = None, timeout: int = None):
         """
         :param table_name:
         :param records:
@@ -977,13 +858,7 @@ class Session(ISession):
         :return:
         """
         await self._ensure_connection()
-        return await self._conn.copy_records_to_table(
-            table_name,
-            records=records,
-            columns=columns,
-            schema_name=schema_name,
-            timeout=timeout
-        )
+        return await self._conn.copy_records_to_table(table_name, records=records, columns=columns, schema_name=schema_name, timeout=timeout)
 
     async def commit(self):
         async with self._locker:

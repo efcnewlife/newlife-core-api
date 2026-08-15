@@ -11,7 +11,6 @@ from typing import Optional
 
 from portal.libs.database import Session
 
-
 _event_session_ctx: ContextVar[Optional[Session]] = ContextVar("event_session_ctx", default=None)
 
 

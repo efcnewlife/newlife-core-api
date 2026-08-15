@@ -1,4 +1,5 @@
 """Http client"""
+
 import asyncio
 import json
 import logging
@@ -6,20 +7,16 @@ import sys
 import time
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Union, overload, AsyncIterator
+from typing import Any, AsyncIterator, Dict, Optional, Union, overload
 
 import httpx
-from portal.config import settings
 from httpx._types import FileTypes  # noqa
+
+from portal.config import settings
 
 request_logger = logging.getLogger("http_client")
 handler = logging.StreamHandler(sys.stdout)
-handler.setFormatter(
-    logging.Formatter(
-        fmt="[%(asctime)s] %(name)s %(levelname)-8s %(message)s",
-        datefmt="%Y-%m-%dT%H:%M:%S%z"
-    )
-)
+handler.setFormatter(logging.Formatter(fmt="[%(asctime)s] %(name)s %(levelname)-8s %(message)s", datefmt="%Y-%m-%dT%H:%M:%S%z"))
 request_logger.addHandler(handler)
 request_logger.setLevel(logging.DEBUG)
 
@@ -27,6 +24,7 @@ request_logger.setLevel(logging.DEBUG)
 @dataclass
 class HttpDefaults:
     """HttpDefaults"""
+
     base_url: str = None
     verbose: bool = None
     timeout: int = 30
@@ -36,6 +34,7 @@ class HttpDefaults:
 @dataclass
 class HttpOptions:
     """HttpOptions"""
+
     # pylint: disable=too-many-instance-attributes
     url: str = None
     verbose: bool = None
@@ -136,10 +135,7 @@ class HttpResponse:
         """aread"""
         return await self._response.aread()
 
-    async def aiter_bytes(
-        self,
-        chunk_size: Optional[int] = None
-    ) -> AsyncIterator[bytes]:
+    async def aiter_bytes(self, chunk_size: Optional[int] = None) -> AsyncIterator[bytes]:
         """
 
         :param chunk_size:
@@ -168,10 +164,7 @@ class HttpSession:
     async def _ensure_client_build(self):
         if self._client:
             return True
-        self._client = httpx.AsyncClient(
-            timeout=self._options.timeout or self.defaults.timeout,
-            verify=self._options.verify
-        )
+        self._client = httpx.AsyncClient(timeout=self._options.timeout or self.defaults.timeout, verify=self._options.verify)
         await self._client.__aenter__()
         return False
 
@@ -349,13 +342,9 @@ class HttpSession:
         if http_method in ('GET', 'DELETE'):
             # pylint: disable=deprecated-method
             if self._options.form:
-                request_logger.warning(
-                    f'{http_method} Request not to use add_form to add parameters, ignored'
-                )
+                request_logger.warning(f'{http_method} Request not to use add_form to add parameters, ignored')
             if self._options.files:
-                request_logger.warning(
-                    f'{http_method} Request not to use add_file to add parameters, ignored'
-                )
+                request_logger.warning(f'{http_method} Request not to use add_file to add parameters, ignored')
 
         elif http_method in ('POST', 'PUT', 'PATCH'):
             if self._options.form:
@@ -393,51 +382,29 @@ class HttpSession:
         esp = time.time() - self._st
         if "application/json" in response.headers.get("content-type", []):
             return f"{response.status_code} ({round(esp * 1000)}ms) {response.text}"
-        return f"{response.status_code} ({round(esp * 1000)}ms) content-type:{response.headers.get('content-type')}, " \
-               f"content-disposition:{response.headers.get('content-disposition')}"
+        return (
+            f"{response.status_code} ({round(esp * 1000)}ms) content-type:{response.headers.get('content-type')}, "
+            f"content-disposition:{response.headers.get('content-disposition')}"
+        )
 
     @staticmethod
     def _format_returns(response: httpx.Response):
         return HttpResponse(response)
 
-    def _format_response(
-        self,
-        method: str,
-        response: httpx.Response,
-        retry_count: int,
-        is_last_time: bool
-    ):
+    def _format_response(self, method: str, response: httpx.Response, retry_count: int, is_last_time: bool):
         if response.status_code >= 500:
             if not is_last_time:
-                request_logger.debug(
-                    f'{method} {self._options.url} Server returned status code '
-                    f'{response.status_code} ready to retry {retry_count + 1} times'
-                )
+                request_logger.debug(f'{method} {self._options.url} Server returned status code {response.status_code} ready to retry {retry_count + 1} times')
                 return None
-            request_logger.debug(
-                f'{method} {self._options.url} '
-                f'The server returns a status code {response.status_code}'
-            )
+            request_logger.debug(f'{method} {self._options.url} The server returns a status code {response.status_code}')
         self._log_verbose(lambda: f'{self._format_log_response(response)}')
         return self._format_returns(response)
 
-    def _retry_error_debug_log(
-        self,
-        method: str,
-        is_last_time: bool,
-        exception: Exception,
-        retry_count: int
-    ):
+    def _retry_error_debug_log(self, method: str, is_last_time: bool, exception: Exception, retry_count: int):
         if not is_last_time:
-            request_logger.debug(
-                f'{method.upper()} {self._options.url} {str(exception)} '
-                f'Ready to retry {retry_count + 1} times'
-            )
+            request_logger.debug(f'{method.upper()} {self._options.url} {str(exception)} Ready to retry {retry_count + 1} times')
         else:
-            request_logger.debug(
-                f'{method.upper()} {self._options.url} {str(exception)} '
-                f'Maximum number of retries reached'
-            )
+            request_logger.debug(f'{method.upper()} {self._options.url} {str(exception)} Maximum number of retries reached')
 
     def get(self) -> HttpResponse:
         """get"""
@@ -468,38 +435,18 @@ class HttpSession:
             is_last_time = (i + 1) == max_retries
             try:
                 response = httpx.request(method=method, **params)
-                if (
-                    response.status_code >= 500
-                    and not is_last_time
-                    and self._options.retry_interval is not None
-                ):
+                if response.status_code >= 500 and not is_last_time and self._options.retry_interval is not None:
                     time.sleep(self._options.retry_interval)
-                formatted_response = self._format_response(
-                    method,
-                    response,
-                    retry_count=i,
-                    is_last_time=is_last_time
-                )
+                formatted_response = self._format_response(method, response, retry_count=i, is_last_time=is_last_time)
                 if not formatted_response:
                     continue
                 return formatted_response
-            except (
-                asyncio.TimeoutError,
-                ConnectionRefusedError,
-                httpx.ConnectError,
-                httpx.ConnectTimeout,
-                httpx.ReadTimeout
-            ) as exc:  # pylint: disable=invalid-name
+            except (asyncio.TimeoutError, ConnectionRefusedError, httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout) as exc:  # pylint: disable=invalid-name
                 if i == max_retries - 1:
                     raise exc
                 if self._options.retry_interval is not None:
                     time.sleep(self._options.retry_interval)
-                self._retry_error_debug_log(
-                    method.upper(),
-                    is_last_time=is_last_time,
-                    exception=exc,
-                    retry_count=i
-                )
+                self._retry_error_debug_log(method.upper(), is_last_time=is_last_time, exception=exc, retry_count=i)
                 continue
 
     async def aget(self) -> HttpResponse:
@@ -535,18 +482,9 @@ class HttpSession:
             is_last_time = (i + 1) == max_retries
             try:
                 response = await self._client.request(method=method, **params)
-                if (
-                    response.status_code >= 500
-                    and not is_last_time
-                    and self._options.retry_interval is not None
-                ):
+                if response.status_code >= 500 and not is_last_time and self._options.retry_interval is not None:
                     await asyncio.sleep(self._options.retry_interval)
-                formatted_response = self._format_response(
-                    method,
-                    response,
-                    retry_count=i,
-                    is_last_time=is_last_time
-                )
+                formatted_response = self._format_response(method, response, retry_count=i, is_last_time=is_last_time)
                 if not formatted_response:
                     continue
                 if not is_created and not self._client.is_closed:
@@ -558,7 +496,7 @@ class HttpSession:
                 httpx.ConnectTimeout,
                 httpx.ConnectError,
                 httpx.ReadTimeout,
-                httpx.RemoteProtocolError
+                httpx.RemoteProtocolError,
             ) as exc:  # pylint: disable=invalid-name
                 if is_last_time:
                     if not is_created and not self._client.is_closed:
@@ -566,12 +504,7 @@ class HttpSession:
                     raise exc
                 if self._options.retry_interval is not None:
                     await asyncio.sleep(self._options.retry_interval)
-                self._retry_error_debug_log(
-                    method.upper(),
-                    is_last_time=is_last_time,
-                    exception=exc,
-                    retry_count=i
-                )
+                self._retry_error_debug_log(method.upper(), is_last_time=is_last_time, exception=exc, retry_count=i)
                 continue
             finally:
                 if is_last_time and not is_created and not self._client.is_closed:

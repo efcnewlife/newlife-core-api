@@ -1,6 +1,7 @@
 """
 Admin Microsoft auth route smoke tests (no database).
 """
+
 import pytest
 from fastapi.testclient import TestClient
 

@@ -1,9 +1,10 @@
 """
 LogRouting
 """
+
 import json
 import time
-from typing import Callable, Dict, Any
+from typing import Any, Callable, Dict
 
 from fastapi import Request, Response
 from fastapi.routing import APIRoute
@@ -24,10 +25,7 @@ class LogRoute(APIRoute):
         :return: True if key is sensitive, False otherwise
         """
         key_lower = key.lower()
-        return any(
-            sensitive_keyword in key_lower
-            for sensitive_keyword in settings.SENSITIVE_PARAMS
-        )
+        return any(sensitive_keyword in key_lower for sensitive_keyword in settings.SENSITIVE_PARAMS)
 
     def filter_sensitive_params(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -79,7 +77,7 @@ class LogRoute(APIRoute):
             body_data = json.loads(body_str)
             filtered_data = self.filter_sensitive_data(body_data)
             return json.dumps(filtered_data, ensure_ascii=False)
-        except (json.JSONDecodeError, ValueError, TypeError):
+        except json.JSONDecodeError, ValueError, TypeError:
             # If not JSON, return as is (could be form data, plain text, etc.)
             return body_str
 
@@ -100,11 +98,7 @@ class LogRoute(APIRoute):
             request_body = await request.body()
             # Filter sensitive parameters from query params
             filtered_params = self.filter_sensitive_params(dict(request.query_params))
-            request_message = {
-                "http.request.method": request.method,
-                "http.request.path": request.url.path,
-                "http.request.params": filtered_params
-            }
+            request_message = {"http.request.method": request.method, "http.request.path": request.url.path, "http.request.params": filtered_params}
             if request.method in ("POST", "PUT", "PATCH"):
                 try:
                     body_str = request_body.decode()

@@ -1,6 +1,7 @@
 """
 Redis cache for user roles.
 """
+
 from uuid import UUID
 
 from redis.asyncio import Redis
@@ -34,12 +35,7 @@ class RoleCache:
         key = self.user_role_key(user_id)
         await self._redis.delete(key)
 
-    async def init_user_roles_cache(
-        self,
-        user_id: UUID,
-        role_codes: list[str],
-        expire: int,
-    ) -> list[str]:
+    async def init_user_roles_cache(self, user_id: UUID, role_codes: list[str], expire: int) -> list[str]:
         """
         Initialize user roles cache.
         :param user_id:

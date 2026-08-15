@@ -1,6 +1,7 @@
 """
 Facility booking domain constants and enums.
 """
+
 from enum import Enum, IntEnum
 
 
@@ -17,6 +18,7 @@ class BookingType(str, Enum):
 
 class BookingStatus(str, Enum):
     """Booking lifecycle status."""
+
     DRAFT = "draft"
     CONFIRMED = "confirmed"
     CANCELLED = "cancelled"
@@ -25,12 +27,14 @@ class BookingStatus(str, Enum):
 
 class BookingSlotStatus(str, Enum):
     """Expanded booking slot occupancy status."""
+
     CONFIRMED = "confirmed"
     CANCELLED = "cancelled"
 
 
 class RentalRateBillingUnit(str, Enum):
     """Rental rate billing unit."""
+
     HOURLY = "hourly"
     DAILY_FLAT = "daily_flat"
     PER_SLOT = "per_slot"
@@ -39,12 +43,14 @@ class RentalRateBillingUnit(str, Enum):
 
 class RentalDiscountCode(str, Enum):
     """Rental discount rule code."""
+
     RECURRING_WEEKLY_MONTHLY = "recurring_weekly_monthly"
     MISSION_ALIGNED = "mission_aligned"
 
 
 class RentalSurchargeCode(str, Enum):
     """Rental surcharge catalog code."""
+
     DEPOSIT_ONE_TIME = "deposit_one_time"
     DOOR_AUDIO_OPERATOR = "door_audio_operator"
     AUDIO_SYSTEM = "audio_system"
@@ -52,6 +58,7 @@ class RentalSurchargeCode(str, Enum):
 
 class RentalSurchargeChargeType(str, Enum):
     """Rental surcharge charge type."""
+
     FLAT = "flat"
     PER_HOUR = "per_hour"
     PER_PROGRAM = "per_program"
@@ -59,6 +66,7 @@ class RentalSurchargeChargeType(str, Enum):
 
 class RentalPolicySettingKey(str, Enum):
     """Rental policy setting key."""
+
     MINIMUM_FEE_DEFAULT = "minimum_fee_default"
     MINIMUM_FEE_GYM = "minimum_fee_gym"
     DAILY_FLAT_MIN_HOURS = "daily_flat_min_hours"
@@ -67,6 +75,7 @@ class RentalPolicySettingKey(str, Enum):
 
 class OverrideOutcome(str, Enum):
     """Ministry priority override outcome."""
+
     OVERRIDE_APPLIED = "override_applied"
     BOOKING_CANCELLED = "booking_cancelled"
     DISPLACED = "displaced"
@@ -74,6 +83,7 @@ class OverrideOutcome(str, Enum):
 
 class DayOfWeek(IntEnum):
     """ISO weekday (Monday=0 through Sunday=6)."""
+
     MONDAY = 0
     TUESDAY = 1
     WEDNESDAY = 2

@@ -1,6 +1,7 @@
 """
 Unit tests for MSGraphUsers mapping and pagination.
 """
+
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -51,33 +52,20 @@ def test_parse_user_defaults_account_enabled() -> None:
 @pytest.mark.asyncio
 async def test_list_users_paginates_across_pages(mocker) -> None:
     page_one = UserCollectionResponse(
-        value=[
-            User(id="u1", given_name="A", surname="One", mail="a@efcnewlife.org"),
-        ],
-        odata_next_link="https://graph.microsoft.com/beta/users?$skiptoken=abc",
+        value=[User(id="u1", given_name="A", surname="One", mail="a@efcnewlife.org")], odata_next_link="https://graph.microsoft.com/beta/users?$skiptoken=abc"
     )
-    page_two = UserCollectionResponse(
-        value=[
-            User(id="u2", given_name="B", surname="Two", mail="b@efcnewlife.org"),
-        ],
-        odata_next_link=None,
-    )
+    page_two = UserCollectionResponse(value=[User(id="u2", given_name="B", surname="Two", mail="b@efcnewlife.org")], odata_next_link=None)
 
     users = MSGraphUsers()
     mocker.patch.object(users, "is_configured", return_value=True)
     mocker.patch.object(users, "get_users", new=AsyncMock(return_value=page_one))
     mocker.patch.object(users, "get_next_link", new=AsyncMock(return_value=page_two))
 
-    records = [
-        record
-        async for record in users.list_users(filter_expr="userType eq 'Member'")
-    ]
+    records = [record async for record in users.list_users(filter_expr="userType eq 'Member'")]
 
     assert [r.object_id for r in records] == ["u1", "u2"]
     users.get_users.assert_awaited_once()
-    users.get_next_link.assert_awaited_once_with(
-        "https://graph.microsoft.com/beta/users?$skiptoken=abc"
-    )
+    users.get_next_link.assert_awaited_once_with("https://graph.microsoft.com/beta/users?$skiptoken=abc")
 
 
 @pytest.mark.asyncio
