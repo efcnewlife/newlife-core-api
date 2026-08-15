@@ -77,6 +77,31 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
         return await call_next(request)
 
+    @staticmethod
+    def _iter_matchable_routes(routes):
+        """
+        Yield API routes, including those nested under FastAPI _IncludedRouter.
+        FastAPI 0.141+ keeps include_router() trees instead of flattening app.routes.
+        """
+        for route in routes:
+            effective_route_contexts = getattr(route, "effective_route_contexts", None)
+            if callable(effective_route_contexts):
+                yield from effective_route_contexts()
+                continue
+            yield route
+
+    @staticmethod
+    def _auth_config_from_candidate(candidate) -> Optional[AuthConfig]:
+        endpoint = getattr(candidate, "endpoint", None)
+        if endpoint and hasattr(endpoint, "__auth_config__"):
+            return getattr(endpoint, "__auth_config__")
+        dependant = getattr(candidate, "dependant", None)
+        if dependant:
+            call = getattr(dependant, "call", None)
+            if call and hasattr(call, "__auth_config__"):
+                return getattr(call, "__auth_config__")
+        return None
+
     def _get_auth_config_from_route(self, request: Request) -> Optional[AuthConfig]:
         """
         Get auth_config from route metadata
@@ -88,9 +113,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
         # Try to get from route if already matched (shouldn't happen in middleware, but check anyway)
         route = request.scope.get("route")
         if route:
-            endpoint = getattr(route, "endpoint", None)
-            if endpoint and hasattr(endpoint, "__auth_config__"):
-                return getattr(endpoint, "__auth_config__")
+            auth_config = self._auth_config_from_candidate(route)
+            if auth_config is not None:
+                return auth_config
 
         # Match route by path and method from app routes
         # This is necessary because routes are matched after middleware in FastAPI
@@ -105,36 +130,23 @@ class AuthMiddleware(BaseHTTPMiddleware):
             path = full_path
         method = request.method
 
-        # Search through all routes to find matching route
-        for r in app.routes:
-            # Skip non-APIRoute routes (e.g., Mount, WebSocketRoute)
-            if not hasattr(r, "methods"):
+        for candidate in self._iter_matchable_routes(app.routes):
+            methods = getattr(candidate, "methods", None)
+            if not methods or method not in methods:
                 continue
 
-            # Check if method matches
-            if method not in r.methods:
+            path_regex = getattr(candidate, "path_regex", None)
+            if path_regex:
+                if path_regex.match(path):
+                    auth_config = self._auth_config_from_candidate(candidate)
+                    if auth_config is not None:
+                        return auth_config
                 continue
 
-            # Try to match path using path_regex (for APIRoute)
-            if hasattr(r, "path_regex"):
-                if r.path_regex.match(path):
-                    # Route matches, get endpoint
-                    endpoint = getattr(r, "endpoint", None)
-                    if endpoint and hasattr(endpoint, "__auth_config__"):
-                        return getattr(endpoint, "__auth_config__")
-
-                    # Also check route's dependant (for dependency-injected endpoints)
-                    dependant = getattr(r, "dependant", None)
-                    if dependant:
-                        call = getattr(dependant, "call", None)
-                        if call and hasattr(call, "__auth_config__"):
-                            return getattr(call, "__auth_config__")
-
-            # Fallback: try exact path match (for simple routes)
-            elif hasattr(r, "path") and r.path == path:
-                endpoint = getattr(r, "endpoint", None)
-                if endpoint and hasattr(endpoint, "__auth_config__"):
-                    return getattr(endpoint, "__auth_config__")
+            if getattr(candidate, "path", None) == path:
+                auth_config = self._auth_config_from_candidate(candidate)
+                if auth_config is not None:
+                    return auth_config
 
         return None
 

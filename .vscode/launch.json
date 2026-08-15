@@ -17,7 +17,7 @@
                 "--use-colors"
             ],
             "cwd": "${workspaceFolder}",
-            "console": "internalConsole"
+            "console": "integratedTerminal"
         },
         {
             "name": "FastAPI: Debug (python -m portal)",
