@@ -7,13 +7,13 @@ version = "0.1.0"
 description = "NewLife Core API Portal with core infrastructure"
 authors = [{ name = "Jay Hsia", email = "jayhsia1997@gmail.com" }]
 readme = "README.md"
-requires-python = "^3.14"
+requires-python = ">=3.14"
 dependencies = [
     # base
     "dependency-injector",
     "fastapi",
     "fastapi-limiter",
-    "gunicorn",
+    "gunicorn>=25,<26",
     "uvicorn",
     "pydantic",
     "pydantic-settings",
@@ -31,7 +31,7 @@ dependencies = [
     # microsoft graph
     "msgraph-beta-sdk",
     # utils
-    "cryptography",
+    "cryptography>=47,<48",
     "email-validator",
     "httpx",
     "pillow",
@@ -42,16 +42,9 @@ dependencies = [
     "pyyaml",
 ]
 
-[tool.poetry]
-package-mode = false
+[dependency-groups]
+dev = ["alembic", "pytest", "pytest-asyncio", "pytest-mock", "click"]
 
-[tool.poetry.group.dev.dependencies]
-alembic = "*"
-pytest = "*"
-pytest-asyncio = "*"
-pytest-mock = "*"
-click = "*"
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+[tool.uv]
+package = false
+required-version = ">=0.12.4,<0.13"

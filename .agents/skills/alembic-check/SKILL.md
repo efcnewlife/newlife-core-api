@@ -17,7 +17,7 @@ Verify that the database revision matches the project's Alembic head(s).
 - Do **not** run: `upgrade`, `downgrade`, `revision`, `stamp`, `merge`
 - Do **not** add, modify, or delete anything under `alembic/`
 - Do **not** run `alembic check` (that compares models to DB schema, not version sync)
-- Run all commands with Poetry from the repo root: `poetry run alembic …`
+- Run all commands with uv from the repo root: `uv run alembic …`
 - Report status only; if behind, tell the user a human must run migrations
 
 ## Workflow
@@ -25,14 +25,14 @@ Verify that the database revision matches the project's Alembic head(s).
 Run from the project root (`newlife-core-api`):
 
 ```bash
-poetry run alembic current
-poetry run alembic heads
+uv run alembic current
+uv run alembic heads
 ```
 
 Optional context (still read-only):
 
 ```bash
-poetry run alembic history -r current:head
+uv run alembic history -r current:head
 ```
 
 ### Interpret results
@@ -56,7 +56,7 @@ Alembic sync: <UP TO DATE | BEHIND | BRANCHED | DIVERGED | UNKNOWN>
 DB current:   <revision or "(none)">
 Local heads:  <revision(s)>
 Pending:      <none | list revision ids / summary from history>
-Action:       <none | ask a human to run poetry run alembic upgrade head>
+Action:       <none | ask a human to run uv run alembic upgrade head>
 ```
 
 Do not offer to run upgrade yourself unless the user explicitly overrides project policy.

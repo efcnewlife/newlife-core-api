@@ -15,7 +15,7 @@ This document helps AI agents quickly understand the **NewLife Core API** codeba
 | **Auth**            | JWT (email/password + Microsoft Entra ID token exchange)                                                         |
 | **Authorization**   | RBAC — roles, permissions, resources, verbs                                                                      |
 | **DI**              | `dependency-injector`                                                                                            |
-| **Package manager** | Poetry (`poetry run …`)                                                                                          |
+| **Package manager** | uv (`uv run …`)                                                                                                  |
 | **Python**          | 3.14+ (see `pyproject.toml`)                                                                                     |
 | **Migrations**      | Alembic — **agents must not add/modify/delete files under `alembic/`**                                           |
 
@@ -34,21 +34,24 @@ This document helps AI agents quickly understand the **NewLife Core API** codeba
 
 ```bash
 # Install
-poetry install
+uv sync
 
 # Local infra
 docker compose up -d
 
 # DB migrate
-poetry run alembic upgrade head
+uv run alembic upgrade head
 
 # Dev server
-poetry run uvicorn portal.main:app --reload
-# or: poetry run python -m portal
+uv run uvicorn portal.main:app --reload
+# or: uv run python -m portal
+
+# IDE debug (Cursor / VS Code): Run and Debug → FastAPI: Debug
+# See .vscode/launch.json (no --reload; breakpoints miss the reloader child)
 
 # Tests
-poetry run pytest
-poetry run pytest tests/application/rbac/test_permission_service.py -v
+uv run pytest
+uv run pytest tests/application/rbac/test_permission_service.py -v
 ```
 
 | URL                                      | Description                 |
@@ -326,7 +329,7 @@ tests/
 - Async tests: `@pytest.mark.asyncio`
 - **Application service tests:** inject stub repos implementing the same methods as Ports; assert on `results` types, not serializers
 - Mirror `portal/application/` under `tests/application/`
-- Run via Poetry: `poetry run pytest`
+- Run via uv: `uv run pytest`
 
 **Example stub pattern:** see `tests/application/rbac/test_permission_service.py`.
 
@@ -418,6 +421,7 @@ Use **Permission** or **Verb** as the reference implementation.
 | `portal/libs/consts/permission.py`                                        | Permission tokens for routes                              |
 | `portal/config.py`                                                        | Environment settings                                      |
 | `example.env`                                                             | Required env vars                                         |
+| `.vscode/launch.json`                                                     | Cursor / VS Code debug (FastAPI + pytest)                 |
 
 ---
 
