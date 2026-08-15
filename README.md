@@ -63,14 +63,14 @@ flowchart TB
     Serializers -.->|API response only| Routers
 ```
 
-| Layer | Path | Responsibility |
-|-------|------|----------------|
-| Domain | `portal/domain/` | Pydantic entities, repository/cache **ports** (Protocol), audit table constants |
-| Application | `portal/application/` | Use-case **services**, **commands** / **results** (snake_case Pydantic); **mappers** translate to serializers at the boundary |
-| Infrastructure | `portal/infrastructure/` | SQLAlchemy **repositories**, Redis **caches**, **event handlers** |
-| Delivery | `portal/routers/`, `portal/serializers/`, `portal/middlewares/` | HTTP routes, API contracts (camelCase), auth and request context |
-| Cross-cutting | `portal/providers/`, `portal/events/`, `portal/libs/` | JWT/OIDC/password, event bus, DB session, authorization helpers |
-| DI | `portal/containers/` | `core`, `admin`, `events`; composition root at `portal/container.py` |
+| Layer          | Path                                                            | Responsibility                                                                                                                |
+| -------------- | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Domain         | `portal/domain/`                                                | Pydantic entities, repository/cache **ports** (Protocol), audit table constants                                               |
+| Application    | `portal/application/`                                           | Use-case **services**, **commands** / **results** (snake_case Pydantic); **mappers** translate to serializers at the boundary |
+| Infrastructure | `portal/infrastructure/`                                        | SQLAlchemy **repositories**, Redis **caches**, **event handlers**                                                             |
+| Delivery       | `portal/routers/`, `portal/serializers/`, `portal/middlewares/` | HTTP routes, API contracts (camelCase), auth and request context                                                              |
+| Cross-cutting  | `portal/providers/`, `portal/events/`, `portal/libs/`           | JWT/OIDC/password, event bus, DB session, authorization helpers                                                               |
+| DI             | `portal/containers/`                                            | `core`, `admin`, `events`; composition root at `portal/container.py`                                                          |
 
 ### Repository layout
 
@@ -318,7 +318,7 @@ flowchart LR
 
 ## Prerequisites
 
-- Python 3.14+
+- uv `>=0.12.4,<0.13` (see `[tool.uv] required-version`)
 - PostgreSQL 17
 - Redis 7
 - Docker
@@ -327,32 +327,19 @@ flowchart LR
 
 > All setup commands should be run in the root directory of the project.
 
-### 1. Install uv
+### Install uv
 
 [uv installation](https://docs.astral.sh/uv/getting-started/installation/)
 
-This project requires uv `>=0.12.4,<0.13` (see `[tool.uv] required-version`).
+uv reads `.python-version` (`3.14`) and installs that interpreter if it is missing.
 
-### 2. Install pyenv (Optional)
-
-[pyenv Installation Guide](https://github.com/pyenv/pyenv#installation)
-
-uv reads `.python-version` (`3.14`). pyenv is optional interpreter management only.
-
-#### Install Python 3.14
-
-```bash
-pyenv install 3.14.x  # Replace x with the version you want to install
-pyenv local 3.14.x   # Replace x with the version you installed
-```
-
-### 3. Install Dependencies
+### Install Dependencies
 
 ```bash
 uv sync
 ```
 
-### 4. Environment Setup
+### Environment Setup
 
 Create a `.env` file in the project root:
 
@@ -374,7 +361,7 @@ The Admin Portal SPA can sign in with Microsoft and exchange the Entra **ID toke
 4. Ensure `CORS_ALLOWED_ORIGINS` includes the Admin Portal origin.
 5. The portal user must already exist with `is_admin`, `is_active`, and `verified`; matching is by **email** from the token.
 
-### 5. Docker
+### Docker
 
 Make sure you have Docker installed and running.
 
@@ -384,16 +371,16 @@ Make sure you have Docker installed and running.
 docker compose up -d
 ```
 
-### 6. Database Setup
+### Database Setup
 
 > How to use Alembic to manage database migrations.
-> 
+>
 > Refer to [Alembic documentation](http://alembic.sqlalchemy.org/en/latest/tutorial.html)
 
 #### About Branch
 
 > The concept is similar to a branch in git.
-> 
+>
 > It allows you to create a new version of the database schema without affecting the current version.
 
 [Alembic Branching](https://alembic.sqlalchemy.org/en/latest/branches.html)
@@ -427,7 +414,9 @@ uv run alembic upgrade {revision}
 ```shell
 uv run alembic downgrade -1
 ```
+
 or
+
 ```shell
 uv run alembic downgrade {revision}
 ```
@@ -435,6 +424,7 @@ uv run alembic downgrade {revision}
 #### Get Current Version
 
 > Refer to [Alembic(Getting Information)](https://alembic.sqlalchemy.org/en/latest/tutorial.html#getting-information)
+
 ```shell
 uv run alembic current
 ```
@@ -446,12 +436,14 @@ uv run alembic current
 ```shell
 uv run alembic history
 ```
+
 or
+
 ```shell
 uv run alembic history --verbose
 ```
 
-### 7. Project initialization (CLI)
+### Project initialization (CLI)
 
 After migrations, seed baseline data and create the first admin account. Run all commands from the project root:
 
@@ -485,17 +477,17 @@ uv run python -m portal.cli.main seed-facility-rental
 uv run python -m portal.cli.main seed-facility-slots
 ```
 
-| Command | Purpose |
-|---------|---------|
-| `init-locales` | Insert supported `SystemLocale` rows from `portal/cli/datas/locale_data.py`. |
-| `init-rbac` | Seed verbs, resources, permissions, and the `admin` role from `portal/cli/datas/rbac_seed_data.py`. Safe to re-run (upserts). |
-| `create-superuser` | Create an `AuthUser` with `is_admin` / `is_superuser` via interactive prompts. |
-| `seed-positions` | Upsert org positions and translations from `portal/cli/datas/position_seed_data.py`. |
-| `seed-ministry-types` | Upsert ministry type catalog (`outreach`, `internal`, `worship`) and translations. |
-| `seed-target-audiences` | Upsert target audience catalog (`children`, `youths`, `adults`, `family`, `all_ages`) and translations. |
-| `seed-facility-rental` | Upsert facility rooms, rates, discounts, surcharges, and policy settings. |
-| `seed-facility-slots` | Replace demo (`seed:`-prefixed) room slot templates and blackouts for existing rooms. |
-| `reset-rbac` | **Destructive:** delete all RBAC data and re-seed from `rbac_seed_data`. |
+| Command                 | Purpose                                                                                                                       |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `init-locales`          | Insert supported `SystemLocale` rows from `portal/cli/datas/locale_data.py`.                                                  |
+| `init-rbac`             | Seed verbs, resources, permissions, and the `admin` role from `portal/cli/datas/rbac_seed_data.py`. Safe to re-run (upserts). |
+| `create-superuser`      | Create an `AuthUser` with `is_admin` / `is_superuser` via interactive prompts.                                                |
+| `seed-positions`        | Upsert org positions and translations from `portal/cli/datas/position_seed_data.py`.                                          |
+| `seed-ministry-types`   | Upsert ministry type catalog (`outreach`, `internal`, `worship`) and translations.                                            |
+| `seed-target-audiences` | Upsert target audience catalog (`children`, `youths`, `adults`, `family`, `all_ages`) and translations.                       |
+| `seed-facility-rental`  | Upsert facility rooms, rates, discounts, surcharges, and policy settings.                                                     |
+| `seed-facility-slots`   | Replace demo (`seed:`-prefixed) room slot templates and blackouts for existing rooms.                                         |
+| `reset-rbac`            | **Destructive:** delete all RBAC data and re-seed from `rbac_seed_data`.                                                      |
 
 Notes:
 
@@ -513,6 +505,24 @@ uv run uvicorn portal.main:app --reload
 # or
 uv run python -m portal
 ```
+
+### Debug in Cursor / VS Code
+
+1. Copy `example.env` → `.env` and start local infra (`docker compose up -d`).
+2. Install recommended extensions when prompted (`ms-python.python`, `ms-python.debugpy`).
+3. Select the workspace interpreter: `.venv/bin/python` (Command Palette → **Python: Select Interpreter**). If `.venv` is missing, run `uv sync` first.
+4. Open **Run and Debug** (`F5` / `Shift+Cmd+D`), pick **FastAPI: Debug**, then start.
+
+Breakpoints in `portal/` will hit. Debug configs **do not** use uvicorn `--reload` — the reloader runs the app in a child process, so the debugger would attach to the parent and miss breakpoints. `python -m portal` also disables reload automatically when a debugger is attached.
+
+| Configuration                         | What it runs                                  |
+| ------------------------------------- | --------------------------------------------- |
+| **FastAPI: Debug**                    | `uvicorn portal.main:app` on `127.0.0.1:8000` |
+| **FastAPI: Debug (python -m portal)** | `python -m portal` (host/port from `.env`)    |
+| **Pytest: current file**              | `pytest` on the active file                   |
+| **Pytest: tests/**                    | `pytest tests`                                |
+
+Configs live in [`.vscode/launch.json`](.vscode/launch.json).
 
 ### Output example
 

@@ -20,7 +20,7 @@ dependencies = [
     "python-dotenv",
     # db
     "asyncpg",
-    "redis>=7,<8",
+    "redis",
     "sqlalchemy",
     "psycopg2-binary",
     # security
@@ -43,13 +43,7 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = [
-    "alembic",
-    "pytest",
-    "pytest-asyncio",
-    "pytest-mock",
-    "click",
-]
+dev = ["alembic", "pytest", "pytest-asyncio", "pytest-mock", "click"]
 
 [tool.uv]
 package = false

@@ -46,6 +46,9 @@ uv run alembic upgrade head
 uv run uvicorn portal.main:app --reload
 # or: uv run python -m portal
 
+# IDE debug (Cursor / VS Code): Run and Debug → FastAPI: Debug
+# See .vscode/launch.json (no --reload; breakpoints miss the reloader child)
+
 # Tests
 uv run pytest
 uv run pytest tests/application/rbac/test_permission_service.py -v
@@ -418,6 +421,7 @@ Use **Permission** or **Verb** as the reference implementation.
 | `portal/libs/consts/permission.py`                                        | Permission tokens for routes                              |
 | `portal/config.py`                                                        | Environment settings                                      |
 | `example.env`                                                             | Required env vars                                         |
+| `.vscode/launch.json`                                                     | Cursor / VS Code debug (FastAPI + pytest)                 |
 
 ---
 
