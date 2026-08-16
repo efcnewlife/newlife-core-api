@@ -1,6 +1,7 @@
 """
 Tests for SettingService.
 """
+
 from datetime import datetime, timezone
 from typing import Any, Optional
 from uuid import UUID, uuid4
@@ -11,11 +12,7 @@ import pytest
 from portal.application.rbac.commands import BulkIdsCommand, DeleteCommand
 from portal.application.system.commands import CreateSettingCommand, UpdateSettingCommand
 from portal.application.system.setting_service import SettingService
-from portal.domain.system.constants import (
-    FacilitySettingKey,
-    SettingNamespace,
-    SettingValueType,
-)
+from portal.domain.system.constants import FacilitySettingKey, SettingNamespace, SettingValueType
 from portal.domain.system.entities import Setting
 from portal.exceptions.responses import BadRequestException, ConflictErrorException, NotFoundException
 
@@ -66,13 +63,7 @@ class StubSettingRepository:
             return None
         return row
 
-    async def get_by_namespace_key(
-        self,
-        namespace: str,
-        setting_key: str,
-        *,
-        include_deleted: bool = False,
-    ):
+    async def get_by_namespace_key(self, namespace: str, setting_key: str, *, include_deleted: bool = False):
         for row in self.rows.values():
             if row.namespace == namespace and row.setting_key == setting_key:
                 if row.is_deleted and not include_deleted:
@@ -171,12 +162,7 @@ async def test_get_facility_timezone_happy_path():
 @pytest.mark.asyncio
 async def test_get_facility_timezone_decodes_asyncpg_jsonb_string():
     # asyncpg returns JSONB strings as JSON text, e.g. '"America/Toronto"'.
-    row = Setting.model_validate(
-        {
-            **_setting().model_dump(),
-            "value": '"America/Toronto"',
-        }
-    )
+    row = Setting.model_validate({**_setting().model_dump(), "value": '"America/Toronto"'})
     assert row.value == "America/Toronto"
     service = SettingService(StubSettingRepository([row]), StubSettingCache())
     tz = await service.get_facility_timezone()
@@ -228,10 +214,7 @@ async def test_update_setting_validates_timezone_and_invalidates_cache():
     repo = StubSettingRepository([row])
     cache = StubSettingCache(cached="America/Toronto")
     service = SettingService(repo, cache)
-    result = await service.update_setting(
-        row.id,
-        UpdateSettingCommand(value="America/Vancouver", remark="west"),
-    )
+    result = await service.update_setting(row.id, UpdateSettingCommand(value="America/Vancouver", remark="west"))
     assert result.value == "America/Vancouver"
     assert result.remark == "west"
     assert cache.invalidate_calls == [(row.namespace, row.setting_key)]
@@ -241,14 +224,7 @@ async def test_update_setting_validates_timezone_and_invalidates_cache():
 async def test_create_setting_happy_path():
     repo = StubSettingRepository([])
     service = SettingService(repo, StubSettingCache())
-    result = await service.create_setting(
-        CreateSettingCommand(
-            namespace="ops",
-            setting_key="feature_flag",
-            value_type="boolean",
-            value=True,
-        )
-    )
+    result = await service.create_setting(CreateSettingCommand(namespace="ops", setting_key="feature_flag", value_type="boolean", value=True))
     assert result.id in repo.rows
     assert repo.rows[result.id].is_built_in is False
     assert len(repo.insert_calls) == 1
@@ -259,14 +235,7 @@ async def test_create_setting_duplicate_active():
     row = _setting(namespace="ops", setting_key="flag", is_built_in=False)
     service = SettingService(StubSettingRepository([row]), StubSettingCache())
     with pytest.raises(ConflictErrorException, match="already exist"):
-        await service.create_setting(
-            CreateSettingCommand(
-                namespace="ops",
-                setting_key="flag",
-                value_type="string",
-                value="x",
-            )
-        )
+        await service.create_setting(CreateSettingCommand(namespace="ops", setting_key="flag", value_type="string", value="x"))
 
 
 @pytest.mark.asyncio
@@ -274,14 +243,7 @@ async def test_create_setting_duplicate_in_recycle():
     row = _setting(namespace="ops", setting_key="flag", is_built_in=False, is_deleted=True)
     service = SettingService(StubSettingRepository([row]), StubSettingCache())
     with pytest.raises(ConflictErrorException, match="recycle"):
-        await service.create_setting(
-            CreateSettingCommand(
-                namespace="ops",
-                setting_key="flag",
-                value_type="string",
-                value="x",
-            )
-        )
+        await service.create_setting(CreateSettingCommand(namespace="ops", setting_key="flag", value_type="string", value="x"))
 
 
 @pytest.mark.asyncio

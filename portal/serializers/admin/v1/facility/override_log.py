@@ -1,6 +1,7 @@
 """
 Admin booking override log serializers.
 """
+
 from datetime import datetime
 from typing import Optional
 from uuid import UUID

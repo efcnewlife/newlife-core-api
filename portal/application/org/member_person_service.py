@@ -1,16 +1,12 @@
 """
 Member person application service.
 """
+
 import uuid
 from typing import Optional
 from uuid import UUID
 
-from portal.application.org.commands import (
-    CreateMemberPersonCommand,
-    LinkMemberPersonCommand,
-    PagesQueryCommand,
-    UpdateMemberPersonCommand,
-)
+from portal.application.org.commands import CreateMemberPersonCommand, LinkMemberPersonCommand, PagesQueryCommand, UpdateMemberPersonCommand
 from portal.application.org.results import CreateIdResult, MemberPersonDetailResult, MemberPersonPageResult
 from portal.exceptions.responses import BadRequestException, NotFoundException
 from portal.infrastructure.persistence.repositories.member.person_repository import PersonRepository
@@ -38,23 +34,14 @@ class MemberPersonService:
     @distributed_trace()
     async def create_person(self, command: CreateMemberPersonCommand) -> CreateIdResult:
         person_id = uuid.uuid4()
-        await self._repository.insert_person(
-            dict(
-                id=person_id,
-                legal_name=command.legal_name,
-                user_id=command.user_id,
-            )
-        )
+        await self._repository.insert_person(dict(id=person_id, legal_name=command.legal_name, user_id=command.user_id))
         return CreateIdResult(id=person_id)
 
     @distributed_trace()
     async def update_person(self, person_id: UUID, command: UpdateMemberPersonCommand) -> None:
         if not await self._repository.get_by_id(person_id):
             raise NotFoundException(detail=f"Member person {person_id} not found")
-        affected = await self._repository.update_person(
-            person_id,
-            dict(legal_name=command.legal_name),
-        )
+        affected = await self._repository.update_person(person_id, dict(legal_name=command.legal_name))
         if affected == 0:
             raise NotFoundException(detail=f"Member person {person_id} not found")
 

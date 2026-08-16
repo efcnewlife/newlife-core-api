@@ -1,7 +1,9 @@
 """
 Ministry admin API router aggregate.
 """
+
 from portal.routers.auth_router import AuthRouter
+
 from .ministry import router as ministry_router
 from .ministry_approval import router as ministry_approval_router
 from .ministry_catalog import router as ministry_catalog_router

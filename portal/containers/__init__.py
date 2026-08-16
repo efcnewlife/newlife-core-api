@@ -1,6 +1,7 @@
 """
 Root DI container: composes core, admin, and events sub-containers.
 """
+
 from typing import TypeVar
 
 from dependency_injector import containers, providers
@@ -14,15 +15,7 @@ from portal.events.bus import EventBus
 class RootContainer(containers.DeclarativeContainer):
     """Application composition root."""
 
-    wiring_config = containers.WiringConfiguration(
-        modules=[],
-        packages=[
-            "portal.application",
-            "portal.routers",
-            "portal.routers.admin",
-            "portal.middlewares",
-        ],
-    )
+    wiring_config = containers.WiringConfiguration(modules=[], packages=["portal.application", "portal.routers", "portal.routers.admin", "portal.middlewares"])
 
     core = providers.Container(CoreContainer)
     admin: AdminContainer = providers.Container(AdminContainer, core=core)

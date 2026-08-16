@@ -1,10 +1,10 @@
 """
 applications: public ASGI app mounts admin and api sub-applications.
 """
+
 from collections import defaultdict
 
-from fastapi import APIRouter, FastAPI
-from fastapi import Request, status, HTTPException
+from fastapi import APIRouter, FastAPI, HTTPException, Request, status
 from fastapi.exception_handlers import http_exception_handler
 from fastapi.responses import JSONResponse
 from starlette.middleware.cors import CORSMiddleware
@@ -14,10 +14,10 @@ from portal.container import Container
 from portal.exceptions.responses import ApiBaseException
 from portal.libs.consts.enums import APIScope
 from portal.libs.contexts.request_session_context import get_request_session
-from portal.runtime_context import set_runtime_container
 from portal.libs.utils.lifespan import lifespan
-from portal.middlewares import CoreRequestMiddleware, AuthMiddleware
+from portal.middlewares import AuthMiddleware, CoreRequestMiddleware
 from portal.routers import admin_api_router, api_router
+from portal.runtime_context import set_runtime_container
 
 
 def _register_cors(application: FastAPI) -> None:
@@ -66,12 +66,14 @@ def _register_api_stack(application: FastAPI) -> None:
     _register_core_request_middleware(application)
     _register_cors(application)
 
+
 def _setup_exception_handlers(application: FastAPI) -> None:
     """
 
     :param application:
     :return:
     """
+
     @application.exception_handler(HTTPException)
     async def root_http_exception_handler(request: Request, exc: HTTPException):
         """
@@ -84,7 +86,6 @@ def _setup_exception_handlers(application: FastAPI) -> None:
         if session is not None:
             await session.rollback()
         return await http_exception_handler(request, exc)
-
 
     @application.exception_handler(ApiBaseException)
     async def root_api_exception_handler(request: Request, exc: ApiBaseException):
@@ -106,11 +107,7 @@ def _setup_exception_handlers(application: FastAPI) -> None:
         if settings.is_dev:
             content["debug_detail"] = exc.debug_detail
             content["url"] = str(request.url)
-        return JSONResponse(
-            content=content,
-            status_code=exc.status_code,
-        )
-
+        return JSONResponse(content=content, status_code=exc.status_code)
 
     @application.exception_handler(Exception)
     async def exception_handler(request: Request, exc):
@@ -124,16 +121,14 @@ def _setup_exception_handlers(application: FastAPI) -> None:
         content["detail"] = {"message": "Internal Server Error", "url": str(request.url)}
         if settings.is_dev:
             content["debug_detail"] = f"{exc.__class__.__name__}: {exc}"
-        return JSONResponse(
-            content=content,
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+        return JSONResponse(content=content, status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 def custom_openapi(scope: APIScope, application: FastAPI):
     def _custom_openapi():
         if not application.openapi_schema:
             from fastapi.openapi.utils import get_openapi
+
             application.openapi_schema = get_openapi(
                 title=f"{settings.APP_NAME} {scope.value} API",
                 version=settings.APP_VERSION,
@@ -142,14 +137,12 @@ def custom_openapi(scope: APIScope, application: FastAPI):
                 routes=application.routes,
             )
         return application.openapi_schema
+
     application.openapi = _custom_openapi
 
 
 def get_admin_application(container: Container) -> FastAPI:
-    application = FastAPI(
-        title=f"{settings.APP_NAME} Admin API",
-        version=settings.APP_VERSION,
-    )
+    application = FastAPI(title=f"{settings.APP_NAME} Admin API", version=settings.APP_VERSION)
     application.container = container
     application.include_router(admin_api_router, prefix="/api")
     _register_admin_stack(application)
@@ -159,10 +152,7 @@ def get_admin_application(container: Container) -> FastAPI:
 
 
 def get_api_application(container: Container) -> FastAPI:
-    application = FastAPI(
-        title=f"{settings.APP_NAME} App API",
-        version=settings.APP_VERSION,
-    )
+    application = FastAPI(title=f"{settings.APP_NAME} App API", version=settings.APP_VERSION)
     application.container = container
     application.include_router(api_router)
     _register_api_stack(application)
@@ -172,11 +162,7 @@ def get_api_application(container: Container) -> FastAPI:
 
 
 def get_public_application(container: Container) -> FastAPI:
-    application = FastAPI(
-        lifespan=lifespan,
-        title=f"{settings.APP_NAME} Public API",
-        version=settings.APP_VERSION,
-    )
+    application = FastAPI(lifespan=lifespan, title=f"{settings.APP_NAME} Public API", version=settings.APP_VERSION)
     application.container = container
 
     admin_app = get_admin_application(container)

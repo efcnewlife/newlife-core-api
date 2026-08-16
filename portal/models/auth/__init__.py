@@ -1,27 +1,10 @@
 """
 Top-level package for auth models.
 """
-from .rbac import (
-    AuthRole,
-    AuthRoleTranslation,
-    AuthResource,
-    AuthResourceTranslation,
-    AuthVerb,
-    AuthVerbTranslation,
-    AuthPermission,
-    AuthPermissionTranslation,
-)
-from .relationships import (
-    AuthUserRole,
-    AuthRolePermission,
-)
-from .user import (
-    AuthUser,
-    AuthUserProfile,
-    AuthUserThirdParty,
-    AuthDevice,
-    AuthRefreshToken,
-)
+
+from .rbac import AuthPermission, AuthPermissionTranslation, AuthResource, AuthResourceTranslation, AuthRole, AuthRoleTranslation, AuthVerb, AuthVerbTranslation
+from .relationships import AuthRolePermission, AuthUserRole
+from .user import AuthDevice, AuthRefreshToken, AuthUser, AuthUserProfile, AuthUserThirdParty
 
 __all__ = [
     # user

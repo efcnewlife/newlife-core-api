@@ -1,6 +1,7 @@
 """
 Org application unit tests.
 """
+
 from datetime import time
 from uuid import uuid4
 
@@ -24,11 +25,7 @@ from portal.domain.facility.days_of_week_mask import days_to_mask, mask_to_days
 from portal.domain.org.catalog_codes import TARGET_AUDIENCE_ADULTS, TARGET_AUDIENCE_ALL_AGES
 from portal.domain.org.constants import MinistryMemberRole, MinistryStatus
 from portal.exceptions.responses import BadRequestException
-from tests.fixtures.org.stubs import (
-    StubMinistryRepository,
-    StubMinistryTypeRepository,
-    StubTargetAudienceRepository,
-)
+from tests.fixtures.org.stubs import StubMinistryRepository, StubMinistryTypeRepository, StubTargetAudienceRepository
 
 
 def make_service(
@@ -37,9 +34,7 @@ def make_service(
     audience_stub: StubTargetAudienceRepository | None = None,
 ) -> MinistryService:
     return MinistryService(
-        ministry_stub or StubMinistryRepository(),
-        type_stub or StubMinistryTypeRepository(),
-        audience_stub or StubTargetAudienceRepository(),
+        ministry_stub or StubMinistryRepository(), type_stub or StubMinistryTypeRepository(), audience_stub or StubTargetAudienceRepository()
     )
 
 
@@ -54,13 +49,7 @@ async def test_submit_ministry_requires_owner_position():
     ministry_id = uuid4()
     stub = StubMinistryRepository(
         ministry_by_id={
-            ministry_id: MinistryDetailResult(
-                id=ministry_id,
-                name="Youth",
-                status=MinistryStatus.DRAFT.value,
-                has_priority_booking=False,
-                is_active=True,
-            )
+            ministry_id: MinistryDetailResult(id=ministry_id, name="Youth", status=MinistryStatus.DRAFT.value, has_priority_booking=False, is_active=True)
         }
     )
     approval_service = MinistryApprovalService(stub, make_service(stub))
@@ -73,22 +62,9 @@ async def test_validate_members_for_submit_requires_primary_and_secondary():
     ministry_id = uuid4()
     stub = StubMinistryRepository(
         ministry_by_id={
-            ministry_id: MinistryDetailResult(
-                id=ministry_id,
-                name="Youth",
-                status=MinistryStatus.DRAFT.value,
-                has_priority_booking=False,
-                is_active=True,
-            )
+            ministry_id: MinistryDetailResult(id=ministry_id, name="Youth", status=MinistryStatus.DRAFT.value, has_priority_booking=False, is_active=True)
         },
-        members_by_ministry={
-            ministry_id: [
-                MinistryMemberResult(
-                    user_id=uuid4(),
-                    member_role=MinistryMemberRole.PRIMARY.value,
-                )
-            ]
-        },
+        members_by_ministry={ministry_id: [MinistryMemberResult(user_id=uuid4(), member_role=MinistryMemberRole.PRIMARY.value)]},
     )
     service = make_service(stub)
     with pytest.raises(BadRequestException, match="secondary"):
@@ -102,13 +78,7 @@ async def test_replace_members_success():
     secondary_id = uuid4()
     stub = StubMinistryRepository(
         ministry_by_id={
-            ministry_id: MinistryDetailResult(
-                id=ministry_id,
-                name="Youth",
-                status=MinistryStatus.DRAFT.value,
-                has_priority_booking=False,
-                is_active=True,
-            )
+            ministry_id: MinistryDetailResult(id=ministry_id, name="Youth", status=MinistryStatus.DRAFT.value, has_priority_booking=False, is_active=True)
         }
     )
     service = make_service(stub)
@@ -116,11 +86,7 @@ async def test_replace_members_success():
         ministry_id,
         ReplaceMinistryMembersCommand(
             members=[
-                MinistryMemberEntryCommand(
-                    user_id=primary_id,
-                    member_role=MinistryMemberRole.PRIMARY,
-                    contact_email="primary@example.com",
-                ),
+                MinistryMemberEntryCommand(user_id=primary_id, member_role=MinistryMemberRole.PRIMARY, contact_email="primary@example.com"),
                 MinistryMemberEntryCommand(user_id=secondary_id, member_role=MinistryMemberRole.SECONDARY),
             ]
         ),
@@ -135,9 +101,7 @@ async def test_create_ministry_with_translation():
     service = make_service(stub)
     locale_id = uuid4()
     result = await service.create_ministry(
-        CreateMinistryCommand(
-            translations=[OrgTranslationCommand(locale_id=locale_id, name="Youth Ministry", schedule_note="Summer off")],
-        )
+        CreateMinistryCommand(translations=[OrgTranslationCommand(locale_id=locale_id, name="Youth Ministry", schedule_note="Summer off")])
     )
     assert result.id is not None
     assert len(stub.insert_calls) == 1
@@ -150,9 +114,7 @@ async def test_create_ministry_with_translation():
 async def test_create_ministry_persists_schedules_and_target_audiences():
     stub = StubMinistryRepository()
     adults_id = uuid4()
-    audience_stub = StubTargetAudienceRepository(
-        {adults_id: TargetAudienceResult(id=adults_id, code=TARGET_AUDIENCE_ADULTS)}
-    )
+    audience_stub = StubTargetAudienceRepository({adults_id: TargetAudienceResult(id=adults_id, code=TARGET_AUDIENCE_ADULTS)})
     service = make_service(stub, audience_stub=audience_stub)
     locale_id = uuid4()
     ministry_type_id = uuid4()
@@ -162,13 +124,7 @@ async def test_create_ministry_persists_schedules_and_target_audiences():
         CreateMinistryCommand(
             ministry_type_id=ministry_type_id,
             target_audience_ids=[adults_id],
-            schedules=[
-                MinistryScheduleCommand(
-                    days_of_week=[0, 6],
-                    start_time=time(13, 30),
-                    end_time=time(16, 30),
-                )
-            ],
+            schedules=[MinistryScheduleCommand(days_of_week=[0, 6], start_time=time(13, 30), end_time=time(16, 30))],
             translations=[OrgTranslationCommand(locale_id=locale_id, name="Badminton")],
         )
     )
@@ -192,8 +148,5 @@ def test_all_ages_target_audience_is_exclusive():
     with pytest.raises(BadRequestException):
         validate_target_audience_ids(
             [all_ages_id, adults_id],
-            [
-                TargetAudienceResult(id=all_ages_id, code=TARGET_AUDIENCE_ALL_AGES),
-                TargetAudienceResult(id=adults_id, code=TARGET_AUDIENCE_ADULTS),
-            ],
+            [TargetAudienceResult(id=all_ages_id, code=TARGET_AUDIENCE_ALL_AGES), TargetAudienceResult(id=adults_id, code=TARGET_AUDIENCE_ADULTS)],
         )

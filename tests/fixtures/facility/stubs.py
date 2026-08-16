@@ -1,6 +1,7 @@
 """
 Stub repositories for facility application unit tests.
 """
+
 from datetime import datetime
 from decimal import Decimal
 from typing import Any, Optional
@@ -8,11 +9,7 @@ from uuid import UUID
 
 from asyncpg import UniqueViolationError
 
-from portal.application.facility.commands import (
-    BookingPagesQueryCommand,
-    OverrideLogPagesQueryCommand,
-    PagesQueryCommand,
-)
+from portal.application.facility.commands import BookingPagesQueryCommand, OverrideLogPagesQueryCommand, PagesQueryCommand
 from portal.application.facility.results import (
     BookingDetailResult,
     DiscountRuleResult,
@@ -59,11 +56,7 @@ class StubRentalRepository:
         self.discount_rules_by_id: dict[UUID, DiscountRuleResult] = {}
         self.surcharges_by_id: dict[UUID, SurchargeResult] = {}
 
-    async def list_active_rates_for_facility(
-        self,
-        facility_id: UUID,
-        as_of_date=None,
-    ) -> list[RentalRateResult]:
+    async def list_active_rates_for_facility(self, facility_id: UUID, as_of_date=None) -> list[RentalRateResult]:
         return list(self.rates_by_facility.get(facility_id, []))
 
     async def list_discount_rules(self) -> list[DiscountRuleResult]:
@@ -72,25 +65,13 @@ class StubRentalRepository:
     async def list_surcharges(self) -> list[SurchargeResult]:
         return list(self.surcharges)
 
-    async def get_policy_amount(
-        self,
-        key: RentalPolicySettingKey | str,
-        facility_id: UUID | None,
-    ) -> Decimal | None:
+    async def get_policy_amount(self, key: RentalPolicySettingKey | str, facility_id: UUID | None) -> Decimal | None:
         setting_key = key.value if hasattr(key, "value") else key
         return self.policy_amounts.get((setting_key, facility_id))
 
     @staticmethod
-    def pick_rate_for_line(
-        rates: list[RentalRateResult],
-        billed_hours: Decimal,
-        allow_first_active: bool = True,
-    ):
-        return RentalRepository.pick_rate_for_line(
-            rates,
-            billed_hours,
-            allow_first_active=allow_first_active,
-        )
+    def pick_rate_for_line(rates: list[RentalRateResult], billed_hours: Decimal, allow_first_active: bool = True):
+        return RentalRepository.pick_rate_for_line(rates, billed_hours, allow_first_active=allow_first_active)
 
     @staticmethod
     def template_to_rate_candidate(template):
@@ -256,18 +237,9 @@ class StubRoomRepository:
 class StubBookingRepository:
     """In-memory booking stub."""
 
-    def __init__(
-        self,
-        exists: bool = True,
-        booking_meta: dict | None = None,
-        has_overlap: bool = False,
-        detail: BookingDetailResult | None = None,
-    ):
+    def __init__(self, exists: bool = True, booking_meta: dict | None = None, has_overlap: bool = False, detail: BookingDetailResult | None = None):
         self.exists = exists
-        self.booking_meta = booking_meta or {
-            "booking_type": "one_time",
-            "currency": "CAD",
-        }
+        self.booking_meta = booking_meta or {"booking_type": "one_time", "currency": "CAD"}
         self.has_overlap = has_overlap
         self.detail = detail
         self.cancel_calls: list[dict] = []
@@ -287,33 +259,14 @@ class StubBookingRepository:
             return None
         return self.booking_meta
 
-    async def has_confirmed_slot_overlap(
-        self,
-        facility_id: UUID,
-        start_at: datetime,
-        end_at: datetime,
-        exclude_booking_id: UUID | None = None,
-    ) -> bool:
+    async def has_confirmed_slot_overlap(self, facility_id: UUID, start_at: datetime, end_at: datetime, exclude_booking_id: UUID | None = None) -> bool:
         return self.has_overlap
 
     async def insert_booking(self, payload: dict) -> None:
         self.insert_calls.append(payload)
 
-    async def cancel_booking(
-        self,
-        booking_id: UUID,
-        cancelled_by_id: UUID | None,
-        cancel_reason: str | None,
-        cancel_slots: bool,
-    ) -> None:
-        self.cancel_calls.append(
-            dict(
-                booking_id=booking_id,
-                cancelled_by_id=cancelled_by_id,
-                cancel_reason=cancel_reason,
-                cancel_slots=cancel_slots,
-            )
-        )
+    async def cancel_booking(self, booking_id: UUID, cancelled_by_id: UUID | None, cancel_reason: str | None, cancel_slots: bool) -> None:
+        self.cancel_calls.append(dict(booking_id=booking_id, cancelled_by_id=cancelled_by_id, cancel_reason=cancel_reason, cancel_slots=cancel_slots))
 
     async def update_booking_header(self, booking_id: UUID, values: dict) -> None:
         self.update_header_calls.append(values)
@@ -332,10 +285,7 @@ class StubRoomSlotTemplateRepository:
     """In-memory slot template stub."""
 
     def __init__(
-        self,
-        candidates: list[RoomSlotTemplateResult] | None = None,
-        template_by_id: dict[UUID, RoomSlotTemplateResult] | None = None,
-        update_affected: int = 1,
+        self, candidates: list[RoomSlotTemplateResult] | None = None, template_by_id: dict[UUID, RoomSlotTemplateResult] | None = None, update_affected: int = 1
     ):
         self.candidates = candidates or []
         self.template_by_id = template_by_id or {}
@@ -345,37 +295,21 @@ class StubRoomSlotTemplateRepository:
 
     @staticmethod
     def effective_dates_overlap(left_from, left_to, right_from, right_to) -> bool:
-        from portal.infrastructure.persistence.repositories.facility.room_slot_template_repository import (
-            RoomSlotTemplateRepository,
-        )
+        from portal.infrastructure.persistence.repositories.facility.room_slot_template_repository import RoomSlotTemplateRepository
 
-        return RoomSlotTemplateRepository.effective_dates_overlap(
-            left_from, left_to, right_from, right_to
-        )
+        return RoomSlotTemplateRepository.effective_dates_overlap(left_from, left_to, right_from, right_to)
 
     @staticmethod
     def time_ranges_overlap(left_start, left_end, right_start, right_end) -> bool:
-        from portal.infrastructure.persistence.repositories.facility.room_slot_template_repository import (
-            RoomSlotTemplateRepository,
-        )
+        from portal.infrastructure.persistence.repositories.facility.room_slot_template_repository import RoomSlotTemplateRepository
 
-        return RoomSlotTemplateRepository.time_ranges_overlap(
-            left_start, left_end, right_start, right_end
-        )
+        return RoomSlotTemplateRepository.time_ranges_overlap(left_start, left_end, right_start, right_end)
 
     async def list_active_overlapping_candidates(
-        self,
-        facility_id: UUID,
-        days_of_week_mask: int,
-        exclude_template_id: UUID | None = None,
+        self, facility_id: UUID, days_of_week_mask: int, exclude_template_id: UUID | None = None
     ) -> list[RoomSlotTemplateResult]:
         self.list_candidates_calls += 1
-        return [
-            item
-            for item in self.candidates
-            if item.id != exclude_template_id
-            and (item.days_of_week_mask & days_of_week_mask) != 0
-        ]
+        return [item for item in self.candidates if item.id != exclude_template_id and (item.days_of_week_mask & days_of_week_mask) != 0]
 
     async def get_by_id(self, template_id: UUID) -> RoomSlotTemplateResult | None:
         return self.template_by_id.get(template_id)
@@ -423,53 +357,30 @@ class StubRoomBlackoutRepository:
 
     @staticmethod
     def effective_dates_overlap(left_from, left_to, right_from, right_to) -> bool:
-        from portal.infrastructure.persistence.repositories.facility.room_blackout_repository import (
-            RoomBlackoutRepository,
-        )
+        from portal.infrastructure.persistence.repositories.facility.room_blackout_repository import RoomBlackoutRepository
 
-        return RoomBlackoutRepository.effective_dates_overlap(
-            left_from, left_to, right_from, right_to
-        )
+        return RoomBlackoutRepository.effective_dates_overlap(left_from, left_to, right_from, right_to)
 
     @staticmethod
     def time_ranges_overlap(left_start, left_end, right_start, right_end) -> bool:
-        from portal.infrastructure.persistence.repositories.facility.room_blackout_repository import (
-            RoomBlackoutRepository,
-        )
+        from portal.infrastructure.persistence.repositories.facility.room_blackout_repository import RoomBlackoutRepository
 
-        return RoomBlackoutRepository.time_ranges_overlap(
-            left_start, left_end, right_start, right_end
-        )
+        return RoomBlackoutRepository.time_ranges_overlap(left_start, left_end, right_start, right_end)
 
     @staticmethod
     def scopes_overlap(left_facility_id, right_facility_id) -> bool:
-        from portal.infrastructure.persistence.repositories.facility.room_blackout_repository import (
-            RoomBlackoutRepository,
-        )
+        from portal.infrastructure.persistence.repositories.facility.room_blackout_repository import RoomBlackoutRepository
 
         return RoomBlackoutRepository.scopes_overlap(left_facility_id, right_facility_id)
 
     def slot_overlaps_blackouts(self, blackouts, slot_start_local, slot_end_local) -> bool:
-        from portal.infrastructure.persistence.repositories.facility.room_blackout_repository import (
-            RoomBlackoutRepository,
-        )
+        from portal.infrastructure.persistence.repositories.facility.room_blackout_repository import RoomBlackoutRepository
 
-        return RoomBlackoutRepository.slot_overlaps_blackouts(
-            self, blackouts, slot_start_local, slot_end_local
-        )
+        return RoomBlackoutRepository.slot_overlaps_blackouts(self, blackouts, slot_start_local, slot_end_local)
 
-    async def list_active_overlapping_candidates(
-        self,
-        facility_id,
-        kind: str,
-        exclude_blackout_id=None,
-    ):
+    async def list_active_overlapping_candidates(self, facility_id, kind: str, exclude_blackout_id=None):
         self.list_candidates_calls += 1
-        return [
-            item
-            for item in self.candidates
-            if getattr(item, "id", None) != exclude_blackout_id and getattr(item, "kind", None) == kind
-        ]
+        return [item for item in self.candidates if getattr(item, "id", None) != exclude_blackout_id and getattr(item, "kind", None) == kind]
 
     async def list_active_for_room_day(self, facility_id, target_date):
         return list(self.for_room_day)
@@ -562,14 +473,8 @@ class StubMinistryRepository:
     async def upsert_translations(self, rows: list) -> None:
         pass
 
-    async def replace_members(
-        self,
-        ministry_id: UUID,
-        members: list[dict],
-    ) -> None:
-        self.replace_members_calls.append(
-            dict(ministry_id=ministry_id, members=members)
-        )
+    async def replace_members(self, ministry_id: UUID, members: list[dict]) -> None:
+        self.replace_members_calls.append(dict(ministry_id=ministry_id, members=members))
 
     @staticmethod
     def is_unique_violation(exc: Exception) -> bool:

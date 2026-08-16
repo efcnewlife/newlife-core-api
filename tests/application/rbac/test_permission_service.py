@@ -1,6 +1,7 @@
 """
 Tests for PermissionService.
 """
+
 from uuid import uuid4
 
 import pytest
@@ -12,12 +13,7 @@ from portal.domain.rbac.entities import PermissionListItem, PermissionRecord
 
 
 class StubPermissionRepository:
-    def __init__(
-        self,
-        list_items=None,
-        user_permissions=None,
-        all_permissions=None,
-    ):
+    def __init__(self, list_items=None, user_permissions=None, all_permissions=None):
         self._list_items = list_items or []
         self._user_permissions = user_permissions or []
         self._all_permissions = all_permissions or []
@@ -65,15 +61,8 @@ class StubRbacAuditService:
 
 @pytest.mark.asyncio
 async def test_get_permission_list_returns_empty_without_locale_context(monkeypatch):
-    monkeypatch.setattr(
-        "portal.application.rbac.permission_service.get_request_context",
-        lambda: None,
-    )
-    service = PermissionService(
-        StubPermissionRepository(),
-        StubPermissionCache(),
-        StubRbacAuditService(),
-    )
+    monkeypatch.setattr("portal.application.rbac.permission_service.get_request_context", lambda: None)
+    service = PermissionService(StubPermissionRepository(), StubPermissionCache(), StubRbacAuditService())
     result = await service.get_permission_list()
     assert result == PermissionListResult(items=[])
 
@@ -82,24 +71,14 @@ async def test_get_permission_list_returns_empty_without_locale_context(monkeypa
 async def test_get_permission_list_uses_cache(monkeypatch):
     locale_id = uuid4()
     list_item = PermissionListItem(
-        id=uuid4(),
-        name="Read users",
-        code="system.user.read",
-        is_active=True,
-        description=None,
-        remark=None,
-        resource_id=uuid4(),
-        verb_id=uuid4(),
+        id=uuid4(), name="Read users", code="system.user.read", is_active=True, description=None, remark=None, resource_id=uuid4(), verb_id=uuid4()
     )
     cached_list = PermissionListResult(items=[list_item])
 
     class ReqCtx:
         resolved_locale_id = locale_id
 
-    monkeypatch.setattr(
-        "portal.application.rbac.permission_service.get_request_context",
-        lambda: ReqCtx(),
-    )
+    monkeypatch.setattr("portal.application.rbac.permission_service.get_request_context", lambda: ReqCtx())
     repo = StubPermissionRepository([list_item])
     cache = StubPermissionCache(cached_list.model_dump_json())
     service = PermissionService(repo, cache, StubRbacAuditService())
@@ -112,11 +91,7 @@ async def test_get_permission_list_uses_cache(monkeypatch):
 @pytest.mark.asyncio
 async def test_init_user_permissions_cache_superuser(monkeypatch):
     user_id = uuid4()
-    perm = PermissionRecord(
-        code="system.user.read",
-        resource_code="system.user",
-        action="read",
-    )
+    perm = PermissionRecord(code="system.user.read", resource_code="system.user", action="read")
 
     class User:
         id = user_id

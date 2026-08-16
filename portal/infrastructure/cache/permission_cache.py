@@ -1,13 +1,14 @@
 """
 Redis cache for user permissions and admin permission list.
 """
+
 from uuid import UUID
 
 from redis.asyncio import Redis
 
 from portal.config import settings
 from portal.domain.rbac.entities import PermissionRecord
-from portal.libs.consts.cache_keys import CacheKeys, CacheExpiry
+from portal.libs.consts.cache_keys import CacheExpiry, CacheKeys
 from portal.libs.database import RedisPool
 
 
@@ -26,21 +27,11 @@ class PermissionCache:
         :return:
         """
         if permission_code:
-            return (
-                CacheKeys(resource="permission")
-                .add_attribute(str(user_id))
-                .add_attribute(permission_code)
-                .build()
-            )
+            return CacheKeys(resource="permission").add_attribute(str(user_id)).add_attribute(permission_code).build()
         return CacheKeys(resource="permission").add_attribute(str(user_id)).build()
 
     def _list_cache_key(self, locale_id: UUID) -> str:
-        return (
-            CacheKeys(resource="permission")
-            .add_attribute("list")
-            .add_attribute(str(locale_id))
-            .build()
-        )
+        return CacheKeys(resource="permission").add_attribute("list").add_attribute(str(locale_id)).build()
 
     async def clear_user_permissions_cache(self, user_id: UUID) -> None:
         """
@@ -51,12 +42,7 @@ class PermissionCache:
         key = self.permission_key(user_id=user_id)
         await self._redis.delete(key)
 
-    async def init_user_permissions_cache(
-        self,
-        user_id: UUID,
-        permissions: list[PermissionRecord],
-        expire: int,
-    ) -> list[str]:
+    async def init_user_permissions_cache(self, user_id: UUID, permissions: list[PermissionRecord], expire: int) -> list[str]:
         """
         Store user permissions in Redis hash.
         :param user_id:
@@ -91,8 +77,4 @@ class PermissionCache:
         :param payload_json:
         :return:
         """
-        await self._redis.set(
-            self._list_cache_key(locale_id),
-            payload_json,
-            ex=CacheExpiry.MONTH,
-        )
+        await self._redis.set(self._list_cache_key(locale_id), payload_json, ex=CacheExpiry.MONTH)

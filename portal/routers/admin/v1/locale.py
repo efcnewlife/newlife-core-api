@@ -2,7 +2,7 @@
 Admin locale API routes
 """
 
-from dependency_injector.wiring import inject, Provide
+from dependency_injector.wiring import Provide, inject
 from fastapi import Depends, status
 
 from portal.application.locale.locale_service import LocaleService
@@ -10,7 +10,6 @@ from portal.application.locale.mappers import locale_list_result_to_api
 from portal.container import Container
 from portal.routers.auth_router import AuthRouter
 from portal.serializers.admin.v1.locale import AdminLocaleList
-
 
 router: AuthRouter = AuthRouter(is_admin=True)
 
@@ -23,9 +22,7 @@ router: AuthRouter = AuthRouter(is_admin=True)
     # permissions=
 )
 @inject
-async def get_locale_list(
-    locale_service: LocaleService = Depends(Provide[Container.locale_service]),
-) -> AdminLocaleList:
+async def get_locale_list(locale_service: LocaleService = Depends(Provide[Container.locale_service])) -> AdminLocaleList:
     """
     Get locale list
     :param locale_service:

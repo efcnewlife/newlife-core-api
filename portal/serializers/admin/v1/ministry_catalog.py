@@ -1,6 +1,7 @@
 """
 Ministry catalog admin API serializers.
 """
+
 from typing import Optional
 from uuid import UUID
 

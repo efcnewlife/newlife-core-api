@@ -1,6 +1,7 @@
 """
 Map locale application results to API serializers.
 """
+
 from portal.application.locale.results import LocaleListResult
 from portal.serializers.admin.v1.locale import AdminLocaleItem, AdminLocaleList
 

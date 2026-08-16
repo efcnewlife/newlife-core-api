@@ -1,23 +1,22 @@
 """
 Resource serializers
 """
+
 from typing import Optional
 from uuid import UUID
 
-from pydantic import Field, BaseModel, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from portal.libs.consts.enums import ResourceType
-from portal.serializers.mixins.model_mixins import UUIDBaseModel, JSONStringMixinModel
-from portal.serializers.admin.v1.translation import (
-    AdminTranslationInput,
-    validate_unique_locale_ids,
-)
+from portal.serializers.admin.v1.translation import AdminTranslationInput, validate_unique_locale_ids
 from portal.serializers.mixins import PaginationBaseResponseModel
 from portal.serializers.mixins.base import ChangeSequence
+from portal.serializers.mixins.model_mixins import JSONStringMixinModel, UUIDBaseModel
 
 
 class AdminResourceBase(UUIDBaseModel):
     """ResourceBase"""
+
     name: str = Field(..., description="Name")
     key: str = Field(..., description="Key")
     code: str = Field(..., description="Code")
@@ -26,6 +25,7 @@ class AdminResourceBase(UUIDBaseModel):
 
 class AdminResourceItem(AdminResourceBase):
     """ResourceItem"""
+
     pid: Optional[UUID] = Field(None, description="Parent resource id")
     path: Optional[str] = Field(None, description="Path")
     type: ResourceType = Field(..., description="Resource type")
@@ -37,6 +37,7 @@ class AdminResourceItem(AdminResourceBase):
 
 class AdminResourceParent(AdminResourceBase, JSONStringMixinModel):
     """ResourceParent"""
+
     id: Optional[UUID] = Field(None, description="Resource id")
     name: Optional[str] = Field(None, description="Name")
     key: Optional[str] = Field(None, description="Key")
@@ -46,22 +47,26 @@ class AdminResourceParent(AdminResourceBase, JSONStringMixinModel):
 
 class AdminResourceDetail(AdminResourceItem):
     """ResourceDetail"""
+
     pid: Optional[UUID] = Field(None, description="Parent resource id", exclude=True)
     parent: Optional[AdminResourceParent] = Field(None, description="Parent resource")
 
 
 class AdminResourcePages(PaginationBaseResponseModel):
     """ResourcePages"""
+
     items: Optional[list[AdminResourceItem]] = Field(..., description="Resource Items")
 
 
 class AdminResourceList(BaseModel):
     """ResourceList"""
+
     items: Optional[list[AdminResourceItem]] = Field(..., description="Resource Items")
 
 
 class AdminResourceTreeItem(AdminResourceItem):
     """Resource Tree Item"""
+
     children: Optional[list["AdminResourceTreeItem"]] = Field(None, description="Resource children")
 
     @field_validator('children')
@@ -85,6 +90,7 @@ class AdminResourceTreeItem(AdminResourceItem):
 
 class AdminResourceTree(BaseModel):
     """Resource Tree - Max 2 levels"""
+
     items: Optional[list[AdminResourceTreeItem]] = Field(None, description="Root resource items")
 
     @field_validator('items')
@@ -98,6 +104,7 @@ class AdminResourceTree(BaseModel):
 
 class AdminResourceWrite(BaseModel):
     """ResourceWrite"""
+
     pid: Optional[UUID] = Field(None, description="Parent resource id")
     name: Optional[str] = Field(None, description="Name")
     key: str = Field(..., description="Key")
@@ -128,11 +135,13 @@ class AdminResourceUpdate(AdminResourceWrite):
 
 class AdminResourceChangeParent(BaseModel):
     """ResourceChangeParent"""
+
     pid: UUID = Field(..., description="New parent resource ID")
 
 
 class AdminResourceBulkDelete(BaseModel):
     """ResourceBulkDelete"""
+
     ids: list[UUID] = Field(..., description="Resource IDs to delete")
 
 

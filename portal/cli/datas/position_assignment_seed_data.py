@@ -4,6 +4,7 @@ One-time position incumbent seed data from Elder / Deacon / Pastor roster.
 Maps user email -> position codes (from position_seed_data / docs/position.md).
 Slash-separated responsibilities are split into multiple position codes.
 """
+
 from typing import Any
 
 # (email, list of OrgPosition.code)
@@ -42,12 +43,7 @@ def build_position_assignment_seed_rows() -> list[dict[str, Any]]:
     """Build assignment rows with normalized email and position codes."""
     rows: list[dict[str, Any]] = []
     for email, codes in _ASSIGNMENT_ROWS:
-        rows.append(
-            {
-                "email": email.strip().lower(),
-                "codes": list(codes),
-            }
-        )
+        rows.append({"email": email.strip().lower(), "codes": list(codes)})
     return rows
 
 

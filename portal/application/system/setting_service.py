@@ -1,6 +1,7 @@
 """
 System setting application service.
 """
+
 from typing import Any, Optional
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -10,11 +11,7 @@ import ujson
 from portal.application.rbac.commands import BulkIdsCommand, DeleteCommand
 from portal.application.system.commands import CreateSettingCommand, UpdateSettingCommand
 from portal.application.system.results import CreateIdResult, SettingListResult, SettingResult
-from portal.domain.system.constants import (
-    FacilitySettingKey,
-    SettingNamespace,
-    SettingValueType,
-)
+from portal.domain.system.constants import FacilitySettingKey, SettingNamespace, SettingValueType
 from portal.domain.system.entities import Setting
 from portal.exceptions.responses import BadRequestException, ConflictErrorException, NotFoundException
 from portal.infrastructure.cache.setting_cache import SettingCache
@@ -25,11 +22,7 @@ from portal.libs.tracing.distributed_trace import distributed_trace
 class SettingService:
     """Read/create/update/delete system settings; resolve facility timezone."""
 
-    def __init__(
-        self,
-        setting_repository: SettingRepository,
-        setting_cache: SettingCache,
-    ):
+    def __init__(self, setting_repository: SettingRepository, setting_cache: SettingCache):
         self._repository = setting_repository
         self._cache = setting_cache
 
@@ -78,12 +71,7 @@ class SettingService:
             raise BadRequestException(detail=f"Unsupported value_type: {value_type}")
 
     @distributed_trace()
-    async def list_settings(
-        self,
-        namespace: Optional[str] = None,
-        *,
-        deleted: bool = False,
-    ) -> SettingListResult:
+    async def list_settings(self, namespace: Optional[str] = None, *, deleted: bool = False) -> SettingListResult:
         rows = await self._repository.list_settings(namespace=namespace, deleted=deleted)
         return SettingListResult(items=[self._to_result(row) for row in rows])
 
@@ -109,22 +97,13 @@ class SettingService:
             raise BadRequestException(detail="namespace and setting_key are required")
         self._assert_value_type_enum(command.value_type)
         self._validate_value_type(command.value_type, command.value)
-        if (
-            namespace == SettingNamespace.FACILITY.value
-            and setting_key == FacilitySettingKey.TIMEZONE.value
-        ):
+        if namespace == SettingNamespace.FACILITY.value and setting_key == FacilitySettingKey.TIMEZONE.value:
             self._validate_iana_timezone(command.value)
 
-        existing = await self._repository.get_by_namespace_key(
-            namespace,
-            setting_key,
-            include_deleted=True,
-        )
+        existing = await self._repository.get_by_namespace_key(namespace, setting_key, include_deleted=True)
         if existing:
             if existing.is_deleted:
-                raise ConflictErrorException(
-                    detail="Setting key exists in recycle bin; restore it instead",
-                )
+                raise ConflictErrorException(detail="Setting key exists in recycle bin; restore it instead")
             raise ConflictErrorException(detail="Setting namespace and key already exist")
 
         setting_id = uuid4()
@@ -143,25 +122,14 @@ class SettingService:
         return CreateIdResult(id=setting_id)
 
     @distributed_trace()
-    async def update_setting(
-        self,
-        setting_id: UUID,
-        command: UpdateSettingCommand,
-    ) -> SettingResult:
+    async def update_setting(self, setting_id: UUID, command: UpdateSettingCommand) -> SettingResult:
         row = await self._repository.get_by_id(setting_id)
         if not row:
             raise NotFoundException(detail="Setting not found")
         self._validate_value_type(row.value_type, command.value)
-        if (
-            row.namespace == SettingNamespace.FACILITY.value
-            and row.setting_key == FacilitySettingKey.TIMEZONE.value
-        ):
+        if row.namespace == SettingNamespace.FACILITY.value and row.setting_key == FacilitySettingKey.TIMEZONE.value:
             self._validate_iana_timezone(command.value)
-        updated = await self._repository.update_value(
-            setting_id=setting_id,
-            value=command.value,
-            remark=command.remark,
-        )
+        updated = await self._repository.update_value(setting_id=setting_id, value=command.value, remark=command.remark)
         if updated < 1:
             raise NotFoundException(detail="Setting not found")
         await self._cache.invalidate(row.namespace, row.setting_key)

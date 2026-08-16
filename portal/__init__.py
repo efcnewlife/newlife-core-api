@@ -1,8 +1,7 @@
 """
 Top level package for the portal
 """
+
 from .main import app
 
-__all__ = [
-    "app"
-]
+__all__ = ["app"]

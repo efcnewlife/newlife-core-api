@@ -1,6 +1,7 @@
 """
 Ministry schedule validation helpers.
 """
+
 from portal.application.org.commands import MinistryScheduleCommand
 from portal.domain.facility.days_of_week_mask import days_to_mask
 from portal.exceptions.responses import BadRequestException
@@ -26,11 +27,7 @@ def validate_ministry_schedules(schedules: list[MinistryScheduleCommand]) -> Non
             raise BadRequestException(detail=f"{prefix}: start_time and end_time must both be set or both be empty")
         if schedule.start_time and schedule.end_time and schedule.start_time >= schedule.end_time:
             raise BadRequestException(detail=f"{prefix}: start_time must be before end_time")
-        if (
-            schedule.effective_from
-            and schedule.effective_to
-            and schedule.effective_from > schedule.effective_to
-        ):
+        if schedule.effective_from and schedule.effective_to and schedule.effective_from > schedule.effective_to:
             raise BadRequestException(detail=f"{prefix}: effective_from must be on or before effective_to")
 
 

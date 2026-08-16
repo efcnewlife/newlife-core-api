@@ -1,6 +1,7 @@
 """
 Unit tests for MicrosoftOidcProvider.verify_id_token (mocked JWKS path).
 """
+
 from unittest.mock import MagicMock, patch
 
 import jwt

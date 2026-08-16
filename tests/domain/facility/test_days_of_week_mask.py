@@ -1,14 +1,10 @@
 """
 Days-of-week bitmask unit tests.
 """
+
 import pytest
 
-from portal.domain.facility.days_of_week_mask import (
-    day_to_bit,
-    days_to_mask,
-    mask_to_days,
-    masks_share_day,
-)
+from portal.domain.facility.days_of_week_mask import day_to_bit, days_to_mask, mask_to_days, masks_share_day
 
 
 def test_day_to_bit():

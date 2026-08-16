@@ -1,6 +1,7 @@
 """
 Shared translation request serializers.
 """
+
 from typing import Optional
 from uuid import UUID
 

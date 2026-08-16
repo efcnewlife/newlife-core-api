@@ -1,18 +1,14 @@
 """
 Azure Blob Storage adapter implementing FileStoragePort.
 """
+
 import asyncio
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from urllib.parse import quote
 
 from azure.core.exceptions import AzureError
-from azure.storage.blob import (
-    BlobSasPermissions,
-    BlobServiceClient,
-    ContentSettings,
-    generate_blob_sas,
-)
+from azure.storage.blob import BlobSasPermissions, BlobServiceClient, ContentSettings, generate_blob_sas
 
 from portal.config import Configuration, settings
 from portal.libs.logger import logger
@@ -41,7 +37,7 @@ class AzureBlobStorage:
     def _parse_account_key(connection_string: str) -> Optional[str]:
         for part in connection_string.split(";"):
             if part.startswith("AccountKey="):
-                return part[len("AccountKey="):]
+                return part[len("AccountKey=") :]
         return None
 
     @property
@@ -65,29 +61,13 @@ class AzureBlobStorage:
             raise AzureError("Azure Blob Storage is not configured (missing connection string)")
         return self._client
 
-    async def put_object(
-        self,
-        *,
-        key: str,
-        body: bytes,
-        content_type: str,
-        metadata: dict[str, str],
-        cache_control: Optional[str] = None,
-    ) -> None:
+    async def put_object(self, *, key: str, body: bytes, content_type: str, metadata: dict[str, str], cache_control: Optional[str] = None) -> None:
         client = self._ensure_client()
         blob_client = client.get_blob_client(container=self._container_name, blob=key)
-        content_settings = ContentSettings(
-            content_type=content_type,
-            cache_control=cache_control or self._cache_control,
-        )
+        content_settings = ContentSettings(content_type=content_type, cache_control=cache_control or self._cache_control)
 
         def _upload() -> None:
-            blob_client.upload_blob(
-                body,
-                overwrite=True,
-                content_settings=content_settings,
-                metadata=metadata,
-            )
+            blob_client.upload_blob(body, overwrite=True, content_settings=content_settings, metadata=metadata)
 
         await asyncio.to_thread(_upload)
 
@@ -111,13 +91,7 @@ class AzureBlobStorage:
         success_keys = await asyncio.to_thread(_delete)
         return success_keys
 
-    async def generate_signed_read_url(
-        self,
-        *,
-        key: str,
-        bucket: Optional[str] = None,
-        expiry_seconds: int = 3600,
-    ) -> str:
+    async def generate_signed_read_url(self, *, key: str, bucket: Optional[str] = None, expiry_seconds: int = 3600) -> str:
         client = self._ensure_client()
         container = bucket or self._container_name
         account_name = self._account_name or client.account_name
@@ -134,9 +108,6 @@ class AzureBlobStorage:
                 expiry=datetime.now(timezone.utc) + timedelta(seconds=expiry_seconds),
             )
             encoded_key = quote(key, safe="/")
-            return (
-                f"https://{account_name}.blob.core.windows.net/"
-                f"{container}/{encoded_key}?{sas_token}"
-            )
+            return f"https://{account_name}.blob.core.windows.net/{container}/{encoded_key}?{sas_token}"
 
         return await asyncio.to_thread(_generate)

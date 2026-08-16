@@ -1,6 +1,7 @@
 """
 Tests for Microsoft user directory sync service.
 """
+
 import json
 from uuid import UUID, uuid4
 
@@ -60,13 +61,7 @@ class StubSession:
 
 
 class StubUserRepository:
-    def __init__(
-        self,
-        *,
-        by_third_party: dict[str, UUID] | None = None,
-        by_email: dict[str, UserSensitive] | None = None,
-        profiles: set[UUID] | None = None,
-    ):
+    def __init__(self, *, by_third_party: dict[str, UUID] | None = None, by_email: dict[str, UserSensitive] | None = None, profiles: set[UUID] | None = None):
         self.by_third_party = by_third_party or {}
         self.by_email = by_email or {}
         self.profiles = profiles or set()
@@ -91,27 +86,13 @@ class StubUserRepository:
         self.created_users.append({"user_id": user_id, "email": email, **kwargs})
 
     async def update_directory_user_profile(self, user_id, first_name, last_name, preferred_name=None):
-        self.updated_profiles.append(
-            {
-                "user_id": user_id,
-                "first_name": first_name,
-                "last_name": last_name,
-                "preferred_name": preferred_name,
-            }
-        )
+        self.updated_profiles.append({"user_id": user_id, "first_name": first_name, "last_name": last_name, "preferred_name": preferred_name})
 
     async def update_user_active_flag(self, user_id, is_active: bool):
         self.active_updates.append((user_id, is_active))
 
     async def create_user_profile(self, user_id, first_name, last_name, preferred_name=None):
-        self.profile_creates.append(
-            {
-                "user_id": user_id,
-                "first_name": first_name,
-                "last_name": last_name,
-                "preferred_name": preferred_name,
-            }
-        )
+        self.profile_creates.append({"user_id": user_id, "first_name": first_name, "last_name": last_name, "preferred_name": preferred_name})
 
     async def upsert_auth_user_third_party(self, **kwargs):
         self.third_party_upserts.append(kwargs)
@@ -125,29 +106,16 @@ def test_default_sync_filter_includes_efcnewlife_domain():
 
 
 def test_is_real_person_requires_given_name_and_surname():
-    assert is_real_person(
-        GraphUserRecord(object_id=str(uuid4()), given_name="Jay", surname="Hsia")
-    ) is True
-    assert is_real_person(
-        GraphUserRecord(object_id=str(uuid4()), given_name="Jay", surname=None)
-    ) is False
-    assert is_real_person(
-        GraphUserRecord(
-            object_id=str(uuid4()),
-            given_name=" ",
-            surname="Room",
-            display_name="Conference Room A",
-            email="room@efcnewlife.org",
-        )
-    ) is False
+    assert is_real_person(GraphUserRecord(object_id=str(uuid4()), given_name="Jay", surname="Hsia")) is True
+    assert is_real_person(GraphUserRecord(object_id=str(uuid4()), given_name="Jay", surname=None)) is False
+    assert (
+        is_real_person(GraphUserRecord(object_id=str(uuid4()), given_name=" ", surname="Room", display_name="Conference Room A", email="room@efcnewlife.org"))
+        is False
+    )
 
 
 def test_resolve_sync_email_prefers_mail():
-    record = GraphUserRecord(
-        object_id=str(uuid4()),
-        email="dev@efcnewlife.org",
-        user_principal_name="other@example.com",
-    )
+    record = GraphUserRecord(object_id=str(uuid4()), email="dev@efcnewlife.org", user_principal_name="other@example.com")
     assert resolve_sync_email(record) == "dev@efcnewlife.org"
 
 
@@ -158,18 +126,11 @@ def test_is_sync_email_domain():
 
 @pytest.mark.asyncio
 async def test_sync_creates_new_user(monkeypatch):
-    monkeypatch.setattr(
-        "portal.application.cli.microsoft_user_sync_service.settings.AZURE_TENANT_ID",
-        str(TENANT_ID),
-    )
+    monkeypatch.setattr("portal.application.cli.microsoft_user_sync_service.settings.AZURE_TENANT_ID", str(TENANT_ID))
     record = _load_example_graph_user()
     session = StubSession()
     repo = StubUserRepository()
-    service = MicrosoftUserSyncService(
-        session=session,
-        user_repository=repo,
-        graph_provider=StubGraphProvider([record]),
-    )
+    service = MicrosoftUserSyncService(session=session, user_repository=repo, graph_provider=StubGraphProvider([record]))
 
     stats = await service.run(dry_run=False)
 
@@ -188,24 +149,11 @@ async def test_sync_creates_new_user(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_sync_skips_non_efcnewlife_domain(monkeypatch):
-    monkeypatch.setattr(
-        "portal.application.cli.microsoft_user_sync_service.settings.AZURE_TENANT_ID",
-        str(TENANT_ID),
-    )
-    record = GraphUserRecord(
-        object_id=str(uuid4()),
-        email="guest@gmail.com",
-        user_principal_name="guest@gmail.com",
-        account_enabled=True,
-        user_type="Member",
-    )
+    monkeypatch.setattr("portal.application.cli.microsoft_user_sync_service.settings.AZURE_TENANT_ID", str(TENANT_ID))
+    record = GraphUserRecord(object_id=str(uuid4()), email="guest@gmail.com", user_principal_name="guest@gmail.com", account_enabled=True, user_type="Member")
     session = StubSession()
     repo = StubUserRepository()
-    service = MicrosoftUserSyncService(
-        session=session,
-        user_repository=repo,
-        graph_provider=StubGraphProvider([record]),
-    )
+    service = MicrosoftUserSyncService(session=session, user_repository=repo, graph_provider=StubGraphProvider([record]))
 
     stats = await service.run(dry_run=False)
 
@@ -216,10 +164,7 @@ async def test_sync_skips_non_efcnewlife_domain(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_sync_skips_resource_without_given_name_and_surname(monkeypatch):
-    monkeypatch.setattr(
-        "portal.application.cli.microsoft_user_sync_service.settings.AZURE_TENANT_ID",
-        str(TENANT_ID),
-    )
+    monkeypatch.setattr("portal.application.cli.microsoft_user_sync_service.settings.AZURE_TENANT_ID", str(TENANT_ID))
     record = GraphUserRecord(
         object_id=str(uuid4()),
         email="conf-room-a@efcnewlife.org",
@@ -230,11 +175,7 @@ async def test_sync_skips_resource_without_given_name_and_surname(monkeypatch):
     )
     session = StubSession()
     repo = StubUserRepository()
-    service = MicrosoftUserSyncService(
-        session=session,
-        user_repository=repo,
-        graph_provider=StubGraphProvider([record]),
-    )
+    service = MicrosoftUserSyncService(session=session, user_repository=repo, graph_provider=StubGraphProvider([record]))
 
     stats = await service.run(dry_run=False)
 
@@ -245,10 +186,7 @@ async def test_sync_skips_resource_without_given_name_and_surname(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_sync_skips_service_account(monkeypatch):
-    monkeypatch.setattr(
-        "portal.application.cli.microsoft_user_sync_service.settings.AZURE_TENANT_ID",
-        str(TENANT_ID),
-    )
+    monkeypatch.setattr("portal.application.cli.microsoft_user_sync_service.settings.AZURE_TENANT_ID", str(TENANT_ID))
     record = GraphUserRecord(
         object_id=str(uuid4()),
         email="dev@efcnewlife.org",
@@ -261,11 +199,7 @@ async def test_sync_skips_service_account(monkeypatch):
     )
     session = StubSession()
     repo = StubUserRepository()
-    service = MicrosoftUserSyncService(
-        session=session,
-        user_repository=repo,
-        graph_provider=StubGraphProvider([record]),
-    )
+    service = MicrosoftUserSyncService(session=session, user_repository=repo, graph_provider=StubGraphProvider([record]))
 
     stats = await service.run(dry_run=False)
 
@@ -275,30 +209,15 @@ async def test_sync_skips_service_account(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_sync_links_existing_email(monkeypatch):
-    monkeypatch.setattr(
-        "portal.application.cli.microsoft_user_sync_service.settings.AZURE_TENANT_ID",
-        str(TENANT_ID),
-    )
+    monkeypatch.setattr("portal.application.cli.microsoft_user_sync_service.settings.AZURE_TENANT_ID", str(TENANT_ID))
     record = _load_example_graph_user()
     existing_id = uuid4()
     session = StubSession()
     repo = StubUserRepository(
-        by_email={
-            "jay.hsia@efcnewlife.org": UserSensitive(
-                id=existing_id,
-                email="jay.hsia@efcnewlife.org",
-                verified=True,
-                is_active=True,
-                is_admin=False,
-            ),
-        },
+        by_email={"jay.hsia@efcnewlife.org": UserSensitive(id=existing_id, email="jay.hsia@efcnewlife.org", verified=True, is_active=True, is_admin=False)},
         profiles={existing_id},
     )
-    service = MicrosoftUserSyncService(
-        session=session,
-        user_repository=repo,
-        graph_provider=StubGraphProvider([record]),
-    )
+    service = MicrosoftUserSyncService(session=session, user_repository=repo, graph_provider=StubGraphProvider([record]))
 
     stats = await service.run(dry_run=False)
 
@@ -309,19 +228,12 @@ async def test_sync_links_existing_email(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_sync_updates_existing_third_party_user(monkeypatch):
-    monkeypatch.setattr(
-        "portal.application.cli.microsoft_user_sync_service.settings.AZURE_TENANT_ID",
-        str(TENANT_ID),
-    )
+    monkeypatch.setattr("portal.application.cli.microsoft_user_sync_service.settings.AZURE_TENANT_ID", str(TENANT_ID))
     record = _load_example_graph_user()
     existing_id = uuid4()
     session = StubSession()
     repo = StubUserRepository(by_third_party={record.object_id: existing_id})
-    service = MicrosoftUserSyncService(
-        session=session,
-        user_repository=repo,
-        graph_provider=StubGraphProvider([record]),
-    )
+    service = MicrosoftUserSyncService(session=session, user_repository=repo, graph_provider=StubGraphProvider([record]))
 
     stats = await service.run(dry_run=False)
 
@@ -332,18 +244,11 @@ async def test_sync_updates_existing_third_party_user(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_sync_dry_run_does_not_write(monkeypatch, tmp_path):
-    monkeypatch.setattr(
-        "portal.application.cli.microsoft_user_sync_service.settings.AZURE_TENANT_ID",
-        str(TENANT_ID),
-    )
+    monkeypatch.setattr("portal.application.cli.microsoft_user_sync_service.settings.AZURE_TENANT_ID", str(TENANT_ID))
     record = _load_example_graph_user()
     session = StubSession()
     repo = StubUserRepository()
-    service = MicrosoftUserSyncService(
-        session=session,
-        user_repository=repo,
-        graph_provider=StubGraphProvider([record]),
-    )
+    service = MicrosoftUserSyncService(session=session, user_repository=repo, graph_provider=StubGraphProvider([record]))
 
     stats = await service.run(dry_run=True, dry_run_output_dir=tmp_path)
 

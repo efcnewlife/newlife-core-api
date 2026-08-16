@@ -1,6 +1,7 @@
 """
 Church position seed data from docs/position.md.
 """
+
 from typing import Any
 
 from portal.domain.org.constants import PositionOffice, PositionTeam, position_office_can_own_ministry
@@ -117,11 +118,7 @@ def build_position_seed_rows() -> list[dict[str, Any]]:
                 "can_own_ministry": position_office_can_own_ministry(office),
                 "is_active": True,
                 "sequence": float(sequence),
-                "translations": {
-                    "en": {"name": name},
-                    "zh-TW": {"name": _NAME_ZH_TW.get(name, name)},
-                    "zh-CN": {"name": _NAME_ZH_CN.get(name, name)},
-                },
+                "translations": {"en": {"name": name}, "zh-TW": {"name": _NAME_ZH_TW.get(name, name)}, "zh-CN": {"name": _NAME_ZH_CN.get(name, name)}},
             }
         )
     return rows

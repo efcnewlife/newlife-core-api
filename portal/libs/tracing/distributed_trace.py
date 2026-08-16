@@ -1,6 +1,7 @@
 """
 OpenTelemetry distributed trace decorator (no-op passthrough).
 """
+
 import functools
 import inspect
 from typing import Any, Callable, TypeVar

@@ -1,6 +1,7 @@
 """
 Microsoft Entra ID admin login application service.
 """
+
 from datetime import datetime, timezone
 from typing import Any, Optional
 from uuid import UUID
@@ -10,13 +11,13 @@ from fastapi import status
 
 from portal.application.auth.commands import MicrosoftLoginCommand
 from portal.application.auth.login_service import LoginService
+from portal.application.auth.member_web_app_resolver import resolve_request_app_code
 from portal.application.auth.microsoft_profile_mapper import profile_fields_from_microsoft_claims
 from portal.application.auth.results import LoginResult, MemberLoginResult, UserSensitive
 from portal.config import settings
-from portal.exceptions.responses import ApiBaseException, UnauthorizedException
-from portal.domain.auth.ports import UserRepositoryPort
-from portal.application.auth.member_web_app_resolver import resolve_request_app_code
 from portal.domain.auth.member_web_app import MemberWebAppRegistry
+from portal.domain.auth.ports import UserRepositoryPort
+from portal.exceptions.responses import ApiBaseException, UnauthorizedException
 from portal.libs.consts.enums import ThirdPartyProvider
 from portal.libs.logger import logger
 from portal.libs.tracing.distributed_trace import distributed_trace
@@ -80,12 +81,7 @@ class MicrosoftAuthService:
             return
         first_name, last_name, preferred_name = profile_fields_from_microsoft_claims(claims)
         try:
-            await self._repository.create_user_profile(
-                user_id=user_id,
-                first_name=first_name,
-                last_name=last_name,
-                preferred_name=preferred_name,
-            )
+            await self._repository.create_user_profile(user_id=user_id, first_name=first_name, last_name=last_name, preferred_name=preferred_name)
         except Exception:
             logger.exception("Failed to create AuthUserProfile for Microsoft login user_id=%s", user_id)
             raise
@@ -99,10 +95,7 @@ class MicrosoftAuthService:
 
     async def _resolve_microsoft_user(self, command: MicrosoftLoginCommand) -> UserSensitive:
         if not self._microsoft_oidc_provider.is_configured():
-            raise ApiBaseException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Microsoft OIDC is not configured",
-            )
+            raise ApiBaseException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Microsoft OIDC is not configured")
         try:
             claims: dict[str, Any] = self._microsoft_oidc_provider.verify_id_token(command.id_token)
         except jwt.PyJWTError:
@@ -128,10 +121,7 @@ class MicrosoftAuthService:
     @distributed_trace()
     async def microsoft_member_login(self, command: MicrosoftLoginCommand) -> MemberLoginResult:
         if not self._member_web_app_registry:
-            raise ApiBaseException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Member web app registry is not configured",
-            )
+            raise ApiBaseException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Member web app registry is not configured")
         app_code = resolve_request_app_code(self._member_web_app_registry, required=True)
         user = await self._resolve_microsoft_user(command)
         if not user.verified or not user.is_active:

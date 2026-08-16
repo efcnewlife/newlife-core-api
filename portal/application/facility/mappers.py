@@ -1,6 +1,7 @@
 """
 Map between facility API serializers and application commands/results.
 """
+
 from uuid import UUID
 
 from portal.application.facility.commands import (
@@ -52,8 +53,8 @@ from portal.application.facility.results import (
     SurchargeResult,
     TranslationItemResult,
 )
-from portal.domain.facility.constants import BookingType
 from portal.domain.common.mixins import UUIDBaseModel
+from portal.domain.facility.constants import BookingType
 from portal.serializers.admin.v1.facility.rental_catalog import (
     AdminDiscountRuleCreate,
     AdminDiscountRuleItem,
@@ -85,13 +86,13 @@ from portal.serializers.admin.v1.facility.rental_rate_template import (
     AdminRentalRateTemplatePages,
     AdminRentalRateTemplateUpdate,
 )
-from portal.serializers.admin.v1.facility.room import (
-    AdminRoomBulkAction,
-    AdminRoomCreate,
-    AdminRoomDetail,
-    AdminRoomList,
-    AdminRoomPages,
-    AdminRoomUpdate,
+from portal.serializers.admin.v1.facility.room import AdminRoomBulkAction, AdminRoomCreate, AdminRoomDetail, AdminRoomList, AdminRoomPages, AdminRoomUpdate
+from portal.serializers.admin.v1.facility.room_blackout import (
+    AdminRoomBlackoutCreate,
+    AdminRoomBlackoutItem,
+    AdminRoomBlackoutList,
+    AdminRoomBlackoutPages,
+    AdminRoomBlackoutUpdate,
 )
 from portal.serializers.admin.v1.facility.room_slot_template import (
     AdminRoomSlotTemplateCreate,
@@ -100,28 +101,13 @@ from portal.serializers.admin.v1.facility.room_slot_template import (
     AdminRoomSlotTemplatePages,
     AdminRoomSlotTemplateUpdate,
 )
-from portal.serializers.admin.v1.facility.room_blackout import (
-    AdminRoomBlackoutCreate,
-    AdminRoomBlackoutItem,
-    AdminRoomBlackoutList,
-    AdminRoomBlackoutPages,
-    AdminRoomBlackoutUpdate,
-)
-from portal.serializers.admin.v1.facility.translation import (
-    AdminFacilityTranslationInput,
-    AdminFacilityTranslationItem,
-)
+from portal.serializers.admin.v1.facility.translation import AdminFacilityTranslationInput, AdminFacilityTranslationItem
 from portal.serializers.mixins import DeleteBaseModel, GenericQueryBaseModel
 
 
 def pages_query_to_command(model: GenericQueryBaseModel) -> PagesQueryCommand:
     return PagesQueryCommand(
-        page=model.page,
-        page_size=model.page_size,
-        order_by=model.order_by,
-        descending=model.descending,
-        deleted=model.deleted,
-        keyword=model.keyword,
+        page=model.page, page_size=model.page_size, order_by=model.order_by, descending=model.descending, deleted=model.deleted, keyword=model.keyword
     )
 
 
@@ -133,32 +119,14 @@ def bulk_action_to_command(model: AdminRoomBulkAction) -> BulkIdsCommand:
     return BulkIdsCommand(ids=model.ids)
 
 
-def _translation_commands(
-    translations: list[AdminFacilityTranslationInput] | None,
-) -> list[FacilityTranslationCommand] | None:
+def _translation_commands(translations: list[AdminFacilityTranslationInput] | None) -> list[FacilityTranslationCommand] | None:
     if translations is None:
         return None
-    return [
-        FacilityTranslationCommand(
-            locale_id=item.locale_id,
-            name=item.name,
-            description=item.description,
-            remark=item.remark,
-        )
-        for item in translations
-    ]
+    return [FacilityTranslationCommand(locale_id=item.locale_id, name=item.name, description=item.description, remark=item.remark) for item in translations]
 
 
 def _translation_items_to_api(items: list[TranslationItemResult]) -> list[AdminFacilityTranslationItem]:
-    return [
-        AdminFacilityTranslationItem(
-            locale_id=item.locale_id,
-            name=item.name,
-            description=item.description,
-            remark=item.remark,
-        )
-        for item in items
-    ]
+    return [AdminFacilityTranslationItem(locale_id=item.locale_id, name=item.name, description=item.description, remark=item.remark) for item in items]
 
 
 def create_id_result_to_api(result: CreateIdResult) -> UUIDBaseModel:
@@ -208,23 +176,13 @@ def room_detail_to_api(result: RoomDetailResult) -> AdminRoomDetail:
 
 
 def room_page_result_to_api(result: RoomPageResult) -> AdminRoomPages:
-    return AdminRoomPages(
-        page=result.page,
-        page_size=result.page_size,
-        total=result.total,
-        items=[room_detail_to_api(item) for item in result.items],
-    )
+    return AdminRoomPages(page=result.page, page_size=result.page_size, total=result.total, items=[room_detail_to_api(item) for item in result.items])
 
 
 def room_list_result_to_api(result: RoomListResult) -> AdminRoomList:
     from portal.serializers.admin.v1.facility.room import AdminRoomBase
 
-    return AdminRoomList(
-        items=[
-            AdminRoomBase(id=item.id, code=item.code, name=item.name)
-            for item in result.items
-        ]
-    )
+    return AdminRoomList(items=[AdminRoomBase(id=item.id, code=item.code, name=item.name) for item in result.items])
 
 
 def create_room_slot_template_to_command(model: AdminRoomSlotTemplateCreate) -> CreateRoomSlotTemplateCommand:
@@ -246,10 +204,7 @@ def room_slot_template_to_api(result: RoomSlotTemplateResult) -> AdminRoomSlotTe
 
 def room_slot_template_page_to_api(result: RoomSlotTemplatePageResult) -> AdminRoomSlotTemplatePages:
     return AdminRoomSlotTemplatePages(
-        page=result.page,
-        page_size=result.page_size,
-        total=result.total,
-        items=[room_slot_template_to_api(item) for item in result.items],
+        page=result.page, page_size=result.page_size, total=result.total, items=[room_slot_template_to_api(item) for item in result.items]
     )
 
 
@@ -287,12 +242,7 @@ def room_blackout_to_api(result: RoomBlackoutResult) -> AdminRoomBlackoutItem:
 
 
 def room_blackout_page_to_api(result: RoomBlackoutPageResult) -> AdminRoomBlackoutPages:
-    return AdminRoomBlackoutPages(
-        page=result.page,
-        page_size=result.page_size,
-        total=result.total,
-        items=[room_blackout_to_api(item) for item in result.items],
-    )
+    return AdminRoomBlackoutPages(page=result.page, page_size=result.page_size, total=result.total, items=[room_blackout_to_api(item) for item in result.items])
 
 
 def room_blackout_list_to_api(result: RoomBlackoutListResult) -> AdminRoomBlackoutList:
@@ -308,9 +258,7 @@ def room_blackout_pages_query_to_command(model) -> tuple[PagesQueryCommand, UUID
     return base, model.facility_id
 
 
-def create_rental_rate_template_to_command(
-    model: AdminRentalRateTemplateCreate,
-) -> CreateRentalRateTemplateCommand:
+def create_rental_rate_template_to_command(model: AdminRentalRateTemplateCreate) -> CreateRentalRateTemplateCommand:
     return CreateRentalRateTemplateCommand(
         name=model.name,
         billing_unit=model.billing_unit,
@@ -322,9 +270,7 @@ def create_rental_rate_template_to_command(
     )
 
 
-def update_rental_rate_template_to_command(
-    model: AdminRentalRateTemplateUpdate,
-) -> UpdateRentalRateTemplateCommand:
+def update_rental_rate_template_to_command(model: AdminRentalRateTemplateUpdate) -> UpdateRentalRateTemplateCommand:
     return UpdateRentalRateTemplateCommand(
         name=model.name,
         billing_unit=model.billing_unit,
@@ -356,10 +302,7 @@ def rental_rate_template_to_api(result: RentalRateTemplateResult) -> AdminRental
 
 def rental_rate_template_page_to_api(result: RentalRateTemplatePageResult) -> AdminRentalRateTemplatePages:
     return AdminRentalRateTemplatePages(
-        page=result.page,
-        page_size=result.page_size,
-        total=result.total,
-        items=[rental_rate_template_to_api(item) for item in result.items],
+        page=result.page, page_size=result.page_size, total=result.total, items=[rental_rate_template_to_api(item) for item in result.items]
     )
 
 
@@ -368,19 +311,11 @@ def rental_rate_template_list_to_api(result: RentalRateTemplateListResult) -> Ad
 
 
 def create_rental_rate_to_command(model: AdminRentalRateCreate) -> CreateRentalRateCommand:
-    return CreateRentalRateCommand(
-        facility_id=model.facility_id,
-        template_id=model.template_id,
-        is_active=model.is_active,
-    )
+    return CreateRentalRateCommand(facility_id=model.facility_id, template_id=model.template_id, is_active=model.is_active)
 
 
 def update_rental_rate_to_command(model: AdminRentalRateUpdate) -> UpdateRentalRateCommand:
-    return UpdateRentalRateCommand(
-        facility_id=model.facility_id,
-        template_id=model.template_id,
-        is_active=model.is_active,
-    )
+    return UpdateRentalRateCommand(facility_id=model.facility_id, template_id=model.template_id, is_active=model.is_active)
 
 
 def rental_rate_to_api(result: RentalRateResult) -> AdminRentalRateItem:
@@ -411,12 +346,7 @@ def rental_rate_to_api(result: RentalRateResult) -> AdminRentalRateItem:
 
 
 def rental_rate_page_to_api(result: RentalRatePageResult) -> AdminRentalRatePages:
-    return AdminRentalRatePages(
-        page=result.page,
-        page_size=result.page_size,
-        total=result.total,
-        items=[rental_rate_to_api(item) for item in result.items],
-    )
+    return AdminRentalRatePages(page=result.page, page_size=result.page_size, total=result.total, items=[rental_rate_to_api(item) for item in result.items])
 
 
 def rental_rate_list_to_api(result: RentalRateListResult) -> AdminRentalRateList:
@@ -438,13 +368,7 @@ def preview_quote_to_command(model: AdminPreviewQuoteRequest) -> PreviewQuoteCom
         is_mission_aligned=model.is_mission_aligned,
         currency=model.currency,
         as_of_date=model.as_of_date,
-        room_lines=[
-            PreviewQuoteRoomLineCommand(
-                facility_id=line.facility_id,
-                billed_hours=line.billed_hours,
-            )
-            for line in model.room_lines
-        ],
+        room_lines=[PreviewQuoteRoomLineCommand(facility_id=line.facility_id, billed_hours=line.billed_hours) for line in model.room_lines],
         surcharge_codes=model.surcharge_codes,
     )
 
@@ -544,11 +468,7 @@ def override_log_pages_query_to_command(model) -> "OverrideLogPagesQueryCommand"
     if not isinstance(model, AdminOverrideLogQuery):
         return OverrideLogPagesQueryCommand(**base.model_dump())
     return OverrideLogPagesQueryCommand(
-        **base.model_dump(),
-        facility_id=model.facility_id,
-        overridden_by_id=model.overridden_by_id,
-        date_from=model.date_from,
-        date_to=model.date_to,
+        **base.model_dump(), facility_id=model.facility_id, overridden_by_id=model.overridden_by_id, date_from=model.date_from, date_to=model.date_to
     )
 
 
@@ -565,13 +485,7 @@ def create_booking_to_command(model) -> "CreateBookingCommand":
         is_mission_aligned=model.is_mission_aligned,
         ministry_id=model.ministry_id,
         rooms=[
-            BookingRoomLineCommand(
-                facility_id=room.facility_id,
-                start_at=room.start_at,
-                end_at=room.end_at,
-                sequence=room.sequence,
-            )
-            for room in model.rooms
+            BookingRoomLineCommand(facility_id=room.facility_id, start_at=room.start_at, end_at=room.end_at, sequence=room.sequence) for room in model.rooms
         ],
         surcharge_codes=model.surcharge_codes,
         remark=model.remark,
@@ -588,13 +502,7 @@ def update_booking_to_command(model) -> "UpdateBookingCommand":
         is_mission_aligned=model.is_mission_aligned,
         ministry_id=model.ministry_id,
         rooms=[
-            BookingRoomLineCommand(
-                facility_id=room.facility_id,
-                start_at=room.start_at,
-                end_at=room.end_at,
-                sequence=room.sequence,
-            )
-            for room in model.rooms
+            BookingRoomLineCommand(facility_id=room.facility_id, start_at=room.start_at, end_at=room.end_at, sequence=room.sequence) for room in model.rooms
         ],
         surcharge_codes=model.surcharge_codes,
     )
@@ -610,10 +518,7 @@ def booking_page_to_api(result) -> "AdminBookingPages":
     from portal.serializers.admin.v1.facility.booking import AdminBookingDetail, AdminBookingPages
 
     return AdminBookingPages(
-        page=result.page,
-        page_size=result.page_size,
-        total=result.total,
-        items=[AdminBookingDetail.model_validate(item.model_dump()) for item in result.items],
+        page=result.page, page_size=result.page_size, total=result.total, items=[AdminBookingDetail.model_validate(item.model_dump()) for item in result.items]
     )
 
 
@@ -626,9 +531,4 @@ def booking_detail_to_api(result) -> "AdminBookingDetail":
 def override_log_page_to_api(result) -> "AdminOverrideLogPages":
     from portal.serializers.admin.v1.facility.override_log import AdminOverrideLogPages
 
-    return AdminOverrideLogPages(
-        page=result.page,
-        page_size=result.page_size,
-        total=result.total,
-        items=[item for item in result.items],
-    )
+    return AdminOverrideLogPages(page=result.page, page_size=result.page_size, total=result.total, items=[item for item in result.items])

@@ -1,6 +1,7 @@
 """
 RBAC initialization CLI commands.
 """
+
 import asyncio
 
 import click
@@ -44,12 +45,7 @@ def init_rbac_process():
 def reset_rbac_process(*, force: bool = False):
     """Synchronous entry to wipe and re-seed RBAC data."""
     if not settings.IS_DEV and not force:
-        click.echo(
-            click.style(
-                f"reset-rbac is blocked when ENV={settings.ENV!r}. Pass --force to proceed.",
-                fg="red",
-            )
-        )
+        click.echo(click.style(f"reset-rbac is blocked when ENV={settings.ENV!r}. Pass --force to proceed.", fg="red"))
         raise SystemExit(1)
 
     if not force:

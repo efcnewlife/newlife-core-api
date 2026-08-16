@@ -1,6 +1,7 @@
 """
 Map Microsoft OIDC claims or Graph user fields to AuthUserProfile columns.
 """
+
 from typing import Any, Optional
 
 from portal.providers.ms_graph.models import GraphUserRecord
@@ -18,11 +19,7 @@ def profile_fields_from_microsoft_claims(claims: dict[str, Any]) -> tuple[str, s
             family_name = name_parts[1]
 
     if not given_name:
-        fallback = (
-            display_name
-            or str(claims.get("preferred_username") or claims.get("email") or claims.get("upn") or "")
-            .strip()
-        )
+        fallback = display_name or str(claims.get("preferred_username") or claims.get("email") or claims.get("upn") or "").strip()
         if "@" in fallback:
             fallback = fallback.split("@", 1)[0]
         given_name = fallback or "User"

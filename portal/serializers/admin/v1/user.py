@@ -1,19 +1,21 @@
 """
 User Serializers
 """
+
 from typing import Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from portal.libs.consts.enums import Gender
 from portal.application.auth.results import UserDetail
-from portal.serializers.mixins.model_mixins import UUIDBaseModel, JSONStringMixinModel
-from portal.serializers.mixins import PaginationBaseResponseModel, GenericQueryBaseModel
+from portal.libs.consts.enums import Gender
+from portal.serializers.mixins import GenericQueryBaseModel, PaginationBaseResponseModel
+from portal.serializers.mixins.model_mixins import JSONStringMixinModel, UUIDBaseModel
 
 
 class AdminUserQuery(GenericQueryBaseModel):
     """UserQuery"""
+
     verified: Optional[bool] = Field(None, description="Is the user verified")
     is_active: Optional[bool] = Field(None, description="Is the user active")
     is_superuser: Optional[bool] = Field(None, description="Is the user a superuser")
@@ -24,6 +26,7 @@ class AdminUserQuery(GenericQueryBaseModel):
 
 class AdminUserBase(UUIDBaseModel, JSONStringMixinModel):
     """UserBase"""
+
     phone_number: Optional[str] = Field(None, description="User's phone number", serialization_alias="phoneNumber")
     email: Optional[str] = Field(None, description="User's email address")
     display_name: Optional[str] = Field(None, description="User's display name", serialization_alias="displayName")
@@ -31,26 +34,31 @@ class AdminUserBase(UUIDBaseModel, JSONStringMixinModel):
 
 class AdminUserTableItem(UserDetail):
     """UserTableItem"""
+
     pass
 
 
 class AdminUserItem(UserDetail):
     """UserItem"""
+
     pass
 
 
 class AdminUserPages(PaginationBaseResponseModel):
     """UserPages"""
+
     items: Optional[list[AdminUserTableItem]] = Field(..., description="Items")
 
 
 class AdminUserList(BaseModel):
     """UserList"""
+
     items: Optional[list[AdminUserBase]] = Field(..., description="Items")
 
 
 class AdminUserCreate(BaseModel):
     """UserCreate"""
+
     phone_number: Optional[str] = Field(..., description="User's phone number")
     email: str = Field(..., description="User's email address")
     verified: bool = Field(False, description="Is the user verified")
@@ -67,12 +75,14 @@ class AdminUserCreate(BaseModel):
 
 class AdminUserUpdate(AdminUserCreate):
     """UserUpdate"""
+
     password: Optional[str] = Field(None, exclude=True)
     password_confirm: Optional[str] = Field(None, exclude=True)
 
 
 class AdminChangePassword(BaseModel):
     """ChangePassword"""
+
     old_password: str = Field(..., min_length=8, description="Old password")
     new_password: str = Field(..., min_length=8, description="New password")
     new_password_confirm: str = Field(..., min_length=8, description="New password confirmation")
@@ -80,19 +90,23 @@ class AdminChangePassword(BaseModel):
 
 class AdminUserBulkAction(BaseModel):
     """UserBulkAction"""
+
     ids: list[UUID] = Field(..., description="User IDs for bulk action")
 
 
 class AdminUserRoles(BaseModel):
     """UserRole"""
+
     role_ids: list[UUID] = Field(..., description="User roles")
 
 
 class AdminBindRole(BaseModel):
     """BindRole"""
+
     role_ids: list[UUID] = Field(..., description="Role IDs to assign to the user")
 
 
 class AdminUserPreferredLanguageUpdate(BaseModel):
     """Update current user preferred language"""
+
     preferred_locale_id: UUID = Field(..., description="Preferred locale id")

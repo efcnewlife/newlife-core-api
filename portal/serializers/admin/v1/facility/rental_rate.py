@@ -1,6 +1,7 @@
 """
 Rental rate serializers (room bindings; price from template).
 """
+
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
@@ -87,14 +88,8 @@ class AdminPreviewQuoteRequest(BaseModel):
     is_mission_aligned: bool = Field(False, description="Mission aligned")
     currency: str = Field("CAD", description="Currency")
     as_of_date: Optional[date] = Field(None, description="Pricing as-of date")
-    room_lines: list[AdminPreviewQuoteRoomLine] = Field(
-        default_factory=list,
-        description="Room lines",
-    )
-    surcharge_codes: list[str] = Field(
-        default_factory=list,
-        description="Surcharge codes",
-    )
+    room_lines: list[AdminPreviewQuoteRoomLine] = Field(default_factory=list, description="Room lines")
+    surcharge_codes: list[str] = Field(default_factory=list, description="Surcharge codes")
 
 
 class AdminPreviewQuoteRoomLineResult(BaseModel):
@@ -120,8 +115,4 @@ class AdminPreviewQuoteResponse(BaseModel):
     surcharge_amount: Decimal = Field(..., serialization_alias="surchargeAmount", description="Surcharge amount")
     quoted_amount: Decimal = Field(..., serialization_alias="quotedAmount", description="Quoted amount")
     currency: str = Field(..., description="Currency")
-    room_lines: list[AdminPreviewQuoteRoomLineResult] = Field(
-        default_factory=list,
-        serialization_alias="roomLines",
-        description="Room lines",
-    )
+    room_lines: list[AdminPreviewQuoteRoomLineResult] = Field(default_factory=list, serialization_alias="roomLines", description="Room lines")

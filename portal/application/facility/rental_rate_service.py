@@ -1,16 +1,12 @@
 """
 Facility rental rate application service.
 """
+
 import uuid
 from typing import Optional
 from uuid import UUID
 
-from portal.application.facility.commands import (
-    CreateRentalRateCommand,
-    DeleteCommand,
-    PagesQueryCommand,
-    UpdateRentalRateCommand,
-)
+from portal.application.facility.commands import CreateRentalRateCommand, DeleteCommand, PagesQueryCommand, UpdateRentalRateCommand
 from portal.application.facility.results import CreateIdResult, RentalRateListResult, RentalRatePageResult, RentalRateResult
 from portal.exceptions.responses import ApiBaseException, BadRequestException, ConflictErrorException, NotFoundException
 from portal.infrastructure.persistence.repositories.facility.rental_repository import RentalRepository
@@ -22,11 +18,7 @@ from portal.libs.tracing.distributed_trace import distributed_trace
 class RentalRateService:
     """Admin rental rate binding use cases (price always from template)."""
 
-    def __init__(
-        self,
-        rental_repository: RentalRepository,
-        room_repository: RoomRepository,
-    ):
+    def __init__(self, rental_repository: RentalRepository, room_repository: RoomRepository):
         self._repository = rental_repository
         self._room_repository = room_repository
 
@@ -42,22 +34,12 @@ class RentalRateService:
             raise NotFoundException(detail=f"Room {facility_id} not found")
 
     @distributed_trace()
-    async def get_rate_pages(
-        self,
-        command: PagesQueryCommand,
-        facility_id: Optional[UUID] = None,
-    ) -> RentalRatePageResult:
-        items, count = await self._repository.fetch_rate_pages(
-            command,
-            facility_id=facility_id,
-        )
+    async def get_rate_pages(self, command: PagesQueryCommand, facility_id: Optional[UUID] = None) -> RentalRatePageResult:
+        items, count = await self._repository.fetch_rate_pages(command, facility_id=facility_id)
         return RentalRatePageResult(page=command.page, page_size=command.page_size, total=count, items=items)
 
     @distributed_trace()
-    async def get_rate_list(
-        self,
-        facility_id: Optional[UUID] = None,
-    ) -> RentalRateListResult:
+    async def get_rate_list(self, facility_id: Optional[UUID] = None) -> RentalRateListResult:
         items = await self._repository.list_rates(facility_id)
         return RentalRateListResult(items=items)
 
@@ -72,20 +54,13 @@ class RentalRateService:
         rate_id = uuid.uuid4()
         try:
             await self._repository.insert_rate(
-                {
-                    "id": rate_id,
-                    "facility_id": command.facility_id,
-                    "template_id": command.template_id,
-                    "is_active": command.is_active,
-                }
+                {"id": rate_id, "facility_id": command.facility_id, "template_id": command.template_id, "is_active": command.is_active}
             )
         except ApiBaseException:
             raise
         except Exception as error:
             if self._repository.is_unique_violation(error):
-                raise ConflictErrorException(
-                    detail="Rental rate binding already exists for facility/template"
-                )
+                raise ConflictErrorException(detail="Rental rate binding already exists for facility/template")
             logger.exception(error)
             raise ApiBaseException(status_code=500, detail="Internal Server Error", debug_detail=str(error))
         return CreateIdResult(id=rate_id)
@@ -99,18 +74,11 @@ class RentalRateService:
         await self._validate_template_for_bind(command.template_id)
         try:
             affected = await self._repository.update_rate(
-                rate_id,
-                {
-                    "facility_id": command.facility_id,
-                    "template_id": command.template_id,
-                    "is_active": command.is_active,
-                },
+                rate_id, {"facility_id": command.facility_id, "template_id": command.template_id, "is_active": command.is_active}
             )
         except Exception as error:
             if self._repository.is_unique_violation(error):
-                raise ConflictErrorException(
-                    detail="Rental rate binding already exists for facility/template"
-                )
+                raise ConflictErrorException(detail="Rental rate binding already exists for facility/template")
             raise
         if affected == 0:
             raise NotFoundException(detail=f"Rental rate {rate_id} not found")

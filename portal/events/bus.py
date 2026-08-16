@@ -1,14 +1,13 @@
 """
 Event Bus for event-driven architecture
 """
+
 from typing import Dict, List, Type
 
-from portal.libs.contexts.event_session_context import (
-    set_event_session,
-    reset_event_session,
-)
+from portal.libs.contexts.event_session_context import reset_event_session, set_event_session
 from portal.libs.database import Session
 from portal.libs.logger import logger
+
 from .base import BaseEvent, EventHandler
 
 
@@ -66,6 +65,7 @@ class EventBus:
 
         # Execute all handlers concurrently
         import asyncio
+
         tasks = [self._execute_handler(handler, event) for handler in handlers]
         await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -82,17 +82,12 @@ class EventBus:
             loop = asyncio.get_running_loop()
             # Create task and don't await it (fire-and-forget)
             loop.create_task(self.publish(event))
-            logger.debug(
-                "Event %s scheduled for background execution", event.event_type
-            )
+            logger.debug("Event %s scheduled for background execution", event.event_type)
         except RuntimeError:
             # If no event loop is running, this is a programming error
             # In async context, there should always be a running loop
             logger.error(
-                "No running event loop found for background event %s. "
-                "This should not happen in async context. "
-                "Event will not be processed.",
-                event.event_type,
+                "No running event loop found for background event %s. This should not happen in async context. Event will not be processed.", event.event_type
             )
 
     async def _execute_handler(self, handler: EventHandler, event: BaseEvent) -> None:
@@ -120,10 +115,7 @@ class EventBus:
                     await session.rollback()
                 except Exception as rollback_err:
                     logger.warning("Event handler session rollback failed: %s", rollback_err)
-            logger.error(
-                f"Error in handler {handler.__class__.__name__} for event {event.event_type}: {str(e)}",
-                exc_info=True
-            )
+            logger.error(f"Error in handler {handler.__class__.__name__} for event {event.event_type}: {str(e)}", exc_info=True)
             raise
         finally:
             if session is not None and token is not None:

@@ -1,6 +1,7 @@
 """
 Ministry approval application service.
 """
+
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
@@ -28,11 +29,7 @@ from portal.libs.tracing.distributed_trace import distributed_trace
 class MinistryApprovalService:
     """Ministry submission and approval workflow."""
 
-    def __init__(
-        self,
-        ministry_repository: MinistryRepository,
-        ministry_service: MinistryService,
-    ):
+    def __init__(self, ministry_repository: MinistryRepository, ministry_service: MinistryService):
         self._repository = ministry_repository
         self._ministry_service = ministry_service
         self._req_ctx: Optional[RequestContext] = get_request_context()
@@ -52,16 +49,11 @@ class MinistryApprovalService:
     async def create_application(self, command: MinistryApplicationCommand) -> CreateIdResult:
         create_result = await self._ministry_service.create_ministry(
             CreateMinistryCommand(
-                owner_position_id=command.owner_position_id,
-                has_priority_booking=command.has_priority_booking,
-                translations=command.translations,
+                owner_position_id=command.owner_position_id, has_priority_booking=command.has_priority_booking, translations=command.translations
             )
         )
         if command.members:
-            await self._ministry_service.replace_members(
-                create_result.id,
-                ReplaceMinistryMembersCommand(members=command.members),
-            )
+            await self._ministry_service.replace_members(create_result.id, ReplaceMinistryMembersCommand(members=command.members))
         await self.submit_ministry(create_result.id, SubmitMinistryCommand())
         return create_result
 
@@ -109,21 +101,9 @@ class MinistryApprovalService:
 
         now = datetime.now(timezone.utc)
         user_id = self._current_user_id()
-        await self._repository.update_ministry(
-            ministry_id,
-            dict(
-                status=MinistryStatus.ACTIVE.value,
-                is_active=True,
-                approved_at=now,
-                approved_by_id=user_id,
-            ),
-        )
+        await self._repository.update_ministry(ministry_id, dict(status=MinistryStatus.ACTIVE.value, is_active=True, approved_at=now, approved_by_id=user_id))
         await self._repository.update_approval(
-            ministry_id=ministry_id,
-            status=MinistryApprovalStatus.APPROVED.value,
-            resolved_by_id=user_id,
-            decided_at=now,
-            comment=command.comment,
+            ministry_id=ministry_id, status=MinistryApprovalStatus.APPROVED.value, resolved_by_id=user_id, decided_at=now, comment=command.comment
         )
 
     @distributed_trace()
@@ -137,13 +117,7 @@ class MinistryApprovalService:
         now = datetime.now(timezone.utc)
         user_id = self._current_user_id()
         await self._repository.update_ministry(
-            ministry_id,
-            dict(
-                status=MinistryStatus.REJECTED.value,
-                rejected_at=now,
-                rejected_by_id=user_id,
-                rejection_reason=command.rejection_reason,
-            ),
+            ministry_id, dict(status=MinistryStatus.REJECTED.value, rejected_at=now, rejected_by_id=user_id, rejection_reason=command.rejection_reason)
         )
         await self._repository.update_approval(
             ministry_id=ministry_id,

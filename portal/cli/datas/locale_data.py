@@ -1,6 +1,7 @@
 """
 Seed data for Locale CLI: supported locales and their translations.
 """
+
 from uuid import UUID
 
 ENGLISH = {
@@ -36,8 +37,4 @@ CHINESE_SIMPLIFIED = {
     "is_default": False,
 }
 
-seed_locales = [
-    ENGLISH,
-    CHINESE_TRADITIONAL,
-    CHINESE_SIMPLIFIED,
-]
+seed_locales = [ENGLISH, CHINESE_TRADITIONAL, CHINESE_SIMPLIFIED]

@@ -1,6 +1,7 @@
 """
 RoomSlotTemplateService unit tests.
 """
+
 from datetime import time
 from uuid import uuid4
 
@@ -8,19 +9,12 @@ import pytest
 
 from portal.application.facility.room_slot_template_service import RoomSlotTemplateService
 from portal.exceptions.responses import BadRequestException, NotFoundException
-from tests.fixtures.facility.factories import (
-    make_create_slot_template_command,
-    make_slot_template_result,
-    new_uuid,
-)
+from tests.fixtures.facility.factories import make_create_slot_template_command, make_slot_template_result, new_uuid
 from tests.fixtures.facility.stubs import StubRoomRepository, StubRoomSlotTemplateRepository
 
 
 def _service(template_stub, room_ids=None):
-    return RoomSlotTemplateService(
-        template_stub,
-        StubRoomRepository(existing_ids=room_ids or set()),
-    )
+    return RoomSlotTemplateService(template_stub, StubRoomRepository(existing_ids=room_ids or set()))
 
 
 @pytest.mark.asyncio
@@ -46,12 +40,7 @@ async def test_create_template_rejects_non_positive_duration():
 async def test_create_template_rejects_overlap():
     facility_id = new_uuid()
     candidate = make_slot_template_result(facility_id, days_of_week_mask=4, start_time=time(9, 0), end_time=time(12, 0))
-    command = make_create_slot_template_command(
-        facility_id,
-        start_time=time(10, 0),
-        end_time=time(11, 0),
-        days_of_week=[2],
-    )
+    command = make_create_slot_template_command(facility_id, start_time=time(10, 0), end_time=time(11, 0), days_of_week=[2])
     service = _service(StubRoomSlotTemplateRepository(candidates=[candidate]), {facility_id})
     with pytest.raises(BadRequestException, match="overlaps"):
         await service.create_template(command)
@@ -61,12 +50,7 @@ async def test_create_template_rejects_overlap():
 async def test_create_template_no_overlap_on_different_weekdays():
     facility_id = new_uuid()
     candidate = make_slot_template_result(facility_id, days_of_week_mask=1, start_time=time(9, 0), end_time=time(12, 0))
-    command = make_create_slot_template_command(
-        facility_id,
-        start_time=time(10, 0),
-        end_time=time(11, 0),
-        days_of_week=[1],
-    )
+    command = make_create_slot_template_command(facility_id, start_time=time(10, 0), end_time=time(11, 0), days_of_week=[1])
     template_stub = StubRoomSlotTemplateRepository(candidates=[candidate])
     service = _service(template_stub, {facility_id})
     result = await service.create_template(command)

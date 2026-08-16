@@ -1,9 +1,10 @@
 """
 Admin Locale Serializer
 """
+
 from typing import Optional
 
-from pydantic import Field, BaseModel
+from pydantic import BaseModel, Field
 
 from portal.serializers.mixins.model_mixins import UUIDBaseModel
 

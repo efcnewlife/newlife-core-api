@@ -1,6 +1,7 @@
 """
 Admin system setting serializers.
 """
+
 from typing import Any, Optional
 from uuid import UUID
 

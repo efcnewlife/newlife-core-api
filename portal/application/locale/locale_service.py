@@ -1,6 +1,7 @@
 """
 Locale application service.
 """
+
 from typing import Any
 
 from portal.application.locale.results import LocaleListResult, LocaleSnapshotResult
@@ -13,11 +14,7 @@ from portal.libs.tracing.distributed_trace import distributed_trace
 class LocaleService:
     """Admin locale list and Redis-backed locale resolution snapshot."""
 
-    def __init__(
-        self,
-        locale_repository: LocaleRepositoryPort,
-        locale_cache: LocaleCache,
-    ):
+    def __init__(self, locale_repository: LocaleRepositoryPort, locale_cache: LocaleCache):
         self._repository = locale_repository
         self._cache = locale_cache
 

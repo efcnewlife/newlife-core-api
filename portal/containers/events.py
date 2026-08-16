@@ -17,10 +17,7 @@ class EventsContainer(containers.DeclarativeContainer):
 
     event_bus = providers.Singleton(EventBus)
 
-    admin_operation_log_event_handler = providers.Factory(
-        AdminOperationLogEventHandler,
-        session=core.request_session,
-    )
+    admin_operation_log_event_handler = providers.Factory(AdminOperationLogEventHandler, session=core.request_session)
 
     @staticmethod
     def register_event_handlers(event_bus_instance: EventBus, container: "EventsContainer") -> None:
@@ -32,8 +29,4 @@ class EventsContainer(containers.DeclarativeContainer):
         """
         handler = container.admin_operation_log_event_handler()
         event_bus_instance.subscribe(AdminOperationLogEvent, handler)
-        logger.info(
-            "Registered %s for %s",
-            handler.__class__.__name__,
-            AdminOperationLogEvent.__name__,
-        )
+        logger.info("Registered %s for %s", handler.__class__.__name__, AdminOperationLogEvent.__name__)

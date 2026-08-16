@@ -1,25 +1,19 @@
 """
 Logger generator
 """
+
 import logging
 import sys
 
-from .const import (
-    DEFAULT_LOG_LEVEL,
-    MAP_ENV_LEVEL,
-    DEFAULT_FORMAT,
-    DEFAULT_FORMAT_DATE,
-)
+from .const import DEFAULT_FORMAT, DEFAULT_FORMAT_DATE, DEFAULT_LOG_LEVEL, MAP_ENV_LEVEL
 
 
 class LoggerGenerator:
     """Logger generator"""
+
     def __init__(self, logger_name: str):
         self.logger_name = logger_name
-        self.formatter = logging.Formatter(
-            DEFAULT_FORMAT,
-            datefmt=DEFAULT_FORMAT_DATE
-        )
+        self.formatter = logging.Formatter(DEFAULT_FORMAT, datefmt=DEFAULT_FORMAT_DATE)
         self.log_level = DEFAULT_LOG_LEVEL
         self.handlers = []
 

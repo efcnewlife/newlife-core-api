@@ -1,6 +1,7 @@
 """
 MSGraphUsers — Microsoft Graph users directory reads (beta).
 """
+
 from collections.abc import AsyncIterator
 from typing import Optional, Type
 
@@ -14,16 +15,7 @@ from portal.libs.logger import logger
 from portal.providers.ms_graph.base import MSGraphClientBase
 from portal.providers.ms_graph.models import GraphUserRecord
 
-DEFAULT_USER_SELECT_FIELDS = [
-    "id",
-    "displayName",
-    "userPrincipalName",
-    "mail",
-    "givenName",
-    "surname",
-    "accountEnabled",
-    "userType",
-]
+DEFAULT_USER_SELECT_FIELDS = ["id", "displayName", "userPrincipalName", "mail", "givenName", "surname", "accountEnabled", "userType"]
 
 
 class MSGraphUsers(MSGraphClientBase):
@@ -45,16 +37,9 @@ class MSGraphUsers(MSGraphClientBase):
             user_type=(user.user_type or None),
         )
 
-    def _users_request_configuration(
-        self,
-        *,
-        include_query_parameters: bool = True,
-    ) -> UsersRequestBuilder.UsersRequestBuilderGetRequestConfiguration:
+    def _users_request_configuration(self, *, include_query_parameters: bool = True) -> UsersRequestBuilder.UsersRequestBuilderGetRequestConfiguration:
         request_configuration = UsersRequestBuilder.UsersRequestBuilderGetRequestConfiguration(
-            options=self.configuration.options,
-            query_parameters=(
-                self.configuration.query_parameters if include_query_parameters else None
-            ),
+            options=self.configuration.options, query_parameters=(self.configuration.query_parameters if include_query_parameters else None)
         )
         self._apply_headers(request_configuration)
         return request_configuration
@@ -77,27 +62,15 @@ class MSGraphUsers(MSGraphClientBase):
             )
             raise
 
-    async def get_next_link(
-        self,
-        next_link: str,
-        parser: Type[Parsable] = UserCollectionResponse,
-    ) -> UserCollectionResponse:
+    async def get_next_link(self, next_link: str, parser: Type[Parsable] = UserCollectionResponse) -> UserCollectionResponse:
         """Follow an @odata.nextLink URL for users pagination."""
         if not self.is_configured():
             raise RuntimeError("Microsoft Graph is not configured")
         try:
-            request_configuration = self._users_request_configuration(
-                include_query_parameters=False,
-            )
-            request_info = self.client.users.to_get_request_information(
-                request_configuration=request_configuration,
-            )
+            request_configuration = self._users_request_configuration(include_query_parameters=False)
+            request_info = self.client.users.to_get_request_information(request_configuration=request_configuration)
             request_info.url = next_link
-            item = await self.client.users.request_adapter.send_async(
-                request_info,
-                parser,
-                self.default_error,
-            )
+            item = await self.client.users.request_adapter.send_async(request_info, parser, self.default_error)
             if item is None:
                 return UserCollectionResponse(value=[])
             return item
@@ -109,13 +82,7 @@ class MSGraphUsers(MSGraphClientBase):
             )
             raise
 
-    async def list_users(
-        self,
-        *,
-        filter_expr: str,
-        select_fields: Optional[list[str]] = None,
-        page_size: int = 999,
-    ) -> AsyncIterator[GraphUserRecord]:
+    async def list_users(self, *, filter_expr: str, select_fields: Optional[list[str]] = None, page_size: int = 999) -> AsyncIterator[GraphUserRecord]:
         """
         Yield users from Graph with pagination via odata_next_link.
         """
@@ -123,12 +90,7 @@ class MSGraphUsers(MSGraphClientBase):
             raise RuntimeError("Microsoft Graph is not configured")
 
         selected = select_fields or DEFAULT_USER_SELECT_FIELDS
-        query_parameter = UsersRequestBuilder.UsersRequestBuilderGetQueryParameters(
-            count=True,
-            filter=filter_expr,
-            select=selected,
-            top=page_size,
-        )
+        query_parameter = UsersRequestBuilder.UsersRequestBuilderGetQueryParameters(count=True, filter=filter_expr, select=selected, top=page_size)
         self.add_header(key="ConsistencyLevel", value="eventual")
         self.add_query_parameter(query_parameter)
 

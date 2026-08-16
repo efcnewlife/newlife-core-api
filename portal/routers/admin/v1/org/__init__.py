@@ -1,7 +1,9 @@
 """
 Org admin API router aggregate.
 """
+
 from portal.routers.auth_router import AuthRouter
+
 from .member import router as member_router
 from .position import router as position_router
 

@@ -1,6 +1,7 @@
 """
 Permission repository implementation.
 """
+
 from typing import Any, Optional
 from uuid import UUID
 
@@ -8,25 +9,20 @@ import sqlalchemy as sa
 from asyncpg import UniqueViolationError
 
 from portal.application.rbac.commands import PermissionPagesQueryCommand
-from portal.domain.rbac.entities import (
-    PermissionDetail,
-    PermissionListItem,
-    PermissionPageItem,
-    PermissionRecord,
-)
+from portal.domain.rbac.entities import PermissionDetail, PermissionListItem, PermissionPageItem, PermissionRecord
 from portal.exceptions.responses import ApiBaseException
 from portal.libs.database import Session
 from portal.libs.database.execute_result import affected_rows
 from portal.models import (
     AuthPermission,
     AuthPermissionTranslation,
-    AuthVerb,
-    AuthVerbTranslation,
     AuthResource,
     AuthResourceTranslation,
     AuthRole,
-    AuthUser,
     AuthRolePermission,
+    AuthUser,
+    AuthVerb,
+    AuthVerbTranslation,
     SystemLocale,
 )
 
@@ -38,55 +34,46 @@ class PermissionRepository:
         self._session = session
 
     def _detail_query(self, locale_id: Optional[UUID]):
-        query = (
-            self._session.select(
-                AuthPermission.id,
-                sa.func.coalesce(AuthPermissionTranslation.name, "").label("name"),
-                AuthPermission.code,
-                sa.func.json_build_object(
-                    sa.cast("id", sa.VARCHAR(4)), AuthResource.id,
-                    sa.cast("name", sa.VARCHAR(4)), sa.func.coalesce(AuthResourceTranslation.name, ""),
-                    sa.cast("key", sa.VARCHAR(4)), AuthResource.key,
-                    sa.cast("code", sa.VARCHAR(4)), AuthResource.code,
-                ).label("resource"),
-                sa.func.json_build_object(
-                    sa.cast("id", sa.VARCHAR(4)), AuthVerb.id,
-                    sa.cast("name", sa.VARCHAR(4)), sa.func.coalesce(AuthVerbTranslation.name, ""),
-                    sa.cast("action", sa.VARCHAR(8)), AuthVerb.action,
-                ).label("verb"),
-                AuthPermission.is_active,
-                AuthPermission.resource_id,
-                AuthPermission.verb_id,
-                AuthPermissionTranslation.description,
-                AuthPermissionTranslation.remark,
-            )
-            .select_from(AuthPermission)
-        )
+        query = self._session.select(
+            AuthPermission.id,
+            sa.func.coalesce(AuthPermissionTranslation.name, "").label("name"),
+            AuthPermission.code,
+            sa.func.json_build_object(
+                sa.cast("id", sa.VARCHAR(4)),
+                AuthResource.id,
+                sa.cast("name", sa.VARCHAR(4)),
+                sa.func.coalesce(AuthResourceTranslation.name, ""),
+                sa.cast("key", sa.VARCHAR(4)),
+                AuthResource.key,
+                sa.cast("code", sa.VARCHAR(4)),
+                AuthResource.code,
+            ).label("resource"),
+            sa.func.json_build_object(
+                sa.cast("id", sa.VARCHAR(4)),
+                AuthVerb.id,
+                sa.cast("name", sa.VARCHAR(4)),
+                sa.func.coalesce(AuthVerbTranslation.name, ""),
+                sa.cast("action", sa.VARCHAR(8)),
+                AuthVerb.action,
+            ).label("verb"),
+            AuthPermission.is_active,
+            AuthPermission.resource_id,
+            AuthPermission.verb_id,
+            AuthPermissionTranslation.description,
+            AuthPermissionTranslation.remark,
+        ).select_from(AuthPermission)
         if locale_id:
             return (
                 query.outerjoin(
                     AuthPermissionTranslation,
-                    sa.and_(
-                        AuthPermissionTranslation.permission_id == AuthPermission.id,
-                        AuthPermissionTranslation.locale_id == locale_id,
-                    ),
+                    sa.and_(AuthPermissionTranslation.permission_id == AuthPermission.id, AuthPermissionTranslation.locale_id == locale_id),
                 )
                 .outerjoin(AuthResource, AuthPermission.resource_id == AuthResource.id)
                 .outerjoin(
-                    AuthResourceTranslation,
-                    sa.and_(
-                        AuthResourceTranslation.resource_id == AuthResource.id,
-                        AuthResourceTranslation.locale_id == locale_id,
-                    ),
+                    AuthResourceTranslation, sa.and_(AuthResourceTranslation.resource_id == AuthResource.id, AuthResourceTranslation.locale_id == locale_id)
                 )
                 .outerjoin(AuthVerb, AuthPermission.verb_id == AuthVerb.id)
-                .outerjoin(
-                    AuthVerbTranslation,
-                    sa.and_(
-                        AuthVerbTranslation.verb_id == AuthVerb.id,
-                        AuthVerbTranslation.locale_id == locale_id,
-                    ),
-                )
+                .outerjoin(AuthVerbTranslation, sa.and_(AuthVerbTranslation.verb_id == AuthVerb.id, AuthVerbTranslation.locale_id == locale_id))
             )
         return (
             query.outerjoin(AuthPermissionTranslation, sa.false())
@@ -97,44 +84,28 @@ class PermissionRepository:
         )
 
     def _pages_query(self, locale_id: Optional[UUID]):
-        query = (
-            self._session.select(
-                AuthPermission.id,
-                sa.func.coalesce(AuthPermissionTranslation.name, "").label("name"),
-                AuthPermission.code,
-                AuthPermission.is_active,
-                AuthPermissionTranslation.description,
-                AuthPermissionTranslation.remark,
-                sa.func.coalesce(AuthResourceTranslation.name, "").label("resource_name"),
-                sa.func.coalesce(AuthVerbTranslation.name, "").label("verb_name"),
-            )
-            .select_from(AuthPermission)
-        )
+        query = self._session.select(
+            AuthPermission.id,
+            sa.func.coalesce(AuthPermissionTranslation.name, "").label("name"),
+            AuthPermission.code,
+            AuthPermission.is_active,
+            AuthPermissionTranslation.description,
+            AuthPermissionTranslation.remark,
+            sa.func.coalesce(AuthResourceTranslation.name, "").label("resource_name"),
+            sa.func.coalesce(AuthVerbTranslation.name, "").label("verb_name"),
+        ).select_from(AuthPermission)
         if locale_id:
             return (
                 query.outerjoin(
                     AuthPermissionTranslation,
-                    sa.and_(
-                        AuthPermissionTranslation.permission_id == AuthPermission.id,
-                        AuthPermissionTranslation.locale_id == locale_id,
-                    ),
+                    sa.and_(AuthPermissionTranslation.permission_id == AuthPermission.id, AuthPermissionTranslation.locale_id == locale_id),
                 )
                 .outerjoin(AuthResource, AuthPermission.resource_id == AuthResource.id)
                 .outerjoin(
-                    AuthResourceTranslation,
-                    sa.and_(
-                        AuthResourceTranslation.resource_id == AuthResource.id,
-                        AuthResourceTranslation.locale_id == locale_id,
-                    ),
+                    AuthResourceTranslation, sa.and_(AuthResourceTranslation.resource_id == AuthResource.id, AuthResourceTranslation.locale_id == locale_id)
                 )
                 .outerjoin(AuthVerb, AuthPermission.verb_id == AuthVerb.id)
-                .outerjoin(
-                    AuthVerbTranslation,
-                    sa.and_(
-                        AuthVerbTranslation.verb_id == AuthVerb.id,
-                        AuthVerbTranslation.locale_id == locale_id,
-                    ),
-                )
+                .outerjoin(AuthVerbTranslation, sa.and_(AuthVerbTranslation.verb_id == AuthVerb.id, AuthVerbTranslation.locale_id == locale_id))
             )
         return (
             query.outerjoin(AuthPermissionTranslation, sa.false())
@@ -144,11 +115,7 @@ class PermissionRepository:
             .outerjoin(AuthVerbTranslation, sa.false())
         )
 
-    async def get_by_id(
-        self,
-        permission_id: UUID,
-        locale_id: Optional[UUID],
-    ) -> Optional[PermissionDetail]:
+    async def get_by_id(self, permission_id: UUID, locale_id: Optional[UUID]) -> Optional[PermissionDetail]:
         """
         Fetch permission detail by id.
         :param permission_id:
@@ -156,23 +123,11 @@ class PermissionRepository:
         :return:
         """
         try:
-            return await (
-                self._detail_query(locale_id)
-                .where(AuthPermission.id == permission_id)
-                .fetchrow(as_model=PermissionDetail)
-            )
+            return await self._detail_query(locale_id).where(AuthPermission.id == permission_id).fetchrow(as_model=PermissionDetail)
         except Exception as e:
-            raise ApiBaseException(
-                status_code=500,
-                detail="Internal Server Error",
-                debug_detail=str(e),
-            )
+            raise ApiBaseException(status_code=500, detail="Internal Server Error", debug_detail=str(e))
 
-    async def fetch_pages(
-        self,
-        command: PermissionPagesQueryCommand,
-        locale_id: Optional[UUID],
-    ) -> tuple[list[PermissionPageItem], int]:
+    async def fetch_pages(self, command: PermissionPagesQueryCommand, locale_id: Optional[UUID]) -> tuple[list[PermissionPageItem], int]:
         """
         Paginated permission list.
         :param model:
@@ -183,18 +138,10 @@ class PermissionRepository:
             self._pages_query(locale_id)
             .where(AuthPermission.is_deleted == command.deleted)
             .where(
-                command.keyword,
-                lambda: sa.or_(
-                    AuthPermissionTranslation.name.ilike(f"%{command.keyword}%"),
-                    AuthPermission.code.ilike(f"%{command.keyword}%"),
-                ),
+                command.keyword, lambda: sa.or_(AuthPermissionTranslation.name.ilike(f"%{command.keyword}%"), AuthPermission.code.ilike(f"%{command.keyword}%"))
             )
             .where(command.is_active is not None, lambda: AuthPermission.is_active == command.is_active)
-            .order_by_with(
-                tables=[AuthPermission],
-                order_by=command.order_by,
-                descending=command.descending,
-            )
+            .order_by_with(tables=[AuthPermission], order_by=command.order_by, descending=command.descending)
             .limit(command.page_size)
             .offset(command.page * command.page_size)
             .fetchpages(as_model=PermissionPageItem)
@@ -222,11 +169,7 @@ class PermissionRepository:
         :param payload:
         :return:
         """
-        await (
-            self._session.insert(AuthPermission)
-            .values(payload)
-            .execute()
-        )
+        await self._session.insert(AuthPermission).values(payload).execute()
 
     async def upsert_translations(self, rows: list[dict[str, Any]]) -> None:
         """
@@ -240,19 +183,13 @@ class PermissionRepository:
             .on_conflict_do_update(
                 index_elements=["permission_id", "locale_id"],
                 set_=dict(
-                    name=sa.literal_column("excluded.name"),
-                    description=sa.literal_column("excluded.description"),
-                    remark=sa.literal_column("excluded.remark"),
+                    name=sa.literal_column("excluded.name"), description=sa.literal_column("excluded.description"), remark=sa.literal_column("excluded.remark")
                 ),
             )
             .execute()
         )
 
-    async def update_permission(
-        self,
-        permission_id: UUID,
-        values: dict[str, Any],
-    ) -> int:
+    async def update_permission(self, permission_id: UUID, values: dict[str, Any]) -> int:
         """
         Update permission row; returns affected row count.
         :param permission_id:
@@ -260,11 +197,7 @@ class PermissionRepository:
         :return:
         """
         result = await (
-            self._session.update(AuthPermission)
-            .values(**values)
-            .where(AuthPermission.id == permission_id)
-            .where(AuthPermission.is_deleted == False)
-            .execute()
+            self._session.update(AuthPermission).values(**values).where(AuthPermission.id == permission_id).where(AuthPermission.is_deleted == False).execute()
         )
         return affected_rows(result)
 
@@ -274,11 +207,7 @@ class PermissionRepository:
         :param permission_id:
         :return:
         """
-        result = await (
-            self._session.delete(AuthPermission)
-            .where(AuthPermission.id == permission_id)
-            .execute()
-        )
+        result = await self._session.delete(AuthPermission).where(AuthPermission.id == permission_id).execute()
         return affected_rows(result)
 
     async def delete_soft(self, permission_id: UUID, reason: Optional[str]) -> int:
@@ -303,12 +232,7 @@ class PermissionRepository:
         :param permission_ids:
         :return:
         """
-        await (
-            self._session.update(AuthPermission)
-            .values(is_deleted=False, delete_reason=None)
-            .where(AuthPermission.id.in_(permission_ids))
-            .execute()
-        )
+        await self._session.update(AuthPermission).values(is_deleted=False, delete_reason=None).where(AuthPermission.id.in_(permission_ids)).execute()
 
     async def list_for_locale(self, locale_id: UUID) -> list[PermissionListItem]:
         """
@@ -330,16 +254,11 @@ class PermissionRepository:
             .select_from(AuthPermission)
             .outerjoin(
                 AuthPermissionTranslation,
-                sa.and_(
-                    AuthPermissionTranslation.permission_id == AuthPermission.id,
-                    AuthPermissionTranslation.locale_id == locale_id,
-                ),
+                sa.and_(AuthPermissionTranslation.permission_id == AuthPermission.id, AuthPermissionTranslation.locale_id == locale_id),
             )
         )
         permissions: list[PermissionListItem] = await (
-            query.where(AuthPermission.is_deleted == False)
-            .order_by(AuthPermission.resource_id)
-            .fetch(as_model=PermissionListItem)
+            query.where(AuthPermission.is_deleted == False).order_by(AuthPermission.resource_id).fetch(as_model=PermissionListItem)
         )
         return permissions or []
 
@@ -350,11 +269,7 @@ class PermissionRepository:
         :return:
         """
         permissions: list[PermissionRecord] = await (
-            self._session.select(
-                AuthPermission.code,
-                AuthVerb.action,
-                AuthResource.code.label("resource_code"),
-            )
+            self._session.select(AuthPermission.code, AuthVerb.action, AuthResource.code.label("resource_code"))
             .select_from(AuthUser)
             .join(AuthUser.roles)
             .join(AuthRolePermission, AuthRolePermission.role_id == AuthRole.id)
@@ -373,20 +288,9 @@ class PermissionRepository:
             .where(AuthVerb.is_active == True)
             .where(AuthResource.is_deleted == False)
             .where(AuthResource.is_visible == True)
-            .where(
-                sa.or_(
-                    AuthRolePermission.expire_date.is_(None),
-                    AuthRolePermission.expire_date > sa.func.now(),
-                )
-            )
+            .where(sa.or_(AuthRolePermission.expire_date.is_(None), AuthRolePermission.expire_date > sa.func.now()))
             .distinct()
-            .order_by(
-                [
-                    AuthResource.code,
-                    AuthVerb.action,
-                    AuthPermission.code,
-                ]
-            )
+            .order_by([AuthResource.code, AuthVerb.action, AuthPermission.code])
             .fetch(as_model=PermissionRecord)
         )
         return permissions or []
@@ -397,11 +301,7 @@ class PermissionRepository:
         :return:
         """
         permissions: list[PermissionRecord] = await (
-            self._session.select(
-                AuthPermission.code,
-                AuthVerb.action,
-                AuthResource.code.label("resource_code"),
-            )
+            self._session.select(AuthPermission.code, AuthVerb.action, AuthResource.code.label("resource_code"))
             .outerjoin(AuthResource, AuthPermission.resource_id == AuthResource.id)
             .outerjoin(AuthVerb, AuthPermission.verb_id == AuthVerb.id)
             .where(AuthPermission.is_active == True)

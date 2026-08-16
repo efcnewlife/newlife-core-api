@@ -1,6 +1,7 @@
 """
 Ministry catalog list application service.
 """
+
 from typing import Optional
 from uuid import UUID
 
@@ -14,11 +15,7 @@ from portal.libs.tracing.distributed_trace import distributed_trace
 class MinistryCatalogService:
     """Read-only ministry type and target audience catalogs."""
 
-    def __init__(
-        self,
-        ministry_type_repository: MinistryTypeRepository,
-        target_audience_repository: TargetAudienceRepository,
-    ):
+    def __init__(self, ministry_type_repository: MinistryTypeRepository, target_audience_repository: TargetAudienceRepository):
         self._ministry_type_repository = ministry_type_repository
         self._target_audience_repository = target_audience_repository
         self._req_ctx: Optional[RequestContext] = get_request_context()

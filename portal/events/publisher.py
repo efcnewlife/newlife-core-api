@@ -5,6 +5,7 @@ Event publisher helper
 from typing import Optional
 
 from portal.libs.logger import logger
+
 from .base import BaseEvent
 from .bus import EventBus
 
@@ -37,9 +38,7 @@ async def publish_event(event: BaseEvent) -> None:
     if event_bus:
         await event_bus.publish(event)
     else:
-        logger.warning(
-            "Event bus not available, event %s not published", event.event_type
-        )
+        logger.warning("Event bus not available, event %s not published", event.event_type)
 
 
 def publish_event_in_background(event: BaseEvent) -> None:
@@ -52,6 +51,4 @@ def publish_event_in_background(event: BaseEvent) -> None:
     if event_bus:
         event_bus.publish_in_background(event)
     else:
-        logger.warning(
-            "Event bus not available, event %s not published", event.event_type
-        )
+        logger.warning("Event bus not available, event %s not published", event.event_type)

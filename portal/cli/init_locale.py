@@ -1,6 +1,7 @@
 """
 Locale initialization CLI commands.
 """
+
 import asyncio
 
 import click

@@ -1,6 +1,7 @@
 """
 Locale seed use case for CLI.
 """
+
 import click
 
 from portal.libs.database import Session
@@ -22,8 +23,7 @@ class LocaleSeedService:
         """
         for locale in seed_locales:
             await (
-                self._session
-                .insert(SystemLocale)
+                self._session.insert(SystemLocale)
                 .values(**locale)
                 .on_conflict_do_update(
                     index_elements=["language_code", "script_code", "region_code"],

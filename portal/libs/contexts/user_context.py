@@ -1,6 +1,7 @@
 """
 User Context (per-request)
 """
+
 from contextvars import ContextVar, Token
 from datetime import datetime
 from typing import Optional
@@ -13,6 +14,7 @@ from portal.libs.consts.enums import Gender
 
 class UserContext(BaseModel):
     """Per-request user information"""
+
     user_id: Optional[UUID] = None
     phone_number: Optional[str] = None
     email: Optional[str] = None

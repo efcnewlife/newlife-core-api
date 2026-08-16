@@ -1,9 +1,10 @@
 """
 Audit information
 """
+
 import pytz
 import sqlalchemy as sa
-from sqlalchemy import Column, DateTime, String, text, Float, Boolean
+from sqlalchemy import Boolean, Column, DateTime, Float, String, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.declarative import declared_attr
 
@@ -20,9 +21,7 @@ class SortableMixin(object):
         :return:
         """
         return Column(
-            Float,
-            server_default=text("extract(epoch from now())"),
-            comment="Display sort, small to large, positive sort, default value current timestamp"
+            Float, server_default=text("extract(epoch from now())"), comment="Display sort, small to large, positive sort, default value current timestamp"
         )
 
 
@@ -35,12 +34,7 @@ class AuditCreatedAtMixin(object):
 
         :return:
         """
-        return Column(
-            DateTime(timezone=True),
-            server_default=sa.func.now(tz=pytz.UTC),
-            comment="Create Date",
-            nullable=False
-        )
+        return Column(DateTime(timezone=True), server_default=sa.func.now(tz=pytz.UTC), comment="Create Date", nullable=False)
 
 
 class AuditCreatedByMixin(object):
@@ -52,12 +46,7 @@ class AuditCreatedByMixin(object):
 
         :return:
         """
-        return Column(
-            String(64),
-            default=get_current_username,
-            comment="Create User Name",
-            nullable=False
-        )
+        return Column(String(64), default=get_current_username, comment="Create User Name", nullable=False)
 
 
 class AuditCreatedMixin(AuditCreatedAtMixin, AuditCreatedByMixin):
@@ -87,7 +76,7 @@ class AuditUpdatedAtMixin(object):
             server_onupdate=sa.func.now(tz=pytz.UTC),
             onupdate=sa.func.now(tz=pytz.UTC),
             comment="Update Date",
-            nullable=False
+            nullable=False,
         )
 
 
@@ -100,12 +89,7 @@ class AuditUpdatedByMixin(object):
 
         :return:
         """
-        return Column(
-            String(64),
-            default=get_current_username,
-            comment="Update User Name",
-            nullable=False
-        )
+        return Column(String(64), default=get_current_username, comment="Update User Name", nullable=False)
 
 
 class AuditUpdatedMixin(AuditUpdatedAtMixin, AuditUpdatedByMixin):
@@ -113,16 +97,12 @@ class AuditUpdatedMixin(AuditUpdatedAtMixin, AuditUpdatedByMixin):
 
     @declared_attr
     def updated_by_id(self):
-        return Column(
-            UUID,
-            default=get_current_id,
-            onupdate=get_current_id,
-            comment="Update User ID"
-        )
+        return Column(UUID, default=get_current_id, onupdate=get_current_id, comment="Update User ID")
 
 
 class AuditMixin(AuditCreatedMixin, AuditUpdatedMixin):
     """AuditMixin"""
+
     pass
 
 
@@ -143,12 +123,7 @@ class DeletedMixin(object):
 
         :return:
         """
-        return Column(
-            Boolean,
-            server_default=text("false"),
-            comment="Is Deleted(Logical Delete)",
-            nullable=False
-        )
+        return Column(Boolean, server_default=text("false"), comment="Is Deleted(Logical Delete)", nullable=False)
 
 
 class DescriptionMixin(object):

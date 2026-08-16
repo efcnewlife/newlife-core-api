@@ -8,4 +8,3 @@ Avoid importing submodules (e.g. `.main`) at package import time, because
 """
 
 __all__: list[str] = []
-

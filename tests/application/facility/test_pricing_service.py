@@ -1,19 +1,14 @@
 """
 PricingService.preview_quote tests.
 """
+
 from decimal import Decimal
 
 import pytest
 
 from portal.application.facility.commands import PreviewQuoteCommand, PreviewQuoteRoomLineCommand
 from portal.application.facility.pricing_service import PricingService
-from portal.domain.facility.constants import (
-    BookingType,
-    RentalDiscountCode,
-    RentalPolicySettingKey,
-    RentalRateBillingUnit,
-    RentalSurchargeChargeType,
-)
+from portal.domain.facility.constants import BookingType, RentalDiscountCode, RentalPolicySettingKey, RentalRateBillingUnit, RentalSurchargeChargeType
 from portal.exceptions.responses import BadRequestException
 from tests.fixtures.facility.factories import (
     make_discount_rule,
@@ -51,10 +46,7 @@ async def test_preview_quote_room_not_found():
 async def test_preview_quote_rejects_non_positive_billed_hours():
     room_id = new_uuid()
     service = _pricing_service(StubRentalRepository(), room_ids={room_id})
-    command = PreviewQuoteCommand(
-        booking_type=BookingType.ONE_TIME,
-        room_lines=[PreviewQuoteRoomLineCommand(facility_id=room_id, billed_hours=Decimal("0"))],
-    )
+    command = PreviewQuoteCommand(booking_type=BookingType.ONE_TIME, room_lines=[PreviewQuoteRoomLineCommand(facility_id=room_id, billed_hours=Decimal("0"))])
     with pytest.raises(BadRequestException, match="billed_hours"):
         await service.preview_quote(command)
 
@@ -114,12 +106,7 @@ async def test_preview_quote_mission_discount_not_stacked_with_recurring():
         ],
     )
     service = _pricing_service(rental, {room_id})
-    command = make_preview_quote_command(
-        facility_id=room_id,
-        billed_hours=Decimal("6"),
-        booking_type=BookingType.RECURRING,
-        is_mission_aligned=True,
-    )
+    command = make_preview_quote_command(facility_id=room_id, billed_hours=Decimal("6"), booking_type=BookingType.RECURRING, is_mission_aligned=True)
     result = await service.preview_quote(command)
     assert result.discount_percent == Decimal("30")
     assert result.discount_amount == Decimal("60.00")
@@ -133,11 +120,7 @@ async def test_preview_quote_recurring_discount():
         discount_rules=[make_discount_rule(RentalDiscountCode.RECURRING_WEEKLY_MONTHLY.value, Decimal("20"))],
     )
     service = _pricing_service(rental, {room_id})
-    command = make_preview_quote_command(
-        facility_id=room_id,
-        booking_type=BookingType.RECURRING,
-        is_mission_aligned=False,
-    )
+    command = make_preview_quote_command(facility_id=room_id, booking_type=BookingType.RECURRING, is_mission_aligned=False)
     result = await service.preview_quote(command)
     assert result.discount_percent == Decimal("20")
 
@@ -183,9 +166,7 @@ async def test_preview_quote_applies_minimum_fee_floor():
     room_id = new_uuid()
     rental = StubRentalRepository(
         rates_by_facility={room_id: [make_rental_rate(facility_id=room_id, unit_amount=Decimal("1"))]},
-        policy_amounts={
-            (RentalPolicySettingKey.MINIMUM_FEE_DEFAULT.value, room_id): Decimal("100"),
-        },
+        policy_amounts={(RentalPolicySettingKey.MINIMUM_FEE_DEFAULT.value, room_id): Decimal("100")},
     )
     service = _pricing_service(rental, {room_id})
     result = await service.preview_quote(make_preview_quote_command(facility_id=room_id, billed_hours=Decimal("1")))
@@ -197,18 +178,11 @@ async def test_preview_quote_uses_templates_when_room_has_no_bindings():
     from tests.fixtures.facility.factories import make_rental_rate_template
 
     room_id = new_uuid()
-    template = make_rental_rate_template(
-        name="Hourly template",
-        billing_unit=RentalRateBillingUnit.HOURLY.value,
-        unit_amount=Decimal("12"),
-        is_default=True,
-    )
+    template = make_rental_rate_template(name="Hourly template", billing_unit=RentalRateBillingUnit.HOURLY.value, unit_amount=Decimal("12"), is_default=True)
     rental = StubRentalRepository(rates_by_facility={})
     rental.templates_by_id[template.id] = template
     service = _pricing_service(rental, {room_id})
-    result = await service.preview_quote(
-        make_preview_quote_command(facility_id=room_id, billed_hours=Decimal("2"))
-    )
+    result = await service.preview_quote(make_preview_quote_command(facility_id=room_id, billed_hours=Decimal("2")))
     assert result.room_lines[0].billing_unit == RentalRateBillingUnit.HOURLY.value
     assert result.room_lines[0].unit_amount == Decimal("12")
     assert result.room_lines[0].rental_rate_name == "Hourly template"
@@ -227,18 +201,11 @@ async def test_preview_quote_falls_back_to_templates_when_room_bindings_do_not_m
         is_default=False,
         applicability={"all": [{"op": "hours_gte", "value": 99}]},
     )
-    template = make_rental_rate_template(
-        name="Fallback hourly",
-        billing_unit=RentalRateBillingUnit.HOURLY.value,
-        unit_amount=Decimal("15"),
-        is_default=True,
-    )
+    template = make_rental_rate_template(name="Fallback hourly", billing_unit=RentalRateBillingUnit.HOURLY.value, unit_amount=Decimal("15"), is_default=True)
     rental = StubRentalRepository(rates_by_facility={room_id: [mismatched]})
     rental.templates_by_id[template.id] = template
     service = _pricing_service(rental, {room_id})
-    result = await service.preview_quote(
-        make_preview_quote_command(facility_id=room_id, billed_hours=Decimal("2"))
-    )
+    result = await service.preview_quote(make_preview_quote_command(facility_id=room_id, billed_hours=Decimal("2")))
     assert result.room_lines[0].rental_rate_name == "Fallback hourly"
     assert result.room_lines[0].unit_amount == Decimal("15")
     assert result.subtotal_amount == Decimal("30.00")
@@ -248,15 +215,7 @@ async def test_preview_quote_falls_back_to_templates_when_room_bindings_do_not_m
 async def test_preview_quote_quantizes_amounts():
     room_id = new_uuid()
     rental = StubRentalRepository(
-        rates_by_facility={
-            room_id: [
-                make_rental_rate(
-                    facility_id=room_id,
-                    unit_amount=Decimal("10.333"),
-                    billing_unit=RentalRateBillingUnit.HOURLY.value,
-                )
-            ]
-        },
+        rates_by_facility={room_id: [make_rental_rate(facility_id=room_id, unit_amount=Decimal("10.333"), billing_unit=RentalRateBillingUnit.HOURLY.value)]}
     )
     service = _pricing_service(rental, {room_id})
     result = await service.preview_quote(make_preview_quote_command(facility_id=room_id, billed_hours=Decimal("1.5")))

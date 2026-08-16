@@ -1,6 +1,7 @@
 """
 Map between org API serializers and application commands/results.
 """
+
 from uuid import UUID
 
 from portal.application.org.commands import (
@@ -36,21 +37,14 @@ from portal.application.org.results import (
     MinistryScheduleResult,
     MinistryTypeListResult,
     MinistryTypeResult,
-    TargetAudienceListResult,
-    TargetAudienceResult,
     PositionDetailResult,
     PositionPageResult,
     PositionTranslationItemResult,
+    TargetAudienceListResult,
+    TargetAudienceResult,
     TranslationItemResult,
 )
 from portal.domain.common.mixins import UUIDBaseModel
-from portal.serializers.admin.v1.org.member_person import (
-    AdminMemberPersonCreate,
-    AdminMemberPersonDetail,
-    AdminMemberPersonLink,
-    AdminMemberPersonPages,
-    AdminMemberPersonUpdate,
-)
 from portal.serializers.admin.v1.ministry import (
     AdminMinistryApplicationCreate,
     AdminMinistryApprove,
@@ -67,11 +61,13 @@ from portal.serializers.admin.v1.ministry import (
     AdminMinistryScheduleItem,
     AdminMinistryUpdate,
 )
-from portal.serializers.admin.v1.ministry_catalog import (
-    AdminMinistryTypeItem,
-    AdminMinistryTypeList,
-    AdminTargetAudienceItem,
-    AdminTargetAudienceList,
+from portal.serializers.admin.v1.ministry_catalog import AdminMinistryTypeItem, AdminMinistryTypeList, AdminTargetAudienceItem, AdminTargetAudienceList
+from portal.serializers.admin.v1.org.member_person import (
+    AdminMemberPersonCreate,
+    AdminMemberPersonDetail,
+    AdminMemberPersonLink,
+    AdminMemberPersonPages,
+    AdminMemberPersonUpdate,
 )
 from portal.serializers.admin.v1.org.position import (
     AdminAssignablePositionItem,
@@ -94,12 +90,7 @@ from portal.serializers.mixins import DeleteBaseModel, GenericQueryBaseModel
 
 def pages_query_to_command(model: GenericQueryBaseModel) -> PagesQueryCommand:
     return PagesQueryCommand(
-        page=model.page,
-        page_size=model.page_size,
-        order_by=model.order_by,
-        descending=model.descending,
-        deleted=model.deleted,
-        keyword=model.keyword,
+        page=model.page, page_size=model.page_size, order_by=model.order_by, descending=model.descending, deleted=model.deleted, keyword=model.keyword
     )
 
 
@@ -111,64 +102,30 @@ def bulk_action_to_command(model: AdminMinistryBulkAction | AdminPositionBulkAct
     return BulkIdsCommand(ids=model.ids)
 
 
-def _org_translation_commands(
-    translations: list[AdminOrgTranslationInput] | None,
-) -> list[OrgTranslationCommand] | None:
+def _org_translation_commands(translations: list[AdminOrgTranslationInput] | None) -> list[OrgTranslationCommand] | None:
     if translations is None:
         return None
     return [
-        OrgTranslationCommand(
-            locale_id=item.locale_id,
-            name=item.name,
-            description=item.description,
-            remark=item.remark,
-            schedule_note=item.schedule_note,
-        )
+        OrgTranslationCommand(locale_id=item.locale_id, name=item.name, description=item.description, remark=item.remark, schedule_note=item.schedule_note)
         for item in translations
     ]
 
 
-def _position_translation_commands(
-    translations: list[AdminPositionTranslationInput] | None,
-) -> list[PositionTranslationCommand] | None:
+def _position_translation_commands(translations: list[AdminPositionTranslationInput] | None) -> list[PositionTranslationCommand] | None:
     if translations is None:
         return None
-    return [
-        PositionTranslationCommand(
-            locale_id=item.locale_id,
-            name=item.name,
-            description=item.description,
-            remark=item.remark,
-        )
-        for item in translations
-    ]
+    return [PositionTranslationCommand(locale_id=item.locale_id, name=item.name, description=item.description, remark=item.remark) for item in translations]
 
 
 def _org_translation_items_to_api(items: list[TranslationItemResult]) -> list[AdminOrgTranslationItem]:
     return [
-        AdminOrgTranslationItem(
-            locale_id=item.locale_id,
-            name=item.name,
-            description=item.description,
-            remark=item.remark,
-            schedule_note=item.schedule_note,
-        )
+        AdminOrgTranslationItem(locale_id=item.locale_id, name=item.name, description=item.description, remark=item.remark, schedule_note=item.schedule_note)
         for item in items
     ]
 
 
-def _position_translation_items_to_api(
-    items: list[PositionTranslationItemResult],
-) -> list[AdminPositionTranslationItem]:
-    return [
-        AdminPositionTranslationItem(
-            locale_id=item.locale_id,
-            name=item.name,
-            description=item.description,
-            remark=item.remark,
-        )
-        for item in items
-    ]
+def _position_translation_items_to_api(items: list[PositionTranslationItemResult]) -> list[AdminPositionTranslationItem]:
+    return [AdminPositionTranslationItem(locale_id=item.locale_id, name=item.name, description=item.description, remark=item.remark) for item in items]
 
 
 def _schedule_commands(schedules: list[AdminMinistryScheduleInput] | None) -> list[MinistryScheduleCommand] | None:
@@ -194,10 +151,7 @@ def _ministry_type_to_api(item: MinistryTypeResult | None) -> AdminMinistryTypeI
 
 
 def _target_audiences_to_api(items: list[TargetAudienceResult]) -> list[AdminTargetAudienceItem]:
-    return [
-        AdminTargetAudienceItem(id=item.id, code=item.code, name=item.name)
-        for item in items
-    ]
+    return [AdminTargetAudienceItem(id=item.id, code=item.code, name=item.name) for item in items]
 
 
 def _schedules_to_api(items: list[MinistryScheduleResult]) -> list[AdminMinistryScheduleItem]:
@@ -217,12 +171,7 @@ def _schedules_to_api(items: list[MinistryScheduleResult]) -> list[AdminMinistry
 
 def _member_commands(members: list[AdminMinistryMemberInput]) -> list[MinistryMemberEntryCommand]:
     return [
-        MinistryMemberEntryCommand(
-            user_id=member.user_id,
-            member_role=member.member_role,
-            remark=member.remark,
-            contact_email=member.contact_email,
-        )
+        MinistryMemberEntryCommand(user_id=member.user_id, member_role=member.member_role, remark=member.remark, contact_email=member.contact_email)
         for member in members
     ]
 
@@ -325,12 +274,7 @@ def ministry_detail_to_api(result: MinistryDetailResult) -> AdminMinistryDetail:
 
 
 def ministry_page_to_api(result: MinistryPageResult) -> AdminMinistryPages:
-    return AdminMinistryPages(
-        page=result.page,
-        page_size=result.page_size,
-        total=result.total,
-        items=[ministry_detail_to_api(item) for item in result.items],
-    )
+    return AdminMinistryPages(page=result.page, page_size=result.page_size, total=result.total, items=[ministry_detail_to_api(item) for item in result.items])
 
 
 def ministry_list_to_api(result: MinistryListResult) -> AdminMinistryList:
@@ -353,21 +297,11 @@ def ministry_list_to_api(result: MinistryListResult) -> AdminMinistryList:
 
 
 def ministry_type_list_to_api(result: MinistryTypeListResult) -> AdminMinistryTypeList:
-    return AdminMinistryTypeList(
-        items=[
-            AdminMinistryTypeItem(id=item.id, code=item.code, name=item.name)
-            for item in result.items
-        ]
-    )
+    return AdminMinistryTypeList(items=[AdminMinistryTypeItem(id=item.id, code=item.code, name=item.name) for item in result.items])
 
 
 def target_audience_list_to_api(result: TargetAudienceListResult) -> AdminTargetAudienceList:
-    return AdminTargetAudienceList(
-        items=[
-            AdminTargetAudienceItem(id=item.id, code=item.code, name=item.name)
-            for item in result.items
-        ]
-    )
+    return AdminTargetAudienceList(items=[AdminTargetAudienceItem(id=item.id, code=item.code, name=item.name) for item in result.items])
 
 
 def create_position_to_command(model: AdminPositionCreate) -> CreatePositionCommand:
@@ -419,12 +353,7 @@ def position_detail_to_api(result: PositionDetailResult) -> AdminPositionDetail:
 
 
 def position_page_to_api(result: PositionPageResult) -> AdminPositionPages:
-    return AdminPositionPages(
-        page=result.page,
-        page_size=result.page_size,
-        total=result.total,
-        items=[position_detail_to_api(item) for item in result.items],
-    )
+    return AdminPositionPages(page=result.page, page_size=result.page_size, total=result.total, items=[position_detail_to_api(item) for item in result.items])
 
 
 def assignable_positions_to_api(items: list[AssignablePositionResult]) -> AdminAssignablePositionList:
@@ -457,19 +386,10 @@ def link_member_person_to_command(model: AdminMemberPersonLink) -> LinkMemberPer
 
 
 def member_person_detail_to_api(result: MemberPersonDetailResult) -> AdminMemberPersonDetail:
-    return AdminMemberPersonDetail(
-        id=result.id,
-        legal_name=result.legal_name,
-        user_id=result.user_id,
-        email=result.email,
-        display_name=result.display_name,
-    )
+    return AdminMemberPersonDetail(id=result.id, legal_name=result.legal_name, user_id=result.user_id, email=result.email, display_name=result.display_name)
 
 
 def member_person_page_to_api(result: MemberPersonPageResult) -> AdminMemberPersonPages:
     return AdminMemberPersonPages(
-        page=result.page,
-        page_size=result.page_size,
-        total=result.total,
-        items=[member_person_detail_to_api(item) for item in result.items],
+        page=result.page, page_size=result.page_size, total=result.total, items=[member_person_detail_to_api(item) for item in result.items]
     )

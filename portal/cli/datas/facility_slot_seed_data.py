@@ -4,6 +4,7 @@ Facility room slot template and blackout demo seed data.
 Names use the ``seed:`` prefix so the seed command can replace only demo rows.
 Room codes match ``facility_rental_seed_data.facility_room_seed_rows``.
 """
+
 from datetime import date, time
 from typing import Any, Optional
 
@@ -12,25 +13,12 @@ from portal.domain.facility.days_of_week_mask import days_to_mask
 
 SEED_NAME_PREFIX = "seed:"
 
-WEEKDAYS = [
-    DayOfWeek.MONDAY,
-    DayOfWeek.TUESDAY,
-    DayOfWeek.WEDNESDAY,
-    DayOfWeek.THURSDAY,
-    DayOfWeek.FRIDAY,
-]
+WEEKDAYS = [DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY, DayOfWeek.FRIDAY]
 WEEKEND = [DayOfWeek.SATURDAY, DayOfWeek.SUNDAY]
 
 
 def _slot(
-    *,
-    room_code: str,
-    name: str,
-    days_of_week: list[int],
-    start_time: time,
-    end_time: time,
-    slot_duration_minutes: int = 60,
-    is_active: bool = True,
+    *, room_code: str, name: str, days_of_week: list[int], start_time: time, end_time: time, slot_duration_minutes: int = 60, is_active: bool = True
 ) -> dict[str, Any]:
     return {
         "room_code": room_code,
@@ -94,34 +82,10 @@ CAMPUS_HOLIDAY_DEMO_DATE = date(2027, 1, 1)
 SANCTUARY_MAINTENANCE_DEMO_DATE = date(2027, 1, 15)
 
 facility_slot_template_seed_rows: list[dict[str, Any]] = [
-    _slot(
-        room_code="sanctuary-hall",
-        name="Weekday daytime",
-        days_of_week=WEEKDAYS,
-        start_time=time(9, 0),
-        end_time=time(17, 0),
-    ),
-    _slot(
-        room_code="gym",
-        name="Weekday extended",
-        days_of_week=WEEKDAYS,
-        start_time=time(9, 0),
-        end_time=time(21, 0),
-    ),
-    _slot(
-        room_code="gym",
-        name="Weekend daytime",
-        days_of_week=WEEKEND,
-        start_time=time(10, 0),
-        end_time=time(18, 0),
-    ),
-    _slot(
-        room_code="lobby",
-        name="Weekday daytime",
-        days_of_week=WEEKDAYS,
-        start_time=time(9, 0),
-        end_time=time(17, 0),
-    ),
+    _slot(room_code="sanctuary-hall", name="Weekday daytime", days_of_week=WEEKDAYS, start_time=time(9, 0), end_time=time(17, 0)),
+    _slot(room_code="gym", name="Weekday extended", days_of_week=WEEKDAYS, start_time=time(9, 0), end_time=time(21, 0)),
+    _slot(room_code="gym", name="Weekend daytime", days_of_week=WEEKEND, start_time=time(10, 0), end_time=time(18, 0)),
+    _slot(room_code="lobby", name="Weekday daytime", days_of_week=WEEKDAYS, start_time=time(9, 0), end_time=time(17, 0)),
 ]
 
 facility_blackout_seed_rows: list[dict[str, Any]] = [

@@ -1,12 +1,13 @@
 """
 Configuration - Template
 """
+
 import json
 import logging
 import os
 from functools import lru_cache
 from pathlib import Path
-from typing import Optional, Any, Type, Tuple
+from typing import Any, Optional, Tuple, Type
 
 import yaml
 from dotenv import load_dotenv
@@ -14,21 +15,14 @@ from pydantic import model_validator
 from pydantic.fields import FieldInfo
 from pydantic_settings import BaseSettings, EnvSettingsSource, PydanticBaseSettingsSource
 
-from portal.libs.shared import Converter
 from portal.libs.rate_limit.config import RateLimitersConfig
+from portal.libs.shared import Converter
 
 load_dotenv()
 
 
 class CustomSource(EnvSettingsSource):
-
-    def prepare_field_value(
-        self,
-        field_name: str,
-        field: FieldInfo,
-        value: Any,
-        value_is_complex: bool
-    ) -> Any:
+    def prepare_field_value(self, field_name: str, field: FieldInfo, value: Any, value_is_complex: bool) -> Any:
         """
         Prepare field value for custom source.
         """
@@ -79,16 +73,10 @@ class Configuration(BaseSettings):
     # [STORAGE]
     STORAGE_BACKEND: str = os.getenv(key="STORAGE_BACKEND", default="azure_blob")
     AZURE_STORAGE_ACCOUNT_NAME: Optional[str] = os.getenv(key="AZURE_STORAGE_ACCOUNT_NAME", default=None)
-    AZURE_STORAGE_CONNECTION_STRING: Optional[str] = os.getenv(
-        key="AZURE_STORAGE_CONNECTION_STRING",
-        default=None,
-    )
+    AZURE_STORAGE_CONNECTION_STRING: Optional[str] = os.getenv(key="AZURE_STORAGE_CONNECTION_STRING", default=None)
     AZURE_STORAGE_CONTAINER_NAME: str = os.getenv(key="AZURE_STORAGE_CONTAINER_NAME", default="files")
     AZURE_STORAGE_REGION: str = os.getenv(key="AZURE_STORAGE_REGION", default="eastus")
-    AZURE_STORAGE_BLOB_PREFIX: str = os.getenv(
-        key="AZURE_STORAGE_BLOB_PREFIX",
-        default=f"original_files/{ENV}",
-    )
+    AZURE_STORAGE_BLOB_PREFIX: str = os.getenv(key="AZURE_STORAGE_BLOB_PREFIX", default=f"original_files/{ENV}")
     AZURE_BLOB_CACHE_CONTROL: str = os.getenv(key="AZURE_BLOB_CACHE_CONTROL", default="max-age=86400")
     SIGNED_URL_EXPIRY_SECONDS: int = int(os.getenv(key="SIGNED_URL_EXPIRY_SECONDS", default="3600"))
     MAX_UPLOAD_SIZE: int = int(os.getenv(key="MAX_UPLOAD_SIZE", default=5 * 1024 * 1024))  # 5MB
@@ -111,8 +99,7 @@ class Configuration(BaseSettings):
     DATABASE_POOL: bool = os.getenv("DATABASE_POOL", True)
     SQL_ECHO: bool = os.getenv("SQL_ECHO", False)
     SQLALCHEMY_DATABASE_URI: str = f'postgresql://{DATABASE_USER}:{DATABASE_PASSWORD}@{DATABASE_HOST}:{DATABASE_PORT}/{DATABASE_NAME}'
-    ASYNC_DATABASE_URL: str = f'postgresql+asyncpg://{DATABASE_USER}:{DATABASE_PASSWORD}@' \
-                              f'{DATABASE_HOST}:{DATABASE_PORT}/{DATABASE_NAME}'
+    ASYNC_DATABASE_URL: str = f'postgresql+asyncpg://{DATABASE_USER}:{DATABASE_PASSWORD}@{DATABASE_HOST}:{DATABASE_PORT}/{DATABASE_NAME}'
 
     # [JWT]
     JWT_SECRET_KEY: str = os.getenv(key="JWT_SECRET_KEY", default="change-me-in-production")
@@ -130,10 +117,7 @@ class Configuration(BaseSettings):
     # [Member web apps — Origin -> app_code for /api/v1 auth]
     # Format: code|origin|origin,code|origin
     # Example: facility-booking|http://localhost:5174,another-app|http://localhost:5180
-    MEMBER_WEB_APPS: str = os.getenv(
-        key="MEMBER_WEB_APPS",
-        default="facility-booking|http://localhost:5174",
-    )
+    MEMBER_WEB_APPS: str = os.getenv(key="MEMBER_WEB_APPS", default="facility-booking|http://localhost:5174")
 
     # [Token Blacklist]
     TOKEN_BLACKLIST_REDIS_DB: int = int(os.getenv(key="TOKEN_BLACKLIST_REDIS_DB", default="1"))
@@ -157,12 +141,7 @@ class Configuration(BaseSettings):
             candidate_paths.append(rate_limiters_config_path)
 
         project_dir = Path(__file__).resolve().parent.parent
-        candidate_paths.extend(
-            [
-                os.path.join(project_dir, "env/rate_limiters.yaml"),
-                "/etc/secrets/rate_limiters.yaml",
-            ]
-        )
+        candidate_paths.extend([os.path.join(project_dir, "env/rate_limiters.yaml"), "/etc/secrets/rate_limiters.yaml"])
 
         for candidate_path in candidate_paths:
             try:
@@ -183,21 +162,9 @@ class Configuration(BaseSettings):
             logger = logging.getLogger(self.APP_NAME)
             logger.warning("Rate limiters config not found, using default values")
             default_config_dict = {
-                "default": {
-                    "short": {"times": 10, "seconds": 1},
-                    "medium": {"times": 50, "seconds": 30},
-                    "long": {"times": 1000, "seconds": 3600},
-                },
-                "read": {
-                    "short": {"times": 20, "seconds": 1},
-                    "medium": {"times": 100, "seconds": 30},
-                    "long": {"times": 1800, "seconds": 3600},
-                },
-                "write": {
-                    "short": {"times": 10, "seconds": 1},
-                    "medium": {"times": 60, "seconds": 30},
-                    "long": {"times": 1200, "seconds": 3600},
-                }
+                "default": {"short": {"times": 10, "seconds": 1}, "medium": {"times": 50, "seconds": 30}, "long": {"times": 1000, "seconds": 3600}},
+                "read": {"short": {"times": 20, "seconds": 1}, "medium": {"times": 100, "seconds": 30}, "long": {"times": 1800, "seconds": 3600}},
+                "write": {"short": {"times": 10, "seconds": 1}, "medium": {"times": 60, "seconds": 30}, "long": {"times": 1200, "seconds": 3600}},
             }
             self.RATE_LIMITERS_CONFIG = RateLimitersConfig(**default_config_dict)
 

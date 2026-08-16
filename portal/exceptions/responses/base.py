@@ -1,7 +1,8 @@
 """
 Exception for APIs
 """
-from typing import Any, Optional, Dict
+
+from typing import Any, Dict, Optional
 
 from fastapi import HTTPException
 from starlette import status
@@ -10,18 +11,8 @@ from starlette import status
 class ApiBaseException(HTTPException):
     """API Base Exception"""
 
-    def __init__(
-        self,
-        status_code: int,
-        detail: Any = None,
-        headers: Optional[Dict[str, Any]] = None,
-        **kwargs
-    ):
-        super().__init__(
-            status_code=status_code,
-            detail=detail,
-            headers=headers
-        )
+    def __init__(self, status_code: int, detail: Any = None, headers: Optional[Dict[str, Any]] = None, **kwargs):
+        super().__init__(status_code=status_code, detail=detail, headers=headers)
         self.debug_detail = kwargs.pop("debug_detail", None)
         self.error_code = kwargs.pop("error_code", None)
         self.context = kwargs.pop("context", None)
@@ -33,18 +24,8 @@ class ApiBaseException(HTTPException):
 class BadRequestException(ApiBaseException):
     """Bad Request Exception"""
 
-    def __init__(
-        self,
-        detail: str = None,
-        headers: Optional[Dict[str, Any]] = None,
-        **kwargs
-    ):
-        super().__init__(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=detail,
-            headers=headers,
-            **kwargs,
-        )
+    def __init__(self, detail: str = None, headers: Optional[Dict[str, Any]] = None, **kwargs):
+        super().__init__(status_code=status.HTTP_400_BAD_REQUEST, detail=detail, headers=headers, **kwargs)
 
 
 class ParamError(BadRequestException):
@@ -57,18 +38,8 @@ class NotFoundException(ApiBaseException):
     status_code: 404
     """
 
-    def __init__(
-        self,
-        detail: str,
-        headers: Optional[Dict[str, Any]] = None,
-        **kwargs
-    ):
-        super().__init__(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=detail,
-            headers=headers,
-            **kwargs,
-        )
+    def __init__(self, detail: str, headers: Optional[Dict[str, Any]] = None, **kwargs):
+        super().__init__(status_code=status.HTTP_404_NOT_FOUND, detail=detail, headers=headers, **kwargs)
 
 
 class ConflictErrorException(ApiBaseException):
@@ -77,18 +48,8 @@ class ConflictErrorException(ApiBaseException):
     status_code: 409
     """
 
-    def __init__(
-        self,
-        detail: str,
-        headers: Optional[Dict[str, Any]] = None,
-        **kwargs
-    ):
-        super().__init__(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=detail,
-            headers=headers,
-            **kwargs,
-        )
+    def __init__(self, detail: str, headers: Optional[Dict[str, Any]] = None, **kwargs):
+        super().__init__(status_code=status.HTTP_409_CONFLICT, detail=detail, headers=headers, **kwargs)
 
 
 class EntityTooLargeException(ApiBaseException):
@@ -97,18 +58,8 @@ class EntityTooLargeException(ApiBaseException):
     status_code: 413
     """
 
-    def __init__(
-        self,
-        detail: str = "Uploaded file size exceeds the limit",
-        headers: Optional[Dict[str, Any]] = None,
-        **kwargs
-    ):
-        super().__init__(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=detail,
-            headers=headers,
-            **kwargs,
-        )
+    def __init__(self, detail: str = "Uploaded file size exceeds the limit", headers: Optional[Dict[str, Any]] = None, **kwargs):
+        super().__init__(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=detail, headers=headers, **kwargs)
 
 
 class NotImplementedException(ApiBaseException):
@@ -117,15 +68,5 @@ class NotImplementedException(ApiBaseException):
     status_code: 501
     """
 
-    def __init__(
-        self,
-        detail: str,
-        headers: Optional[Dict[str, Any]] = None,
-        **kwargs
-    ):
-        super().__init__(
-            status_code=status.HTTP_501_NOT_IMPLEMENTED,
-            detail=detail,
-            headers=headers,
-            **kwargs,
-        )
+    def __init__(self, detail: str, headers: Optional[Dict[str, Any]] = None, **kwargs):
+        super().__init__(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=detail, headers=headers, **kwargs)

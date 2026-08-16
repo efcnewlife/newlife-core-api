@@ -1,14 +1,8 @@
 """
 Map auth application results to API serializers.
 """
-from portal.application.auth.results import (
-    AdminProfileResult,
-    LoginResult,
-    MemberLoginResult,
-    MemberProfileResult,
-    TokenResult,
-    UserSensitive,
-)
+
+from portal.application.auth.results import AdminProfileResult, LoginResult, MemberLoginResult, MemberProfileResult, TokenResult, UserSensitive
 from portal.serializers.admin.v1.auth import AdminInfo, AdminLoginResponse
 from portal.serializers.apis.v1.auth import MemberInfo, MemberLoginResponse
 from portal.serializers.mixins import TokenResponse
@@ -32,12 +26,7 @@ def token_result_to_api(result: TokenResult) -> TokenResponse:
     :param result:
     :return:
     """
-    return TokenResponse(
-        access_token=result.access_token,
-        refresh_token=result.refresh_token,
-        token_type=result.token_type,
-        expires_in=result.expires_in,
-    )
+    return TokenResponse(access_token=result.access_token, refresh_token=result.refresh_token, token_type=result.token_type, expires_in=result.expires_in)
 
 
 def admin_profile_result_to_api(result: AdminProfileResult) -> AdminInfo:
@@ -64,10 +53,7 @@ def login_result_to_api(result: LoginResult) -> AdminLoginResponse:
     :param result:
     :return:
     """
-    return AdminLoginResponse(
-        admin=admin_profile_result_to_api(result.admin),
-        token=token_result_to_api(result.token),
-    )
+    return AdminLoginResponse(admin=admin_profile_result_to_api(result.admin), token=token_result_to_api(result.token))
 
 
 def member_profile_result_to_api(result: MemberProfileResult) -> MemberInfo:
@@ -94,7 +80,4 @@ def member_login_result_to_api(result: MemberLoginResult) -> MemberLoginResponse
     :param result:
     :return:
     """
-    return MemberLoginResponse(
-        member=member_profile_result_to_api(result.member),
-        token=token_result_to_api(result.token),
-    )
+    return MemberLoginResponse(member=member_profile_result_to_api(result.member), token=token_result_to_api(result.token))

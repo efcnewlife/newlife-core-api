@@ -3,13 +3,7 @@ from uuid import UUID
 import pytest
 
 from portal.application.auth.results import HeaderInfo
-from portal.libs.contexts.request_context import (
-    get_resolved_locale_id,
-    get_request_context,
-    reset_request_context,
-    set_request_context,
-    RequestContext,
-)
+from portal.libs.contexts.request_context import RequestContext, get_request_context, get_resolved_locale_id, reset_request_context, set_request_context
 
 
 def test_get_resolved_locale_id_no_context():

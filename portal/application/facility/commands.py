@@ -1,6 +1,7 @@
 """
 Facility booking application commands.
 """
+
 from datetime import date, datetime, time
 from decimal import Decimal
 from typing import Optional
@@ -8,16 +9,10 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+# Ministry commands live in org.
+from portal.application.org.commands import CreateMinistryCommand, MinistryMemberEntryCommand, ReplaceMinistryMembersCommand, UpdateMinistryCommand
 from portal.application.rbac.commands import BulkIdsCommand, DeleteCommand, PagesQueryCommand
 from portal.domain.facility.constants import BookingType, RentalRateBillingUnit
-
-# Ministry commands live in org.
-from portal.application.org.commands import (
-    CreateMinistryCommand,
-    MinistryMemberEntryCommand,
-    ReplaceMinistryMembersCommand,
-    UpdateMinistryCommand,
-)
 
 
 class FacilityTranslationCommand(BaseModel):

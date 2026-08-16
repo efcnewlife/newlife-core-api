@@ -1,6 +1,7 @@
 """
 Admin facility booking serializers.
 """
+
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional
@@ -80,15 +81,9 @@ class AdminBookingDetail(AdminBookingListItem):
 
     ministry_id: Optional[UUID] = Field(default=None, serialization_alias="ministryId")
     recurrence_rule: Optional[str] = Field(
-        default=None,
-        serialization_alias="recurrenceRule",
-        description="iCal RRULE string (RFC 5545); series anchor is start_at",
+        default=None, serialization_alias="recurrenceRule", description="iCal RRULE string (RFC 5545); series anchor is start_at"
     )
-    recurrence_end_at: Optional[datetime] = Field(
-        default=None,
-        serialization_alias="recurrenceEndAt",
-        description="Recurrence series end",
-    )
+    recurrence_end_at: Optional[datetime] = Field(default=None, serialization_alias="recurrenceEndAt", description="Recurrence series end")
     is_mission_aligned: bool = Field(default=False, serialization_alias="isMissionAligned")
     subtotal_amount: Optional[Decimal] = Field(default=None, serialization_alias="subtotalAmount")
     discount_percent: Optional[Decimal] = Field(default=None, serialization_alias="discountPercent")

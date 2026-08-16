@@ -1,6 +1,7 @@
 """
 Ministry application service.
 """
+
 import uuid
 from typing import Any, Optional
 from uuid import UUID
@@ -14,13 +15,7 @@ from portal.application.org.commands import (
     UpdateMinistryCommand,
 )
 from portal.application.org.ministry_schedule import build_schedule_payloads, validate_ministry_schedules
-from portal.application.org.results import (
-    CreateIdResult,
-    MinistryDetailResult,
-    MinistryListResult,
-    MinistryMemberResult,
-    MinistryPageResult,
-)
+from portal.application.org.results import CreateIdResult, MinistryDetailResult, MinistryListResult, MinistryMemberResult, MinistryPageResult
 from portal.application.org.target_audience_validation import validate_target_audience_ids
 from portal.domain.org.catalog_codes import MINISTRY_TYPE_INTERNAL
 from portal.domain.org.constants import MinistryMemberRole, MinistryStatus
@@ -37,10 +32,7 @@ class MinistryService:
     """Org ministry CRUD and member assignment."""
 
     def __init__(
-        self,
-        ministry_repository: MinistryRepository,
-        ministry_type_repository: MinistryTypeRepository,
-        target_audience_repository: TargetAudienceRepository,
+        self, ministry_repository: MinistryRepository, ministry_type_repository: MinistryTypeRepository, target_audience_repository: TargetAudienceRepository
     ):
         self._repository = ministry_repository
         self._ministry_type_repository = ministry_type_repository
@@ -58,19 +50,10 @@ class MinistryService:
             return self._user_ctx.user_id
         return None
 
-    def _build_translation_payloads(
-        self,
-        command: CreateMinistryCommand | UpdateMinistryCommand,
-    ) -> list[dict[str, Any]]:
+    def _build_translation_payloads(self, command: CreateMinistryCommand | UpdateMinistryCommand) -> list[dict[str, Any]]:
         translation_payloads = command.translations or []
         return [
-            dict(
-                locale_id=item.locale_id,
-                name=item.name,
-                description=item.description,
-                remark=item.remark,
-                schedule_note=item.schedule_note,
-            )
+            dict(locale_id=item.locale_id, name=item.name, description=item.description, remark=item.remark, schedule_note=item.schedule_note)
             for item in translation_payloads
         ]
 
@@ -124,16 +107,8 @@ class MinistryService:
         return MinistryListResult(items=items)
 
     @distributed_trace()
-    async def get_ministry_by_id(
-        self,
-        ministry_id: UUID,
-        all_locales: bool = False,
-    ) -> Optional[MinistryDetailResult]:
-        return await self._repository.get_by_id(
-            ministry_id,
-            self._resolved_locale_id(),
-            all_locales=all_locales,
-        )
+    async def get_ministry_by_id(self, ministry_id: UUID, all_locales: bool = False) -> Optional[MinistryDetailResult]:
+        return await self._repository.get_by_id(ministry_id, self._resolved_locale_id(), all_locales=all_locales)
 
     @distributed_trace()
     async def create_ministry(self, command: CreateMinistryCommand) -> CreateIdResult:
@@ -171,10 +146,7 @@ class MinistryService:
         existing = await self._repository.get_by_id(ministry_id)
         if not existing:
             raise NotFoundException(detail=f"Ministry {ministry_id} not found")
-        values = {
-            "has_priority_booking": command.has_priority_booking,
-            "is_active": command.is_active,
-        }
+        values = {"has_priority_booking": command.has_priority_booking, "is_active": command.is_active}
         if command.owner_position_id is not None:
             values["owner_position_id"] = command.owner_position_id
         if command.ministry_type_id is not None:
@@ -211,11 +183,7 @@ class MinistryService:
         user_id = self._current_user_id()
         if not user_id:
             return MinistryListResult(items=[])
-        items = await self._repository.list_owned_active(
-            user_id,
-            self._resolved_locale_id(),
-            include_pending=include_pending,
-        )
+        items = await self._repository.list_owned_active(user_id, self._resolved_locale_id(), include_pending=include_pending)
         return MinistryListResult(items=items)
 
     @distributed_trace()
@@ -226,12 +194,8 @@ class MinistryService:
 
     @staticmethod
     def validate_primary_and_secondary(members: list[MinistryMemberResult]) -> None:
-        primary_count = sum(
-            1 for member in members if member.member_role == MinistryMemberRole.PRIMARY.value
-        )
-        secondary_count = sum(
-            1 for member in members if member.member_role == MinistryMemberRole.SECONDARY.value
-        )
+        primary_count = sum(1 for member in members if member.member_role == MinistryMemberRole.PRIMARY.value)
+        secondary_count = sum(1 for member in members if member.member_role == MinistryMemberRole.SECONDARY.value)
         if primary_count != 1:
             raise BadRequestException(detail="Exactly one primary ministry member is required")
         if secondary_count < 1:
@@ -242,18 +206,10 @@ class MinistryService:
         if not await self._repository.get_by_id(ministry_id):
             raise NotFoundException(detail=f"Ministry {ministry_id} not found")
         member_rows = [
-            dict(
-                user_id=member.user_id,
-                member_role=member.member_role.value,
-                remark=member.remark,
-                contact_email=member.contact_email,
-            )
+            dict(user_id=member.user_id, member_role=member.member_role.value, remark=member.remark, contact_email=member.contact_email)
             for member in command.members
         ]
-        await self._repository.replace_members(
-            ministry_id=ministry_id,
-            members=member_rows,
-        )
+        await self._repository.replace_members(ministry_id=ministry_id, members=member_rows)
 
     @distributed_trace()
     async def validate_members_for_submit(self, ministry_id: UUID) -> None:

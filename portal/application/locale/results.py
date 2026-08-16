@@ -1,6 +1,7 @@
 """
 Locale application results.
 """
+
 from typing import Any, Optional
 
 from pydantic import BaseModel, Field

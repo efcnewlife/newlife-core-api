@@ -1,17 +1,13 @@
 """
 Hours-only applicability rule engine unit tests.
 """
+
 from decimal import Decimal
 
 import pytest
 from pydantic import ValidationError
 
-from portal.domain.facility.rate_applicability import (
-    RateSelectionContext,
-    coerce_applicability_from_db,
-    matches_applicability,
-    parse_applicability,
-)
+from portal.domain.facility.rate_applicability import RateSelectionContext, coerce_applicability_from_db, matches_applicability, parse_applicability
 
 
 def test_parse_hours_gte_and_lt():
@@ -22,9 +18,7 @@ def test_parse_hours_gte_and_lt():
 
 
 def test_parse_hours_range():
-    rule = parse_applicability(
-        {"all": [{"op": "hours_range", "min": 0, "max": 5, "max_exclusive": True}]}
-    )
+    rule = parse_applicability({"all": [{"op": "hours_range", "min": 0, "max": 5, "max_exclusive": True}]})
     assert rule["all"][0]["op"] == "hours_range"
     assert rule["all"][0]["max_exclusive"] is True
 
@@ -61,12 +55,7 @@ def test_matches_hours_range_exclusive():
 
 
 def test_matches_any_and_not():
-    rule = {
-        "any": [
-            {"op": "hours_lt", "value": 2},
-            {"not": {"op": "hours_lt", "value": 8}},
-        ]
-    }
+    rule = {"any": [{"op": "hours_lt", "value": 2}, {"not": {"op": "hours_lt", "value": 8}}]}
     assert matches_applicability(rule, RateSelectionContext(Decimal("1"))) is True
     assert matches_applicability(rule, RateSelectionContext(Decimal("9"))) is True
     assert matches_applicability(rule, RateSelectionContext(Decimal("5"))) is False

@@ -1,17 +1,12 @@
 """
 Facility room application service.
 """
+
 import uuid
 from typing import Any, Optional
 from uuid import UUID
 
-from portal.application.facility.commands import (
-    BulkIdsCommand,
-    CreateRoomCommand,
-    DeleteCommand,
-    PagesQueryCommand,
-    UpdateRoomCommand,
-)
+from portal.application.facility.commands import BulkIdsCommand, CreateRoomCommand, DeleteCommand, PagesQueryCommand, UpdateRoomCommand
 from portal.application.facility.results import CreateIdResult, RoomDetailResult, RoomListResult, RoomPageResult
 from portal.exceptions.responses import ApiBaseException, BadRequestException, ConflictErrorException, NotFoundException
 from portal.infrastructure.persistence.repositories.facility.room_repository import RoomRepository
@@ -31,20 +26,9 @@ class RoomService:
             return self._req_ctx.resolved_locale_id
         return None
 
-    def _build_translation_payloads(
-        self,
-        command: CreateRoomCommand | UpdateRoomCommand,
-    ) -> list[dict[str, Any]]:
+    def _build_translation_payloads(self, command: CreateRoomCommand | UpdateRoomCommand) -> list[dict[str, Any]]:
         translation_payloads = command.translations or []
-        return [
-            dict(
-                locale_id=item.locale_id,
-                name=item.name,
-                description=item.description,
-                remark=item.remark,
-            )
-            for item in translation_payloads
-        ]
+        return [dict(locale_id=item.locale_id, name=item.name, description=item.description, remark=item.remark) for item in translation_payloads]
 
     async def _validate_and_upsert_translations(self, room_id: UUID, translation_payloads: list) -> None:
         if not translation_payloads:
@@ -67,16 +51,8 @@ class RoomService:
         return RoomListResult(items=items)
 
     @distributed_trace()
-    async def get_room_by_id(
-        self,
-        room_id: UUID,
-        all_locales: bool = False,
-    ) -> Optional[RoomDetailResult]:
-        return await self._repository.get_by_id(
-            room_id,
-            self._resolved_locale_id(),
-            all_locales=all_locales,
-        )
+    async def get_room_by_id(self, room_id: UUID, all_locales: bool = False) -> Optional[RoomDetailResult]:
+        return await self._repository.get_by_id(room_id, self._resolved_locale_id(), all_locales=all_locales)
 
     @distributed_trace()
     async def create_room(self, command: CreateRoomCommand) -> CreateIdResult:
@@ -85,13 +61,7 @@ class RoomService:
         if not translation_payloads:
             raise BadRequestException(detail="translations are required")
         try:
-            payload = {
-                "id": room_id,
-                "code": command.code,
-                "room_number": command.room_number,
-                "capacity": command.capacity,
-                "is_active": command.is_active,
-            }
+            payload = {"id": room_id, "code": command.code, "room_number": command.room_number, "capacity": command.capacity, "is_active": command.is_active}
             if command.sequence is not None:
                 payload["sequence"] = command.sequence
             await self._repository.insert_room(payload)
@@ -109,11 +79,7 @@ class RoomService:
         existing = await self._repository.get_by_id(room_id, self._resolved_locale_id())
         if not existing:
             raise NotFoundException(detail=f"Room {room_id} not found")
-        values = {
-            "room_number": command.room_number,
-            "capacity": command.capacity,
-            "is_active": command.is_active,
-        }
+        values = {"room_number": command.room_number, "capacity": command.capacity, "is_active": command.is_active}
         if command.sequence is not None:
             values["sequence"] = command.sequence
         affected = await self._repository.update_room(room_id, values)

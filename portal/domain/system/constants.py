@@ -1,6 +1,7 @@
 """
 System setting domain constants.
 """
+
 from enum import Enum
 
 

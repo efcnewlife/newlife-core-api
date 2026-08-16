@@ -1,6 +1,7 @@
 """
 Facility booking repository.
 """
+
 import json
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -10,12 +11,7 @@ from uuid import UUID
 import sqlalchemy as sa
 
 from portal.application.facility.commands import BookingPagesQueryCommand, UpdateBookingCommand
-from portal.application.facility.results import (
-    BookingDetailResult,
-    BookingListItemResult,
-    BookingRoomLineResult,
-    BookingSlotResult,
-)
+from portal.application.facility.results import BookingDetailResult, BookingListItemResult, BookingRoomLineResult, BookingSlotResult
 from portal.domain.facility.constants import BookingSlotStatus, BookingStatus
 from portal.libs.database import Session
 from portal.models import (
@@ -92,19 +88,11 @@ class BookingRepository:
         )
         if locale_id:
             query = query.outerjoin(
-                FacilityRoomTranslation,
-                sa.and_(
-                    FacilityRoomTranslation.room_id == FacilityRoom.id,
-                    FacilityRoomTranslation.locale_id == locale_id,
-                ),
+                FacilityRoomTranslation, sa.and_(FacilityRoomTranslation.room_id == FacilityRoom.id, FacilityRoomTranslation.locale_id == locale_id)
             )
         return query
 
-    async def fetch_pages(
-        self,
-        model: BookingPagesQueryCommand,
-        locale_id: Optional[UUID],
-    ) -> tuple[list[BookingListItemResult], int]:
+    async def fetch_pages(self, model: BookingPagesQueryCommand, locale_id: Optional[UUID]) -> tuple[list[BookingListItemResult], int]:
         items, count = await (
             self._list_query(locale_id)
             .where(FacilityBooking.is_deleted == model.deleted)
@@ -123,63 +111,38 @@ class BookingRepository:
                     AuthUserProfile.preferred_name.ilike(f"%{model.keyword}%"),
                 ),
             )
-            .order_by_with(
-                tables=[FacilityBooking],
-                order_by=model.order_by,
-                descending=model.descending,
-            )
+            .order_by_with(tables=[FacilityBooking], order_by=model.order_by, descending=model.descending)
             .limit(model.page_size)
             .offset(model.page * model.page_size)
             .fetchpages(no_order_by=False, as_model=BookingListItemResult)
         )
         items = items or []
         if items:
-            names_by_booking_id = await self._fetch_facility_names_by_booking_ids(
-                [item.id for item in items],
-                locale_id,
-            )
+            names_by_booking_id = await self._fetch_facility_names_by_booking_ids([item.id for item in items], locale_id)
             items = [
-                item.model_copy(
-                    update={
-                        "facility_names": names_by_booking_id.get(item.id)
-                        or ([item.facility_name] if item.facility_name else []),
-                    }
-                )
+                item.model_copy(update={"facility_names": names_by_booking_id.get(item.id) or ([item.facility_name] if item.facility_name else [])})
                 for item in items
             ]
         return items, count
 
-    async def _fetch_facility_names_by_booking_ids(
-        self,
-        booking_ids: list[UUID],
-        locale_id: Optional[UUID],
-    ) -> dict[UUID, list[str]]:
+    async def _fetch_facility_names_by_booking_ids(self, booking_ids: list[UUID], locale_id: Optional[UUID]) -> dict[UUID, list[str]]:
         if not booking_ids:
             return {}
         room_name = FacilityRoom.code
         if locale_id:
             room_name = sa.func.coalesce(
                 sa.select(FacilityRoomTranslation.name)
-                .where(
-                    FacilityRoomTranslation.room_id == FacilityRoom.id,
-                    FacilityRoomTranslation.locale_id == locale_id,
-                )
+                .where(FacilityRoomTranslation.room_id == FacilityRoom.id, FacilityRoomTranslation.locale_id == locale_id)
                 .limit(1)
                 .scalar_subquery(),
                 FacilityRoom.code,
             )
         rows = await (
-            self._session.select(
-                FacilityBookingRoom.facility_booking_id,
-                room_name.label("facility_name"),
-            )
+            self._session.select(FacilityBookingRoom.facility_booking_id, room_name.label("facility_name"))
             .select_from(FacilityBookingRoom)
             .join(FacilityRoom, FacilityRoom.id == FacilityBookingRoom.facility_id)
             .where(FacilityBookingRoom.facility_booking_id.in_(booking_ids))
-            .order_by(
-                FacilityBookingRoom.facility_booking_id.asc(),
-                FacilityBookingRoom.sequence.asc(),
-            )
+            .order_by(FacilityBookingRoom.facility_booking_id.asc(), FacilityBookingRoom.sequence.asc())
             .fetch()
         )
         result: dict[UUID, list[str]] = {}
@@ -235,19 +198,12 @@ class BookingRepository:
         data["slots"] = slots
         return BookingDetailResult.model_validate(data)
 
-    async def _fetch_booking_rooms(
-        self,
-        booking_id: UUID,
-        locale_id: Optional[UUID],
-    ) -> list[BookingRoomLineResult]:
+    async def _fetch_booking_rooms(self, booking_id: UUID, locale_id: Optional[UUID]) -> list[BookingRoomLineResult]:
         room_name = FacilityRoom.code
         if locale_id:
             room_name = sa.func.coalesce(
                 sa.select(FacilityRoomTranslation.name)
-                .where(
-                    FacilityRoomTranslation.room_id == FacilityRoom.id,
-                    FacilityRoomTranslation.locale_id == locale_id,
-                )
+                .where(FacilityRoomTranslation.room_id == FacilityRoom.id, FacilityRoomTranslation.locale_id == locale_id)
                 .limit(1)
                 .scalar_subquery(),
                 FacilityRoom.code,
@@ -282,11 +238,7 @@ class BookingRepository:
     async def _fetch_booking_slots(self, booking_id: UUID) -> list[BookingSlotResult]:
         rows: list[BookingSlotResult] = await (
             self._session.select(
-                FacilityBookingSlot.id,
-                FacilityBookingSlot.facility_id,
-                FacilityBookingSlot.start_at,
-                FacilityBookingSlot.end_at,
-                FacilityBookingSlot.status,
+                FacilityBookingSlot.id, FacilityBookingSlot.facility_id, FacilityBookingSlot.start_at, FacilityBookingSlot.end_at, FacilityBookingSlot.status
             )
             .where(FacilityBookingSlot.facility_booking_id == booking_id)
             .order_by(FacilityBookingSlot.start_at.asc())
@@ -295,21 +247,10 @@ class BookingRepository:
         return rows or []
 
     async def exists_by_id(self, booking_id: UUID) -> bool:
-        row = await (
-            self._session.select(FacilityBooking.id)
-            .where(FacilityBooking.id == booking_id)
-            .where(FacilityBooking.is_deleted == False)
-            .fetchrow()
-        )
+        row = await self._session.select(FacilityBooking.id).where(FacilityBooking.id == booking_id).where(FacilityBooking.is_deleted == False).fetchrow()
         return row is not None
 
-    async def has_confirmed_slot_overlap(
-        self,
-        facility_id: UUID,
-        start_at: datetime,
-        end_at: datetime,
-        exclude_booking_id: Optional[UUID] = None,
-    ) -> bool:
+    async def has_confirmed_slot_overlap(self, facility_id: UUID, start_at: datetime, end_at: datetime, exclude_booking_id: Optional[UUID] = None) -> bool:
         query = (
             self._session.select(sa.func.count())
             .select_from(FacilityBookingSlot)
@@ -323,22 +264,11 @@ class BookingRepository:
         count = await query.fetchval()
         return bool(count and count > 0)
 
-    async def cancel_booking(
-        self,
-        booking_id: UUID,
-        cancelled_by_id: Optional[UUID],
-        cancel_reason: Optional[str],
-        cancel_slots: bool,
-    ) -> None:
+    async def cancel_booking(self, booking_id: UUID, cancelled_by_id: Optional[UUID], cancel_reason: Optional[str], cancel_slots: bool) -> None:
         now = datetime.now(timezone.utc)
         await (
             self._session.update(FacilityBooking)
-            .values(
-                status=BookingStatus.CANCELLED.value,
-                cancelled_at=now,
-                cancelled_by_id=cancelled_by_id,
-                cancel_reason=cancel_reason,
-            )
+            .values(status=BookingStatus.CANCELLED.value, cancelled_at=now, cancelled_by_id=cancelled_by_id, cancel_reason=cancel_reason)
             .where(FacilityBooking.id == booking_id)
             .execute()
         )
@@ -350,50 +280,17 @@ class BookingRepository:
                 .execute()
             )
 
-    async def update_booking_header(
-        self,
-        booking_id: UUID,
-        values: dict,
-    ) -> None:
-        await (
-            self._session.update(FacilityBooking)
-            .values(**values)
-            .where(FacilityBooking.id == booking_id)
-            .execute()
-        )
+    async def update_booking_header(self, booking_id: UUID, values: dict) -> None:
+        await self._session.update(FacilityBooking).values(**values).where(FacilityBooking.id == booking_id).execute()
 
-    async def replace_booking_rooms(
-        self,
-        booking_id: UUID,
-        room_rows: list[dict],
-    ) -> None:
-        await (
-            self._session.delete(FacilityBookingRoom)
-            .where(FacilityBookingRoom.facility_booking_id == booking_id)
-            .execute()
-        )
+    async def replace_booking_rooms(self, booking_id: UUID, room_rows: list[dict]) -> None:
+        await self._session.delete(FacilityBookingRoom).where(FacilityBookingRoom.facility_booking_id == booking_id).execute()
         if room_rows:
-            prepared_rows = apply_audit_fields_to_rows(
-                [
-                    {
-                        **row,
-                        "applicability": self._serialize_jsonb(row.get("applicability")),
-                    }
-                    for row in room_rows
-                ]
-            )
+            prepared_rows = apply_audit_fields_to_rows([{**row, "applicability": self._serialize_jsonb(row.get("applicability"))} for row in room_rows])
             await self._session.insert(FacilityBookingRoom).values(prepared_rows).execute()
 
-    async def replace_booking_slots(
-        self,
-        booking_id: UUID,
-        slot_rows: list[dict],
-    ) -> None:
-        await (
-            self._session.delete(FacilityBookingSlot)
-            .where(FacilityBookingSlot.facility_booking_id == booking_id)
-            .execute()
-        )
+    async def replace_booking_slots(self, booking_id: UUID, slot_rows: list[dict]) -> None:
+        await self._session.delete(FacilityBookingSlot).where(FacilityBookingSlot.facility_booking_id == booking_id).execute()
         if slot_rows:
             prepared_slot_rows = apply_audit_fields_to_rows(slot_rows)
             await self._session.insert(FacilityBookingSlot).values(prepared_slot_rows).execute()
@@ -401,39 +298,20 @@ class BookingRepository:
     async def insert_booking(self, payload: dict) -> None:
         await self._session.insert(FacilityBooking).values(payload).execute()
 
-    async def list_user_bookings(
-        self,
-        user_id: UUID,
-        locale_id: Optional[UUID],
-    ) -> list[BookingListItemResult]:
+    async def list_user_bookings(self, user_id: UUID, locale_id: Optional[UUID]) -> list[BookingListItemResult]:
         # Reuse pages query with large page for member "mine" list
         from portal.application.facility.commands import BookingPagesQueryCommand
 
-        command = BookingPagesQueryCommand(
-            page=0,
-            page_size=100,
-            user_id=user_id,
-            order_by="start_at",
-            descending=True,
-        )
+        command = BookingPagesQueryCommand(page=0, page_size=100, user_id=user_id, order_by="start_at", descending=True)
         items, _count = await self.fetch_pages(command, locale_id)
         return items
 
     async def get_user_id_for_booking(self, booking_id: UUID) -> Optional[UUID]:
-        return await (
-            self._session.select(FacilityBooking.user_id)
-            .where(FacilityBooking.id == booking_id)
-            .where(FacilityBooking.is_deleted == False)
-            .fetchval()
-        )
+        return await self._session.select(FacilityBooking.user_id).where(FacilityBooking.id == booking_id).where(FacilityBooking.is_deleted == False).fetchval()
 
     async def get_booking_type_and_flags(self, booking_id: UUID) -> Optional[dict]:
         return await (
-            self._session.select(
-                FacilityBooking.booking_type,
-                FacilityBooking.is_mission_aligned,
-                FacilityBooking.currency,
-            )
+            self._session.select(FacilityBooking.booking_type, FacilityBooking.is_mission_aligned, FacilityBooking.currency)
             .where(FacilityBooking.id == booking_id)
             .fetchrow()
         )

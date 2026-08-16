@@ -1,6 +1,7 @@
 """
 Rental catalog serializers.
 """
+
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional
@@ -53,11 +54,7 @@ class AdminSurchargeItem(UUIDBaseModel):
     unit_amount: Decimal = Field(..., serialization_alias="unitAmount", description="Unit amount")
     currency: str = Field(..., description="Currency")
     is_active: bool = Field(True, serialization_alias="isActive", description="Active flag")
-    applies_to_booking_type: Optional[str] = Field(
-        None,
-        serialization_alias="appliesToBookingType",
-        description="Booking type filter",
-    )
+    applies_to_booking_type: Optional[str] = Field(None, serialization_alias="appliesToBookingType", description="Booking type filter")
     remark: Optional[str] = Field(None, description="Remark")
     created_at: Optional[datetime] = Field(None, serialization_alias="createAt", description="Created at")
     updated_at: Optional[datetime] = Field(None, serialization_alias="updateAt", description="Updated at")
@@ -77,10 +74,7 @@ class AdminSurchargeWrite(BaseModel):
     unit_amount: Decimal = Field(..., description="Unit amount")
     currency: str = Field("CAD", description="Currency")
     is_active: bool = Field(True, description="Active flag")
-    applies_to_booking_type: Optional[str] = Field(
-        None,
-        description="Booking type filter",
-    )
+    applies_to_booking_type: Optional[str] = Field(None, description="Booking type filter")
     remark: Optional[str] = Field(None, description="Remark")
 
 

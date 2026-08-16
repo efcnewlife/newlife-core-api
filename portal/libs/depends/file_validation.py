@@ -1,6 +1,7 @@
 """
 File validation dependencies.
 """
+
 from fastapi import UploadFile
 
 from portal.config import settings
@@ -18,10 +19,5 @@ class FileValidation:
         if content_length and content_length > settings.MAX_UPLOAD_SIZE:
             raise EntityTooLargeException()
         if file.content_type not in self.allowed_types:
-            raise BadRequestException(
-                detail=(
-                    f"File type {file.content_type} is not allowed. "
-                    f"Allowed types: {', '.join(self.allowed_types)}"
-                )
-            )
+            raise BadRequestException(detail=(f"File type {file.content_type} is not allowed. Allowed types: {', '.join(self.allowed_types)}"))
         return file

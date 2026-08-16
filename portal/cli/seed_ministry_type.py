@@ -1,6 +1,7 @@
 """
 Ministry type seed CLI commands.
 """
+
 import asyncio
 
 import click
@@ -39,12 +40,7 @@ async def seed_ministry_types() -> None:
 def seed_ministry_types_process(*, force: bool = False) -> None:
     """Synchronous entry to run ministry type seed."""
     if not settings.IS_DEV and not force:
-        click.echo(
-            click.style(
-                f"seed-ministry-types is blocked when ENV={settings.ENV!r}. Pass --force to proceed.",
-                fg="red",
-            )
-        )
+        click.echo(click.style(f"seed-ministry-types is blocked when ENV={settings.ENV!r}. Pass --force to proceed.", fg="red"))
         raise SystemExit(1)
 
     if not force:

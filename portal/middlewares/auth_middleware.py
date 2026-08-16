@@ -1,27 +1,28 @@
 """
 Authentication and Authorization Middleware
 """
+
 from collections import defaultdict
 from typing import Optional
 
-from dependency_injector.wiring import inject, Provide
+from dependency_injector.wiring import Provide, inject
 from fastapi import Request
 from fastapi.security.http import HTTPAuthorizationCredentials, HTTPBearer
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import Response, JSONResponse
+from starlette.responses import JSONResponse, Response
 
+from portal.application.auth.member_web_app_resolver import resolve_request_app_code
+from portal.application.auth.results import AccessTokenPayload, UserDetail, UserSensitive
+from portal.application.auth.user_read_service import UserReadService
 from portal.config import settings
 from portal.container import Container
-from portal.exceptions.responses import UnauthorizedException, InvalidTokenException, ForbiddenException
-from portal.application.auth.user_read_service import UserReadService
-from portal.application.auth.member_web_app_resolver import resolve_request_app_code
+from portal.domain.auth.member_web_app import MemberWebAppRegistry
+from portal.exceptions.responses import ForbiddenException, InvalidTokenException, UnauthorizedException
 from portal.libs.authorization.auth_config import AuthConfig
 from portal.libs.authorization.permission_checker import PermissionChecker
-from portal.libs.contexts.user_context import UserContext, set_user_context, get_user_context
+from portal.libs.contexts.user_context import UserContext, get_user_context, set_user_context
 from portal.libs.logger import logger
 from portal.providers.jwt_provider import JWTProvider
-from portal.application.auth.results import AccessTokenPayload, UserDetail, UserSensitive
-from portal.domain.auth.member_web_app import MemberWebAppRegistry
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
@@ -69,11 +70,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
                     content["url"] = str(request.url)
                 if exc.headers:
                     headers = exc.headers
-                return JSONResponse(
-                    content=content,
-                    status_code=exc.status_code,
-                    headers=headers
-                )
+                return JSONResponse(content=content, status_code=exc.status_code, headers=headers)
 
         return await call_next(request)
 
@@ -125,7 +122,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         full_path = request.url.path
         # Remove root_path prefix to get the path relative to the current app
         if root_path and full_path.startswith(root_path):
-            path = full_path[len(root_path):]
+            path = full_path[len(root_path) :]
         else:
             path = full_path
         method = request.method
@@ -186,10 +183,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         :param user_read_service:
         :return:
         """
-        payload: AccessTokenPayload = jwt_provider.verify_token(
-            token=token,
-            is_admin=True
-        )
+        payload: AccessTokenPayload = jwt_provider.verify_token(token=token, is_admin=True)
         if not payload:
             raise InvalidTokenException()
 
@@ -214,7 +208,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             login_admin=True,
             token=token,
             token_payload=payload.model_dump(),
-            username=user.email.split("@")[0]
+            username=user.email.split("@")[0],
         )
         set_user_context(user_context)
 
@@ -232,10 +226,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         :param request: FastAPI Request
         :param token: Access token
         """
-        payload: AccessTokenPayload = jwt_provider.verify_token(
-            token=token,
-            is_admin=False
-        )
+        payload: AccessTokenPayload = jwt_provider.verify_token(token=token, is_admin=False)
         if not payload:
             raise InvalidTokenException()
         if not payload.azp:
@@ -266,16 +257,13 @@ class AuthMiddleware(BaseHTTPMiddleware):
             login_admin=False,
             token=token,
             token_payload=payload.model_dump(),
-            username=user.email.split("@")[0]
+            username=user.email.split("@")[0],
         )
         set_user_context(user_context)
 
     @inject
     async def _check_permissions(
-        self,
-        request: Request,
-        auth_config: AuthConfig,
-        permission_checker: PermissionChecker = Provide[Container.permission_checker]
+        self, request: Request, auth_config: AuthConfig, permission_checker: PermissionChecker = Provide[Container.permission_checker]
     ) -> None:
         """
         Check permissions for the request
@@ -303,13 +291,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
             # Require all permissions
             has_permission = await permission_checker.has_all_permissions(permission_codes)
             if not has_permission:
-                raise ForbiddenException(
-                    debug_detail=f"All permissions required: {', '.join(permission_codes)}",
-                )
+                raise ForbiddenException(debug_detail=f"All permissions required: {', '.join(permission_codes)}")
         else:
             # Require any permission
             has_permission = await permission_checker.has_any_permission(permission_codes)
             if not has_permission:
-                raise ForbiddenException(
-                    debug_detail=f"Any permission required: {', '.join(permission_codes)}",
-                )
+                raise ForbiddenException(debug_detail=f"Any permission required: {', '.join(permission_codes)}")

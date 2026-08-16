@@ -1,27 +1,17 @@
 """
 System setting application mappers (API boundary).
 """
+
 from portal.application.rbac.commands import BulkIdsCommand, DeleteCommand
 from portal.application.system.commands import CreateSettingCommand, UpdateSettingCommand
 from portal.application.system.results import SettingListResult, SettingResult
-from portal.serializers.admin.v1.system.setting import (
-    AdminSettingBulkAction,
-    AdminSettingCreate,
-    AdminSettingItem,
-    AdminSettingList,
-    AdminSettingUpdate,
-)
+from portal.serializers.admin.v1.system.setting import AdminSettingBulkAction, AdminSettingCreate, AdminSettingItem, AdminSettingList, AdminSettingUpdate
 from portal.serializers.mixins import DeleteBaseModel
 
 
 def create_setting_to_command(model: AdminSettingCreate) -> CreateSettingCommand:
     return CreateSettingCommand(
-        namespace=model.namespace,
-        setting_key=model.setting_key,
-        value_type=model.value_type,
-        value=model.value,
-        remark=model.remark,
-        is_active=model.is_active,
+        namespace=model.namespace, setting_key=model.setting_key, value_type=model.value_type, value=model.value, remark=model.remark, is_active=model.is_active
     )
 
 

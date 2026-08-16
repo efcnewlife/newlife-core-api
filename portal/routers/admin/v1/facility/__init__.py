@@ -1,15 +1,17 @@
 """
 Facility admin API router aggregate.
 """
+
 from portal.routers.auth_router import AuthRouter
-from .room import router as room_router
-from .room_slot_template import router as room_slot_template_router
-from .room_blackout import router as room_blackout_router
-from .rental_rate import router as rental_rate_router
-from .rental_rate_template import router as rental_rate_template_router
-from .rental_catalog import router as rental_catalog_router
+
 from .booking import router as booking_router
 from .override_log import router as override_log_router
+from .rental_catalog import router as rental_catalog_router
+from .rental_rate import router as rental_rate_router
+from .rental_rate_template import router as rental_rate_template_router
+from .room import router as room_router
+from .room_blackout import router as room_blackout_router
+from .room_slot_template import router as room_slot_template_router
 
 router = AuthRouter(is_admin=True)
 router.include_router(room_router, prefix="/rooms", tags=["Facility Room"])

@@ -1,6 +1,7 @@
 """
 Tests for LocaleService.
 """
+
 from uuid import uuid4
 
 import pytest
@@ -35,12 +36,7 @@ class StubLocaleCache:
         self.clear_calls += 1
 
 
-def _active_locale(
-    *,
-    language_code: str = "en",
-    region_code: str | None = "US",
-    is_default: bool = False,
-) -> Locale:
+def _active_locale(*, language_code: str = "en", region_code: str | None = "US", is_default: bool = False) -> Locale:
     return Locale(
         id=uuid4(),
         language_code=language_code,
@@ -90,14 +86,8 @@ async def test_get_locale_codes_by_language():
     cached = LocaleSnapshotResult(
         active_locales=["zh-TW", "zh-CN"],
         default_locale="zh-TW",
-        normalized_map={
-            "zh-tw": "zh-TW",
-            "zh-cn": "zh-CN",
-        },
-        normalized_id_map={
-            "zh-tw": str(locale_id),
-            "zh-cn": str(uuid4()),
-        },
+        normalized_map={"zh-tw": "zh-TW", "zh-cn": "zh-CN"},
+        normalized_id_map={"zh-tw": str(locale_id), "zh-cn": str(uuid4())},
         language_buckets={"zh": ["zh-TW", "zh-CN"]},
     )
     service = LocaleService(StubLocaleRepository(), StubLocaleCache(snapshot=cached))

@@ -1,6 +1,7 @@
 """
 Facility booking admin application service.
 """
+
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional
@@ -19,26 +20,13 @@ from portal.application.facility.pricing_service import PricingService
 from portal.application.facility.results import BookingDetailResult, BookingListItemResult, BookingPageResult
 from portal.application.org.results import CreateIdResult
 from portal.application.system.setting_service import SettingService
-from portal.domain.facility.constants import (
-    BookingErrorCode,
-    BookingSlotStatus,
-    BookingStatus,
-    BookingType,
-    RentalPolicySettingKey,
-)
-from portal.exceptions.responses import (
-    BadRequestException,
-    ConflictErrorException,
-    ForbiddenException,
-    NotFoundException,
-)
+from portal.domain.facility.constants import BookingErrorCode, BookingSlotStatus, BookingStatus, BookingType, RentalPolicySettingKey
+from portal.domain.org.constants import MinistryStatus
+from portal.exceptions.responses import BadRequestException, ConflictErrorException, ForbiddenException, NotFoundException
 from portal.infrastructure.persistence.repositories.facility.booking_repository import BookingRepository
 from portal.infrastructure.persistence.repositories.facility.rental_repository import RentalRepository
-from portal.infrastructure.persistence.repositories.facility.room_blackout_repository import (
-    RoomBlackoutRepository,
-)
+from portal.infrastructure.persistence.repositories.facility.room_blackout_repository import RoomBlackoutRepository
 from portal.infrastructure.persistence.repositories.org.ministry_repository import MinistryRepository
-from portal.domain.org.constants import MinistryStatus
 from portal.libs.contexts.request_context import RequestContext, get_request_context
 from portal.libs.contexts.user_context import UserContext, get_user_context
 from portal.libs.tracing.distributed_trace import distributed_trace
@@ -95,10 +83,7 @@ class BookingService:
         cancelled_by_id = self._user_ctx.user_id if self._user_ctx else None
         cancel_slots = command.scope != "series"
         await self._repository.cancel_booking(
-            booking_id=booking_id,
-            cancelled_by_id=cancelled_by_id,
-            cancel_reason=command.cancel_reason,
-            cancel_slots=cancel_slots,
+            booking_id=booking_id, cancelled_by_id=cancelled_by_id, cancel_reason=command.cancel_reason, cancel_slots=cancel_slots
         )
 
     @distributed_trace()
@@ -114,10 +99,7 @@ class BookingService:
         if not meta:
             raise NotFoundException(detail="Booking not found")
 
-        max_rooms = await self._rental_repository.get_policy_amount(
-            RentalPolicySettingKey.MAX_ROOMS_PER_BOOKING,
-            None,
-        )
+        max_rooms = await self._rental_repository.get_policy_amount(RentalPolicySettingKey.MAX_ROOMS_PER_BOOKING, None)
         max_rooms_int = int(max_rooms) if max_rooms is not None else 3
         if len(command.rooms) > max_rooms_int:
             raise BadRequestException(detail=f"At most {max_rooms_int} rooms per booking")
@@ -127,23 +109,14 @@ class BookingService:
             start_at = line.start_at or command.start_at
             end_at = line.end_at or command.end_at
             await self._raise_if_room_unavailable(
-                facility_id=line.facility_id,
-                start_at=start_at,
-                end_at=end_at,
-                local_tz=local_tz,
-                exclude_booking_id=booking_id,
+                facility_id=line.facility_id, start_at=start_at, end_at=end_at, local_tz=local_tz, exclude_booking_id=booking_id
             )
 
         quote_lines = []
         for line in command.rooms:
             start_at = line.start_at or command.start_at
             end_at = line.end_at or command.end_at
-            quote_lines.append(
-                PreviewQuoteRoomLineCommand(
-                    facility_id=line.facility_id,
-                    billed_hours=self._billed_hours(start_at, end_at),
-                )
-            )
+            quote_lines.append(PreviewQuoteRoomLineCommand(facility_id=line.facility_id, billed_hours=self._billed_hours(start_at, end_at)))
 
         booking_type_value = meta["booking_type"] if isinstance(meta, dict) else meta.booking_type
         currency_value = meta.get("currency") if isinstance(meta, dict) else meta.currency
@@ -230,10 +203,7 @@ class BookingService:
 
         await self._validate_ministry_booking_gate(command.ministry_id, booker_id=booker_id)
 
-        max_rooms = await self._rental_repository.get_policy_amount(
-            RentalPolicySettingKey.MAX_ROOMS_PER_BOOKING,
-            None,
-        )
+        max_rooms = await self._rental_repository.get_policy_amount(RentalPolicySettingKey.MAX_ROOMS_PER_BOOKING, None)
         max_rooms_int = int(max_rooms) if max_rooms is not None else 3
         if len(command.rooms) > max_rooms_int:
             raise BadRequestException(detail=f"At most {max_rooms_int} rooms per booking")
@@ -242,23 +212,13 @@ class BookingService:
         for line in command.rooms:
             start_at = line.start_at or command.start_at
             end_at = line.end_at or command.end_at
-            await self._raise_if_room_unavailable(
-                facility_id=line.facility_id,
-                start_at=start_at,
-                end_at=end_at,
-                local_tz=local_tz,
-            )
+            await self._raise_if_room_unavailable(facility_id=line.facility_id, start_at=start_at, end_at=end_at, local_tz=local_tz)
 
         quote_lines = []
         for line in command.rooms:
             start_at = line.start_at or command.start_at
             end_at = line.end_at or command.end_at
-            quote_lines.append(
-                PreviewQuoteRoomLineCommand(
-                    facility_id=line.facility_id,
-                    billed_hours=self._billed_hours(start_at, end_at),
-                )
-            )
+            quote_lines.append(PreviewQuoteRoomLineCommand(facility_id=line.facility_id, billed_hours=self._billed_hours(start_at, end_at)))
 
         quote = await self._pricing_service.preview_quote(
             PreviewQuoteCommand(
@@ -353,49 +313,28 @@ class BookingService:
         await self.cancel_booking(booking_id, command)
 
     async def _raise_if_room_unavailable(
-        self,
-        facility_id: UUID,
-        start_at: datetime,
-        end_at: datetime,
-        local_tz: ZoneInfo,
-        exclude_booking_id: Optional[UUID] = None,
+        self, facility_id: UUID, start_at: datetime, end_at: datetime, local_tz: ZoneInfo, exclude_booking_id: Optional[UUID] = None
     ) -> None:
-        if await self._repository.has_confirmed_slot_overlap(
-            facility_id=facility_id,
-            start_at=start_at,
-            end_at=end_at,
-            exclude_booking_id=exclude_booking_id,
-        ):
+        if await self._repository.has_confirmed_slot_overlap(facility_id=facility_id, start_at=start_at, end_at=end_at, exclude_booking_id=exclude_booking_id):
             raise ConflictErrorException(
                 detail=f"Room {facility_id} has a scheduling conflict",
                 error_code=BookingErrorCode.SCHEDULING_CONFLICT.value,
                 context={"facility_id": str(facility_id)},
             )
-        if await self._blackout_repository.has_blackout_overlap(
-            facility_id=facility_id,
-            start_at=start_at,
-            end_at=end_at,
-            tz=local_tz,
-        ):
+        if await self._blackout_repository.has_blackout_overlap(facility_id=facility_id, start_at=start_at, end_at=end_at, tz=local_tz):
             raise BadRequestException(
                 detail=f"Room {facility_id} is closed for the selected time",
                 error_code=BookingErrorCode.ROOM_BLACKOUT.value,
                 context={"facility_id": str(facility_id)},
             )
 
-    async def _validate_ministry_booking_gate(
-        self,
-        ministry_id: Optional[UUID],
-        booker_id: Optional[UUID] = None,
-    ) -> None:
+    async def _validate_ministry_booking_gate(self, ministry_id: Optional[UUID], booker_id: Optional[UUID] = None) -> None:
         if ministry_id is None:
             return
         status = await self._ministry_repository.get_status(ministry_id)
         if status != MinistryStatus.ACTIVE.value:
             raise BadRequestException(detail="Ministry must be active for booking")
-        user_id = booker_id if booker_id is not None else (
-            self._user_ctx.user_id if self._user_ctx else None
-        )
+        user_id = booker_id if booker_id is not None else (self._user_ctx.user_id if self._user_ctx else None)
         if not user_id:
             raise ForbiddenException(detail="Authenticated user required for ministry booking")
         if not await self._ministry_repository.is_user_booking_member(ministry_id, user_id):

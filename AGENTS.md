@@ -17,7 +17,7 @@ This document helps AI agents quickly understand the **NewLife Core API** codeba
 | **DI**              | `dependency-injector`                                                                                            |
 | **Package manager** | uv (`uv run …`)                                                                                                  |
 | **Python**          | 3.14+ (see `pyproject.toml`)                                                                                     |
-| **Migrations**      | Alembic — **agents must not add/modify/delete files under `alembic/`**                                           |
+| **Migrations**      | Alembic — **agents must not add/modify/delete files under `alembic/versions/`**                                  |
 
 ### Related repositories
 
@@ -52,7 +52,13 @@ uv run uvicorn portal.main:app --reload
 # Tests
 uv run pytest
 uv run pytest tests/application/rbac/test_permission_service.py -v
+
+# Format (layout, then import sort — I only)
+uv run ruff format
+uv run ruff check --fix
 ```
+
+Python layout is Ruff, not PyCharm Reformat. Disable PyCharm's built-in Python formatter, or use a Ruff plugin that reads `[tool.ruff]`. EditorConfig `ij_python_*` wrap/align keys are not the contract.
 
 | URL                                      | Description                 |
 | ---------------------------------------- | --------------------------- |
@@ -357,7 +363,7 @@ Use **Permission** or **Verb** as the reference implementation.
 4. **ORM** (if new tables)
    - `portal/models/<schema>/<entity>.py`
    - Register in `portal/models/__init__.py`
-   - **Do not** edit `alembic/` — human runs migrations
+   - **Do not** edit `alembic/versions/` — human runs migrations
 
 5. **Delivery**
    - `serializers/admin/v1/<ctx>/` — request/response models
@@ -395,13 +401,14 @@ Use **Permission** or **Verb** as the reference implementation.
 
 | Action                                           | Reason                                        |
 | ------------------------------------------------ | --------------------------------------------- |
-| Add/modify/delete `alembic/**`                   | Project policy — migrations are human-managed |
+| Add/modify/delete `alembic/versions/**`          | Project policy — migrations are human-managed |
 | Import `portal.models` in application services   | Clean Architecture boundary                   |
 | Import `portal.serializers` outside `mappers.py` | Boundary violation                            |
 | Map repositories to `Admin*Serializer`           | Use application `results`                     |
 | Use non-ASCII in comments                        | Project standard                              |
 | Run `git commit/push/merge` unless user asks     | Automation policy                             |
-| Check/format with black, isort, flake8           | Not used in this project                      |
+| Check/format with black, isort, flake8           | Use Ruff instead (`uv run ruff format`, then `uv run ruff check --fix`) |
+| Broaden `ruff check` lint select beyond `I`      | Formatter contract is format + import sort only |
 
 ---
 
@@ -411,6 +418,8 @@ Use **Permission** or **Verb** as the reference implementation.
 | ------------------------------------------------------------------------- | --------------------------------------------------------- |
 | `README.md`                                                               | Architecture diagrams, setup, Alembic usage               |
 | `.cursor/rules/standard.mdc`                                              | Full coding standards (ORM examples, repository patterns) |
+| `pyproject.toml`                                                          | uv + Ruff contract (`[tool.ruff]`)                        |
+| `docs/adr/0003-ruff-is-the-formatter.md`                                  | Why Ruff, I-only lint select, not Black                   |
 | `portal/apps.py`                                                          | App mounting, middleware, exception handlers              |
 | `portal/container.py`                                                     | All wired services                                        |
 | `portal/routers/admin/v1/permission.py`                                   | Canonical router pattern                                  |

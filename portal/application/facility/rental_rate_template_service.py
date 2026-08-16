@@ -1,6 +1,7 @@
 """
 Facility rental rate template application service.
 """
+
 import json
 import uuid
 from typing import Optional
@@ -8,26 +9,11 @@ from uuid import UUID
 
 from pydantic import ValidationError
 
-from portal.application.facility.commands import (
-    CreateRentalRateTemplateCommand,
-    DeleteCommand,
-    PagesQueryCommand,
-    UpdateRentalRateTemplateCommand,
-)
-from portal.application.facility.results import (
-    CreateIdResult,
-    RentalRateTemplateListResult,
-    RentalRateTemplatePageResult,
-    RentalRateTemplateResult,
-)
+from portal.application.facility.commands import CreateRentalRateTemplateCommand, DeleteCommand, PagesQueryCommand, UpdateRentalRateTemplateCommand
+from portal.application.facility.results import CreateIdResult, RentalRateTemplateListResult, RentalRateTemplatePageResult, RentalRateTemplateResult
 from portal.domain.facility.constants import RentalRateBillingUnit
 from portal.domain.facility.rate_applicability import parse_applicability
-from portal.exceptions.responses import (
-    ApiBaseException,
-    BadRequestException,
-    ConflictErrorException,
-    NotFoundException,
-)
+from portal.exceptions.responses import ApiBaseException, BadRequestException, ConflictErrorException, NotFoundException
 from portal.infrastructure.persistence.repositories.facility.rental_repository import RentalRepository
 from portal.libs.logger import logger
 from portal.libs.tracing.distributed_trace import distributed_trace
@@ -56,12 +42,7 @@ class RentalRateTemplateService:
     @distributed_trace()
     async def get_template_pages(self, command: PagesQueryCommand) -> RentalRateTemplatePageResult:
         items, count = await self._repository.fetch_template_pages(command)
-        return RentalRateTemplatePageResult(
-            page=command.page,
-            page_size=command.page_size,
-            total=count,
-            items=items,
-        )
+        return RentalRateTemplatePageResult(page=command.page, page_size=command.page_size, total=count, items=items)
 
     @distributed_trace()
     async def get_template_list(self) -> RentalRateTemplateListResult:
@@ -131,9 +112,7 @@ class RentalRateTemplateService:
             raise NotFoundException(detail=f"Rental rate template {template_id} not found")
         rate_count = await self._repository.count_rates_for_template(template_id)
         if rate_count > 0:
-            raise BadRequestException(
-                detail="Cannot delete rental rate template while rates still reference it"
-            )
+            raise BadRequestException(detail="Cannot delete rental rate template while rates still reference it")
         if command.permanent:
             raise BadRequestException(detail="Permanent delete is not supported for rental rate templates")
         await self._repository.delete_template_soft(template_id, command.reason)

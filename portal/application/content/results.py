@@ -1,6 +1,7 @@
 """
 Content application results (snake_case, no API serialization aliases).
 """
+
 from datetime import datetime
 from typing import Optional
 from uuid import UUID

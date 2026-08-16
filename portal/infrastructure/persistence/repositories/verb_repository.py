@@ -1,6 +1,7 @@
 """
 Verb repository implementation.
 """
+
 from uuid import UUID
 
 import sqlalchemy as sa
@@ -23,20 +24,9 @@ class VerbRepository:
         :return:
         """
         verbs: list[VerbListItem] = await (
-            self._session.select(
-                AuthVerb.id,
-                AuthVerb.action,
-                AuthVerbTranslation.name,
-                AuthVerbTranslation.description,
-            )
+            self._session.select(AuthVerb.id, AuthVerb.action, AuthVerbTranslation.name, AuthVerbTranslation.description)
             .select_from(AuthVerb)
-            .join(
-                AuthVerbTranslation,
-                sa.and_(
-                    AuthVerbTranslation.verb_id == AuthVerb.id,
-                    AuthVerbTranslation.locale_id == locale_id,
-                ),
-            )
+            .join(AuthVerbTranslation, sa.and_(AuthVerbTranslation.verb_id == AuthVerb.id, AuthVerbTranslation.locale_id == locale_id))
             .where(AuthVerb.is_active == True)
             .where(AuthVerb.is_deleted == False)
             .order_by(AuthVerb.created_at)

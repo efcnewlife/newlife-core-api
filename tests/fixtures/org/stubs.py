@@ -1,6 +1,7 @@
 """
 Stub repositories for org application unit tests.
 """
+
 from typing import Optional
 from uuid import UUID
 
@@ -54,9 +55,7 @@ class StubMinistryRepository:
     """In-memory org ministry stub."""
 
     def __init__(
-        self,
-        ministry_by_id: dict[UUID, MinistryDetailResult] | None = None,
-        members_by_ministry: dict[UUID, list[MinistryMemberResult]] | None = None,
+        self, ministry_by_id: dict[UUID, MinistryDetailResult] | None = None, members_by_ministry: dict[UUID, list[MinistryMemberResult]] | None = None
     ):
         self.ministry_by_id = ministry_by_id or {}
         self.members_by_ministry = members_by_ministry or {}
@@ -69,12 +68,7 @@ class StubMinistryRepository:
         self.insert_approval_calls: list[dict] = []
         self.update_approval_calls: list[dict] = []
 
-    async def get_by_id(
-        self,
-        ministry_id: UUID,
-        locale_id: Optional[UUID] = None,
-        all_locales: bool = False,
-    ) -> MinistryDetailResult | None:
+    async def get_by_id(self, ministry_id: UUID, locale_id: Optional[UUID] = None, all_locales: bool = False) -> MinistryDetailResult | None:
         return self.ministry_by_id.get(ministry_id)
 
     async def insert_ministry(self, payload: dict) -> None:
@@ -93,22 +87,14 @@ class StubMinistryRepository:
     async def list_members(self, ministry_id: UUID) -> list[MinistryMemberResult]:
         return self.members_by_ministry.get(ministry_id, [])
 
-    async def replace_members(
-        self,
-        ministry_id: UUID,
-        members: list[dict],
-    ) -> None:
-        self.replace_members_calls.append(
-            dict(ministry_id=ministry_id, members=members)
-        )
+    async def replace_members(self, ministry_id: UUID, members: list[dict]) -> None:
+        self.replace_members_calls.append(dict(ministry_id=ministry_id, members=members))
 
     async def upsert_schedules(self, ministry_id: UUID, rows: list[dict]) -> None:
         self.upsert_schedules_calls.append(dict(ministry_id=ministry_id, rows=rows))
 
     async def upsert_target_audiences(self, ministry_id: UUID, audience_ids: list[UUID]) -> None:
-        self.upsert_target_audiences_calls.append(
-            dict(ministry_id=ministry_id, audience_ids=audience_ids)
-        )
+        self.upsert_target_audiences_calls.append(dict(ministry_id=ministry_id, audience_ids=audience_ids))
 
     async def list_schedules(self, ministry_id: UUID):
         return []

@@ -1,6 +1,7 @@
 """
 RentalRateTemplateService unit tests.
 """
+
 from decimal import Decimal
 from uuid import uuid4
 
@@ -9,11 +10,7 @@ import pytest
 from portal.application.facility.commands import DeleteCommand
 from portal.application.facility.rental_rate_template_service import RentalRateTemplateService
 from portal.exceptions.responses import BadRequestException, ConflictErrorException, NotFoundException
-from tests.fixtures.facility.factories import (
-    make_create_rental_rate_template_command,
-    make_rental_rate_template,
-    new_uuid,
-)
+from tests.fixtures.facility.factories import make_create_rental_rate_template_command, make_rental_rate_template, new_uuid
 from tests.fixtures.facility.stubs import StubRentalRepository
 
 

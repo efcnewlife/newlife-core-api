@@ -1,6 +1,7 @@
 """
 MSGraphClientBase — app-only Microsoft Graph beta client.
 """
+
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Type
 
@@ -11,9 +12,7 @@ from msgraph_beta.generated.models.o_data_errors.o_data_error import ODataError
 from msgraph_beta.graph_request_adapter import GraphRequestAdapter
 
 from portal.config import settings
-from portal.providers.ms_graph.authentication_provider import (
-    CustomAzureIdentityAuthenticationProvider,
-)
+from portal.providers.ms_graph.authentication_provider import CustomAzureIdentityAuthenticationProvider
 
 GRAPH_SCOPE = ["https://graph.microsoft.com/.default"]
 GRAPH_BASE_URL = "https://graph.microsoft.com/beta"
@@ -49,18 +48,11 @@ class MSGraphClientBase:
     def _credential(self) -> ClientSecretCredential:
         if not self.is_configured():
             raise RuntimeError("Microsoft Graph is not configured")
-        return ClientSecretCredential(
-            tenant_id=str(self._tenant_id),
-            client_id=str(self._client_id),
-            client_secret=str(self._client_secret),
-        )
+        return ClientSecretCredential(tenant_id=str(self._tenant_id), client_id=str(self._client_id), client_secret=str(self._client_secret))
 
     @property
     def _auth_provider(self) -> CustomAzureIdentityAuthenticationProvider:
-        return CustomAzureIdentityAuthenticationProvider(
-            credentials=self._credential,
-            scopes=GRAPH_SCOPE,
-        )
+        return CustomAzureIdentityAuthenticationProvider(credentials=self._credential, scopes=GRAPH_SCOPE)
 
     @property
     def _request_adapter(self) -> GraphRequestAdapter:
@@ -74,10 +66,7 @@ class MSGraphClientBase:
 
     @property
     def default_error(self) -> Dict[str, Type[ODataError]]:
-        return {
-            "4XX": ODataError,
-            "5XX": ODataError,
-        }
+        return {"4XX": ODataError, "5XX": ODataError}
 
     def as_application(self, as_application: bool = True) -> "MSGraphClientBase":
         self.configuration.as_application = as_application
@@ -118,9 +107,7 @@ class MSGraphClientBase:
     def add_query_parameter(self, query_parameter: Any = None) -> "MSGraphClientBase":
         if not query_parameter:
             return self
-        assert hasattr(query_parameter, "get_query_parameter"), (
-            "object must have get_query_parameter method"
-        )
+        assert hasattr(query_parameter, "get_query_parameter"), "object must have get_query_parameter method"
         self.configuration.query_parameters = query_parameter
         return self
 

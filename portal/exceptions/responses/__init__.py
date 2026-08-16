@@ -1,9 +1,9 @@
 """
 Top-level package for responses of exceptions.
 """
-from .base import *
-from .auth import *
 
+from .auth import *
+from .base import *
 
 __all__ = [
     # base
@@ -18,6 +18,5 @@ __all__ = [
     "InvalidTokenException",  # 401
     "UnauthorizedException",  # 401
     "RefreshTokenInvalidException",  # 401
-    "ForbiddenException"  # 403
+    "ForbiddenException",  # 403
 ]
-

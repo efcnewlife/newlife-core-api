@@ -1,13 +1,13 @@
 """
 RBAC application commands (snake_case, no API serialization aliases).
 """
+
 from typing import Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
 
 from portal.domain.common.mixins import UUIDBaseModel
-
 from portal.libs.consts.enums import Gender, ResourceType
 
 

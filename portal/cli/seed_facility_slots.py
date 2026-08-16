@@ -1,6 +1,7 @@
 """
 Facility slot template and blackout seed CLI commands.
 """
+
 import asyncio
 
 import click
@@ -10,10 +11,7 @@ from portal.config import settings
 from portal.container import Container
 from portal.libs.logger import logger
 
-from .datas.facility_slot_seed_data import (
-    facility_blackout_seed_rows,
-    facility_slot_template_seed_rows,
-)
+from .datas.facility_slot_seed_data import facility_blackout_seed_rows, facility_slot_template_seed_rows
 
 
 async def seed_facility_slots() -> None:
@@ -21,11 +19,7 @@ async def seed_facility_slots() -> None:
     container = Container()
     session = container.db_session()
     try:
-        await run_facility_slot_seed(
-            session,
-            slot_rows=facility_slot_template_seed_rows,
-            blackout_rows=facility_blackout_seed_rows,
-        )
+        await run_facility_slot_seed(session, slot_rows=facility_slot_template_seed_rows, blackout_rows=facility_blackout_seed_rows)
     except Exception as error:
         await session.rollback()
         click.echo(click.style(f"Facility slot seed failed: {error}", fg="red"))
@@ -38,12 +32,7 @@ async def seed_facility_slots() -> None:
 def seed_facility_slots_process(*, force: bool = False) -> None:
     """Synchronous entry to run facility slot / blackout seed."""
     if not settings.IS_DEV and not force:
-        click.echo(
-            click.style(
-                f"seed-facility-slots is blocked when ENV={settings.ENV!r}. Pass --force to proceed.",
-                fg="red",
-            )
-        )
+        click.echo(click.style(f"seed-facility-slots is blocked when ENV={settings.ENV!r}. Pass --force to proceed.", fg="red"))
         raise SystemExit(1)
 
     if not force:

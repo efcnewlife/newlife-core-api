@@ -1,36 +1,21 @@
 """
 Org position repository.
 """
+
 from datetime import datetime, timezone
 from typing import Any, Optional
 from uuid import UUID
 
-import ujson
 import sqlalchemy as sa
+import ujson
 from asyncpg import UniqueViolationError
 
-from portal.application.org.results import (
-    AssignablePositionResult,
-    PositionDetailResult,
-    PositionListItemResult,
-    PositionTranslationItemResult,
-)
+from portal.application.org.results import AssignablePositionResult, PositionDetailResult, PositionListItemResult, PositionTranslationItemResult
 from portal.application.rbac.commands import PagesQueryCommand
-from portal.infrastructure.persistence.repositories.shared.translation_queries import (
-    locale_scoped_max,
-    position_name_fallback,
-    position_translations_agg,
-)
+from portal.infrastructure.persistence.repositories.shared.translation_queries import locale_scoped_max, position_name_fallback, position_translations_agg
 from portal.libs.database import Session
 from portal.libs.database.execute_result import affected_rows
-from portal.models import (
-    AuthUser,
-    AuthUserProfile,
-    OrgPosition,
-    OrgPositionAssignment,
-    OrgPositionTranslation,
-    SystemLocale,
-)
+from portal.models import AuthUser, AuthUserProfile, OrgPosition, OrgPositionAssignment, OrgPositionTranslation, SystemLocale
 from portal.models.mixins.context import apply_audit_fields_to_rows
 
 
@@ -61,17 +46,10 @@ class PositionRepository:
     def _detail_query(self, locale_id: Optional[UUID] = None, all_locales: bool = False):
         query = self._detail_select(locale_id)
         if all_locales:
-            return query.outerjoin(
-                OrgPositionTranslation,
-                OrgPositionTranslation.position_id == OrgPosition.id,
-            )
+            return query.outerjoin(OrgPositionTranslation, OrgPositionTranslation.position_id == OrgPosition.id)
         if locale_id:
             return query.outerjoin(
-                OrgPositionTranslation,
-                sa.and_(
-                    OrgPositionTranslation.position_id == OrgPosition.id,
-                    OrgPositionTranslation.locale_id == locale_id,
-                ),
+                OrgPositionTranslation, sa.and_(OrgPositionTranslation.position_id == OrgPosition.id, OrgPositionTranslation.locale_id == locale_id)
             )
         return query.outerjoin(OrgPositionTranslation, sa.false())
 
@@ -104,7 +82,9 @@ class PositionRepository:
         data = row.model_dump()
         # #region agent log
         try:
-            import json as _json, time as _time
+            import json as _json
+            import time as _time
+
             _name_before = data.get("name")
             _tr_raw = data.get("translations")
             _tr_first_name = None
@@ -117,10 +97,7 @@ class PositionRepository:
                         _tr_first_name = _json.loads(_first).get("name")
                     except Exception:
                         _tr_first_name = None
-            with open(
-                "/Users/jayhsia/Projects/github/organization/efcnewlife/newlife-core-api/.cursor/debug-a40f35.log",
-                "a",
-            ) as _f:
+            with open("/Users/jayhsia/Projects/github/organization/efcnewlife/newlife-core-api/.cursor/debug-a40f35.log", "a") as _f:
                 _f.write(
                     _json.dumps(
                         {
@@ -128,12 +105,7 @@ class PositionRepository:
                             "hypothesisId": "A",
                             "location": "position_repository.py:_normalize_row:before_pop",
                             "message": "name before pop",
-                            "data": {
-                                "code": data.get("code"),
-                                "name_before": _name_before,
-                                "team": data.get("team"),
-                                "translation_first_name": _tr_first_name,
-                            },
+                            "data": {"code": data.get("code"), "name_before": _name_before, "team": data.get("team"), "translation_first_name": _tr_first_name},
                             "timestamp": int(_time.time() * 1000),
                             "runId": "post-fix",
                         }
@@ -147,11 +119,10 @@ class PositionRepository:
         data["translations"] = self._parse_translations(translations)
         # #region agent log
         try:
-            import json as _json, time as _time
-            with open(
-                "/Users/jayhsia/Projects/github/organization/efcnewlife/newlife-core-api/.cursor/debug-a40f35.log",
-                "a",
-            ) as _f:
+            import json as _json
+            import time as _time
+
+            with open("/Users/jayhsia/Projects/github/organization/efcnewlife/newlife-core-api/.cursor/debug-a40f35.log", "a") as _f:
                 _f.write(
                     _json.dumps(
                         {
@@ -163,11 +134,7 @@ class PositionRepository:
                                 "code": data.get("code"),
                                 "name_in_data": data.get("name"),
                                 "parsed_translations_count": len(data.get("translations") or []),
-                                "parsed_first_name": (
-                                    data["translations"][0].name
-                                    if data.get("translations")
-                                    else None
-                                ),
+                                "parsed_first_name": (data["translations"][0].name if data.get("translations") else None),
                             },
                             "timestamp": int(_time.time() * 1000),
                             "runId": "post-fix",
@@ -183,11 +150,7 @@ class PositionRepository:
     def _normalize_items(self, items: list[PositionDetailResult]) -> list[PositionDetailResult]:
         return [self._normalize_row(item) for item in items if item]
 
-    async def fetch_pages(
-        self,
-        model: PagesQueryCommand,
-        locale_id: Optional[UUID],
-    ) -> tuple[list[PositionDetailResult], int]:
+    async def fetch_pages(self, model: PagesQueryCommand, locale_id: Optional[UUID]) -> tuple[list[PositionDetailResult], int]:
         keyword_exists = sa.exists(
             sa.select(1)
             .select_from(OrgPositionTranslation)
@@ -201,20 +164,10 @@ class PositionRepository:
             )
         )
         query = self._detail_query(locale_id).where(OrgPosition.is_deleted == model.deleted)
-        query = query.where(
-            model.keyword,
-            lambda: sa.or_(
-                OrgPosition.code.ilike(f"%{model.keyword}%"),
-                keyword_exists,
-            ),
-        )
+        query = query.where(model.keyword, lambda: sa.or_(OrgPosition.code.ilike(f"%{model.keyword}%"), keyword_exists))
         items, count = await (
             query.group_by(OrgPosition.id)
-            .order_by_with(
-                tables=[OrgPosition],
-                order_by=model.order_by,
-                descending=model.descending,
-            )
+            .order_by_with(tables=[OrgPosition], order_by=model.order_by, descending=model.descending)
             .limit(model.page_size)
             .offset(model.page * model.page_size)
             .fetchpages(no_order_by=False, as_model=PositionDetailResult)
@@ -226,44 +179,27 @@ class PositionRepository:
             incumbent = incumbent_map.get(item.id)
             enriched.append(
                 item.model_copy(
-                    update={
-                        "current_user_id": incumbent[0] if incumbent else None,
-                        "current_user_display_name": incumbent[1] if incumbent else None,
-                    }
+                    update={"current_user_id": incumbent[0] if incumbent else None, "current_user_display_name": incumbent[1] if incumbent else None}
                 )
             )
         return enriched, count
 
-    async def get_by_id(
-        self,
-        position_id: UUID,
-        locale_id: Optional[UUID] = None,
-        all_locales: bool = False,
-    ) -> Optional[PositionDetailResult]:
+    async def get_by_id(self, position_id: UUID, locale_id: Optional[UUID] = None, all_locales: bool = False) -> Optional[PositionDetailResult]:
         row: Optional[PositionDetailResult] = await (
-            self._detail_query(locale_id, all_locales)
-            .where(OrgPosition.id == position_id)
-            .group_by(OrgPosition.id)
-            .fetchrow(as_model=PositionDetailResult)
+            self._detail_query(locale_id, all_locales).where(OrgPosition.id == position_id).group_by(OrgPosition.id).fetchrow(as_model=PositionDetailResult)
         )
         normalized = self._normalize_row(row)
         if not normalized:
             return None
         incumbent = await self._current_incumbent(position_id)
         return normalized.model_copy(
-            update={
-                "current_user_id": incumbent[0] if incumbent else None,
-                "current_user_display_name": incumbent[1] if incumbent else None,
-            }
+            update={"current_user_id": incumbent[0] if incumbent else None, "current_user_display_name": incumbent[1] if incumbent else None}
         )
 
     async def _current_incumbent(self, position_id: UUID) -> Optional[tuple[UUID, Optional[str]]]:
         display_name = sa.func.coalesce(AuthUserProfile.preferred_name, AuthUser.email)
         row = await (
-            self._session.select(
-                OrgPositionAssignment.user_id,
-                display_name.label("display_name"),
-            )
+            self._session.select(OrgPositionAssignment.user_id, display_name.label("display_name"))
             .select_from(OrgPositionAssignment)
             .outerjoin(AuthUser, AuthUser.id == OrgPositionAssignment.user_id)
             .outerjoin(AuthUserProfile, AuthUserProfile.user_id == AuthUser.id)
@@ -277,19 +213,12 @@ class PositionRepository:
             return None
         return row["user_id"], row.get("display_name")
 
-    async def _batch_current_incumbents(
-        self,
-        position_ids: list[UUID],
-    ) -> dict[UUID, tuple[UUID, Optional[str]]]:
+    async def _batch_current_incumbents(self, position_ids: list[UUID]) -> dict[UUID, tuple[UUID, Optional[str]]]:
         if not position_ids:
             return {}
         display_name = sa.func.coalesce(AuthUserProfile.preferred_name, AuthUser.email)
         rows = await (
-            self._session.select(
-                OrgPositionAssignment.position_id,
-                OrgPositionAssignment.user_id,
-                display_name.label("display_name"),
-            )
+            self._session.select(OrgPositionAssignment.position_id, OrgPositionAssignment.user_id, display_name.label("display_name"))
             .select_from(OrgPositionAssignment)
             .outerjoin(AuthUser, AuthUser.id == OrgPositionAssignment.user_id)
             .outerjoin(AuthUserProfile, AuthUserProfile.user_id == AuthUser.id)
@@ -319,35 +248,20 @@ class PositionRepository:
         ).select_from(OrgPosition)
         if locale_id:
             query = query.outerjoin(
-                OrgPositionTranslation,
-                sa.and_(
-                    OrgPositionTranslation.position_id == OrgPosition.id,
-                    OrgPositionTranslation.locale_id == locale_id,
-                ),
+                OrgPositionTranslation, sa.and_(OrgPositionTranslation.position_id == OrgPosition.id, OrgPositionTranslation.locale_id == locale_id)
             )
         else:
             query = query.outerjoin(OrgPositionTranslation, sa.false())
-        query = query.outerjoin(
-            OrgPositionAssignment,
-            sa.and_(
-                OrgPositionAssignment.position_id == OrgPosition.id,
-                OrgPositionAssignment.end_at.is_(None),
-            ),
-        ).outerjoin(AuthUser, AuthUser.id == OrgPositionAssignment.user_id).outerjoin(
-            AuthUserProfile,
-            AuthUserProfile.user_id == AuthUser.id,
+        query = (
+            query.outerjoin(OrgPositionAssignment, sa.and_(OrgPositionAssignment.position_id == OrgPosition.id, OrgPositionAssignment.end_at.is_(None)))
+            .outerjoin(AuthUser, AuthUser.id == OrgPositionAssignment.user_id)
+            .outerjoin(AuthUserProfile, AuthUserProfile.user_id == AuthUser.id)
         )
         items: list[AssignablePositionResult] = await (
             query.where(OrgPosition.is_deleted == False)
             .where(OrgPosition.is_active == True)
             .where(OrgPosition.can_own_ministry == True)
-            .group_by(
-                OrgPosition.id,
-                OrgPosition.code,
-                OrgPositionAssignment.user_id,
-                AuthUser.email,
-                AuthUserProfile.preferred_name,
-            )
+            .group_by(OrgPosition.id, OrgPosition.code, OrgPositionAssignment.user_id, AuthUser.email, AuthUserProfile.preferred_name)
             .order_by(OrgPosition.sequence)
             .fetch(as_model=AssignablePositionResult)
         )
@@ -367,13 +281,7 @@ class PositionRepository:
         await self._session.insert(OrgPosition).values(payload).execute()
 
     async def update_position(self, position_id: UUID, values: dict[str, Any]) -> int:
-        result = await (
-            self._session.update(OrgPosition)
-            .values(**values)
-            .where(OrgPosition.id == position_id)
-            .where(OrgPosition.is_deleted == False)
-            .execute()
-        )
+        result = await self._session.update(OrgPosition).values(**values).where(OrgPosition.id == position_id).where(OrgPosition.is_deleted == False).execute()
         return affected_rows(result)
 
     async def upsert_translations(self, rows: list[dict[str, Any]]) -> None:
@@ -394,12 +302,7 @@ class PositionRepository:
             .execute()
         )
 
-    async def assign_incumbent(
-        self,
-        position_id: UUID,
-        user_id: UUID,
-        start_at: Optional[datetime] = None,
-    ) -> None:
+    async def assign_incumbent(self, position_id: UUID, user_id: UUID, start_at: Optional[datetime] = None) -> None:
         now = start_at or datetime.now(timezone.utc)
         await (
             self._session.update(OrgPositionAssignment)
@@ -408,39 +311,17 @@ class PositionRepository:
             .where(OrgPositionAssignment.end_at.is_(None))
             .execute()
         )
-        await (
-            self._session.insert(OrgPositionAssignment)
-            .values(
-                position_id=position_id,
-                user_id=user_id,
-                start_at=now,
-            )
-            .execute()
-        )
+        await self._session.insert(OrgPositionAssignment).values(position_id=position_id, user_id=user_id, start_at=now).execute()
 
     async def delete_soft(self, position_id: UUID, reason: Optional[str]) -> None:
-        await (
-            self._session.update(OrgPosition)
-            .values(is_deleted=True, delete_reason=reason)
-            .where(OrgPosition.id == position_id)
-            .execute()
-        )
+        await self._session.update(OrgPosition).values(is_deleted=True, delete_reason=reason).where(OrgPosition.id == position_id).execute()
 
     async def delete_hard(self, position_id: UUID) -> None:
-        await (
-            self._session.delete(OrgPositionAssignment)
-            .where(OrgPositionAssignment.position_id == position_id)
-            .execute()
-        )
+        await self._session.delete(OrgPositionAssignment).where(OrgPositionAssignment.position_id == position_id).execute()
         await self._session.delete(OrgPosition).where(OrgPosition.id == position_id).execute()
 
     async def restore_position(self, position_id: UUID) -> None:
-        await (
-            self._session.update(OrgPosition)
-            .values(is_deleted=False, delete_reason=None)
-            .where(OrgPosition.id == position_id)
-            .execute()
-        )
+        await self._session.update(OrgPosition).values(is_deleted=False, delete_reason=None).where(OrgPosition.id == position_id).execute()
 
     @staticmethod
     def is_unique_violation(exc: Exception) -> bool:

@@ -1,18 +1,14 @@
 """
 System setting application commands.
 """
+
 from typing import Any, Optional
 
 from pydantic import BaseModel, Field
 
 from portal.application.rbac.commands import BulkIdsCommand, DeleteCommand
 
-__all__ = [
-    "BulkIdsCommand",
-    "CreateSettingCommand",
-    "DeleteCommand",
-    "UpdateSettingCommand",
-]
+__all__ = ["BulkIdsCommand", "CreateSettingCommand", "DeleteCommand", "UpdateSettingCommand"]
 
 
 class UpdateSettingCommand(BaseModel):

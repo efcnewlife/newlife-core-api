@@ -1,6 +1,7 @@
 """
 Tests for RoleService.
 """
+
 from uuid import uuid4
 
 import pytest
@@ -11,11 +12,7 @@ from portal.domain.rbac.entities import RoleListItem
 
 
 class StubRoleRepository:
-    def __init__(
-        self,
-        active_roles=None,
-        user_role_codes=None,
-    ):
+    def __init__(self, active_roles=None, user_role_codes=None):
         self._active_roles = active_roles or []
         self._user_role_codes = user_role_codes or []
         self.list_active_called = False
@@ -51,15 +48,8 @@ class StubRbacAuditService:
 
 @pytest.mark.asyncio
 async def test_get_active_roles_returns_empty_without_locale_context(monkeypatch):
-    monkeypatch.setattr(
-        "portal.application.rbac.role_service.get_request_context",
-        lambda: None,
-    )
-    service = RoleService(
-        StubRoleRepository(),
-        StubRoleCache(),
-        StubRbacAuditService(),
-    )
+    monkeypatch.setattr("portal.application.rbac.role_service.get_request_context", lambda: None)
+    service = RoleService(StubRoleRepository(), StubRoleCache(), StubRbacAuditService())
     result = await service.get_active_roles()
     assert result.items == []
 
@@ -67,19 +57,12 @@ async def test_get_active_roles_returns_empty_without_locale_context(monkeypatch
 @pytest.mark.asyncio
 async def test_get_active_roles_loads_from_repository(monkeypatch):
     locale_id = uuid4()
-    role = RoleListItem(
-        id=uuid4(),
-        code="admin",
-        name="Administrator",
-    )
+    role = RoleListItem(id=uuid4(), code="admin", name="Administrator")
 
     class ReqCtx:
         resolved_locale_id = locale_id
 
-    monkeypatch.setattr(
-        "portal.application.rbac.role_service.get_request_context",
-        lambda: ReqCtx(),
-    )
+    monkeypatch.setattr("portal.application.rbac.role_service.get_request_context", lambda: ReqCtx())
     repo = StubRoleRepository(active_roles=[role])
     service = RoleService(repo, StubRoleCache(), StubRbacAuditService())
     result = await service.get_active_roles()
@@ -91,14 +74,7 @@ async def test_get_active_roles_loads_from_repository(monkeypatch):
 @pytest.mark.asyncio
 async def test_init_user_roles_cache_superuser(monkeypatch):
     user_id = uuid4()
-    user = UserSensitive(
-        id=user_id,
-        email="admin@example.com",
-        verified=True,
-        is_active=True,
-        is_superuser=True,
-        is_admin=True,
-    )
+    user = UserSensitive(id=user_id, email="admin@example.com", verified=True, is_active=True, is_superuser=True, is_admin=True)
     repo = StubRoleRepository()
     cache = StubRoleCache()
     service = RoleService(repo, cache, StubRbacAuditService())
@@ -112,14 +88,7 @@ async def test_init_user_roles_cache_superuser(monkeypatch):
 @pytest.mark.asyncio
 async def test_init_user_roles_cache_regular_user(monkeypatch):
     user_id = uuid4()
-    user = UserSensitive(
-        id=user_id,
-        email="user@example.com",
-        verified=True,
-        is_active=True,
-        is_superuser=False,
-        is_admin=True,
-    )
+    user = UserSensitive(id=user_id, email="user@example.com", verified=True, is_active=True, is_superuser=False, is_admin=True)
     repo = StubRoleRepository(user_role_codes=["editor", "viewer"])
     cache = StubRoleCache()
     service = RoleService(repo, cache, StubRbacAuditService())
@@ -132,14 +101,7 @@ async def test_init_user_roles_cache_regular_user(monkeypatch):
 @pytest.mark.asyncio
 async def test_init_user_roles_cache_clears_when_no_roles(monkeypatch):
     user_id = uuid4()
-    user = UserSensitive(
-        id=user_id,
-        email="user@example.com",
-        verified=True,
-        is_active=True,
-        is_superuser=False,
-        is_admin=True,
-    )
+    user = UserSensitive(id=user_id, email="user@example.com", verified=True, is_active=True, is_superuser=False, is_admin=True)
     repo = StubRoleRepository(user_role_codes=[])
     cache = StubRoleCache()
     service = RoleService(repo, cache, StubRbacAuditService())

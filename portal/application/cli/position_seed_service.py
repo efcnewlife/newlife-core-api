@@ -1,6 +1,7 @@
 """
 Position seed use case for CLI.
 """
+
 import uuid
 from typing import Any, Optional
 
@@ -16,12 +17,7 @@ async def run_position_seed(session: Session, rows: list[dict[str, Any]]) -> Non
     Seed org positions and translations. Idempotent on position code.
     """
     locale_rows = await (
-        session.select(
-            SystemLocale.id,
-            SystemLocale.language_code,
-            SystemLocale.region_code,
-            SystemLocale.script_code,
-        )
+        session.select(SystemLocale.id, SystemLocale.language_code, SystemLocale.region_code, SystemLocale.script_code)
         .where(SystemLocale.is_active == True)
         .where(SystemLocale.is_deleted == False)
         .fetch()
@@ -56,27 +52,14 @@ async def run_position_seed(session: Session, rows: list[dict[str, Any]]) -> Non
         await (
             session.insert(OrgPosition)
             .values(
-                id=position_id,
-                code=row["code"],
-                can_own_ministry=row["can_own_ministry"],
-                is_active=row.get("is_active", True),
-                sequence=row.get("sequence"),
+                id=position_id, code=row["code"], can_own_ministry=row["can_own_ministry"], is_active=row.get("is_active", True), sequence=row.get("sequence")
             )
             .on_conflict_do_update(
-                index_elements=["code"],
-                set_=dict(
-                    can_own_ministry=row["can_own_ministry"],
-                    is_active=row.get("is_active", True),
-                    sequence=row.get("sequence"),
-                ),
+                index_elements=["code"], set_=dict(can_own_ministry=row["can_own_ministry"], is_active=row.get("is_active", True), sequence=row.get("sequence"))
             )
             .execute()
         )
-        existing_id = await (
-            session.select(OrgPosition.id)
-            .where(OrgPosition.code == row["code"])
-            .fetchval()
-        )
+        existing_id = await session.select(OrgPosition.id).where(OrgPosition.code == row["code"]).fetchval()
         position_id = existing_id or position_id
 
         row_team = row.get("team")
@@ -90,22 +73,8 @@ async def run_position_seed(session: Session, rows: list[dict[str, Any]]) -> Non
             office = row_office or translation.get("office")
             await (
                 session.insert(OrgPositionTranslation)
-                .values(
-                    id=uuid.uuid4(),
-                    position_id=position_id,
-                    locale_id=locale_id,
-                    team=team,
-                    office=office,
-                    name=translation["name"],
-                )
-                .on_conflict_do_update(
-                    index_elements=["position_id", "locale_id"],
-                    set_=dict(
-                        team=team,
-                        office=office,
-                        name=translation["name"],
-                    ),
-                )
+                .values(id=uuid.uuid4(), position_id=position_id, locale_id=locale_id, team=team, office=office, name=translation["name"])
+                .on_conflict_do_update(index_elements=["position_id", "locale_id"], set_=dict(team=team, office=office, name=translation["name"]))
                 .execute()
             )
         seeded += 1

@@ -1,7 +1,9 @@
 """
 Member facility API serializers.
 """
-from datetime import date as DateType, datetime
+
+from datetime import date as DateType
+from datetime import datetime
 from typing import Optional
 from uuid import UUID
 

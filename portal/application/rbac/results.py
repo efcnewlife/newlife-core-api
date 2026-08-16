@@ -1,6 +1,7 @@
 """
 RBAC application results.
 """
+
 from datetime import datetime
 from typing import Optional
 from uuid import UUID
@@ -12,11 +13,11 @@ from portal.domain.rbac.entities import (
     PermissionDetail,
     PermissionListItem,
     PermissionPageItem,
-    RoleDetail,
-    RoleListItem,
     ResourceDetail,
     ResourceItem,
     ResourceTreeNode,
+    RoleDetail,
+    RoleListItem,
     VerbListItem,
 )
 from portal.libs.consts.enums import Gender

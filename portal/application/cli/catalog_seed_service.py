@@ -1,6 +1,7 @@
 """
 Shared org catalog seed helpers for CLI.
 """
+
 import uuid
 from typing import Any, Optional, Type
 
@@ -11,22 +12,11 @@ from portal.models.system_locale import SystemLocale
 
 
 async def run_catalog_seed(
-    session: Session,
-    rows: list[dict[str, Any]],
-    *,
-    catalog_model: Type,
-    translation_model: Type,
-    catalog_fk_field: str,
-    label: str,
+    session: Session, rows: list[dict[str, Any]], *, catalog_model: Type, translation_model: Type, catalog_fk_field: str, label: str
 ) -> None:
     """Upsert catalog rows and translations by stable code."""
     locale_rows = await (
-        session.select(
-            SystemLocale.id,
-            SystemLocale.language_code,
-            SystemLocale.region_code,
-            SystemLocale.script_code,
-        )
+        session.select(SystemLocale.id, SystemLocale.language_code, SystemLocale.region_code, SystemLocale.script_code)
         .where(SystemLocale.is_active == True)
         .where(SystemLocale.is_deleted == False)
         .fetch()
@@ -60,26 +50,11 @@ async def run_catalog_seed(
         catalog_id = uuid.uuid4()
         await (
             session.insert(catalog_model)
-            .values(
-                id=catalog_id,
-                code=row["code"],
-                is_active=row.get("is_active", True),
-                sequence=row.get("sequence"),
-            )
-            .on_conflict_do_update(
-                index_elements=["code"],
-                set_=dict(
-                    is_active=row.get("is_active", True),
-                    sequence=row.get("sequence"),
-                ),
-            )
+            .values(id=catalog_id, code=row["code"], is_active=row.get("is_active", True), sequence=row.get("sequence"))
+            .on_conflict_do_update(index_elements=["code"], set_=dict(is_active=row.get("is_active", True), sequence=row.get("sequence")))
             .execute()
         )
-        existing_id = await (
-            session.select(catalog_model.id)
-            .where(catalog_model.code == row["code"])
-            .fetchval()
-        )
+        existing_id = await session.select(catalog_model.id).where(catalog_model.code == row["code"]).fetchval()
         catalog_id = existing_id or catalog_id
 
         for locale_code, translation in (row.get("translations") or {}).items():
@@ -89,14 +64,8 @@ async def run_catalog_seed(
                 continue
             await (
                 session.insert(translation_model)
-                .values(
-                    id=uuid.uuid4(),
-                    **{catalog_fk_field: catalog_id, "locale_id": locale_id, "name": translation["name"]},
-                )
-                .on_conflict_do_update(
-                    index_elements=[catalog_fk_field, "locale_id"],
-                    set_=dict(name=translation["name"]),
-                )
+                .values(id=uuid.uuid4(), **{catalog_fk_field: catalog_id, "locale_id": locale_id, "name": translation["name"]})
+                .on_conflict_do_update(index_elements=[catalog_fk_field, "locale_id"], set_=dict(name=translation["name"]))
                 .execute()
             )
         seeded += 1

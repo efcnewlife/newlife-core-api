@@ -1,6 +1,7 @@
 """
 Facility command validator tests.
 """
+
 import pytest
 from pydantic import ValidationError
 

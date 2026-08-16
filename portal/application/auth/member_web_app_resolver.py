@@ -1,6 +1,7 @@
 """
 Resolve member web app from the current request context.
 """
+
 from typing import Optional
 
 from portal.domain.auth.member_web_app import MemberWebAppRegistry

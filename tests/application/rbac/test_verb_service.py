@@ -1,6 +1,7 @@
 """
 Tests for VerbService.
 """
+
 from uuid import uuid4
 
 import pytest
@@ -34,10 +35,7 @@ class StubVerbListCache:
 
 @pytest.mark.asyncio
 async def test_get_verb_list_returns_empty_without_locale_context(monkeypatch):
-    monkeypatch.setattr(
-        "portal.application.rbac.verb_service.get_request_context",
-        lambda: None,
-    )
+    monkeypatch.setattr("portal.application.rbac.verb_service.get_request_context", lambda: None)
     service = VerbService(StubVerbRepository(), StubVerbListCache())
     result = await service.get_verb_list()
     assert result == VerbListResult(items=[])
@@ -46,20 +44,12 @@ async def test_get_verb_list_returns_empty_without_locale_context(monkeypatch):
 @pytest.mark.asyncio
 async def test_get_verb_list_uses_cache(monkeypatch):
     locale_id = uuid4()
-    cached_item = VerbListItem(
-        id=uuid4(),
-        action="read",
-        name="Read",
-        description=None,
-    )
+    cached_item = VerbListItem(id=uuid4(), action="read", name="Read", description=None)
 
     class ReqCtx:
         resolved_locale_id = locale_id
 
-    monkeypatch.setattr(
-        "portal.application.rbac.verb_service.get_request_context",
-        lambda: ReqCtx(),
-    )
+    monkeypatch.setattr("portal.application.rbac.verb_service.get_request_context", lambda: ReqCtx())
     repo = StubVerbRepository([cached_item])
     cache = StubVerbListCache([cached_item])
     service = VerbService(repo, cache)
@@ -72,20 +62,12 @@ async def test_get_verb_list_uses_cache(monkeypatch):
 @pytest.mark.asyncio
 async def test_get_verb_list_loads_from_repository_and_caches(monkeypatch):
     locale_id = uuid4()
-    item = VerbListItem(
-        id=uuid4(),
-        action="create",
-        name="Create",
-        description="Create resource",
-    )
+    item = VerbListItem(id=uuid4(), action="create", name="Create", description="Create resource")
 
     class ReqCtx:
         resolved_locale_id = locale_id
 
-    monkeypatch.setattr(
-        "portal.application.rbac.verb_service.get_request_context",
-        lambda: ReqCtx(),
-    )
+    monkeypatch.setattr("portal.application.rbac.verb_service.get_request_context", lambda: ReqCtx())
     repo = StubVerbRepository([item])
     cache = StubVerbListCache(None)
     service = VerbService(repo, cache)

@@ -1,6 +1,7 @@
 """
 Content application commands (snake_case, no API serialization aliases).
 """
+
 from typing import Optional
 from uuid import UUID
 

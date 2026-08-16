@@ -1,39 +1,24 @@
 """
 Facility room slot template application service.
 """
+
 import uuid
 from typing import Optional
 from uuid import UUID
 
-from portal.application.facility.commands import (
-    CreateRoomSlotTemplateCommand,
-    DeleteCommand,
-    PagesQueryCommand,
-    UpdateRoomSlotTemplateCommand,
-)
-from portal.application.facility.results import (
-    CreateIdResult,
-    RoomSlotTemplateListResult,
-    RoomSlotTemplatePageResult,
-    RoomSlotTemplateResult,
-)
+from portal.application.facility.commands import CreateRoomSlotTemplateCommand, DeleteCommand, PagesQueryCommand, UpdateRoomSlotTemplateCommand
+from portal.application.facility.results import CreateIdResult, RoomSlotTemplateListResult, RoomSlotTemplatePageResult, RoomSlotTemplateResult
 from portal.domain.facility.days_of_week_mask import days_to_mask
 from portal.exceptions.responses import BadRequestException, NotFoundException
 from portal.infrastructure.persistence.repositories.facility.room_repository import RoomRepository
-from portal.infrastructure.persistence.repositories.facility.room_slot_template_repository import (
-    RoomSlotTemplateRepository,
-)
+from portal.infrastructure.persistence.repositories.facility.room_slot_template_repository import RoomSlotTemplateRepository
 from portal.libs.tracing.distributed_trace import distributed_trace
 
 
 class RoomSlotTemplateService:
     """Admin room slot template use cases."""
 
-    def __init__(
-        self,
-        room_slot_template_repository: RoomSlotTemplateRepository,
-        room_repository: RoomRepository,
-    ):
+    def __init__(self, room_slot_template_repository: RoomSlotTemplateRepository, room_repository: RoomRepository):
         self._repository = room_slot_template_repository
         self._room_repository = room_repository
 
@@ -52,49 +37,23 @@ class RoomSlotTemplateService:
             raise BadRequestException(detail=str(exc)) from exc
 
     async def _assert_no_overlap(
-        self,
-        command: CreateRoomSlotTemplateCommand | UpdateRoomSlotTemplateCommand,
-        days_of_week_mask: int,
-        exclude_template_id: Optional[UUID] = None,
+        self, command: CreateRoomSlotTemplateCommand | UpdateRoomSlotTemplateCommand, days_of_week_mask: int, exclude_template_id: Optional[UUID] = None
     ) -> None:
         if not command.is_active:
             return
         candidates = await self._repository.list_active_overlapping_candidates(
-            facility_id=command.facility_id,
-            days_of_week_mask=days_of_week_mask,
-            exclude_template_id=exclude_template_id,
+            facility_id=command.facility_id, days_of_week_mask=days_of_week_mask, exclude_template_id=exclude_template_id
         )
         for candidate in candidates:
-            if not self._repository.effective_dates_overlap(
-                command.effective_from,
-                command.effective_to,
-                candidate.effective_from,
-                candidate.effective_to,
-            ):
+            if not self._repository.effective_dates_overlap(command.effective_from, command.effective_to, candidate.effective_from, candidate.effective_to):
                 continue
-            if self._repository.time_ranges_overlap(
-                command.start_time,
-                command.end_time,
-                candidate.start_time,
-                candidate.end_time,
-            ):
-                raise BadRequestException(
-                    detail="Slot template overlaps an existing active template for the same room and weekday",
-                )
+            if self._repository.time_ranges_overlap(command.start_time, command.end_time, candidate.start_time, candidate.end_time):
+                raise BadRequestException(detail="Slot template overlaps an existing active template for the same room and weekday")
 
     @distributed_trace()
-    async def get_template_pages(
-        self,
-        command: PagesQueryCommand,
-        facility_id: Optional[UUID] = None,
-    ) -> RoomSlotTemplatePageResult:
+    async def get_template_pages(self, command: PagesQueryCommand, facility_id: Optional[UUID] = None) -> RoomSlotTemplatePageResult:
         items, count = await self._repository.fetch_pages(command, facility_id)
-        return RoomSlotTemplatePageResult(
-            page=command.page,
-            page_size=command.page_size,
-            total=count,
-            items=items,
-        )
+        return RoomSlotTemplatePageResult(page=command.page, page_size=command.page_size, total=count, items=items)
 
     @distributed_trace()
     async def get_template_list(self, facility_id: UUID) -> RoomSlotTemplateListResult:

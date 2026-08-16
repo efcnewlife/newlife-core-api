@@ -1,6 +1,7 @@
 """
 Token Blacklist Provider for managing revoked tokens
 """
+
 import hashlib
 from datetime import datetime, timezone
 

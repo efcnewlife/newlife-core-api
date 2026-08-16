@@ -1,7 +1,9 @@
 """
 Member API router aggregate.
 """
+
 from portal.routers.auth_router import AuthRouter
+
 from .auth import router as auth_router
 from .facility import router as facility_router
 from .ministry import router as ministry_router

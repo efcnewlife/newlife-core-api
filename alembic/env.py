@@ -2,10 +2,9 @@ import logging
 import sys
 from logging.config import fileConfig
 
-from alembic import context
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
+from sqlalchemy import engine_from_config, pool
 
+from alembic import context
 from portal.config import settings
 from portal.libs.database.orm import Base
 from portal.models import *  # noqa
@@ -46,9 +45,7 @@ def _check_allowed_schemas() -> bool:
     missing_from_allowed = _metadata_schemas() - ALLOWED_SCHEMAS
     if not missing_from_allowed:
         return True
-    log.error(
-        f"Schema mismatch: metadata contains schemas {missing_from_allowed} not in ALLOWED_SCHEMAS {ALLOWED_SCHEMAS}"
-    )
+    log.error(f"Schema mismatch: metadata contains schemas {missing_from_allowed} not in ALLOWED_SCHEMAS {ALLOWED_SCHEMAS}")
     return False
 
 
@@ -138,13 +135,7 @@ def run_migrations_offline() -> None:
 
     """
     url = config.get_main_option("sqlalchemy.url")
-    context.configure(
-        url=url,
-        target_metadata=target_metadata,
-        literal_binds=True,
-        dialect_opts={"paramstyle": "named"},
-        include_schemas=True,
-    )
+    context.configure(url=url, target_metadata=target_metadata, literal_binds=True, dialect_opts={"paramstyle": "named"}, include_schemas=True)
 
     with context.begin_transaction():
         context.run_migrations()
@@ -183,11 +174,7 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
-    connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-    )
+    connectable = engine_from_config(config.get_section(config.config_ini_section, {}), prefix="sqlalchemy.", poolclass=pool.NullPool)
 
     with connectable.connect() as connection:
         context.configure(

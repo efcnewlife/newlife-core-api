@@ -1,11 +1,13 @@
 """
 Enums for the application - Template: Core enums only
 """
+
 from enum import Enum, IntEnum
 
 
 class APIScope(Enum):
     """API scopes"""
+
     ADMIN = "admin"
     API = "api"
     PUBLIC = "public"
@@ -13,17 +15,20 @@ class APIScope(Enum):
 
 class AccessTokenAudType(Enum):
     """Access token audience type"""
+
     ADMIN = "admin"
     USER = "user"
 
 
 class ThirdPartyProvider(str, Enum):
     """Third-party OAuth / OIDC provider keys (auth.auth_third_party_provider.name)."""
+
     MICROSOFT = "microsoft"
 
 
 class Gender(IntEnum):
     """Gender"""
+
     UNKNOWN = 0
     MALE = 1
     FEMALE = 2
@@ -31,12 +36,14 @@ class Gender(IntEnum):
 
 class ResourceType(IntEnum):
     """Resource type"""
+
     SYSTEM = 0
     GENERAL = 1
 
 
 class OperationType(Enum):
     """Operation Type"""
+
     CREATE = "create"
     UPDATE = "update"
     DELETE = "delete"
@@ -50,13 +57,4 @@ class OperationType(Enum):
 # Re-export content enums for existing serializer imports.
 from portal.domain.content.constants import FileStatus, FileUploadSource  # noqa: E402
 
-__all__ = [
-    "APIScope",
-    "AccessTokenAudType",
-    "ThirdPartyProvider",
-    "Gender",
-    "ResourceType",
-    "OperationType",
-    "FileStatus",
-    "FileUploadSource",
-]
+__all__ = ["APIScope", "AccessTokenAudType", "ThirdPartyProvider", "Gender", "ResourceType", "OperationType", "FileStatus", "FileUploadSource"]

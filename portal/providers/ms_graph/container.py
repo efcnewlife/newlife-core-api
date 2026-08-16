@@ -1,6 +1,7 @@
 """
 MS Graph DI container.
 """
+
 from dependency_injector import containers, providers
 
 from portal.providers.ms_graph.users import MSGraphUsers

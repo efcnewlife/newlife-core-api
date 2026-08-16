@@ -1,6 +1,7 @@
 """
 Request Context (per-request)
 """
+
 from contextvars import ContextVar, Token
 from typing import Optional
 from uuid import UUID
@@ -12,6 +13,7 @@ from portal.application.auth.results import HeaderInfo
 
 class RequestContext(BaseModel):
     """Per-request HTTP information"""
+
     request_id: Optional[str] = None
     ip: Optional[str] = None
     client_ip: Optional[str] = None

@@ -35,12 +35,7 @@ async def lifespan(app: FastAPI):
     redis_connection = None
     if settings.REDIS_URL:
         try:
-            redis_connection = redis_from_url(
-                settings.REDIS_URL,
-                db=settings.RATE_LIMITER_REDIS_DB,
-                encoding="utf-8",
-                decode_responses=True,
-            )
+            redis_connection = redis_from_url(settings.REDIS_URL, db=settings.RATE_LIMITER_REDIS_DB, encoding="utf-8", decode_responses=True)
             app.state.rate_limiters = await create_redis_rate_limiters(redis_connection)
             logger.info("Redis rate limiters initialized")
         except Exception as e:
