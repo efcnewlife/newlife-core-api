@@ -16,7 +16,8 @@
                 "debug",
                 "--use-colors"
             ],
-            "cwd": "${workspaceFolder}",
+            "python": "${workspaceFolder:newlife-core-api}/.venv/bin/python",
+            "cwd": "${workspaceFolder:newlife-core-api}",
             "console": "integratedTerminal"
         },
         {
@@ -24,7 +25,8 @@
             "type": "debugpy",
             "request": "launch",
             "module": "portal",
-            "cwd": "${workspaceFolder}",
+            "python": "${workspaceFolder:newlife-core-api}/.venv/bin/python",
+            "cwd": "${workspaceFolder:newlife-core-api}",
             "console": "integratedTerminal",
             "justMyCode": true
         },

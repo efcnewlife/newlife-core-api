@@ -43,14 +43,7 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = [
-    "alembic",
-    "pytest",
-    "pytest-asyncio",
-    "pytest-mock",
-    "click",
-    "ruff",
-]
+dev = ["alembic", "pytest", "pytest-asyncio", "pytest-mock", "click", "ruff"]
 
 [tool.uv]
 package = false
