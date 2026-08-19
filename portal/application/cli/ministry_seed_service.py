@@ -120,25 +120,32 @@ async def _load_owning_position_ids(session: Session) -> list[UUID]:
 async def _ensure_demo_user(session: Session, row: dict[str, Any]) -> UUID:
     """Return the demo steward user id, creating a non-admin account when missing."""
     email = (row["email"] or "").strip().lower()
+    first_name = row["first_name"]
+    last_name = row["last_name"]
+    # Ministry member lists display preferred_name and fall back to the email.
+    preferred_name = f"{first_name} {last_name}"
+
     existing_id = await session.select(AuthUser.id).where(AuthUser.email == email).fetchval()
     if existing_id:
         # The email is unique, so a soft-deleted or deactivated demo user cannot be
         # re-created. Restore the flags the seeded ministries rely on instead.
-        await session.update(AuthUser).values(is_active=True, verified=True, is_deleted=False).where(AuthUser.id == existing_id).execute()
-        return _as_uuid(existing_id)
+        user_id = _as_uuid(existing_id)
+        await session.update(AuthUser).values(is_active=True, verified=True, is_deleted=False).where(AuthUser.id == user_id).execute()
+    else:
+        user_id = uuid.uuid4()
+        await (
+            session.insert(AuthUser)
+            .values(id=user_id, email=email, password_hash=None, verified=True, is_active=True, is_superuser=False, is_admin=False)
+            .execute()
+        )
+        click.echo(f"Created demo ministry user: {email}")
 
-    user_id = uuid.uuid4()
-    await (
-        session.insert(AuthUser)
-        .values(id=user_id, email=email, password_hash=None, verified=True, is_active=True, is_superuser=False, is_admin=False)
-        .execute()
-    )
     await (
         session.insert(AuthUserProfile)
-        .values(id=uuid.uuid4(), user_id=user_id, first_name=row["first_name"], last_name=row["last_name"], gender=Gender.UNKNOWN.value)
+        .values(id=uuid.uuid4(), user_id=user_id, first_name=first_name, last_name=last_name, preferred_name=preferred_name, gender=Gender.UNKNOWN.value)
+        .on_conflict_do_update(index_elements=["user_id"], set_=dict(first_name=first_name, last_name=last_name, preferred_name=preferred_name))
         .execute()
     )
-    click.echo(f"Created demo ministry user: {email}")
     return user_id
 
 
