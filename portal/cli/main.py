@@ -8,6 +8,7 @@ from .init_locale import init_locales_process
 from .rbac import init_rbac_process, reset_rbac_process
 from .seed_facility_rental import seed_facility_rental_process
 from .seed_facility_slots import seed_facility_slots_process
+from .seed_ministry import seed_ministries_process
 from .seed_ministry_type import seed_ministry_types_process
 from .seed_position import seed_positions_process
 from .seed_position_assignment import seed_position_assignments_process
@@ -66,6 +67,13 @@ def seed_position_assignments_cmd(force: bool):
 def seed_ministry_types_cmd(force: bool):
     """Seed org ministry types with multilingual translations."""
     seed_ministry_types_process(force=force)
+
+
+@cli.command(name="seed-ministries")
+@click.option("--force", is_flag=True, default=False, help="Skip confirmation and allow running when ENV is prod or stg.")
+def seed_ministries_cmd(force: bool):
+    """Seed ten demo Active ministries with a simulated approval."""
+    seed_ministries_process(force=force)
 
 
 @cli.command(name="seed-target-audiences")
