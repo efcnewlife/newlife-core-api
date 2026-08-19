@@ -9,6 +9,7 @@ import sqlalchemy as sa
 import ujson
 from asyncpg import UniqueViolationError
 
+from portal.application.org.commands import PagesQueryCommand, StewardDirectoryQueryCommand
 from portal.application.org.results import (
     MinistryApprovalResult,
     MinistryDetailResult,
@@ -19,7 +20,6 @@ from portal.application.org.results import (
     TargetAudienceResult,
     TranslationItemResult,
 )
-from portal.application.rbac.commands import PagesQueryCommand
 from portal.domain.org.constants import MinistryApprovalStatus, MinistryMemberRole, MinistryStatus
 from portal.infrastructure.persistence.repositories.shared.translation_queries import (
     default_locale_subquery,
@@ -214,6 +214,48 @@ class MinistryRepository:
             .fetch(as_model=MinistryListItemResult)
         )
         return items or []
+
+    def _steward_directory_q_exists(self, q: str):
+        pattern = f"%{q}%"
+        display_name = sa.func.coalesce(AuthUserProfile.preferred_name, AuthUser.email)
+        name_hit = sa.exists(
+            sa.select(1)
+            .select_from(OrgMinistryTranslation)
+            .where(OrgMinistryTranslation.ministry_id == OrgMinistry.id)
+            .where(OrgMinistryTranslation.name.ilike(pattern))
+        )
+        steward_hit = sa.exists(
+            sa.select(1)
+            .select_from(OrgMinistryMember)
+            .outerjoin(AuthUser, AuthUser.id == OrgMinistryMember.user_id)
+            .outerjoin(AuthUserProfile, AuthUserProfile.user_id == AuthUser.id)
+            .where(OrgMinistryMember.ministry_id == OrgMinistry.id)
+            .where(sa.or_(AuthUser.email.ilike(pattern), display_name.ilike(pattern), OrgMinistryMember.contact_email.ilike(pattern)))
+        )
+        return sa.or_(name_hit, steward_hit)
+
+    async def fetch_steward_directory(self, model: StewardDirectoryQueryCommand, locale_id: Optional[UUID]) -> tuple[list[MinistryListItemResult], int]:
+        query = self._session.select(
+            OrgMinistry.id, ministry_name_fallback(locale_id).label("name"), OrgMinistry.status, OrgMinistry.has_priority_booking, OrgMinistry.is_active
+        ).select_from(OrgMinistry)
+        if locale_id:
+            query = query.outerjoin(
+                OrgMinistryTranslation, sa.and_(OrgMinistryTranslation.ministry_id == OrgMinistry.id, OrgMinistryTranslation.locale_id == locale_id)
+            )
+        else:
+            query = query.outerjoin(OrgMinistryTranslation, sa.false())
+        query = query.where(OrgMinistry.is_deleted == False)
+        query = query.where(model.status is not None, lambda: OrgMinistry.status == model.status.value)
+        q = (model.q or "").strip()
+        query = query.where(bool(q), lambda: self._steward_directory_q_exists(q))
+        items, count = await (
+            query.group_by(OrgMinistry.id)
+            .order_by(OrgMinistry.sequence)
+            .limit(model.page_size)
+            .offset(model.page * model.page_size)
+            .fetchpages(no_order_by=False, as_model=MinistryListItemResult)
+        )
+        return items or [], count
 
     async def get_by_id(self, ministry_id: UUID, locale_id: Optional[UUID] = None, all_locales: bool = False) -> Optional[MinistryDetailResult]:
         row: Optional[MinistryDetailResult] = await (

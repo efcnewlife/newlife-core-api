@@ -2,10 +2,11 @@
 Stub repositories for org application unit tests.
 """
 
+from dataclasses import dataclass, field
 from typing import Optional
 from uuid import UUID
 
-from portal.application.org.commands import PagesQueryCommand
+from portal.application.org.commands import PagesQueryCommand, StewardDirectoryQueryCommand
 from portal.application.org.results import (
     MinistryApprovalResult,
     MinistryDetailResult,
@@ -14,7 +15,27 @@ from portal.application.org.results import (
     MinistryTypeResult,
     TargetAudienceResult,
 )
+from portal.application.org.steward_directory_query import matches_steward_directory_q
 from portal.domain.org.catalog_codes import MINISTRY_TYPE_INTERNAL
+from portal.domain.org.constants import MinistryStatus
+
+
+@dataclass
+class StubStewardDirectoryRow:
+    """In-memory ministry row for steward directory and pages keyword tests."""
+
+    id: UUID
+    name: str
+    status: str = MinistryStatus.ACTIVE.value
+    is_deleted: bool = False
+    is_active: bool = True
+    has_priority_booking: bool = False
+    translation_names: list[str] = field(default_factory=list)
+    stewards: list[dict[str, Optional[str]]] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        if not self.translation_names:
+            self.translation_names = [self.name]
 
 
 class StubMinistryTypeRepository:
@@ -55,10 +76,14 @@ class StubMinistryRepository:
     """In-memory org ministry stub."""
 
     def __init__(
-        self, ministry_by_id: dict[UUID, MinistryDetailResult] | None = None, members_by_ministry: dict[UUID, list[MinistryMemberResult]] | None = None
+        self,
+        ministry_by_id: dict[UUID, MinistryDetailResult] | None = None,
+        members_by_ministry: dict[UUID, list[MinistryMemberResult]] | None = None,
+        directory_rows: list[StubStewardDirectoryRow] | None = None,
     ):
         self.ministry_by_id = ministry_by_id or {}
         self.members_by_ministry = members_by_ministry or {}
+        self.directory_rows = directory_rows or []
         self.insert_calls: list[dict] = []
         self.update_calls: list[dict] = []
         self.upsert_translation_calls: list[list] = []
@@ -109,7 +134,41 @@ class StubMinistryRepository:
         self.update_approval_calls.append(kwargs)
 
     async def fetch_pages(self, command: PagesQueryCommand, locale_id):
-        return [], 0
+        items: list[MinistryDetailResult] = []
+        needle = (command.keyword or "").strip().lower()
+        for row in self.directory_rows:
+            if row.is_deleted != command.deleted:
+                continue
+            names = row.translation_names or [row.name]
+            if needle and not any(needle in name.lower() for name in names if name):
+                continue
+            items.append(
+                MinistryDetailResult(id=row.id, name=row.name, status=row.status, has_priority_booking=row.has_priority_booking, is_active=row.is_active)
+            )
+        return items, len(items)
+
+    async def fetch_steward_directory(self, command: StewardDirectoryQueryCommand, locale_id):
+        items: list[MinistryListItemResult] = []
+        for row in self.directory_rows:
+            if row.is_deleted:
+                continue
+            if command.status and row.status != command.status.value:
+                continue
+            stewards = row.stewards or []
+            if not matches_steward_directory_q(
+                command.q,
+                translation_names=row.translation_names or [row.name],
+                steward_login_emails=[item.get("email") for item in stewards],
+                steward_display_names=[item.get("display_name") for item in stewards],
+                steward_contact_emails=[item.get("contact_email") for item in stewards],
+            ):
+                continue
+            items.append(
+                MinistryListItemResult(id=row.id, name=row.name, status=row.status, has_priority_booking=row.has_priority_booking, is_active=row.is_active)
+            )
+        total = len(items)
+        start = command.page * command.page_size
+        return items[start : start + command.page_size], total
 
     async def list_active(self, locale_id) -> list[MinistryListItemResult]:
         return []

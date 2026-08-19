@@ -21,6 +21,8 @@ from portal.application.org.mappers import (
     pages_query_to_command,
     reject_ministry_to_command,
     replace_ministry_members_to_command,
+    steward_directory_query_to_command,
+    steward_directory_to_api,
     update_ministry_to_command,
 )
 from portal.application.org.ministry_approval_service import MinistryApprovalService
@@ -37,7 +39,9 @@ from portal.serializers.admin.v1.ministry import (
     AdminMinistryPages,
     AdminMinistryReject,
     AdminMinistryReplaceMembers,
+    AdminMinistryStewardDirectoryPages,
     AdminMinistryUpdate,
+    AdminStewardDirectoryQuery,
 )
 from portal.serializers.mixins import DeleteBaseModel, DetailQueryModel, GenericQueryBaseModel
 from portal.serializers.mixins.model_mixins import UUIDBaseModel
@@ -59,6 +63,20 @@ async def get_ministry_pages(
 async def get_ministry_list(ministry_service: MinistryService = Depends(Provide[Container.org_ministry_service])):
     result = await ministry_service.get_ministry_list()
     return ministry_list_to_api(result)
+
+
+@router.get(
+    path="/steward-directory",
+    status_code=status.HTTP_200_OK,
+    response_model=AdminMinistryStewardDirectoryPages,
+    permissions=[Permission.MINISTRY_MINISTRY.read],
+)
+@inject
+async def get_steward_directory(
+    query_model: Annotated[AdminStewardDirectoryQuery, Query()], ministry_service: MinistryService = Depends(Provide[Container.org_ministry_service])
+):
+    result = await ministry_service.get_steward_directory(command=steward_directory_query_to_command(query_model))
+    return steward_directory_to_api(result)
 
 
 @router.post(path="", status_code=status.HTTP_201_CREATED, response_model=UUIDBaseModel, permissions=[Permission.MINISTRY_MINISTRY.create])

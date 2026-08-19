@@ -21,6 +21,7 @@ __all__ = [
     "MinistryListResult",
     "MinistryMemberResult",
     "MinistryPageResult",
+    "StewardDirectoryPageResult",
     "MinistryScheduleResult",
     "MinistryTypeResult",
     "MinistryTypeListResult",
@@ -160,6 +161,15 @@ class MinistryPageResult(BaseModel):
 class MinistryListResult(BaseModel):
     """Active ministries dropdown."""
 
+    items: list[MinistryListItemResult] = Field(default_factory=list)
+
+
+class StewardDirectoryPageResult(BaseModel):
+    """Paginated steward directory (ministry identity only)."""
+
+    page: int = Field(...)
+    page_size: int = Field(...)
+    total: int = Field(...)
     items: list[MinistryListItemResult] = Field(default_factory=list)
 
 

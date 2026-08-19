@@ -9,10 +9,10 @@ from uuid import UUID
 from pydantic import BaseModel, Field, field_validator
 
 from portal.domain.facility.constants import DayOfWeek
-from portal.domain.org.constants import MinistryMemberRole
+from portal.domain.org.constants import MinistryMemberRole, MinistryStatus
 from portal.serializers.admin.v1.ministry_catalog import AdminMinistryTypeItem, AdminTargetAudienceItem
 from portal.serializers.admin.v1.org.translation import AdminOrgTranslationInput, AdminOrgTranslationItem, validate_unique_org_locale_ids
-from portal.serializers.mixins import PaginationBaseResponseModel
+from portal.serializers.mixins import PaginationBaseResponseModel, PaginationQueryBaseModel
 from portal.serializers.mixins.model_mixins import UUIDBaseModel
 
 
@@ -117,6 +117,19 @@ class AdminMinistryPages(PaginationBaseResponseModel):
 
 class AdminMinistryList(BaseModel):
     """Ministry dropdown list."""
+
+    items: list[AdminMinistryBase] = Field(default_factory=list, description="Items")
+
+
+class AdminStewardDirectoryQuery(PaginationQueryBaseModel):
+    """Steward directory query (snake_case)."""
+
+    q: Optional[str] = Field(None, description="Ministry name or steward identity")
+    status: Optional[MinistryStatus] = Field(None, description="Ministry status filter")
+
+
+class AdminMinistryStewardDirectoryPages(PaginationBaseResponseModel):
+    """Paginated steward directory."""
 
     items: list[AdminMinistryBase] = Field(default_factory=list, description="Items")
 

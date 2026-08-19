@@ -21,6 +21,7 @@ from portal.application.org.commands import (
     PositionTranslationCommand,
     RejectMinistryCommand,
     ReplaceMinistryMembersCommand,
+    StewardDirectoryQueryCommand,
     UpdateMemberPersonCommand,
     UpdateMinistryCommand,
     UpdatePositionCommand,
@@ -40,6 +41,7 @@ from portal.application.org.results import (
     PositionDetailResult,
     PositionPageResult,
     PositionTranslationItemResult,
+    StewardDirectoryPageResult,
     TargetAudienceListResult,
     TargetAudienceResult,
     TranslationItemResult,
@@ -48,6 +50,7 @@ from portal.domain.common.mixins import UUIDBaseModel
 from portal.serializers.admin.v1.ministry import (
     AdminMinistryApplicationCreate,
     AdminMinistryApprove,
+    AdminMinistryBase,
     AdminMinistryBulkAction,
     AdminMinistryCreate,
     AdminMinistryDetail,
@@ -59,7 +62,9 @@ from portal.serializers.admin.v1.ministry import (
     AdminMinistryReplaceMembers,
     AdminMinistryScheduleInput,
     AdminMinistryScheduleItem,
+    AdminMinistryStewardDirectoryPages,
     AdminMinistryUpdate,
+    AdminStewardDirectoryQuery,
 )
 from portal.serializers.admin.v1.ministry_catalog import AdminMinistryTypeItem, AdminMinistryTypeList, AdminTargetAudienceItem, AdminTargetAudienceList
 from portal.serializers.admin.v1.org.member_person import (
@@ -92,6 +97,10 @@ def pages_query_to_command(model: GenericQueryBaseModel) -> PagesQueryCommand:
     return PagesQueryCommand(
         page=model.page, page_size=model.page_size, order_by=model.order_by, descending=model.descending, deleted=model.deleted, keyword=model.keyword
     )
+
+
+def steward_directory_query_to_command(model: AdminStewardDirectoryQuery) -> StewardDirectoryQueryCommand:
+    return StewardDirectoryQueryCommand(page=model.page, page_size=model.page_size, q=model.q, status=model.status)
 
 
 def delete_model_to_command(model: DeleteBaseModel) -> DeleteCommand:
@@ -293,6 +302,26 @@ def ministry_list_to_api(result: MinistryListResult) -> AdminMinistryList:
             )
             for item in result.items
         ]
+    )
+
+
+def steward_directory_to_api(result: StewardDirectoryPageResult) -> AdminMinistryStewardDirectoryPages:
+    return AdminMinistryStewardDirectoryPages(
+        page=result.page,
+        page_size=result.page_size,
+        total=result.total,
+        items=[
+            AdminMinistryBase(
+                id=item.id,
+                name=item.name,
+                status=item.status,
+                has_priority_booking=item.has_priority_booking,
+                is_active=item.is_active,
+                ministry_type=_ministry_type_to_api(item.ministry_type),
+                target_audiences=_target_audiences_to_api(item.target_audiences),
+            )
+            for item in result.items
+        ],
     )
 
 

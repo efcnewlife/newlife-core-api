@@ -3,7 +3,7 @@ Org application unit tests.
 """
 
 from datetime import time
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from pydantic import ValidationError
@@ -13,19 +13,22 @@ from portal.application.org.commands import (
     MinistryMemberEntryCommand,
     MinistryScheduleCommand,
     OrgTranslationCommand,
+    PagesQueryCommand,
     ReplaceMinistryMembersCommand,
+    StewardDirectoryQueryCommand,
     SubmitMinistryCommand,
 )
 from portal.application.org.ministry_approval_service import MinistryApprovalService
 from portal.application.org.ministry_schedule import validate_ministry_schedules
 from portal.application.org.ministry_service import MinistryService
 from portal.application.org.results import MinistryDetailResult, MinistryMemberResult, TargetAudienceResult
+from portal.application.org.steward_directory_query import matches_steward_directory_q
 from portal.application.org.target_audience_validation import validate_target_audience_ids
 from portal.domain.facility.days_of_week_mask import days_to_mask, mask_to_days
 from portal.domain.org.catalog_codes import TARGET_AUDIENCE_ADULTS, TARGET_AUDIENCE_ALL_AGES
 from portal.domain.org.constants import MinistryMemberRole, MinistryStatus
 from portal.exceptions.responses import BadRequestException
-from tests.fixtures.org.stubs import StubMinistryRepository, StubMinistryTypeRepository, StubTargetAudienceRepository
+from tests.fixtures.org.stubs import StubMinistryRepository, StubMinistryTypeRepository, StubStewardDirectoryRow, StubTargetAudienceRepository
 
 
 def make_service(
@@ -150,3 +153,131 @@ def test_all_ages_target_audience_is_exclusive():
             [all_ages_id, adults_id],
             [TargetAudienceResult(id=all_ages_id, code=TARGET_AUDIENCE_ALL_AGES), TargetAudienceResult(id=adults_id, code=TARGET_AUDIENCE_ADULTS)],
         )
+
+
+def _directory_fixture() -> tuple[UUID, UUID, UUID, StubMinistryRepository]:
+    youth_id = uuid4()
+    alpha_id = uuid4()
+    empty_id = uuid4()
+    stub = StubMinistryRepository(
+        directory_rows=[
+            StubStewardDirectoryRow(
+                id=youth_id,
+                name="Youth",
+                status=MinistryStatus.DRAFT.value,
+                stewards=[{"email": "jane.login@example.com", "display_name": "Jane Steward", "contact_email": "jane.public@church.org"}],
+            ),
+            StubStewardDirectoryRow(id=alpha_id, name="Alpha 2026", status=MinistryStatus.ACTIVE.value, stewards=[]),
+            StubStewardDirectoryRow(id=empty_id, name="Choir", status=MinistryStatus.INACTIVE.value, stewards=[]),
+            StubStewardDirectoryRow(
+                id=uuid4(),
+                name="Deleted Group",
+                status=MinistryStatus.ACTIVE.value,
+                is_deleted=True,
+                stewards=[{"email": "gone@example.com", "display_name": "Gone", "contact_email": None}],
+            ),
+        ]
+    )
+    return youth_id, alpha_id, empty_id, stub
+
+
+def test_matches_steward_directory_q_is_case_insensitive_partial():
+    assert matches_steward_directory_q(
+        "JANE",
+        translation_names=["Youth"],
+        steward_login_emails=["jane.login@example.com"],
+        steward_display_names=["Jane Steward"],
+        steward_contact_emails=["jane.public@church.org"],
+    )
+    assert matches_steward_directory_q(
+        "login",
+        translation_names=["Youth"],
+        steward_login_emails=["jane.login@example.com"],
+        steward_display_names=["Jane Steward"],
+        steward_contact_emails=["jane.public@church.org"],
+    )
+    assert matches_steward_directory_q(
+        "church.org",
+        translation_names=["Youth"],
+        steward_login_emails=["jane.login@example.com"],
+        steward_display_names=["Jane Steward"],
+        steward_contact_emails=["jane.public@church.org"],
+    )
+    assert not matches_steward_directory_q("Jane", translation_names=["Choir"], steward_login_emails=[], steward_display_names=[], steward_contact_emails=[])
+
+
+@pytest.mark.asyncio
+async def test_steward_directory_empty_q_includes_empty_rosters_and_omits_deleted():
+    youth_id, alpha_id, empty_id, stub = _directory_fixture()
+    result = await make_service(stub).get_steward_directory(StewardDirectoryQueryCommand())
+    ids = {item.id for item in result.items}
+    assert ids == {youth_id, alpha_id, empty_id}
+    assert result.total == 3
+    assert all("members" not in item.model_dump() for item in result.items)
+
+
+@pytest.mark.asyncio
+async def test_steward_directory_filters_status():
+    _, alpha_id, _, stub = _directory_fixture()
+    result = await make_service(stub).get_steward_directory(StewardDirectoryQueryCommand(status=MinistryStatus.ACTIVE))
+    assert [item.id for item in result.items] == [alpha_id]
+
+
+@pytest.mark.asyncio
+async def test_steward_directory_q_matches_ministry_name_and_steward_identity():
+    youth_id, alpha_id, _, stub = _directory_fixture()
+    service = make_service(stub)
+    by_name = await service.get_steward_directory(StewardDirectoryQueryCommand(q="alpha"))
+    assert [item.id for item in by_name.items] == [alpha_id]
+    by_person = await service.get_steward_directory(StewardDirectoryQueryCommand(q="Jane"))
+    assert [item.id for item in by_person.items] == [youth_id]
+    mixed = await service.get_steward_directory(StewardDirectoryQueryCommand(q="a"))
+    assert {item.id for item in mixed.items} == {youth_id, alpha_id}
+
+
+@pytest.mark.asyncio
+async def test_steward_directory_person_q_excludes_empty_roster():
+    youth_id, _, empty_id, stub = _directory_fixture()
+    service = make_service(stub)
+    by_name = await service.get_steward_directory(StewardDirectoryQueryCommand(q="Choir"))
+    assert [item.id for item in by_name.items] == [empty_id]
+    by_person = await service.get_steward_directory(StewardDirectoryQueryCommand(q="Jane"))
+    assert [item.id for item in by_person.items] == [youth_id]
+    person_miss = await service.get_steward_directory(StewardDirectoryQueryCommand(q="Nobody"))
+    assert person_miss.items == []
+
+
+@pytest.mark.asyncio
+async def test_steward_directory_paginates():
+    _, _, _, stub = _directory_fixture()
+    result = await make_service(stub).get_steward_directory(StewardDirectoryQueryCommand(page=0, page_size=1))
+    assert result.page == 0
+    assert result.page_size == 1
+    assert result.total == 3
+    assert len(result.items) == 1
+
+
+@pytest.mark.asyncio
+async def test_ministry_pages_keyword_matches_name_not_steward():
+    youth_id, _, _, stub = _directory_fixture()
+    service = make_service(stub)
+    by_name = await service.get_ministry_pages(PagesQueryCommand(keyword="Youth"))
+    assert [item.id for item in by_name.items] == [youth_id]
+    by_steward = await service.get_ministry_pages(PagesQueryCommand(keyword="Jane"))
+    assert by_steward.items == []
+
+
+@pytest.mark.asyncio
+async def test_replace_members_rejects_missing_secondary():
+    ministry_id = uuid4()
+    stub = StubMinistryRepository(
+        ministry_by_id={
+            ministry_id: MinistryDetailResult(id=ministry_id, name="Youth", status=MinistryStatus.DRAFT.value, has_priority_booking=False, is_active=True)
+        }
+    )
+    service = make_service(stub)
+    with pytest.raises(BadRequestException, match="secondary"):
+        await service.replace_members(
+            ministry_id, ReplaceMinistryMembersCommand(members=[MinistryMemberEntryCommand(user_id=uuid4(), member_role=MinistryMemberRole.PRIMARY)])
+        )
+    assert stub.replace_members_calls == []
