@@ -29,3 +29,13 @@ _Avoid_: generic "conflict", treating Blackout as the same failure, parsing the 
 **Blackout**:
 A room-closed interval that makes the room unbookable. Overlap with a Blackout is a distinct rejection from a Scheduling Conflict; the client must show a different prompt.
 _Avoid_: scheduling conflict, "closed" without naming the Blackout rule
+
+### Org / ministry
+
+**Annual Ministry**:
+A ministry that runs as one distinct edition per year, with the year in its name (e.g. Alpha 2026). Next year's edition is a **new** Ministry record, not the same row with shifted dates, so each year keeps its own approval, stewards, and history.
+_Avoid_: recycling last year's row by editing its dates, treating the year as a Seasonal schedule bound
+
+**Seasonal schedule**:
+An ongoing weekly Ministry whose pattern only applies inside a date window, expressed as `effective_from` / `effective_to` on its schedule rows (e.g. a Saturday class that pauses June through August). The Ministry stays a single record across seasons.
+_Avoid_: one Ministry per season, calling a bounded weekly pattern an Annual Ministry
