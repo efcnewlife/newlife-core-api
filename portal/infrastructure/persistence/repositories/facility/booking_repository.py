@@ -118,16 +118,37 @@ class BookingRepository:
         )
         items = items or []
         if items:
-            names_by_booking_id = await self._fetch_facility_names_by_booking_ids([item.id for item in items], locale_id)
+            ids_by_booking_id, names_by_booking_id = await self._fetch_facility_lines_by_booking_ids([item.id for item in items], locale_id)
             items = [
-                item.model_copy(update={"facility_names": names_by_booking_id.get(item.id) or ([item.facility_name] if item.facility_name else [])})
+                item.model_copy(
+                    update={
+                        "facility_ids": ids_by_booking_id.get(item.id) or [],
+                        "facility_names": names_by_booking_id.get(item.id) or ([item.facility_name] if item.facility_name else []),
+                    }
+                )
                 for item in items
             ]
         return items, count
 
-    async def _fetch_facility_names_by_booking_ids(self, booking_ids: list[UUID], locale_id: Optional[UUID]) -> dict[UUID, list[str]]:
+    @staticmethod
+    def group_facility_lines(rows: list[dict[str, Any]]) -> tuple[dict[UUID, list[UUID]], dict[UUID, list[str]]]:
+        """Group room-line rows into ordered facility ids and display names per booking."""
+        ids_by_booking_id: dict[UUID, list[UUID]] = {}
+        names_by_booking_id: dict[UUID, list[str]] = {}
+        for row in rows:
+            booking_id = row["facility_booking_id"]
+            facility_id = row["facility_id"]
+            ids_by_booking_id.setdefault(booking_id, []).append(facility_id)
+            name = row["facility_name"]
+            if name:
+                names_by_booking_id.setdefault(booking_id, []).append(str(name))
+        return ids_by_booking_id, names_by_booking_id
+
+    async def _fetch_facility_lines_by_booking_ids(
+        self, booking_ids: list[UUID], locale_id: Optional[UUID]
+    ) -> tuple[dict[UUID, list[UUID]], dict[UUID, list[str]]]:
         if not booking_ids:
-            return {}
+            return {}, {}
         room_name = FacilityRoom.code
         if locale_id:
             room_name = sa.func.coalesce(
@@ -138,20 +159,14 @@ class BookingRepository:
                 FacilityRoom.code,
             )
         rows = await (
-            self._session.select(FacilityBookingRoom.facility_booking_id, room_name.label("facility_name"))
+            self._session.select(FacilityBookingRoom.facility_booking_id, FacilityBookingRoom.facility_id, room_name.label("facility_name"))
             .select_from(FacilityBookingRoom)
             .join(FacilityRoom, FacilityRoom.id == FacilityBookingRoom.facility_id)
             .where(FacilityBookingRoom.facility_booking_id.in_(booking_ids))
             .order_by(FacilityBookingRoom.facility_booking_id.asc(), FacilityBookingRoom.sequence.asc())
             .fetch()
         )
-        result: dict[UUID, list[str]] = {}
-        for row in rows or []:
-            booking_id = row["facility_booking_id"]
-            name = row["facility_name"]
-            if name:
-                result.setdefault(booking_id, []).append(str(name))
-        return result
+        return self.group_facility_lines(list(rows or []))
 
     async def get_detail(self, booking_id: UUID, locale_id: Optional[UUID]) -> Optional[BookingDetailResult]:
         row = await (

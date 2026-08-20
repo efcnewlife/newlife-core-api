@@ -335,6 +335,7 @@ class BookingListItemResult(UUIDBaseModel):
     user_display_name: Optional[str] = Field(default=None)
     facility_id: Optional[UUID] = Field(default=None)
     facility_name: Optional[str] = Field(default=None)
+    facility_ids: list[UUID] = Field(default_factory=list)
     facility_names: list[str] = Field(default_factory=list)
     booking_type: str = Field(...)
     start_at: datetime = Field(...)

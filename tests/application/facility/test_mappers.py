@@ -7,6 +7,7 @@ from decimal import Decimal
 from uuid import uuid4
 
 from portal.application.facility.mappers import (
+    booking_page_to_api,
     booking_pages_query_to_command,
     bulk_action_to_command,
     cancel_booking_to_command,
@@ -25,11 +26,20 @@ from portal.application.facility.mappers import (
     update_booking_to_command,
     update_policy_setting_to_command,
 )
-from portal.application.facility.results import DiscountRuleResult, PreviewQuoteResult, PreviewQuoteRoomLineResult, RoomDetailResult, TranslationItemResult
+from portal.application.facility.results import (
+    BookingListItemResult,
+    BookingPageResult,
+    DiscountRuleResult,
+    PreviewQuoteResult,
+    PreviewQuoteRoomLineResult,
+    RoomDetailResult,
+    TranslationItemResult,
+)
 from portal.application.org.mappers import create_ministry_to_command, ministry_detail_to_api, replace_ministry_members_to_command
 from portal.application.org.results import MinistryDetailResult
 from portal.domain.facility.constants import BookingType, RentalRateBillingUnit
 from portal.domain.org.constants import MinistryMemberRole
+from portal.infrastructure.persistence.repositories.facility.booking_repository import BookingRepository
 from portal.serializers.admin.v1.facility.booking import AdminBookingCancel, AdminBookingQuery, AdminBookingUpdate
 from portal.serializers.admin.v1.facility.override_log import AdminOverrideLogQuery
 from portal.serializers.admin.v1.facility.rental_catalog import AdminDiscountRuleCreate, AdminPolicySettingUpdate, AdminSurchargeCreate
@@ -226,6 +236,68 @@ def test_booking_and_member_mappers():
     cancel_cmd = cancel_booking_to_command(AdminBookingCancel(scope="series", cancel_reason="weather"))
     assert cancel_cmd.scope == "series"
     assert cancel_cmd.cancel_reason == "weather"
+
+
+def test_booking_page_to_api_includes_ordered_facility_ids():
+    primary_id = uuid4()
+    secondary_id = uuid4()
+    start = datetime(2026, 5, 1, 10, 0, tzinfo=timezone.utc)
+    end = datetime(2026, 5, 1, 12, 0, tzinfo=timezone.utc)
+    item = BookingListItemResult(
+        id=uuid4(),
+        user_id=uuid4(),
+        facility_id=primary_id,
+        facility_ids=[primary_id, secondary_id],
+        facility_names=["Gym", "Hall"],
+        booking_type="one_time",
+        start_at=start,
+        end_at=end,
+        status="confirmed",
+    )
+    api = booking_page_to_api(BookingPageResult(page=0, page_size=20, total=1, items=[item]))
+    assert api.items[0].facility_id == primary_id
+    assert api.items[0].facility_ids == [primary_id, secondary_id]
+    assert api.items[0].model_dump(by_alias=True)["facilityIds"] == [primary_id, secondary_id]
+
+
+def test_booking_page_to_api_keeps_empty_facility_ids_and_primary():
+    primary_id = uuid4()
+    start = datetime(2026, 5, 1, 10, 0, tzinfo=timezone.utc)
+    end = datetime(2026, 5, 1, 12, 0, tzinfo=timezone.utc)
+    item = BookingListItemResult(
+        id=uuid4(),
+        user_id=uuid4(),
+        facility_id=primary_id,
+        facility_ids=[],
+        facility_names=[],
+        booking_type="one_time",
+        start_at=start,
+        end_at=end,
+        status="confirmed",
+    )
+    api = booking_page_to_api(BookingPageResult(page=0, page_size=20, total=1, items=[item]))
+    assert api.items[0].facility_id == primary_id
+    assert api.items[0].facility_ids == []
+
+
+def test_group_facility_lines_preserves_room_line_order():
+    booking_a = uuid4()
+    booking_b = uuid4()
+    room_1 = uuid4()
+    room_2 = uuid4()
+    room_3 = uuid4()
+    ids_by_booking, names_by_booking = BookingRepository.group_facility_lines(
+        [
+            {"facility_booking_id": booking_a, "facility_id": room_2, "facility_name": "B"},
+            {"facility_booking_id": booking_a, "facility_id": room_1, "facility_name": "A"},
+            {"facility_booking_id": booking_b, "facility_id": room_3, "facility_name": "C"},
+            {"facility_booking_id": booking_b, "facility_id": room_3, "facility_name": None},
+        ]
+    )
+    assert ids_by_booking[booking_a] == [room_2, room_1]
+    assert names_by_booking[booking_a] == ["B", "A"]
+    assert ids_by_booking[booking_b] == [room_3, room_3]
+    assert names_by_booking[booking_b] == ["C"]
 
 
 def test_override_log_pages_query_to_command():
