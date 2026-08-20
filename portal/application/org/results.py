@@ -116,6 +116,8 @@ class MinistryListItemResult(UUIDBaseModel):
     is_active: bool = Field(default=True)
     ministry_type: Optional[MinistryTypeResult] = Field(default=None)
     target_audiences: list[TargetAudienceResult] = Field(default_factory=list)
+    created_at: Optional[datetime] = Field(default=None)
+    updated_at: Optional[datetime] = Field(default=None)
 
 
 class MinistryDetailResult(UUIDBaseModel):

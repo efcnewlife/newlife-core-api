@@ -32,6 +32,9 @@ class StubStewardDirectoryRow:
     has_priority_booking: bool = False
     translation_names: list[str] = field(default_factory=list)
     stewards: list[dict[str, Optional[str]]] = field(default_factory=list)
+    sequence: float = 0.0
+    created_at: Optional[object] = None
+    updated_at: Optional[object] = None
 
     def __post_init__(self) -> None:
         if not self.translation_names:
@@ -164,8 +167,33 @@ class StubMinistryRepository:
             ):
                 continue
             items.append(
-                MinistryListItemResult(id=row.id, name=row.name, status=row.status, has_priority_booking=row.has_priority_booking, is_active=row.is_active)
+                MinistryListItemResult(
+                    id=row.id,
+                    name=row.name,
+                    status=row.status,
+                    has_priority_booking=row.has_priority_booking,
+                    is_active=row.is_active,
+                    created_at=row.created_at,
+                    updated_at=row.updated_at,
+                )
             )
+
+        order_by = command.order_by or "sequence"
+        reverse = command.descending if command.order_by else False
+
+        def sort_key(item: MinistryListItemResult):
+            if order_by == "name":
+                return (item.name or "").lower()
+            if order_by == "updated_at":
+                return item.updated_at or ""
+            if order_by == "created_at":
+                return item.created_at or ""
+            if order_by == "status":
+                return item.status
+            row = next((entry for entry in self.directory_rows if entry.id == item.id), None)
+            return row.sequence if row else 0.0
+
+        items.sort(key=sort_key, reverse=reverse)
         total = len(items)
         start = command.page * command.page_size
         return items[start : start + command.page_size], total

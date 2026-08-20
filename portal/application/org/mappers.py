@@ -100,7 +100,9 @@ def pages_query_to_command(model: GenericQueryBaseModel) -> PagesQueryCommand:
 
 
 def steward_directory_query_to_command(model: AdminStewardDirectoryQuery) -> StewardDirectoryQueryCommand:
-    return StewardDirectoryQueryCommand(page=model.page, page_size=model.page_size, q=model.q, status=model.status)
+    return StewardDirectoryQueryCommand(
+        page=model.page, page_size=model.page_size, q=model.q, status=model.status, order_by=model.order_by, descending=model.descending
+    )
 
 
 def delete_model_to_command(model: DeleteBaseModel) -> DeleteCommand:
@@ -319,6 +321,8 @@ def steward_directory_to_api(result: StewardDirectoryPageResult) -> AdminMinistr
                 is_active=item.is_active,
                 ministry_type=_ministry_type_to_api(item.ministry_type),
                 target_audiences=_target_audiences_to_api(item.target_audiences),
+                created_at=item.created_at,
+                updated_at=item.updated_at,
             )
             for item in result.items
         ],

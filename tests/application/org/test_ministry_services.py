@@ -258,6 +258,13 @@ async def test_steward_directory_paginates():
 
 
 @pytest.mark.asyncio
+async def test_steward_directory_orders_by_name():
+    youth_id, alpha_id, empty_id, stub = _directory_fixture()
+    result = await make_service(stub).get_steward_directory(StewardDirectoryQueryCommand(order_by="name", descending=False, page_size=10))
+    assert [item.id for item in result.items] == [alpha_id, empty_id, youth_id]
+
+
+@pytest.mark.asyncio
 async def test_ministry_pages_keyword_matches_name_not_steward():
     youth_id, _, _, stub = _directory_fixture()
     service = make_service(stub)

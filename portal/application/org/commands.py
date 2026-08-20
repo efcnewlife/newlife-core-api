@@ -101,6 +101,8 @@ class StewardDirectoryQueryCommand(BaseModel):
     page_size: int = Field(default=10)
     q: Optional[str] = Field(default=None)
     status: Optional[MinistryStatus] = Field(default=None)
+    order_by: Optional[str] = Field(default=None)
+    descending: bool = Field(default=False)
 
 
 class MinistryMemberEntryCommand(BaseModel):
