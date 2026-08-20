@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Reject pushes of illegally named topic branches.
+set -euo pipefail
+
+ROOT_DIR="$(git rev-parse --show-toplevel)"
+CHECKER="${ROOT_DIR}/scripts/check-branch-name.sh"
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  # Skip deletes (local sha all zeros)
+  if [[ "${local_sha}" =~ ^0+$ ]]; then
+    continue
+  fi
+
+  case "${local_ref}" in
+    refs/heads/*)
+      branch_name="${local_ref#refs/heads/}"
+      "${CHECKER}" "${branch_name}"
+      ;;
+    *)
+      # Tags and other refs are not checked
+      ;;
+  esac
+done
