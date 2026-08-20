@@ -12,19 +12,27 @@ assert_exit() {
   local expected_exit="$1"
   local branch="$2"
   local label="$3"
+  local expect_substring="${4:-}"
   set +e
   output="$("${CHECKER}" "${branch}" 2>&1)"
   actual_exit=$?
   set -e
-  if [[ "${actual_exit}" -eq "${expected_exit}" ]]; then
-    pass_count=$((pass_count + 1))
-  else
+  if [[ "${actual_exit}" -ne "${expected_exit}" ]]; then
     fail_count=$((fail_count + 1))
     echo "FAIL: ${label}"
     echo "  branch: ${branch}"
     echo "  expected exit ${expected_exit}, got ${actual_exit}"
     echo "  output: ${output}"
+    return
   fi
+  if [[ -n "${expect_substring}" && "${output}" != *"${expect_substring}"* ]]; then
+    fail_count=$((fail_count + 1))
+    echo "FAIL: ${label} (missing guidance text)"
+    echo "  expected substring: ${expect_substring}"
+    echo "  output: ${output}"
+    return
+  fi
+  pass_count=$((pass_count + 1))
 }
 
 assert_exit 0 "main" "allows main"
@@ -42,16 +50,16 @@ assert_exit 0 "ci/10-branch-check" "allows ci"
 assert_exit 0 "release/1.4.0" "allows release semver"
 assert_exit 0 "spike/explore-calendar" "allows spike without issue"
 
-assert_exit 1 "feat/add-booking-grid" "rejects feat without issue"
-assert_exit 1 "Feat/1-foo" "rejects uppercase type"
-assert_exit 1 "feat/1-Foo" "rejects uppercase slug"
-assert_exit 1 "feat/1-" "rejects empty slug"
-assert_exit 1 "feat/1-bad--" "rejects consecutive hyphens"
-assert_exit 1 "feat/1--bad" "rejects leading hyphen in slug segment"
-assert_exit 1 "release/1.4.0-rc.1" "rejects release pre-release"
-assert_exit 1 "spike/" "rejects empty spike slug"
-assert_exit 1 "random-branch" "rejects unstructured name"
-assert_exit 1 "feature/1-foo" "rejects unknown type"
+assert_exit 1 "feat/add-booking-grid" "rejects feat without issue" "Invalid branch name"
+assert_exit 1 "Feat/1-foo" "rejects uppercase type" "Expected one of"
+assert_exit 1 "feat/1-Foo" "rejects uppercase slug" "feat/69-enforce-branch-names"
+assert_exit 1 "feat/1-" "rejects empty slug" "Invalid branch name"
+assert_exit 1 "feat/1-bad--" "rejects consecutive hyphens" "Invalid branch name"
+assert_exit 1 "feat/1--bad" "rejects leading hyphen in slug segment" "Invalid branch name"
+assert_exit 1 "release/1.4.0-rc.1" "rejects release pre-release" "release/<major>.<minor>.<patch>"
+assert_exit 1 "spike/" "rejects empty spike slug" "Invalid branch name"
+assert_exit 1 "random-branch" "rejects unstructured name" "Invalid branch name"
+assert_exit 1 "feature/1-foo" "rejects unknown type" "Invalid branch name"
 
 if [[ "${fail_count}" -gt 0 ]]; then
   echo "${fail_count} failed, ${pass_count} passed"
