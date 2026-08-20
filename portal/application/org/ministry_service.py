@@ -12,10 +12,18 @@ from portal.application.org.commands import (
     DeleteCommand,
     PagesQueryCommand,
     ReplaceMinistryMembersCommand,
+    StewardDirectoryQueryCommand,
     UpdateMinistryCommand,
 )
 from portal.application.org.ministry_schedule import build_schedule_payloads, validate_ministry_schedules
-from portal.application.org.results import CreateIdResult, MinistryDetailResult, MinistryListResult, MinistryMemberResult, MinistryPageResult
+from portal.application.org.results import (
+    CreateIdResult,
+    MinistryDetailResult,
+    MinistryListResult,
+    MinistryMemberResult,
+    MinistryPageResult,
+    StewardDirectoryPageResult,
+)
 from portal.application.org.target_audience_validation import validate_target_audience_ids
 from portal.domain.org.catalog_codes import MINISTRY_TYPE_INTERNAL
 from portal.domain.org.constants import MinistryMemberRole, MinistryStatus
@@ -105,6 +113,11 @@ class MinistryService:
     async def get_ministry_list(self) -> MinistryListResult:
         items = await self._repository.list_active(self._resolved_locale_id())
         return MinistryListResult(items=items)
+
+    @distributed_trace()
+    async def get_steward_directory(self, command: StewardDirectoryQueryCommand) -> StewardDirectoryPageResult:
+        items, count = await self._repository.fetch_steward_directory(command, self._resolved_locale_id())
+        return StewardDirectoryPageResult(page=command.page, page_size=command.page_size, total=count, items=items)
 
     @distributed_trace()
     async def get_ministry_by_id(self, ministry_id: UUID, all_locales: bool = False) -> Optional[MinistryDetailResult]:
@@ -209,6 +222,7 @@ class MinistryService:
             dict(user_id=member.user_id, member_role=member.member_role.value, remark=member.remark, contact_email=member.contact_email)
             for member in command.members
         ]
+        self.validate_primary_and_secondary([MinistryMemberResult(user_id=member.user_id, member_role=member.member_role.value) for member in command.members])
         await self._repository.replace_members(ministry_id=ministry_id, members=member_rows)
 
     @distributed_trace()

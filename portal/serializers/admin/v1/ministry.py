@@ -9,10 +9,10 @@ from uuid import UUID
 from pydantic import BaseModel, Field, field_validator
 
 from portal.domain.facility.constants import DayOfWeek
-from portal.domain.org.constants import MinistryMemberRole
+from portal.domain.org.constants import MinistryMemberRole, MinistryStatus
 from portal.serializers.admin.v1.ministry_catalog import AdminMinistryTypeItem, AdminTargetAudienceItem
 from portal.serializers.admin.v1.org.translation import AdminOrgTranslationInput, AdminOrgTranslationItem, validate_unique_org_locale_ids
-from portal.serializers.mixins import PaginationBaseResponseModel
+from portal.serializers.mixins import OrderByQueryBaseModel, PaginationBaseResponseModel
 from portal.serializers.mixins.model_mixins import UUIDBaseModel
 
 
@@ -83,6 +83,8 @@ class AdminMinistryBase(UUIDBaseModel):
     is_active: bool = Field(True, serialization_alias="isActive", description="Active flag")
     ministry_type: Optional[AdminMinistryTypeItem] = Field(None, serialization_alias="ministryType", description="Ministry type")
     target_audiences: list[AdminTargetAudienceItem] = Field(default_factory=list, serialization_alias="targetAudiences", description="Target audiences")
+    created_at: Optional[datetime] = Field(None, serialization_alias="createAt", description="Created at")
+    updated_at: Optional[datetime] = Field(None, serialization_alias="updateAt", description="Updated at")
 
 
 class AdminMinistryDetail(AdminMinistryBase):
@@ -98,9 +100,7 @@ class AdminMinistryDetail(AdminMinistryBase):
     rejected_at: Optional[datetime] = Field(None, serialization_alias="rejectedAt", description="Rejected at")
     rejected_by_id: Optional[UUID] = Field(None, serialization_alias="rejectedById", description="Rejected by")
     rejection_reason: Optional[str] = Field(None, serialization_alias="rejectionReason", description="Rejection reason")
-    created_at: Optional[datetime] = Field(None, serialization_alias="createAt", description="Created at")
     created_by: Optional[str] = Field(None, serialization_alias="createdBy", description="Created by")
-    updated_at: Optional[datetime] = Field(None, serialization_alias="updateAt", description="Updated at")
     updated_by: Optional[str] = Field(None, serialization_alias="updatedBy", description="Updated by")
     delete_reason: Optional[str] = Field(None, serialization_alias="deleteReason", description="Delete reason")
     translations: list[AdminOrgTranslationItem] = Field(default_factory=list, description="Translations")
@@ -117,6 +117,19 @@ class AdminMinistryPages(PaginationBaseResponseModel):
 
 class AdminMinistryList(BaseModel):
     """Ministry dropdown list."""
+
+    items: list[AdminMinistryBase] = Field(default_factory=list, description="Items")
+
+
+class AdminStewardDirectoryQuery(OrderByQueryBaseModel):
+    """Steward directory query (snake_case)."""
+
+    q: Optional[str] = Field(None, description="Ministry name or steward identity")
+    status: Optional[MinistryStatus] = Field(None, description="Ministry status filter")
+
+
+class AdminMinistryStewardDirectoryPages(PaginationBaseResponseModel):
+    """Paginated steward directory."""
 
     items: list[AdminMinistryBase] = Field(default_factory=list, description="Items")
 

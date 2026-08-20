@@ -21,6 +21,7 @@ __all__ = [
     "MinistryListResult",
     "MinistryMemberResult",
     "MinistryPageResult",
+    "StewardDirectoryPageResult",
     "MinistryScheduleResult",
     "MinistryTypeResult",
     "MinistryTypeListResult",
@@ -115,6 +116,8 @@ class MinistryListItemResult(UUIDBaseModel):
     is_active: bool = Field(default=True)
     ministry_type: Optional[MinistryTypeResult] = Field(default=None)
     target_audiences: list[TargetAudienceResult] = Field(default_factory=list)
+    created_at: Optional[datetime] = Field(default=None)
+    updated_at: Optional[datetime] = Field(default=None)
 
 
 class MinistryDetailResult(UUIDBaseModel):
@@ -160,6 +163,15 @@ class MinistryPageResult(BaseModel):
 class MinistryListResult(BaseModel):
     """Active ministries dropdown."""
 
+    items: list[MinistryListItemResult] = Field(default_factory=list)
+
+
+class StewardDirectoryPageResult(BaseModel):
+    """Paginated steward directory (ministry identity only)."""
+
+    page: int = Field(...)
+    page_size: int = Field(...)
+    total: int = Field(...)
     items: list[MinistryListItemResult] = Field(default_factory=list)
 
 

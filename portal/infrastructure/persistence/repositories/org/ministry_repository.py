@@ -9,6 +9,7 @@ import sqlalchemy as sa
 import ujson
 from asyncpg import UniqueViolationError
 
+from portal.application.org.commands import PagesQueryCommand, StewardDirectoryQueryCommand
 from portal.application.org.results import (
     MinistryApprovalResult,
     MinistryDetailResult,
@@ -19,7 +20,6 @@ from portal.application.org.results import (
     TargetAudienceResult,
     TranslationItemResult,
 )
-from portal.application.rbac.commands import PagesQueryCommand
 from portal.domain.org.constants import MinistryApprovalStatus, MinistryMemberRole, MinistryStatus
 from portal.infrastructure.persistence.repositories.shared.translation_queries import (
     default_locale_subquery,
@@ -215,6 +215,57 @@ class MinistryRepository:
         )
         return items or []
 
+    def _steward_directory_q_exists(self, q: str):
+        pattern = f"%{q}%"
+        display_name = sa.func.coalesce(AuthUserProfile.preferred_name, AuthUser.email)
+        name_hit = sa.exists(
+            sa.select(1)
+            .select_from(OrgMinistryTranslation)
+            .where(OrgMinistryTranslation.ministry_id == OrgMinistry.id)
+            .where(OrgMinistryTranslation.name.ilike(pattern))
+        )
+        steward_hit = sa.exists(
+            sa.select(1)
+            .select_from(OrgMinistryMember)
+            .outerjoin(AuthUser, AuthUser.id == OrgMinistryMember.user_id)
+            .outerjoin(AuthUserProfile, AuthUserProfile.user_id == AuthUser.id)
+            .where(OrgMinistryMember.ministry_id == OrgMinistry.id)
+            .where(sa.or_(AuthUser.email.ilike(pattern), display_name.ilike(pattern), OrgMinistryMember.contact_email.ilike(pattern)))
+        )
+        return sa.or_(name_hit, steward_hit)
+
+    async def fetch_steward_directory(self, model: StewardDirectoryQueryCommand, locale_id: Optional[UUID]) -> tuple[list[MinistryListItemResult], int]:
+        query = self._session.select(
+            OrgMinistry.id,
+            ministry_name_fallback(locale_id).label("name"),
+            OrgMinistry.status,
+            OrgMinistry.has_priority_booking,
+            OrgMinistry.is_active,
+            OrgMinistry.created_at,
+            OrgMinistry.updated_at,
+        ).select_from(OrgMinistry)
+        if locale_id:
+            query = query.outerjoin(
+                OrgMinistryTranslation, sa.and_(OrgMinistryTranslation.ministry_id == OrgMinistry.id, OrgMinistryTranslation.locale_id == locale_id)
+            )
+        else:
+            query = query.outerjoin(OrgMinistryTranslation, sa.false())
+        query = query.where(OrgMinistry.is_deleted == False)
+        query = query.where(model.status is not None, lambda: OrgMinistry.status == model.status.value)
+        q = (model.q or "").strip()
+        query = query.where(bool(q), lambda: self._steward_directory_q_exists(q))
+        order_by = model.order_by or "sequence"
+        items, count = await (
+            query.group_by(OrgMinistry.id)
+            .order_by_with(
+                tables=[OrgMinistry], order_by=order_by, descending=model.descending if model.order_by else False, name=sa.func.min(OrgMinistryTranslation.name)
+            )
+            .limit(model.page_size)
+            .offset(model.page * model.page_size)
+            .fetchpages(no_order_by=False, as_model=MinistryListItemResult)
+        )
+        return items or [], count
+
     async def get_by_id(self, ministry_id: UUID, locale_id: Optional[UUID] = None, all_locales: bool = False) -> Optional[MinistryDetailResult]:
         row: Optional[MinistryDetailResult] = await (
             self._detail_query(locale_id, all_locales)
@@ -340,22 +391,19 @@ class MinistryRepository:
         await self._session.delete(OrgMinistryMember).where(OrgMinistryMember.ministry_id == ministry_id).execute()
         if not members:
             return
-        await (
-            self._session.insert(OrgMinistryMember)
-            .values(
-                [
-                    {
-                        "ministry_id": ministry_id,
-                        "user_id": member["user_id"],
-                        "member_role": member["member_role"],
-                        "remark": member.get("remark"),
-                        "contact_email": member.get("contact_email"),
-                    }
-                    for member in members
-                ]
-            )
-            .execute()
+        rows = apply_audit_fields_to_rows(
+            [
+                {
+                    "ministry_id": ministry_id,
+                    "user_id": member["user_id"],
+                    "member_role": member["member_role"],
+                    "remark": member.get("remark"),
+                    "contact_email": member.get("contact_email"),
+                }
+                for member in members
+            ]
         )
+        await self._session.insert(OrgMinistryMember).values(rows).execute()
 
     async def list_schedules(self, ministry_id: UUID) -> list[MinistryScheduleResult]:
         from portal.domain.facility.days_of_week_mask import mask_to_days

@@ -32,6 +32,18 @@ _Avoid_: scheduling conflict, "closed" without naming the Blackout rule
 
 ### Org / ministry
 
+**Ministry Steward**:
+A user assigned to a Ministry as `primary` or `secondary` (`org.ministry_member`). This is who may represent the Ministry. It is not a pastoral Person record and not the facility-booking priority-member identity.
+_Avoid_: Ministry Member (when meaning booking priority), Member Person, owner (Position incumbent)
+
+**Steward roster**:
+The full set of Ministry Stewards for one Ministry. Domain rule: exactly one primary steward and at least one secondary steward.
+_Avoid_: treating primary/secondary as auth.role or org.position
+
+**Steward directory query**:
+A query whose result is Ministries, not membership rows. It may match a Ministry name or a Steward's display name/email. A match does not return the Steward roster; the roster loads for the selected Ministry.
+_Avoid_: one row per steward, treating this as Member Person search, stuffing the roster into the directory payload
+
 **Annual Ministry**:
 A ministry that runs as one distinct edition per year, with the year in its name (e.g. Alpha 2026). Next year's edition is a **new** Ministry record, not the same row with shifted dates, so each year keeps its own approval, stewards, and history.
 _Avoid_: recycling last year's row by editing its dates, treating the year as a Seasonal schedule bound

@@ -9,7 +9,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field, model_validator
 
 from portal.application.rbac.commands import BulkIdsCommand, DeleteCommand, PagesQueryCommand
-from portal.domain.org.constants import MinistryMemberRole, PositionOffice, PositionTeam
+from portal.domain.org.constants import MinistryMemberRole, MinistryStatus, PositionOffice, PositionTeam
 
 __all__ = [
     "ApproveMinistryCommand",
@@ -28,6 +28,7 @@ __all__ = [
     "PositionTranslationCommand",
     "RejectMinistryCommand",
     "ReplaceMinistryMembersCommand",
+    "StewardDirectoryQueryCommand",
     "SubmitMinistryCommand",
     "UpdateMemberPersonCommand",
     "UpdateMinistryCommand",
@@ -91,6 +92,17 @@ class UpdateMinistryCommand(BaseModel):
     is_active: bool = Field(default=True)
     sequence: Optional[float] = Field(default=None)
     translations: Optional[list[OrgTranslationCommand]] = Field(default=None)
+
+
+class StewardDirectoryQueryCommand(BaseModel):
+    """Paginated steward directory query (ministries, not membership rows)."""
+
+    page: int = Field(default=0)
+    page_size: int = Field(default=10)
+    q: Optional[str] = Field(default=None)
+    status: Optional[MinistryStatus] = Field(default=None)
+    order_by: Optional[str] = Field(default=None)
+    descending: bool = Field(default=False)
 
 
 class MinistryMemberEntryCommand(BaseModel):
