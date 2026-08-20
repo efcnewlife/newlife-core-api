@@ -339,6 +339,14 @@ uv reads `.python-version` (`3.14`) and installs that interpreter if it is missi
 uv sync
 ```
 
+### Git hooks (once per clone)
+
+```bash
+./scripts/install-git-hooks.sh
+```
+
+Branch names must follow `{type}/{issue-number}-{short-description}` (see `AGENTS.md`). PRs run `.github/workflows/branch-name.yml`.
+
 ### Environment Setup
 
 Create a `.env` file in the project root:
