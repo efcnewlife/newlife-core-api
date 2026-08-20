@@ -18,7 +18,7 @@ from portal.application.org.commands import (
 )
 from portal.application.org.ministry_service import MinistryService
 from portal.application.org.results import CreateIdResult, MinistryApprovalResult, MinistryPageResult
-from portal.domain.org.constants import MinistryApprovalStatus, MinistryStatus
+from portal.domain.org.constants import MinistryApprovalStatus, MinistryStatus, OrgErrorCode
 from portal.exceptions.responses import BadRequestException, NotFoundException
 from portal.infrastructure.persistence.repositories.org.ministry_repository import MinistryRepository
 from portal.libs.contexts.request_context import RequestContext, get_request_context
@@ -61,11 +61,15 @@ class MinistryApprovalService:
     async def submit_ministry(self, ministry_id: UUID, command: SubmitMinistryCommand) -> None:
         ministry = await self._repository.get_by_id(ministry_id)
         if not ministry:
-            raise NotFoundException(detail=f"Ministry {ministry_id} not found")
+            raise NotFoundException(
+                detail=f"Ministry {ministry_id} not found", error_code=OrgErrorCode.MINISTRY_NOT_FOUND.value, context={"ministry_id": str(ministry_id)}
+            )
         if ministry.status not in {MinistryStatus.DRAFT.value, MinistryStatus.REJECTED.value}:
-            raise BadRequestException(detail="Ministry cannot be submitted in its current status")
+            raise BadRequestException(
+                detail="Ministry cannot be submitted in its current status", error_code=OrgErrorCode.MINISTRY_INVALID_STATUS_FOR_SUBMIT.value
+            )
         if not ministry.owner_position_id:
-            raise BadRequestException(detail="owner_position_id is required before submit")
+            raise BadRequestException(detail="owner_position_id is required before submit", error_code=OrgErrorCode.MINISTRY_OWNER_POSITION_REQUIRED.value)
         await self._ministry_service.validate_members_for_submit(ministry_id)
 
         now = datetime.now(timezone.utc)
@@ -95,9 +99,11 @@ class MinistryApprovalService:
     async def approve_ministry(self, ministry_id: UUID, command: ApproveMinistryCommand) -> None:
         ministry = await self._repository.get_by_id(ministry_id)
         if not ministry:
-            raise NotFoundException(detail=f"Ministry {ministry_id} not found")
+            raise NotFoundException(
+                detail=f"Ministry {ministry_id} not found", error_code=OrgErrorCode.MINISTRY_NOT_FOUND.value, context={"ministry_id": str(ministry_id)}
+            )
         if ministry.status != MinistryStatus.PENDING_APPROVAL.value:
-            raise BadRequestException(detail="Ministry is not pending approval")
+            raise BadRequestException(detail="Ministry is not pending approval", error_code=OrgErrorCode.MINISTRY_NOT_PENDING_APPROVAL.value)
 
         now = datetime.now(timezone.utc)
         user_id = self._current_user_id()
@@ -110,9 +116,11 @@ class MinistryApprovalService:
     async def reject_ministry(self, ministry_id: UUID, command: RejectMinistryCommand) -> None:
         ministry = await self._repository.get_by_id(ministry_id)
         if not ministry:
-            raise NotFoundException(detail=f"Ministry {ministry_id} not found")
+            raise NotFoundException(
+                detail=f"Ministry {ministry_id} not found", error_code=OrgErrorCode.MINISTRY_NOT_FOUND.value, context={"ministry_id": str(ministry_id)}
+            )
         if ministry.status != MinistryStatus.PENDING_APPROVAL.value:
-            raise BadRequestException(detail="Ministry is not pending approval")
+            raise BadRequestException(detail="Ministry is not pending approval", error_code=OrgErrorCode.MINISTRY_NOT_PENDING_APPROVAL.value)
 
         now = datetime.now(timezone.utc)
         user_id = self._current_user_id()

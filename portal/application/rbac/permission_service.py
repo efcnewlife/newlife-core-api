@@ -10,8 +10,9 @@ from portal.application.auth.results import UserSensitive
 from portal.application.rbac.commands import BulkIdsCommand, CreatePermissionCommand, DeleteCommand, PermissionPagesQueryCommand, UpdatePermissionCommand
 from portal.application.rbac.results import CreateIdResult, PermissionDetailResult, PermissionListResult, PermissionPageResult
 from portal.domain.audit.constants import AUTH_PERMISSION_TABLE
+from portal.domain.auth.constants import AuthErrorCode
 from portal.domain.rbac.ports import PermissionCachePort, PermissionRepositoryPort, RbacAuditPort
-from portal.exceptions.responses import ApiBaseException, ConflictErrorException
+from portal.exceptions.responses import ApiBaseException, ConflictErrorException, NotFoundException
 from portal.infrastructure.cache.permission_cache import PermissionCache
 from portal.libs.consts.enums import OperationType
 from portal.libs.contexts.request_context import RequestContext, get_request_context
@@ -129,7 +130,9 @@ class PermissionService:
             await self._validate_and_upsert_translations(permission_id, self._build_translation_payloads(command))
         except Exception as e:
             if self._repository.is_unique_violation(e):
-                raise ConflictErrorException(detail=f"Permission {command.code} already exists", debug_detail=str(e))
+                raise ConflictErrorException(
+                    detail=f"Permission {command.code} already exists", error_code=AuthErrorCode.PERMISSION_CODE_EXISTS.value, debug_detail=str(e)
+                )
             raise ApiBaseException(status_code=500, detail="Internal Server Error", debug_detail=str(e))
         self._audit.create_log(
             OperationType.CREATE,
@@ -152,13 +155,19 @@ class PermissionService:
                 permission_id, {"code": command.code, "resource_id": command.resource_id, "verb_id": command.verb_id, "is_active": command.is_active}
             )
             if n == 0:
-                raise ApiBaseException(status_code=404, detail=f"Permission {permission_id} not found")
+                raise NotFoundException(
+                    detail=f"Permission {permission_id} not found",
+                    error_code=AuthErrorCode.PERMISSION_NOT_FOUND.value,
+                    context={"permission_id": str(permission_id)},
+                )
             await self._validate_and_upsert_translations(permission_id, self._build_translation_payloads(command))
         except ApiBaseException:
             raise
         except Exception as e:
             if self._repository.is_unique_violation(e):
-                raise ConflictErrorException(detail=f"Permission {command.code} already exists", debug_detail=str(e))
+                raise ConflictErrorException(
+                    detail=f"Permission {command.code} already exists", error_code=AuthErrorCode.PERMISSION_CODE_EXISTS.value, debug_detail=str(e)
+                )
             raise ApiBaseException(status_code=500, detail="Internal Server Error", debug_detail=str(e))
         new_row = await self._get_permission_audit_dict(permission_id)
         if old_row is not None and new_row is not None:
@@ -178,7 +187,11 @@ class PermissionService:
             else:
                 n = await self._repository.delete_soft(permission_id, command.reason)
             if n == 0:
-                raise ApiBaseException(status_code=404, detail=f"Permission {permission_id} not found")
+                raise NotFoundException(
+                    detail=f"Permission {permission_id} not found",
+                    error_code=AuthErrorCode.PERMISSION_NOT_FOUND.value,
+                    context={"permission_id": str(permission_id)},
+                )
         except ApiBaseException:
             raise
         except Exception as e:

@@ -25,3 +25,12 @@ class SettingValueType(str, Enum):
     BOOLEAN = "boolean"
     OBJECT = "object"
     ARRAY = "array"
+
+
+class SystemErrorCode(str, Enum):
+    """Machine-readable system setting admin error codes for clients."""
+
+    SETTING_NOT_FOUND = "SYSTEM_SETTING_NOT_FOUND"
+    SETTING_KEY_EXISTS = "SYSTEM_SETTING_KEY_EXISTS"
+    SETTING_IN_RECYCLE_BIN = "SYSTEM_SETTING_IN_RECYCLE_BIN"
+    SETTING_BUILTIN_DELETE_FORBIDDEN = "SYSTEM_SETTING_BUILTIN_DELETE_FORBIDDEN"

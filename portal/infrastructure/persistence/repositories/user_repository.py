@@ -14,6 +14,7 @@ from asyncpg import UniqueViolationError
 from portal.application.auth.results import UserDetail, UserSensitive
 from portal.application.rbac.commands import AdminUserPagesQueryCommand, CreateAdminUserCommand, DeleteCommand, UpdateAdminUserCommand
 from portal.application.rbac.results import AdminUserDetailResult, AdminUserListItem, AdminUserTableRow, CreateIdResult
+from portal.domain.auth.constants import AuthErrorCode
 from portal.exceptions.responses import ConflictErrorException
 from portal.libs.consts.enums import Gender, ThirdPartyProvider
 from portal.libs.database import Session
@@ -335,7 +336,7 @@ class UserRepository:
                 .execute()
             )
         except UniqueViolationError as error:
-            raise ConflictErrorException(detail="User already exists", debug_detail=str(error))
+            raise ConflictErrorException(detail="User already exists", error_code=AuthErrorCode.USER_ALREADY_EXISTS.value, debug_detail=str(error))
         return CreateIdResult(id=user_id)
 
     async def update_user(self, user_id: UUID, model: UpdateAdminUserCommand) -> None:
@@ -367,7 +368,7 @@ class UserRepository:
                 .execute()
             )
         except UniqueViolationError as error:
-            raise ConflictErrorException(detail="User already exists", debug_detail=str(error))
+            raise ConflictErrorException(detail="User already exists", error_code=AuthErrorCode.USER_ALREADY_EXISTS.value, debug_detail=str(error))
 
     async def delete_user(self, user_id: UUID, model: DeleteCommand) -> None:
         await self._session.update(AuthUser).values(is_deleted=True, delete_reason=model.reason).where(AuthUser.id == user_id).execute()

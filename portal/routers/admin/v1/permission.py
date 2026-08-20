@@ -21,6 +21,8 @@ from portal.application.rbac.mappers import (
 )
 from portal.application.rbac.permission_service import PermissionService
 from portal.container import Container
+from portal.domain.auth.constants import AuthErrorCode
+from portal.exceptions.responses import NotFoundException
 from portal.libs.consts.permission import Permission
 from portal.routers.auth_router import AuthRouter
 from portal.serializers.admin.v1.permission import (
@@ -91,9 +93,9 @@ async def get_permission(permission_id: uuid.UUID, permission_service: Permissio
     """
     result = await permission_service.get_permission_by_id(permission_id=permission_id)
     if not result:
-        from fastapi import HTTPException
-
-        raise HTTPException(status_code=404, detail="Permission not found")
+        raise NotFoundException(
+            detail="Permission not found", error_code=AuthErrorCode.PERMISSION_NOT_FOUND.value, context={"permission_id": str(permission_id)}
+        )
     return permission_detail_result_to_api(result)
 
 

@@ -10,8 +10,9 @@ from portal.application.auth.results import UserSensitive
 from portal.application.rbac.commands import AssignRolePermissionsCommand, CreateRoleCommand, DeleteCommand, PagesQueryCommand, UpdateRoleCommand
 from portal.application.rbac.results import CreateIdResult, RoleDetailResult, RoleListResult, RolePageResult
 from portal.domain.audit.constants import AUTH_ROLE_PERMISSION_TABLE, AUTH_ROLE_TABLE
+from portal.domain.auth.constants import AuthErrorCode
 from portal.domain.rbac.ports import RbacAuditPort, RoleCachePort, RoleRepositoryPort
-from portal.exceptions.responses import ApiBaseException, ConflictErrorException
+from portal.exceptions.responses import ApiBaseException, ConflictErrorException, NotFoundException
 from portal.infrastructure.cache.role_cache import RoleCache
 from portal.libs.consts.enums import OperationType
 from portal.libs.contexts.request_context import RequestContext, get_request_context
@@ -135,7 +136,7 @@ class RoleService:
             raise
         except Exception as error:
             if self._repository.is_unique_violation(error):
-                raise ConflictErrorException(detail="Role code already exists", debug_detail=str(error))
+                raise ConflictErrorException(detail="Role code already exists", error_code=AuthErrorCode.ROLE_CODE_EXISTS.value, debug_detail=str(error))
             raise ApiBaseException(status_code=500, detail="Internal Server Error", debug_detail=str(error))
         self._audit.create_log(
             OperationType.CREATE,
@@ -170,12 +171,12 @@ class RoleService:
             await self._repository.insert_role_permissions(role_id, insert_permission_ids)
             await self._repository.delete_role_permissions(role_id, delete_permission_ids)
             if affected == 0:
-                raise ApiBaseException(status_code=404, detail=f"Role {role_id} not found")
+                raise NotFoundException(detail=f"Role {role_id} not found", error_code=AuthErrorCode.ROLE_NOT_FOUND.value, context={"role_id": str(role_id)})
         except ApiBaseException:
             raise
         except Exception as error:
             if self._repository.is_unique_violation(error):
-                raise ConflictErrorException(detail="Role code already exists", debug_detail=str(error))
+                raise ConflictErrorException(detail="Role code already exists", error_code=AuthErrorCode.ROLE_CODE_EXISTS.value, debug_detail=str(error))
             raise ApiBaseException(status_code=500, detail="Internal Server Error", debug_detail=str(error))
         new_role_row = await self._get_role_audit_dict(role_id)
         if old_role_row is not None and new_role_row is not None:

@@ -8,6 +8,7 @@ from uuid import UUID
 
 from portal.application.facility.commands import BulkIdsCommand, CreateRoomCommand, DeleteCommand, PagesQueryCommand, UpdateRoomCommand
 from portal.application.facility.results import CreateIdResult, RoomDetailResult, RoomListResult, RoomPageResult
+from portal.domain.facility.constants import FacilityErrorCode
 from portal.exceptions.responses import ApiBaseException, BadRequestException, ConflictErrorException, NotFoundException
 from portal.infrastructure.persistence.repositories.facility.room_repository import RoomRepository
 from portal.libs.contexts.request_context import RequestContext, get_request_context
@@ -70,7 +71,7 @@ class RoomService:
             raise
         except Exception as error:
             if self._repository.is_unique_violation(error):
-                raise ConflictErrorException(detail="Room code already exists", debug_detail=str(error))
+                raise ConflictErrorException(detail="Room code already exists", error_code=FacilityErrorCode.ROOM_CODE_EXISTS.value, debug_detail=str(error))
             raise ApiBaseException(status_code=500, detail="Internal Server Error", debug_detail=str(error))
         return CreateIdResult(id=room_id)
 
@@ -78,13 +79,13 @@ class RoomService:
     async def update_room(self, room_id: UUID, command: UpdateRoomCommand) -> None:
         existing = await self._repository.get_by_id(room_id, self._resolved_locale_id())
         if not existing:
-            raise NotFoundException(detail=f"Room {room_id} not found")
+            raise NotFoundException(detail=f"Room {room_id} not found", error_code=FacilityErrorCode.ROOM_NOT_FOUND.value, context={"room_id": str(room_id)})
         values = {"room_number": command.room_number, "capacity": command.capacity, "is_active": command.is_active}
         if command.sequence is not None:
             values["sequence"] = command.sequence
         affected = await self._repository.update_room(room_id, values)
         if affected == 0:
-            raise NotFoundException(detail=f"Room {room_id} not found")
+            raise NotFoundException(detail=f"Room {room_id} not found", error_code=FacilityErrorCode.ROOM_NOT_FOUND.value, context={"room_id": str(room_id)})
         translation_payloads = self._build_translation_payloads(command)
         if translation_payloads:
             await self._validate_and_upsert_translations(room_id, translation_payloads)
@@ -92,7 +93,7 @@ class RoomService:
     @distributed_trace()
     async def delete_room(self, room_id: UUID, command: DeleteCommand) -> None:
         if not await self._repository.get_by_id(room_id, self._resolved_locale_id()):
-            raise NotFoundException(detail=f"Room {room_id} not found")
+            raise NotFoundException(detail=f"Room {room_id} not found", error_code=FacilityErrorCode.ROOM_NOT_FOUND.value, context={"room_id": str(room_id)})
         if command.permanent:
             await self._repository.delete_hard(room_id)
         else:

@@ -11,7 +11,7 @@ from pydantic import ValidationError
 
 from portal.application.facility.commands import CreateRentalRateTemplateCommand, DeleteCommand, PagesQueryCommand, UpdateRentalRateTemplateCommand
 from portal.application.facility.results import CreateIdResult, RentalRateTemplateListResult, RentalRateTemplatePageResult, RentalRateTemplateResult
-from portal.domain.facility.constants import RentalRateBillingUnit
+from portal.domain.facility.constants import FacilityErrorCode, RentalRateBillingUnit
 from portal.domain.facility.rate_applicability import parse_applicability
 from portal.exceptions.responses import ApiBaseException, BadRequestException, ConflictErrorException, NotFoundException
 from portal.infrastructure.persistence.repositories.facility.rental_repository import RentalRepository
@@ -73,7 +73,9 @@ class RentalRateTemplateService:
             raise
         except Exception as error:
             if self._repository.is_unique_violation(error):
-                raise ConflictErrorException(detail="Rental rate template name already exists")
+                raise ConflictErrorException(
+                    detail="Rental rate template name already exists", error_code=FacilityErrorCode.RENTAL_RATE_TEMPLATE_NAME_EXISTS.value
+                )
             logger.exception(error)
             raise ApiBaseException(status_code=500, detail="Internal Server Error", debug_detail=str(error))
         return CreateIdResult(id=template_id)
@@ -82,7 +84,11 @@ class RentalRateTemplateService:
     async def update_template(self, template_id: UUID, command: UpdateRentalRateTemplateCommand) -> None:
         existing = await self._repository.get_template_by_id(template_id)
         if not existing:
-            raise NotFoundException(detail=f"Rental rate template {template_id} not found")
+            raise NotFoundException(
+                detail=f"Rental rate template {template_id} not found",
+                error_code=FacilityErrorCode.RENTAL_RATE_TEMPLATE_NOT_FOUND.value,
+                context={"template_id": str(template_id)},
+            )
         try:
             affected = await self._repository.update_template(
                 template_id,
@@ -97,22 +103,34 @@ class RentalRateTemplateService:
                 },
             )
             if affected == 0:
-                raise NotFoundException(detail=f"Rental rate template {template_id} not found")
+                raise NotFoundException(
+                    detail=f"Rental rate template {template_id} not found",
+                    error_code=FacilityErrorCode.RENTAL_RATE_TEMPLATE_NOT_FOUND.value,
+                    context={"template_id": str(template_id)},
+                )
         except ApiBaseException:
             raise
         except Exception as error:
             if self._repository.is_unique_violation(error):
-                raise ConflictErrorException(detail="Rental rate template name already exists")
+                raise ConflictErrorException(
+                    detail="Rental rate template name already exists", error_code=FacilityErrorCode.RENTAL_RATE_TEMPLATE_NAME_EXISTS.value
+                )
             raise
 
     @distributed_trace()
     async def delete_template(self, template_id: UUID, command: DeleteCommand) -> None:
         existing = await self._repository.get_template_by_id(template_id)
         if not existing:
-            raise NotFoundException(detail=f"Rental rate template {template_id} not found")
+            raise NotFoundException(
+                detail=f"Rental rate template {template_id} not found",
+                error_code=FacilityErrorCode.RENTAL_RATE_TEMPLATE_NOT_FOUND.value,
+                context={"template_id": str(template_id)},
+            )
         rate_count = await self._repository.count_rates_for_template(template_id)
         if rate_count > 0:
-            raise BadRequestException(detail="Cannot delete rental rate template while rates still reference it")
+            raise BadRequestException(
+                detail="Cannot delete rental rate template while rates still reference it", error_code=FacilityErrorCode.RENTAL_RATE_TEMPLATE_IN_USE.value
+            )
         if command.permanent:
             raise BadRequestException(detail="Permanent delete is not supported for rental rate templates")
         await self._repository.delete_template_soft(template_id, command.reason)

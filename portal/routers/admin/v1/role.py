@@ -21,6 +21,8 @@ from portal.application.rbac.mappers import (
 )
 from portal.application.rbac.role_service import RoleService
 from portal.container import Container
+from portal.domain.auth.constants import AuthErrorCode
+from portal.exceptions.responses import NotFoundException
 from portal.libs.consts.permission import Permission
 from portal.routers.auth_router import AuthRouter
 from portal.serializers.admin.v1.role import AdminRoleCreate, AdminRoleList, AdminRolePages, AdminRolePermissionAssign, AdminRoleTableItem, AdminRoleUpdate
@@ -66,9 +68,7 @@ async def get_role(role_id: uuid.UUID, role_service: RoleService = Depends(Provi
     """
     result = await role_service.get_role_by_id(role_id=role_id)
     if not result:
-        from fastapi import HTTPException
-
-        raise HTTPException(status_code=404, detail="Role not found")
+        raise NotFoundException(detail="Role not found", error_code=AuthErrorCode.ROLE_NOT_FOUND.value, context={"role_id": str(role_id)})
     return role_detail_result_to_api(result)
 
 

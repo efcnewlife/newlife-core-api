@@ -16,6 +16,7 @@ from portal.application.rbac.commands import (
 )
 from portal.application.rbac.results import CreateIdResult, ResourceDetailResult, ResourceListResult, ResourceTreeResult
 from portal.domain.audit.constants import AUTH_RESOURCE_TABLE
+from portal.domain.auth.constants import AuthErrorCode
 from portal.domain.rbac.entities import ResourceItem, ResourceTreeNode
 from portal.domain.rbac.ports import RbacAuditPort, ResourceRepositoryPort
 from portal.exceptions.responses import ApiBaseException, ConflictErrorException, NotFoundException, UnauthorizedException
@@ -78,7 +79,9 @@ class ResourceService:
         """
         resource = await self._repository.get_by_id(resource_id=resource_id, locale_id=self._resolved_locale_id())
         if not resource:
-            raise NotFoundException(detail=f"Resource {resource_id} not found")
+            raise NotFoundException(
+                detail=f"Resource {resource_id} not found", error_code=AuthErrorCode.RESOURCE_NOT_FOUND.value, context={"resource_id": str(resource_id)}
+            )
         return ResourceDetailResult.model_validate(resource.model_dump())
 
     async def create_resource(self, command: CreateResourceCommand) -> CreateIdResult:
@@ -106,7 +109,9 @@ class ResourceService:
             raise
         except Exception as error:
             if self._repository.is_unique_violation(error):
-                raise ConflictErrorException(detail=f"Resource {command.code} already exists", debug_detail=str(error))
+                raise ConflictErrorException(
+                    detail=f"Resource {command.code} already exists", error_code=AuthErrorCode.RESOURCE_CODE_EXISTS.value, debug_detail=str(error)
+                )
             raise ApiBaseException(status_code=500, detail="Internal Server Error", debug_detail=str(error))
         self._audit.create_log(
             OperationType.CREATE,
@@ -153,13 +158,17 @@ class ResourceService:
                 },
             )
             if n == 0:
-                raise ApiBaseException(status_code=404, detail=f"Resource {resource_id} not found")
+                raise NotFoundException(
+                    detail=f"Resource {resource_id} not found", error_code=AuthErrorCode.RESOURCE_NOT_FOUND.value, context={"resource_id": str(resource_id)}
+                )
             await self._validate_and_upsert_translations(resource_id, self._build_translation_payloads(command))
         except ApiBaseException:
             raise
         except Exception as error:
             if self._repository.is_unique_violation(error):
-                raise ConflictErrorException(detail=f"Resource {command.code} already exists", debug_detail=str(error))
+                raise ConflictErrorException(
+                    detail=f"Resource {command.code} already exists", error_code=AuthErrorCode.RESOURCE_CODE_EXISTS.value, debug_detail=str(error)
+                )
             raise ApiBaseException(status_code=500, detail="Internal Server Error", debug_detail=str(error))
         new_row = await self._get_resource_audit_dict(resource_id)
         self._audit.create_log(OperationType.UPDATE, record_id=resource_id, operation_code=AUTH_RESOURCE_TABLE, old_data=old_row, new_data=new_row)

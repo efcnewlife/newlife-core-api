@@ -6,7 +6,7 @@ import uuid
 from typing import Annotated, Optional
 
 from dependency_injector.wiring import Provide, inject
-from fastapi import Depends, HTTPException, Query, status
+from fastapi import Depends, Query, status
 
 from portal.application.facility.mappers import (
     create_id_result_to_api,
@@ -20,6 +20,8 @@ from portal.application.facility.mappers import (
 )
 from portal.application.facility.room_blackout_service import RoomBlackoutService
 from portal.container import Container
+from portal.domain.facility.constants import FacilityErrorCode
+from portal.exceptions.responses import NotFoundException
 from portal.libs.consts.permission import Permission
 from portal.routers.auth_router import AuthRouter
 from portal.serializers.admin.v1.facility.room_blackout import (
@@ -68,7 +70,7 @@ async def create_room_blackout(model: AdminRoomBlackoutCreate, room_blackout_ser
 async def get_room_blackout(blackout_id: uuid.UUID, room_blackout_service: RoomBlackoutService = Depends(Provide[Container.room_blackout_service])):
     result = await room_blackout_service.get_blackout_by_id(blackout_id=blackout_id)
     if not result:
-        raise HTTPException(status_code=404, detail="Blackout not found")
+        raise NotFoundException(detail="Blackout not found", error_code=FacilityErrorCode.BLACKOUT_NOT_FOUND.value, context={"blackout_id": str(blackout_id)})
     return room_blackout_to_api(result)
 
 

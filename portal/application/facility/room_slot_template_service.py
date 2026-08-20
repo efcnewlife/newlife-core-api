@@ -8,6 +8,7 @@ from uuid import UUID
 
 from portal.application.facility.commands import CreateRoomSlotTemplateCommand, DeleteCommand, PagesQueryCommand, UpdateRoomSlotTemplateCommand
 from portal.application.facility.results import CreateIdResult, RoomSlotTemplateListResult, RoomSlotTemplatePageResult, RoomSlotTemplateResult
+from portal.domain.facility.constants import FacilityErrorCode
 from portal.domain.facility.days_of_week_mask import days_to_mask
 from portal.exceptions.responses import BadRequestException, NotFoundException
 from portal.infrastructure.persistence.repositories.facility.room_repository import RoomRepository
@@ -48,7 +49,10 @@ class RoomSlotTemplateService:
             if not self._repository.effective_dates_overlap(command.effective_from, command.effective_to, candidate.effective_from, candidate.effective_to):
                 continue
             if self._repository.time_ranges_overlap(command.start_time, command.end_time, candidate.start_time, candidate.end_time):
-                raise BadRequestException(detail="Slot template overlaps an existing active template for the same room and weekday")
+                raise BadRequestException(
+                    detail="Slot template overlaps an existing active template for the same room and weekday",
+                    error_code=FacilityErrorCode.SLOT_TEMPLATE_OVERLAP.value,
+                )
 
     @distributed_trace()
     async def get_template_pages(self, command: PagesQueryCommand, facility_id: Optional[UUID] = None) -> RoomSlotTemplatePageResult:
@@ -67,7 +71,9 @@ class RoomSlotTemplateService:
     @distributed_trace()
     async def create_template(self, command: CreateRoomSlotTemplateCommand) -> CreateIdResult:
         if not await self._room_repository.exists_by_id(command.facility_id):
-            raise NotFoundException(detail=f"Room {command.facility_id} not found")
+            raise NotFoundException(
+                detail=f"Room {command.facility_id} not found", error_code=FacilityErrorCode.ROOM_NOT_FOUND.value, context={"room_id": str(command.facility_id)}
+            )
         self._validate_time_window(command)
         days_of_week_mask = self._encode_days_mask(command)
         await self._assert_no_overlap(command, days_of_week_mask)
@@ -92,9 +98,15 @@ class RoomSlotTemplateService:
     async def update_template(self, template_id: UUID, command: UpdateRoomSlotTemplateCommand) -> None:
         existing = await self._repository.get_by_id(template_id)
         if not existing:
-            raise NotFoundException(detail=f"Slot template {template_id} not found")
+            raise NotFoundException(
+                detail=f"Slot template {template_id} not found",
+                error_code=FacilityErrorCode.SLOT_TEMPLATE_NOT_FOUND.value,
+                context={"template_id": str(template_id)},
+            )
         if not await self._room_repository.exists_by_id(command.facility_id):
-            raise NotFoundException(detail=f"Room {command.facility_id} not found")
+            raise NotFoundException(
+                detail=f"Room {command.facility_id} not found", error_code=FacilityErrorCode.ROOM_NOT_FOUND.value, context={"room_id": str(command.facility_id)}
+            )
         self._validate_time_window(command)
         days_of_week_mask = self._encode_days_mask(command)
         await self._assert_no_overlap(command, days_of_week_mask, exclude_template_id=template_id)
@@ -113,12 +125,20 @@ class RoomSlotTemplateService:
             },
         )
         if affected == 0:
-            raise NotFoundException(detail=f"Slot template {template_id} not found")
+            raise NotFoundException(
+                detail=f"Slot template {template_id} not found",
+                error_code=FacilityErrorCode.SLOT_TEMPLATE_NOT_FOUND.value,
+                context={"template_id": str(template_id)},
+            )
 
     @distributed_trace()
     async def delete_template(self, template_id: UUID, command: DeleteCommand) -> None:
         if not await self._repository.get_by_id(template_id):
-            raise NotFoundException(detail=f"Slot template {template_id} not found")
+            raise NotFoundException(
+                detail=f"Slot template {template_id} not found",
+                error_code=FacilityErrorCode.SLOT_TEMPLATE_NOT_FOUND.value,
+                context={"template_id": str(template_id)},
+            )
         if command.permanent:
             await self._repository.delete_hard(template_id)
         else:

@@ -6,7 +6,7 @@ import uuid
 from typing import Annotated
 
 from dependency_injector.wiring import Provide, inject
-from fastapi import Depends, HTTPException, Query, status
+from fastapi import Depends, Query, status
 
 from portal.application.facility.mappers import (
     bulk_action_to_command,
@@ -21,6 +21,8 @@ from portal.application.facility.mappers import (
 )
 from portal.application.facility.room_service import RoomService
 from portal.container import Container
+from portal.domain.facility.constants import FacilityErrorCode
+from portal.exceptions.responses import NotFoundException
 from portal.libs.consts.permission import Permission
 from portal.routers.auth_router import AuthRouter
 from portal.serializers.admin.v1.facility.room import AdminRoomBulkAction, AdminRoomCreate, AdminRoomDetail, AdminRoomList, AdminRoomPages, AdminRoomUpdate
@@ -56,7 +58,7 @@ async def create_room(room_data: AdminRoomCreate, room_service: RoomService = De
 async def get_room(room_id: uuid.UUID, query_model: Annotated[DetailQueryModel, Query()], room_service: RoomService = Depends(Provide[Container.room_service])):
     result = await room_service.get_room_by_id(room_id=room_id, all_locales=query_model.all_locales)
     if not result:
-        raise HTTPException(status_code=404, detail="Room not found")
+        raise NotFoundException(detail="Room not found", error_code=FacilityErrorCode.ROOM_NOT_FOUND.value, context={"room_id": str(room_id)})
     return room_detail_to_api(result)
 
 

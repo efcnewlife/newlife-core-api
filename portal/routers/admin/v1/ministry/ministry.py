@@ -6,7 +6,7 @@ import uuid
 from typing import Annotated
 
 from dependency_injector.wiring import Provide, inject
-from fastapi import Depends, HTTPException, Query, status
+from fastapi import Depends, Query, status
 
 from portal.application.org.commands import SubmitMinistryCommand
 from portal.application.org.mappers import (
@@ -28,6 +28,8 @@ from portal.application.org.mappers import (
 from portal.application.org.ministry_approval_service import MinistryApprovalService
 from portal.application.org.ministry_service import MinistryService
 from portal.container import Container
+from portal.domain.org.constants import OrgErrorCode
+from portal.exceptions.responses import NotFoundException
 from portal.libs.consts.permission import Permission
 from portal.routers.auth_router import AuthRouter
 from portal.serializers.admin.v1.ministry import (
@@ -95,7 +97,7 @@ async def get_ministry(
 ):
     result = await ministry_service.get_ministry_by_id(ministry_id=ministry_id, all_locales=query_model.all_locales)
     if not result:
-        raise HTTPException(status_code=404, detail="Ministry not found")
+        raise NotFoundException(detail="Ministry not found", error_code=OrgErrorCode.MINISTRY_NOT_FOUND.value, context={"ministry_id": str(ministry_id)})
     return ministry_detail_to_api(result)
 
 

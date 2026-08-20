@@ -20,7 +20,7 @@ from portal.application.facility.pricing_service import PricingService
 from portal.application.facility.results import BookingDetailResult, BookingListItemResult, BookingPageResult
 from portal.application.org.results import CreateIdResult
 from portal.application.system.setting_service import SettingService
-from portal.domain.facility.constants import BookingErrorCode, BookingSlotStatus, BookingStatus, BookingType, RentalPolicySettingKey
+from portal.domain.facility.constants import BookingErrorCode, BookingSlotStatus, BookingStatus, BookingType, FacilityErrorCode, RentalPolicySettingKey
 from portal.domain.org.constants import MinistryStatus
 from portal.exceptions.responses import BadRequestException, ConflictErrorException, ForbiddenException, NotFoundException
 from portal.infrastructure.persistence.repositories.facility.booking_repository import BookingRepository
@@ -73,13 +73,13 @@ class BookingService:
     async def get_booking_by_id(self, booking_id: UUID) -> BookingDetailResult:
         row = await self._repository.get_detail(booking_id, self._resolved_locale_id())
         if not row:
-            raise NotFoundException(detail="Booking not found")
+            raise NotFoundException(detail="Booking not found", error_code=FacilityErrorCode.BOOKING_NOT_FOUND.value, context={"booking_id": str(booking_id)})
         return row
 
     @distributed_trace()
     async def cancel_booking(self, booking_id: UUID, command: CancelBookingCommand) -> None:
         if not await self._repository.exists_by_id(booking_id):
-            raise NotFoundException(detail="Booking not found")
+            raise NotFoundException(detail="Booking not found", error_code=FacilityErrorCode.BOOKING_NOT_FOUND.value, context={"booking_id": str(booking_id)})
         cancelled_by_id = self._user_ctx.user_id if self._user_ctx else None
         cancel_slots = command.scope != "series"
         await self._repository.cancel_booking(
@@ -89,20 +89,20 @@ class BookingService:
     @distributed_trace()
     async def update_booking(self, booking_id: UUID, command: UpdateBookingCommand) -> BookingDetailResult:
         if command.end_at <= command.start_at:
-            raise BadRequestException(detail="end_at must be after start_at")
+            raise BadRequestException(detail="end_at must be after start_at", error_code=FacilityErrorCode.BOOKING_INVALID_TIME_RANGE.value)
         if not command.rooms:
-            raise BadRequestException(detail="At least one room is required")
+            raise BadRequestException(detail="At least one room is required", error_code=FacilityErrorCode.BOOKING_ROOMS_REQUIRED.value)
 
         await self._validate_ministry_booking_gate(command.ministry_id)
 
         meta = await self._repository.get_booking_type_and_flags(booking_id)
         if not meta:
-            raise NotFoundException(detail="Booking not found")
+            raise NotFoundException(detail="Booking not found", error_code=FacilityErrorCode.BOOKING_NOT_FOUND.value, context={"booking_id": str(booking_id)})
 
         max_rooms = await self._rental_repository.get_policy_amount(RentalPolicySettingKey.MAX_ROOMS_PER_BOOKING, None)
         max_rooms_int = int(max_rooms) if max_rooms is not None else 3
         if len(command.rooms) > max_rooms_int:
-            raise BadRequestException(detail=f"At most {max_rooms_int} rooms per booking")
+            raise BadRequestException(detail=f"At most {max_rooms_int} rooms per booking", error_code=FacilityErrorCode.BOOKING_MAX_ROOMS.value)
 
         local_tz = await self._setting_service.get_facility_timezone()
         for line in command.rooms:
@@ -193,9 +193,9 @@ class BookingService:
     @distributed_trace()
     async def create_booking(self, command: CreateBookingCommand) -> CreateIdResult:
         if command.end_at <= command.start_at:
-            raise BadRequestException(detail="end_at must be after start_at")
+            raise BadRequestException(detail="end_at must be after start_at", error_code=FacilityErrorCode.BOOKING_INVALID_TIME_RANGE.value)
         if not command.rooms:
-            raise BadRequestException(detail="At least one room is required")
+            raise BadRequestException(detail="At least one room is required", error_code=FacilityErrorCode.BOOKING_ROOMS_REQUIRED.value)
         operator_id = self._user_ctx.user_id if self._user_ctx else None
         if not operator_id:
             raise ForbiddenException(detail="Authenticated user required")
@@ -206,7 +206,7 @@ class BookingService:
         max_rooms = await self._rental_repository.get_policy_amount(RentalPolicySettingKey.MAX_ROOMS_PER_BOOKING, None)
         max_rooms_int = int(max_rooms) if max_rooms is not None else 3
         if len(command.rooms) > max_rooms_int:
-            raise BadRequestException(detail=f"At most {max_rooms_int} rooms per booking")
+            raise BadRequestException(detail=f"At most {max_rooms_int} rooms per booking", error_code=FacilityErrorCode.BOOKING_MAX_ROOMS.value)
 
         local_tz = await self._setting_service.get_facility_timezone()
         for line in command.rooms:
@@ -307,7 +307,7 @@ class BookingService:
             raise ForbiddenException(detail="Authenticated user required")
         owner_id = await self._repository.get_user_id_for_booking(booking_id)
         if not owner_id:
-            raise NotFoundException(detail="Booking not found")
+            raise NotFoundException(detail="Booking not found", error_code=FacilityErrorCode.BOOKING_NOT_FOUND.value, context={"booking_id": str(booking_id)})
         if owner_id != user_id:
             raise ForbiddenException(detail="Cannot cancel another user's booking")
         await self.cancel_booking(booking_id, command)
@@ -333,7 +333,11 @@ class BookingService:
             return
         status = await self._ministry_repository.get_status(ministry_id)
         if status != MinistryStatus.ACTIVE.value:
-            raise BadRequestException(detail="Ministry must be active for booking")
+            raise BadRequestException(
+                detail="Ministry must be active for booking",
+                error_code=FacilityErrorCode.BOOKING_MINISTRY_INACTIVE.value,
+                context={"ministry_id": str(ministry_id)},
+            )
         user_id = booker_id if booker_id is not None else (self._user_ctx.user_id if self._user_ctx else None)
         if not user_id:
             raise ForbiddenException(detail="Authenticated user required for ministry booking")

@@ -11,7 +11,7 @@ import ujson
 from portal.application.rbac.commands import BulkIdsCommand, DeleteCommand
 from portal.application.system.commands import CreateSettingCommand, UpdateSettingCommand
 from portal.application.system.results import CreateIdResult, SettingListResult, SettingResult
-from portal.domain.system.constants import FacilitySettingKey, SettingNamespace, SettingValueType
+from portal.domain.system.constants import FacilitySettingKey, SettingNamespace, SettingValueType, SystemErrorCode
 from portal.domain.system.entities import Setting
 from portal.exceptions.responses import BadRequestException, ConflictErrorException, NotFoundException
 from portal.infrastructure.cache.setting_cache import SettingCache
@@ -79,14 +79,14 @@ class SettingService:
     async def get_setting_by_id(self, setting_id: UUID) -> SettingResult:
         row = await self._repository.get_by_id(setting_id)
         if not row:
-            raise NotFoundException(detail="Setting not found")
+            raise NotFoundException(detail="Setting not found", error_code=SystemErrorCode.SETTING_NOT_FOUND.value)
         return self._to_result(row)
 
     @distributed_trace()
     async def get_setting_by_key(self, namespace: str, setting_key: str) -> SettingResult:
         row = await self._repository.get_by_namespace_key(namespace, setting_key)
         if not row or not row.is_active:
-            raise NotFoundException(detail="Setting not found")
+            raise NotFoundException(detail="Setting not found", error_code=SystemErrorCode.SETTING_NOT_FOUND.value)
         return self._to_result(row)
 
     @distributed_trace()
@@ -103,8 +103,10 @@ class SettingService:
         existing = await self._repository.get_by_namespace_key(namespace, setting_key, include_deleted=True)
         if existing:
             if existing.is_deleted:
-                raise ConflictErrorException(detail="Setting key exists in recycle bin; restore it instead")
-            raise ConflictErrorException(detail="Setting namespace and key already exist")
+                raise ConflictErrorException(
+                    detail="Setting key exists in recycle bin; restore it instead", error_code=SystemErrorCode.SETTING_IN_RECYCLE_BIN.value
+                )
+            raise ConflictErrorException(detail="Setting namespace and key already exist", error_code=SystemErrorCode.SETTING_KEY_EXISTS.value)
 
         setting_id = uuid4()
         await self._repository.insert(
@@ -125,34 +127,34 @@ class SettingService:
     async def update_setting(self, setting_id: UUID, command: UpdateSettingCommand) -> SettingResult:
         row = await self._repository.get_by_id(setting_id)
         if not row:
-            raise NotFoundException(detail="Setting not found")
+            raise NotFoundException(detail="Setting not found", error_code=SystemErrorCode.SETTING_NOT_FOUND.value)
         self._validate_value_type(row.value_type, command.value)
         if row.namespace == SettingNamespace.FACILITY.value and row.setting_key == FacilitySettingKey.TIMEZONE.value:
             self._validate_iana_timezone(command.value)
         updated = await self._repository.update_value(setting_id=setting_id, value=command.value, remark=command.remark)
         if updated < 1:
-            raise NotFoundException(detail="Setting not found")
+            raise NotFoundException(detail="Setting not found", error_code=SystemErrorCode.SETTING_NOT_FOUND.value)
         await self._cache.invalidate(row.namespace, row.setting_key)
         refreshed = await self._repository.get_by_id(setting_id)
         if not refreshed:
-            raise NotFoundException(detail="Setting not found")
+            raise NotFoundException(detail="Setting not found", error_code=SystemErrorCode.SETTING_NOT_FOUND.value)
         return self._to_result(refreshed)
 
     @distributed_trace()
     async def delete_setting(self, setting_id: UUID, command: DeleteCommand) -> None:
         row = await self._repository.get_by_id(setting_id, include_deleted=command.permanent)
         if not row:
-            raise NotFoundException(detail="Setting not found")
+            raise NotFoundException(detail="Setting not found", error_code=SystemErrorCode.SETTING_NOT_FOUND.value)
         if row.is_built_in:
-            raise BadRequestException(detail="Built-in settings cannot be deleted")
+            raise BadRequestException(detail="Built-in settings cannot be deleted", error_code=SystemErrorCode.SETTING_BUILTIN_DELETE_FORBIDDEN.value)
         if command.permanent:
             affected = await self._repository.delete_hard(setting_id)
         else:
             if row.is_deleted:
-                raise NotFoundException(detail="Setting not found")
+                raise NotFoundException(detail="Setting not found", error_code=SystemErrorCode.SETTING_NOT_FOUND.value)
             affected = await self._repository.delete_soft(setting_id, command.reason)
         if affected < 1:
-            raise NotFoundException(detail="Setting not found")
+            raise NotFoundException(detail="Setting not found", error_code=SystemErrorCode.SETTING_NOT_FOUND.value)
         await self._cache.invalidate(row.namespace, row.setting_key)
 
     @distributed_trace()

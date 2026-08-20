@@ -6,7 +6,7 @@ import uuid
 from typing import Annotated, Optional
 
 from dependency_injector.wiring import Provide, inject
-from fastapi import Depends, HTTPException, Query, status
+from fastapi import Depends, Query, status
 
 from portal.application.facility.mappers import (
     create_id_result_to_api,
@@ -23,6 +23,8 @@ from portal.application.facility.mappers import (
 from portal.application.facility.pricing_service import PricingService
 from portal.application.facility.rental_rate_service import RentalRateService
 from portal.container import Container
+from portal.domain.facility.constants import FacilityErrorCode
+from portal.exceptions.responses import NotFoundException
 from portal.libs.consts.permission import Permission
 from portal.routers.auth_router import AuthRouter
 from portal.serializers.admin.v1.facility.rental_rate import (
@@ -82,7 +84,7 @@ async def create_rental_rate(model: AdminRentalRateCreate, rental_rate_service: 
 async def get_rental_rate(rate_id: uuid.UUID, rental_rate_service: RentalRateService = Depends(Provide[Container.rental_rate_service])):
     result = await rental_rate_service.get_rate_by_id(rate_id=rate_id)
     if not result:
-        raise HTTPException(status_code=404, detail="Rental rate not found")
+        raise NotFoundException(detail="Rental rate not found", error_code=FacilityErrorCode.RENTAL_RATE_NOT_FOUND.value, context={"rate_id": str(rate_id)})
     return rental_rate_to_api(result)
 
 
