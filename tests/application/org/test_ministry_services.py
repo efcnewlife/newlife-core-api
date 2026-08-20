@@ -27,7 +27,7 @@ from portal.application.org.target_audience_validation import validate_target_au
 from portal.domain.facility.days_of_week_mask import days_to_mask, mask_to_days
 from portal.domain.org.catalog_codes import TARGET_AUDIENCE_ADULTS, TARGET_AUDIENCE_ALL_AGES
 from portal.domain.org.constants import MinistryMemberRole, MinistryStatus
-from portal.exceptions.responses import BadRequestException
+from portal.exceptions.responses import BadRequestException, NotFoundException
 from tests.fixtures.org.stubs import StubMinistryRepository, StubMinistryTypeRepository, StubStewardDirectoryRow, StubTargetAudienceRepository
 
 
@@ -70,8 +70,35 @@ async def test_validate_members_for_submit_requires_primary_and_secondary():
         members_by_ministry={ministry_id: [MinistryMemberResult(user_id=uuid4(), member_role=MinistryMemberRole.PRIMARY.value)]},
     )
     service = make_service(stub)
-    with pytest.raises(BadRequestException, match="secondary"):
+    with pytest.raises(BadRequestException, match="secondary") as exc_info:
         await service.validate_members_for_submit(ministry_id)
+    assert exc_info.value.error_code == "ORG_MINISTRY_SECONDARY_REQUIRED"
+
+
+@pytest.mark.asyncio
+async def test_validate_members_for_submit_requires_primary():
+    ministry_id = uuid4()
+    stub = StubMinistryRepository(
+        ministry_by_id={
+            ministry_id: MinistryDetailResult(id=ministry_id, name="Youth", status=MinistryStatus.DRAFT.value, has_priority_booking=False, is_active=True)
+        },
+        members_by_ministry={ministry_id: [MinistryMemberResult(user_id=uuid4(), member_role=MinistryMemberRole.SECONDARY.value)]},
+    )
+    service = make_service(stub)
+    with pytest.raises(BadRequestException, match="primary") as exc_info:
+        await service.validate_members_for_submit(ministry_id)
+    assert exc_info.value.error_code == "ORG_MINISTRY_PRIMARY_REQUIRED"
+
+
+@pytest.mark.asyncio
+async def test_submit_ministry_not_found_error_code():
+    ministry_id = uuid4()
+    stub = StubMinistryRepository(ministry_by_id={})
+    approval_service = MinistryApprovalService(stub, make_service(stub))
+    with pytest.raises(NotFoundException) as exc_info:
+        await approval_service.submit_ministry(ministry_id, SubmitMinistryCommand())
+    assert exc_info.value.error_code == "ORG_MINISTRY_NOT_FOUND"
+    assert exc_info.value.context == {"ministry_id": str(ministry_id)}
 
 
 @pytest.mark.asyncio

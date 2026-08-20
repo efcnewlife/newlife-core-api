@@ -6,7 +6,7 @@ import uuid
 from typing import Annotated
 
 from dependency_injector.wiring import Provide, inject
-from fastapi import Depends, HTTPException, Query, status
+from fastapi import Depends, Query, status
 
 from portal.application.org.mappers import (
     create_id_result_to_api,
@@ -19,6 +19,8 @@ from portal.application.org.mappers import (
 )
 from portal.application.org.member_person_service import MemberPersonService
 from portal.container import Container
+from portal.domain.member.constants import MemberErrorCode
+from portal.exceptions.responses import NotFoundException
 from portal.libs.consts.permission import Permission
 from portal.routers.auth_router import AuthRouter
 from portal.serializers.admin.v1.org.member_person import (
@@ -57,7 +59,7 @@ async def create_member_person(
 async def get_member_person(person_id: uuid.UUID, member_person_service: MemberPersonService = Depends(Provide[Container.org_member_person_service])):
     result = await member_person_service.get_person_by_id(person_id)
     if not result:
-        raise HTTPException(status_code=404, detail="Member person not found")
+        raise NotFoundException(detail="Member person not found", error_code=MemberErrorCode.PERSON_NOT_FOUND.value, context={"person_id": str(person_id)})
     return member_person_detail_to_api(result)
 
 

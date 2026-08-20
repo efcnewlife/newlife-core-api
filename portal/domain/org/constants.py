@@ -46,6 +46,19 @@ class PositionOffice(str, Enum):
     STAFF = "staff"
 
 
+class OrgErrorCode(str, Enum):
+    """Machine-readable org admin error codes for clients."""
+
+    MINISTRY_NOT_FOUND = "ORG_MINISTRY_NOT_FOUND"
+    MINISTRY_PRIMARY_REQUIRED = "ORG_MINISTRY_PRIMARY_REQUIRED"
+    MINISTRY_SECONDARY_REQUIRED = "ORG_MINISTRY_SECONDARY_REQUIRED"
+    MINISTRY_NOT_PENDING_APPROVAL = "ORG_MINISTRY_NOT_PENDING_APPROVAL"
+    MINISTRY_INVALID_STATUS_FOR_SUBMIT = "ORG_MINISTRY_INVALID_STATUS_FOR_SUBMIT"
+    MINISTRY_OWNER_POSITION_REQUIRED = "ORG_MINISTRY_OWNER_POSITION_REQUIRED"
+    POSITION_NOT_FOUND = "ORG_POSITION_NOT_FOUND"
+    POSITION_CODE_EXISTS = "ORG_POSITION_CODE_EXISTS"
+
+
 def position_office_can_own_ministry(office: PositionOffice | str) -> bool:
     """Whether the office may own a ministry."""
     value = office.value if isinstance(office, PositionOffice) else office

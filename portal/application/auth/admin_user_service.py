@@ -19,6 +19,7 @@ from portal.application.rbac.commands import (
 from portal.application.rbac.permission_service import PermissionService
 from portal.application.rbac.results import AdminUserDetailResult, AdminUserListResult, AdminUserPageResult, AdminUserRolesResult, CreateIdResult
 from portal.application.rbac.role_service import RoleService
+from portal.domain.auth.constants import AuthErrorCode
 from portal.domain.auth.ports import UserRepositoryPort
 from portal.exceptions.responses import BadRequestException, UnauthorizedException
 from portal.libs.contexts.user_context import UserContext, get_user_context
@@ -102,7 +103,7 @@ class AdminUserService:
     async def change_password(self, user_id: UUID, command: ChangePasswordCommand) -> None:
         user = await self.get_user_detail_by_id(user_id=user_id)
         if not user:
-            raise BadRequestException(detail="User not found")
+            raise BadRequestException(detail="User not found", error_code=AuthErrorCode.USER_NOT_FOUND.value)
         if not self._user_ctx or user.id != self._user_ctx.user_id:
             raise UnauthorizedException(detail="Unauthorized")
         if not self._password_provider.verify_password(command.old_password, user.password_hash):

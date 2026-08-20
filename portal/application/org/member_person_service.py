@@ -8,6 +8,7 @@ from uuid import UUID
 
 from portal.application.org.commands import CreateMemberPersonCommand, LinkMemberPersonCommand, PagesQueryCommand, UpdateMemberPersonCommand
 from portal.application.org.results import CreateIdResult, MemberPersonDetailResult, MemberPersonPageResult
+from portal.domain.member.constants import MemberErrorCode
 from portal.exceptions.responses import BadRequestException, NotFoundException
 from portal.infrastructure.persistence.repositories.member.person_repository import PersonRepository
 from portal.libs.tracing.distributed_trace import distributed_trace
@@ -28,7 +29,9 @@ class MemberPersonService:
     async def get_person_by_id(self, person_id: UUID) -> MemberPersonDetailResult:
         row = await self._repository.get_by_id(person_id)
         if not row:
-            raise NotFoundException(detail=f"Member person {person_id} not found")
+            raise NotFoundException(
+                detail=f"Member person {person_id} not found", error_code=MemberErrorCode.PERSON_NOT_FOUND.value, context={"person_id": str(person_id)}
+            )
         return row
 
     @distributed_trace()
@@ -40,17 +43,25 @@ class MemberPersonService:
     @distributed_trace()
     async def update_person(self, person_id: UUID, command: UpdateMemberPersonCommand) -> None:
         if not await self._repository.get_by_id(person_id):
-            raise NotFoundException(detail=f"Member person {person_id} not found")
+            raise NotFoundException(
+                detail=f"Member person {person_id} not found", error_code=MemberErrorCode.PERSON_NOT_FOUND.value, context={"person_id": str(person_id)}
+            )
         affected = await self._repository.update_person(person_id, dict(legal_name=command.legal_name))
         if affected == 0:
-            raise NotFoundException(detail=f"Member person {person_id} not found")
+            raise NotFoundException(
+                detail=f"Member person {person_id} not found", error_code=MemberErrorCode.PERSON_NOT_FOUND.value, context={"person_id": str(person_id)}
+            )
 
     @distributed_trace()
     async def link_user(self, person_id: UUID, command: LinkMemberPersonCommand) -> None:
         if not await self._repository.get_by_id(person_id):
-            raise NotFoundException(detail=f"Member person {person_id} not found")
+            raise NotFoundException(
+                detail=f"Member person {person_id} not found", error_code=MemberErrorCode.PERSON_NOT_FOUND.value, context={"person_id": str(person_id)}
+            )
         if await self._repository.user_already_linked(command.user_id, exclude_person_id=person_id):
-            raise BadRequestException(detail="User is already linked to another member person")
+            raise BadRequestException(detail="User is already linked to another member person", error_code=MemberErrorCode.PERSON_USER_ALREADY_LINKED.value)
         affected = await self._repository.link_user(person_id, command.user_id)
         if affected == 0:
-            raise NotFoundException(detail=f"Member person {person_id} not found")
+            raise NotFoundException(
+                detail=f"Member person {person_id} not found", error_code=MemberErrorCode.PERSON_NOT_FOUND.value, context={"person_id": str(person_id)}
+            )

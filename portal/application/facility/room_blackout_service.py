@@ -8,7 +8,7 @@ from uuid import UUID
 
 from portal.application.facility.commands import CreateRoomBlackoutCommand, DeleteCommand, PagesQueryCommand, UpdateRoomBlackoutCommand
 from portal.application.facility.results import CreateIdResult, RoomBlackoutListResult, RoomBlackoutPageResult, RoomBlackoutResult
-from portal.domain.facility.constants import RoomBlackoutKind
+from portal.domain.facility.constants import FacilityErrorCode, RoomBlackoutKind
 from portal.domain.facility.days_of_week_mask import days_to_mask
 from portal.exceptions.responses import BadRequestException, NotFoundException
 from portal.infrastructure.persistence.repositories.facility.room_blackout_repository import RoomBlackoutRepository
@@ -59,7 +59,9 @@ class RoomBlackoutService:
         if facility_id is None:
             return
         if not await self._room_repository.exists_by_id(facility_id):
-            raise NotFoundException(detail=f"Room {facility_id} not found")
+            raise NotFoundException(
+                detail=f"Room {facility_id} not found", error_code=FacilityErrorCode.ROOM_NOT_FOUND.value, context={"room_id": str(facility_id)}
+            )
 
     async def _assert_no_overlap(
         self,
@@ -88,7 +90,9 @@ class RoomBlackoutService:
                     continue
                 if not self._repository.effective_dates_overlap(command.effective_from, command.effective_to, candidate.effective_from, candidate.effective_to):
                     continue
-            raise BadRequestException(detail="Blackout overlaps an existing active blackout for the same scope and time")
+            raise BadRequestException(
+                detail="Blackout overlaps an existing active blackout for the same scope and time", error_code=FacilityErrorCode.BLACKOUT_OVERLAP.value
+            )
 
     def _to_payload(
         self, command: CreateRoomBlackoutCommand | UpdateRoomBlackoutCommand, kind: str, days_of_week_mask: Optional[int], blackout_id: Optional[UUID] = None
@@ -137,18 +141,24 @@ class RoomBlackoutService:
     async def update_blackout(self, blackout_id: UUID, command: UpdateRoomBlackoutCommand) -> None:
         existing = await self._repository.get_by_id(blackout_id)
         if not existing:
-            raise NotFoundException(detail=f"Blackout {blackout_id} not found")
+            raise NotFoundException(
+                detail=f"Blackout {blackout_id} not found", error_code=FacilityErrorCode.BLACKOUT_NOT_FOUND.value, context={"blackout_id": str(blackout_id)}
+            )
         await self._assert_room_exists(command.facility_id)
         kind, days_of_week_mask = self._validate_command(command)
         await self._assert_no_overlap(command, kind, days_of_week_mask, exclude_blackout_id=blackout_id)
         affected = await self._repository.update_blackout(blackout_id, self._to_payload(command, kind, days_of_week_mask))
         if affected == 0:
-            raise NotFoundException(detail=f"Blackout {blackout_id} not found")
+            raise NotFoundException(
+                detail=f"Blackout {blackout_id} not found", error_code=FacilityErrorCode.BLACKOUT_NOT_FOUND.value, context={"blackout_id": str(blackout_id)}
+            )
 
     @distributed_trace()
     async def delete_blackout(self, blackout_id: UUID, command: DeleteCommand) -> None:
         if not await self._repository.get_by_id(blackout_id):
-            raise NotFoundException(detail=f"Blackout {blackout_id} not found")
+            raise NotFoundException(
+                detail=f"Blackout {blackout_id} not found", error_code=FacilityErrorCode.BLACKOUT_NOT_FOUND.value, context={"blackout_id": str(blackout_id)}
+            )
         if command.permanent:
             await self._repository.delete_hard(blackout_id)
         else:

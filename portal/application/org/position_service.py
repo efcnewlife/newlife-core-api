@@ -16,6 +16,7 @@ from portal.application.org.commands import (
     UpdatePositionCommand,
 )
 from portal.application.org.results import AssignablePositionResult, CreateIdResult, PositionDetailResult, PositionPageResult
+from portal.domain.org.constants import OrgErrorCode
 from portal.exceptions.responses import ApiBaseException, BadRequestException, ConflictErrorException, NotFoundException
 from portal.infrastructure.persistence.repositories.org.position_repository import PositionRepository
 from portal.libs.contexts.request_context import RequestContext, get_request_context
@@ -82,20 +83,24 @@ class PositionService:
             raise
         except Exception as error:
             if self._repository.is_unique_violation(error):
-                raise ConflictErrorException(detail="Position code already exists", debug_detail=str(error))
+                raise ConflictErrorException(detail="Position code already exists", error_code=OrgErrorCode.POSITION_CODE_EXISTS.value, debug_detail=str(error))
             raise ApiBaseException(status_code=500, detail="Internal Server Error", debug_detail=str(error))
         return CreateIdResult(id=position_id)
 
     @distributed_trace()
     async def update_position(self, position_id: UUID, command: UpdatePositionCommand) -> None:
         if not await self._repository.get_by_id(position_id):
-            raise NotFoundException(detail=f"Position {position_id} not found")
+            raise NotFoundException(
+                detail=f"Position {position_id} not found", error_code=OrgErrorCode.POSITION_NOT_FOUND.value, context={"position_id": str(position_id)}
+            )
         values = {"can_own_ministry": command.can_own_ministry, "is_active": command.is_active}
         if command.sequence is not None:
             values["sequence"] = command.sequence
         affected = await self._repository.update_position(position_id, values)
         if affected == 0:
-            raise NotFoundException(detail=f"Position {position_id} not found")
+            raise NotFoundException(
+                detail=f"Position {position_id} not found", error_code=OrgErrorCode.POSITION_NOT_FOUND.value, context={"position_id": str(position_id)}
+            )
         translation_payloads = self._build_translation_payloads(command)
         if translation_payloads:
             await self._validate_and_upsert_translations(position_id, translation_payloads)
@@ -103,7 +108,9 @@ class PositionService:
     @distributed_trace()
     async def delete_position(self, position_id: UUID, command: DeleteCommand) -> None:
         if not await self._repository.get_by_id(position_id):
-            raise NotFoundException(detail=f"Position {position_id} not found")
+            raise NotFoundException(
+                detail=f"Position {position_id} not found", error_code=OrgErrorCode.POSITION_NOT_FOUND.value, context={"position_id": str(position_id)}
+            )
         if command.permanent:
             await self._repository.delete_hard(position_id)
         else:
@@ -119,5 +126,7 @@ class PositionService:
     @distributed_trace()
     async def assign_position(self, position_id: UUID, command: AssignPositionCommand) -> None:
         if not await self._repository.get_by_id(position_id):
-            raise NotFoundException(detail=f"Position {position_id} not found")
+            raise NotFoundException(
+                detail=f"Position {position_id} not found", error_code=OrgErrorCode.POSITION_NOT_FOUND.value, context={"position_id": str(position_id)}
+            )
         await self._repository.assign_incumbent(position_id=position_id, user_id=command.user_id, start_at=command.start_at)

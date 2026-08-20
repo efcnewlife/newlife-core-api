@@ -8,6 +8,7 @@ from uuid import UUID
 
 from portal.application.facility.commands import CreateRentalRateCommand, DeleteCommand, PagesQueryCommand, UpdateRentalRateCommand
 from portal.application.facility.results import CreateIdResult, RentalRateListResult, RentalRatePageResult, RentalRateResult
+from portal.domain.facility.constants import FacilityErrorCode
 from portal.exceptions.responses import ApiBaseException, BadRequestException, ConflictErrorException, NotFoundException
 from portal.infrastructure.persistence.repositories.facility.rental_repository import RentalRepository
 from portal.infrastructure.persistence.repositories.facility.room_repository import RoomRepository
@@ -25,13 +26,19 @@ class RentalRateService:
     async def _validate_template_for_bind(self, template_id: UUID) -> None:
         template = await self._repository.get_template_by_id(template_id)
         if not template:
-            raise NotFoundException(detail=f"Rental rate template {template_id} not found")
+            raise NotFoundException(
+                detail=f"Rental rate template {template_id} not found",
+                error_code=FacilityErrorCode.RENTAL_RATE_TEMPLATE_NOT_FOUND.value,
+                context={"template_id": str(template_id)},
+            )
         if not template.is_active:
             raise BadRequestException(detail="Cannot bind rates to an inactive rental rate template")
 
     async def _validate_facility(self, facility_id: UUID) -> None:
         if not await self._room_repository.exists_by_id(facility_id):
-            raise NotFoundException(detail=f"Room {facility_id} not found")
+            raise NotFoundException(
+                detail=f"Room {facility_id} not found", error_code=FacilityErrorCode.ROOM_NOT_FOUND.value, context={"room_id": str(facility_id)}
+            )
 
     @distributed_trace()
     async def get_rate_pages(self, command: PagesQueryCommand, facility_id: Optional[UUID] = None) -> RentalRatePageResult:
@@ -60,7 +67,9 @@ class RentalRateService:
             raise
         except Exception as error:
             if self._repository.is_unique_violation(error):
-                raise ConflictErrorException(detail="Rental rate binding already exists for facility/template")
+                raise ConflictErrorException(
+                    detail="Rental rate binding already exists for facility/template", error_code=FacilityErrorCode.RENTAL_RATE_EXISTS.value
+                )
             logger.exception(error)
             raise ApiBaseException(status_code=500, detail="Internal Server Error", debug_detail=str(error))
         return CreateIdResult(id=rate_id)
@@ -69,7 +78,9 @@ class RentalRateService:
     async def update_rate(self, rate_id: UUID, command: UpdateRentalRateCommand) -> None:
         existing = await self._repository.get_rate_by_id(rate_id)
         if not existing:
-            raise NotFoundException(detail=f"Rental rate {rate_id} not found")
+            raise NotFoundException(
+                detail=f"Rental rate {rate_id} not found", error_code=FacilityErrorCode.RENTAL_RATE_NOT_FOUND.value, context={"rate_id": str(rate_id)}
+            )
         await self._validate_facility(command.facility_id)
         await self._validate_template_for_bind(command.template_id)
         try:
@@ -78,16 +89,22 @@ class RentalRateService:
             )
         except Exception as error:
             if self._repository.is_unique_violation(error):
-                raise ConflictErrorException(detail="Rental rate binding already exists for facility/template")
+                raise ConflictErrorException(
+                    detail="Rental rate binding already exists for facility/template", error_code=FacilityErrorCode.RENTAL_RATE_EXISTS.value
+                )
             raise
         if affected == 0:
-            raise NotFoundException(detail=f"Rental rate {rate_id} not found")
+            raise NotFoundException(
+                detail=f"Rental rate {rate_id} not found", error_code=FacilityErrorCode.RENTAL_RATE_NOT_FOUND.value, context={"rate_id": str(rate_id)}
+            )
 
     @distributed_trace()
     async def delete_rate(self, rate_id: UUID, command: DeleteCommand) -> None:
         existing = await self._repository.get_rate_by_id(rate_id)
         if not existing:
-            raise NotFoundException(detail=f"Rental rate {rate_id} not found")
+            raise NotFoundException(
+                detail=f"Rental rate {rate_id} not found", error_code=FacilityErrorCode.RENTAL_RATE_NOT_FOUND.value, context={"rate_id": str(rate_id)}
+            )
         if command.permanent:
             await self._repository.delete_rate_hard(rate_id)
         else:

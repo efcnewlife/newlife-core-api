@@ -26,8 +26,9 @@ async def test_create_room_success():
 async def test_create_room_unique_violation():
     stub = StubRoomRepository(insert_raises_unique=True)
     service = RoomService(stub)
-    with pytest.raises(ConflictErrorException, match="Room code"):
+    with pytest.raises(ConflictErrorException, match="Room code") as exc_info:
         await service.create_room(make_create_room_command())
+    assert exc_info.value.error_code == "FACILITY_ROOM_CODE_EXISTS"
 
 
 @pytest.mark.asyncio
@@ -37,8 +38,10 @@ async def test_update_room_not_found():
     service = RoomService(stub)
     from portal.application.facility.commands import UpdateRoomCommand
 
-    with pytest.raises(NotFoundException, match="Room"):
+    with pytest.raises(NotFoundException, match="Room") as exc_info:
         await service.update_room(room_id, UpdateRoomCommand(is_active=True))
+    assert exc_info.value.error_code == "FACILITY_ROOM_NOT_FOUND"
+    assert exc_info.value.context == {"room_id": str(room_id)}
 
 
 @pytest.mark.asyncio

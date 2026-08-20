@@ -57,8 +57,9 @@ def _booking_service(
 @pytest.mark.asyncio
 async def test_cancel_booking_not_found():
     service = _booking_service(StubBookingRepository(exists=False))
-    with pytest.raises(NotFoundException, match="Booking not found"):
+    with pytest.raises(NotFoundException) as exc_info:
         await service.cancel_booking(uuid4(), CancelBookingCommand())
+    assert exc_info.value.error_code == "FACILITY_BOOKING_NOT_FOUND"
 
 
 @pytest.mark.asyncio
@@ -89,7 +90,7 @@ async def test_update_booking_invalid_time_range():
     with pytest.raises(BadRequestException) as exc_info:
         await service.update_booking(uuid4(), command)
     assert "end_at" in str(exc_info.value.detail)
-    assert getattr(exc_info.value, "error_code", None) is None
+    assert exc_info.value.error_code == "FACILITY_BOOKING_INVALID_TIME_RANGE"
 
 
 @pytest.mark.asyncio
@@ -111,7 +112,7 @@ async def test_update_booking_max_rooms_exceeded():
     with pytest.raises(BadRequestException) as exc_info:
         await service.update_booking(uuid4(), command)
     assert "At most 2" in str(exc_info.value.detail)
-    assert getattr(exc_info.value, "error_code", None) is None
+    assert exc_info.value.error_code == "FACILITY_BOOKING_MAX_ROOMS"
 
 
 @pytest.mark.asyncio
@@ -271,18 +272,18 @@ async def test_create_booking_max_rooms_exceeded(monkeypatch):
     with pytest.raises(BadRequestException) as exc_info:
         await service.create_booking(command)
     assert "At most 2" in str(exc_info.value.detail)
-    assert getattr(exc_info.value, "error_code", None) is None
+    assert exc_info.value.error_code == "FACILITY_BOOKING_MAX_ROOMS"
 
 
 @pytest.mark.asyncio
-async def test_create_booking_invalid_time_range_has_no_error_code(monkeypatch):
+async def test_create_booking_invalid_time_range_has_error_code(monkeypatch):
     _user_ctx(monkeypatch)
     command = make_create_booking_command(start_at=datetime(2026, 5, 1, 14, 0, tzinfo=timezone.utc), end_at=datetime(2026, 5, 1, 10, 0, tzinfo=timezone.utc))
     service = _booking_service(StubBookingRepository())
     with pytest.raises(BadRequestException) as exc_info:
         await service.create_booking(command)
     assert "end_at" in str(exc_info.value.detail)
-    assert getattr(exc_info.value, "error_code", None) is None
+    assert exc_info.value.error_code == "FACILITY_BOOKING_INVALID_TIME_RANGE"
 
 
 @pytest.mark.asyncio

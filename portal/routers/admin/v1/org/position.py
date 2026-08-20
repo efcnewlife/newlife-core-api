@@ -6,7 +6,7 @@ import uuid
 from typing import Annotated
 
 from dependency_injector.wiring import Provide, inject
-from fastapi import Depends, HTTPException, Query, status
+from fastapi import Depends, Query, status
 
 from portal.application.org.mappers import (
     assign_position_to_command,
@@ -22,6 +22,8 @@ from portal.application.org.mappers import (
 )
 from portal.application.org.position_service import PositionService
 from portal.container import Container
+from portal.domain.org.constants import OrgErrorCode
+from portal.exceptions.responses import NotFoundException
 from portal.libs.consts.permission import Permission
 from portal.routers.auth_router import AuthRouter
 from portal.serializers.admin.v1.org.position import (
@@ -71,7 +73,7 @@ async def get_position(
 ):
     result = await position_service.get_position_by_id(position_id=position_id, all_locales=query_model.all_locales)
     if not result:
-        raise HTTPException(status_code=404, detail="Position not found")
+        raise NotFoundException(detail="Position not found", error_code=OrgErrorCode.POSITION_NOT_FOUND.value, context={"position_id": str(position_id)})
     return position_detail_to_api(result)
 
 

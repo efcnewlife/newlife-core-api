@@ -24,6 +24,8 @@ from portal.application.rbac.mappers import (
     update_admin_user_to_command,
 )
 from portal.container import Container
+from portal.domain.auth.constants import AuthErrorCode
+from portal.exceptions.responses import NotFoundException
 from portal.libs.consts.permission import Permission
 from portal.routers.auth_router import AuthRouter
 from portal.serializers.admin.v1.user import (
@@ -99,9 +101,7 @@ async def get_current_user(admin_user_service: AdminUserService = Depends(Provid
     """
     result = await admin_user_service.get_current_user()
     if not result:
-        from fastapi import HTTPException
-
-        raise HTTPException(status_code=404, detail="User not found")
+        raise NotFoundException(detail="User not found", error_code=AuthErrorCode.USER_NOT_FOUND.value)
     return admin_user_detail_result_to_api(result)
 
 
@@ -158,9 +158,7 @@ async def get_user(user_id: uuid.UUID, admin_user_service: AdminUserService = De
     """
     result = await admin_user_service.get_user_by_id(user_id=user_id)
     if not result:
-        from fastapi import HTTPException
-
-        raise HTTPException(status_code=404, detail="User not found")
+        raise NotFoundException(detail="User not found", error_code=AuthErrorCode.USER_NOT_FOUND.value, context={"user_id": str(user_id)})
     return admin_user_detail_result_to_api(result)
 
 

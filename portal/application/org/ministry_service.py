@@ -26,7 +26,7 @@ from portal.application.org.results import (
 )
 from portal.application.org.target_audience_validation import validate_target_audience_ids
 from portal.domain.org.catalog_codes import MINISTRY_TYPE_INTERNAL
-from portal.domain.org.constants import MinistryMemberRole, MinistryStatus
+from portal.domain.org.constants import MinistryMemberRole, MinistryStatus, OrgErrorCode
 from portal.exceptions.responses import ApiBaseException, BadRequestException, NotFoundException
 from portal.infrastructure.persistence.repositories.org.ministry_repository import MinistryRepository
 from portal.infrastructure.persistence.repositories.org.ministry_type_repository import MinistryTypeRepository
@@ -158,7 +158,9 @@ class MinistryService:
     async def update_ministry(self, ministry_id: UUID, command: UpdateMinistryCommand) -> None:
         existing = await self._repository.get_by_id(ministry_id)
         if not existing:
-            raise NotFoundException(detail=f"Ministry {ministry_id} not found")
+            raise NotFoundException(
+                detail=f"Ministry {ministry_id} not found", error_code=OrgErrorCode.MINISTRY_NOT_FOUND.value, context={"ministry_id": str(ministry_id)}
+            )
         values = {"has_priority_booking": command.has_priority_booking, "is_active": command.is_active}
         if command.owner_position_id is not None:
             values["owner_position_id"] = command.owner_position_id
@@ -168,7 +170,9 @@ class MinistryService:
             values["sequence"] = command.sequence
         affected = await self._repository.update_ministry(ministry_id, values)
         if affected == 0:
-            raise NotFoundException(detail=f"Ministry {ministry_id} not found")
+            raise NotFoundException(
+                detail=f"Ministry {ministry_id} not found", error_code=OrgErrorCode.MINISTRY_NOT_FOUND.value, context={"ministry_id": str(ministry_id)}
+            )
         translation_payloads = self._build_translation_payloads(command)
         if translation_payloads:
             await self._validate_and_upsert_translations(ministry_id, translation_payloads)
@@ -178,7 +182,9 @@ class MinistryService:
     @distributed_trace()
     async def delete_ministry(self, ministry_id: UUID, command: DeleteCommand) -> None:
         if not await self._repository.get_by_id(ministry_id):
-            raise NotFoundException(detail=f"Ministry {ministry_id} not found")
+            raise NotFoundException(
+                detail=f"Ministry {ministry_id} not found", error_code=OrgErrorCode.MINISTRY_NOT_FOUND.value, context={"ministry_id": str(ministry_id)}
+            )
         if command.permanent:
             await self._repository.delete_hard(ministry_id)
         else:
@@ -202,7 +208,9 @@ class MinistryService:
     @distributed_trace()
     async def list_members(self, ministry_id: UUID) -> list[MinistryMemberResult]:
         if not await self._repository.get_by_id(ministry_id):
-            raise NotFoundException(detail=f"Ministry {ministry_id} not found")
+            raise NotFoundException(
+                detail=f"Ministry {ministry_id} not found", error_code=OrgErrorCode.MINISTRY_NOT_FOUND.value, context={"ministry_id": str(ministry_id)}
+            )
         return await self._repository.list_members(ministry_id)
 
     @staticmethod
@@ -210,14 +218,16 @@ class MinistryService:
         primary_count = sum(1 for member in members if member.member_role == MinistryMemberRole.PRIMARY.value)
         secondary_count = sum(1 for member in members if member.member_role == MinistryMemberRole.SECONDARY.value)
         if primary_count != 1:
-            raise BadRequestException(detail="Exactly one primary ministry member is required")
+            raise BadRequestException(detail="Exactly one primary ministry member is required", error_code=OrgErrorCode.MINISTRY_PRIMARY_REQUIRED.value)
         if secondary_count < 1:
-            raise BadRequestException(detail="At least one secondary ministry member is required")
+            raise BadRequestException(detail="At least one secondary ministry member is required", error_code=OrgErrorCode.MINISTRY_SECONDARY_REQUIRED.value)
 
     @distributed_trace()
     async def replace_members(self, ministry_id: UUID, command: ReplaceMinistryMembersCommand) -> None:
         if not await self._repository.get_by_id(ministry_id):
-            raise NotFoundException(detail=f"Ministry {ministry_id} not found")
+            raise NotFoundException(
+                detail=f"Ministry {ministry_id} not found", error_code=OrgErrorCode.MINISTRY_NOT_FOUND.value, context={"ministry_id": str(ministry_id)}
+            )
         member_rows = [
             dict(user_id=member.user_id, member_role=member.member_role.value, remark=member.remark, contact_email=member.contact_email)
             for member in command.members
