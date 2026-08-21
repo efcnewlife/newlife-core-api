@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Format staged Python files (Ruff) before commit; re-stage results.
+set -euo pipefail
+
+ROOT_DIR="$(git rev-parse --show-toplevel </dev/null)"
+exec "${ROOT_DIR}/scripts/format-staged.sh"
