@@ -56,6 +56,7 @@ uv run uvicorn portal.main:app --reload
 uv run pytest
 uv run pytest tests/application/rbac/test_permission_service.py -v
 ./scripts/check-branch-name.test.sh
+./scripts/format-staged.test.sh
 
 # Format (layout, then import sort — I only)
 uv run ruff format
@@ -65,6 +66,10 @@ uv run ruff check --fix
 ### Branch names
 
 Topic branches: `{type}/{issue-number}-{short-description}` (types: `feat` `fix` `hotfix` `refactor` `perf` `test` `docs` `chore` `build` `ci`). Exceptions: `release/x.y.z`, `spike/{short-description}`, plus `main` / `develop`. Enforced by `.githooks/pre-push` (after install) and `.github/workflows/branch-name.yml` on PRs. Emergency local bypass: `git push --no-verify`. Consider marking the `Branch name` check required in GitHub branch protection.
+
+### Commit format hook
+
+After `./scripts/install-git-hooks.sh`, `.githooks/pre-commit` formats **staged** `*.py` via `scripts/format-staged.sh` (Ruff format + I-only `--fix`) and re-stages. Emergency: `git commit --no-verify`. See ADR 0006.
 
 Python layout is Ruff, not PyCharm Reformat. Disable PyCharm's built-in Python formatter, or use a Ruff plugin that reads `[tool.ruff]`. EditorConfig `ij_python_*` wrap/align keys are not the contract.
 
@@ -428,6 +433,7 @@ Use **Permission** or **Verb** as the reference implementation.
 | `.cursor/rules/standard.mdc`                                              | Full coding standards (ORM examples, repository patterns) |
 | `pyproject.toml`                                                          | uv + Ruff contract (`[tool.ruff]`)                        |
 | `docs/adr/0003-ruff-is-the-formatter.md`                                  | Why Ruff, I-only lint select, not Black                   |
+| `docs/adr/0006-githooks-enforce-ruff-on-commit.md`                        | `.githooks` pre-commit runs Ruff on staged files          |
 | `portal/apps.py`                                                          | App mounting, middleware, exception handlers              |
 | `portal/container.py`                                                     | All wired services                                        |
 | `portal/routers/admin/v1/permission.py`                                   | Canonical router pattern                                  |
