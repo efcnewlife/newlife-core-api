@@ -15,6 +15,9 @@ class BookingType(str, Enum):
 # recurrence_rule on facility.booking stores iCal RRULE only (RFC 5545), e.g. FREQ=WEEKLY;BYDAY=TU.
 # Use booking.start_at as the series DTSTART; recurrence_end_at bounds the series end.
 
+# Max inclusive span for Booking range query (Calendar / Grid visible window).
+BOOKING_RANGE_MAX_DAYS = 62
+
 
 class BookingStatus(str, Enum):
     """Booking lifecycle status."""
@@ -126,3 +129,4 @@ class FacilityErrorCode(str, Enum):
     BOOKING_ROOMS_REQUIRED = "FACILITY_BOOKING_ROOMS_REQUIRED"
     BOOKING_MAX_ROOMS = "FACILITY_BOOKING_MAX_ROOMS"
     BOOKING_MINISTRY_INACTIVE = "FACILITY_BOOKING_MINISTRY_INACTIVE"
+    BOOKING_RANGE_WINDOW_TOO_LARGE = "FACILITY_BOOKING_RANGE_WINDOW_TOO_LARGE"

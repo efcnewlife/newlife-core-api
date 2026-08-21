@@ -226,6 +226,14 @@ class BookingPagesQueryCommand(PagesQueryCommand):
     date_to: Optional[datetime] = Field(default=None)
 
 
+class BookingRangeQueryCommand(BaseModel):
+    """Non-paginated booking range query for Calendar and Grid."""
+
+    date_from: datetime = Field(...)
+    date_to: datetime = Field(...)
+    include_cancelled: bool = Field(default=False)
+
+
 class OverrideLogPagesQueryCommand(PagesQueryCommand):
     """Paginated override audit log filters."""
 
@@ -285,6 +293,7 @@ class RoomAvailabilityQueryCommand(BaseModel):
 __all__ = [
     "ReplaceMinistryMembersCommand",
     "BookingPagesQueryCommand",
+    "BookingRangeQueryCommand",
     "BookingRoomLineCommand",
     "BulkIdsCommand",
     "CancelBookingCommand",

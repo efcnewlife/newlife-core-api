@@ -13,6 +13,8 @@ from portal.application.facility.mappers import (
     booking_detail_to_api,
     booking_page_to_api,
     booking_pages_query_to_command,
+    booking_range_query_to_command,
+    booking_range_to_api,
     cancel_booking_to_command,
     create_booking_to_command,
     create_id_result_to_api,
@@ -27,6 +29,8 @@ from portal.serializers.admin.v1.facility.booking import (
     AdminBookingDetail,
     AdminBookingPages,
     AdminBookingQuery,
+    AdminBookingRange,
+    AdminBookingRangeQuery,
     AdminBookingUpdate,
 )
 from portal.serializers.mixins.model_mixins import UUIDBaseModel
@@ -39,6 +43,15 @@ router: AuthRouter = AuthRouter(is_admin=True)
 async def get_booking_pages(query_model: Annotated[AdminBookingQuery, Query()], booking_service: BookingService = Depends(Provide[Container.booking_service])):
     result = await booking_service.get_booking_pages(command=booking_pages_query_to_command(query_model))
     return booking_page_to_api(result)
+
+
+@router.get(path="/range", status_code=status.HTTP_200_OK, response_model=AdminBookingRange, permissions=[Permission.FACILITY_BOOKING.read])
+@inject
+async def get_booking_range(
+    query_model: Annotated[AdminBookingRangeQuery, Query()], booking_service: BookingService = Depends(Provide[Container.booking_service])
+):
+    result = await booking_service.get_booking_range(command=booking_range_query_to_command(query_model))
+    return booking_range_to_api(result)
 
 
 @router.post(path="", status_code=status.HTTP_201_CREATED, response_model=UUIDBaseModel, permissions=[Permission.FACILITY_BOOKING.create])

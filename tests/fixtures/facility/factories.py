@@ -22,6 +22,7 @@ from portal.application.facility.commands import (
     UpdateBookingCommand,
 )
 from portal.application.facility.results import (
+    BookingListItemResult,
     DiscountRuleResult,
     MinistryDetailResult,
     PreviewQuoteResult,
@@ -237,6 +238,28 @@ def make_create_rental_rate_template_command(name: str = "Hourly") -> CreateRent
 
 def make_create_rental_rate_command(facility_id: UUID, template_id: UUID | None = None) -> CreateRentalRateCommand:
     return CreateRentalRateCommand(facility_id=facility_id, template_id=template_id or new_uuid(), is_active=True)
+
+
+def make_booking_list_item(
+    *,
+    start_at: datetime | None = None,
+    end_at: datetime | None = None,
+    status: str = "confirmed",
+    booking_id: UUID | None = None,
+    user_id: UUID | None = None,
+    facility_id: UUID | None = None,
+) -> BookingListItemResult:
+    room_id = facility_id or new_uuid()
+    return BookingListItemResult(
+        id=booking_id or new_uuid(),
+        user_id=user_id or new_uuid(),
+        facility_id=room_id,
+        facility_ids=[room_id],
+        booking_type="one_time",
+        start_at=start_at or datetime(2026, 5, 1, 10, 0, tzinfo=timezone.utc),
+        end_at=end_at or datetime(2026, 5, 1, 14, 0, tzinfo=timezone.utc),
+        status=status,
+    )
 
 
 def make_update_booking_command(facility_id: UUID | None = None, start_at: datetime | None = None, end_at: datetime | None = None) -> UpdateBookingCommand:

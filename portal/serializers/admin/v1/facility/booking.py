@@ -77,6 +77,20 @@ class AdminBookingPages(PaginationBaseResponseModel):
     items: list[AdminBookingListItem] = Field(default_factory=list)
 
 
+class AdminBookingRangeQuery(BaseModel):
+    """Booking range query filters for Calendar and Grid."""
+
+    date_from: datetime = Field(...)
+    date_to: datetime = Field(...)
+    include_cancelled: bool = Field(default=False)
+
+
+class AdminBookingRange(BaseModel):
+    """Complete booking set for a visible time window."""
+
+    items: list[AdminBookingListItem] = Field(default_factory=list)
+
+
 class AdminBookingDetail(AdminBookingListItem):
     """Booking detail."""
 

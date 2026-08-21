@@ -9,9 +9,10 @@ from uuid import UUID
 
 from asyncpg import UniqueViolationError
 
-from portal.application.facility.commands import BookingPagesQueryCommand, OverrideLogPagesQueryCommand, PagesQueryCommand
+from portal.application.facility.commands import BookingPagesQueryCommand, BookingRangeQueryCommand, OverrideLogPagesQueryCommand, PagesQueryCommand
 from portal.application.facility.results import (
     BookingDetailResult,
+    BookingListItemResult,
     DiscountRuleResult,
     MinistryDetailResult,
     OverrideLogResult,
@@ -20,7 +21,7 @@ from portal.application.facility.results import (
     RoomSlotTemplateResult,
     SurchargeResult,
 )
-from portal.domain.facility.constants import RentalPolicySettingKey
+from portal.domain.facility.constants import BookingStatus, RentalPolicySettingKey
 from portal.infrastructure.persistence.repositories.facility.rental_repository import RentalRepository
 
 
@@ -237,16 +238,27 @@ class StubRoomRepository:
 class StubBookingRepository:
     """In-memory booking stub."""
 
-    def __init__(self, exists: bool = True, booking_meta: dict | None = None, has_overlap: bool = False, detail: BookingDetailResult | None = None):
+    def __init__(
+        self,
+        exists: bool = True,
+        booking_meta: dict | None = None,
+        has_overlap: bool = False,
+        detail: BookingDetailResult | None = None,
+        range_items: list[BookingListItemResult] | None = None,
+        deleted_ids: set[UUID] | None = None,
+    ):
         self.exists = exists
         self.booking_meta = booking_meta or {"booking_type": "one_time", "currency": "CAD"}
         self.has_overlap = has_overlap
         self.detail = detail
+        self.range_items = range_items or []
+        self.deleted_ids = deleted_ids or set()
         self.cancel_calls: list[dict] = []
         self.insert_calls: list[dict] = []
         self.update_header_calls: list[dict] = []
         self.replace_rooms_calls: list = []
         self.replace_slots_calls: list = []
+        self.fetch_range_calls: list[BookingRangeQueryCommand] = []
 
     async def exists_by_id(self, booking_id: UUID) -> bool:
         return self.exists
@@ -279,6 +291,19 @@ class StubBookingRepository:
 
     async def fetch_pages(self, command: BookingPagesQueryCommand, locale_id):
         return [], 0
+
+    async def fetch_range(self, command: BookingRangeQueryCommand, locale_id) -> list[BookingListItemResult]:
+        self.fetch_range_calls.append(command)
+        items: list[BookingListItemResult] = []
+        for item in self.range_items:
+            if item.id in self.deleted_ids:
+                continue
+            if not (item.start_at < command.date_to and item.end_at > command.date_from):
+                continue
+            if not command.include_cancelled and item.status == BookingStatus.CANCELLED.value:
+                continue
+            items.append(item)
+        return items
 
 
 class StubRoomSlotTemplateRepository:

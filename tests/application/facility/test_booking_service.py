@@ -2,18 +2,19 @@
 BookingService unit tests.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from uuid import uuid4
 
 import pytest
 
 from portal.application.facility.booking_service import BookingService
-from portal.application.facility.commands import BookingRoomLineCommand, CancelBookingCommand
+from portal.application.facility.commands import BookingRangeQueryCommand, BookingRoomLineCommand, CancelBookingCommand
 from portal.application.facility.results import BookingDetailResult
-from portal.domain.facility.constants import RentalPolicySettingKey
+from portal.domain.facility.constants import BookingStatus, RentalPolicySettingKey
 from portal.exceptions.responses import BadRequestException, ConflictErrorException, ForbiddenException, NotFoundException
 from tests.fixtures.facility.factories import (
+    make_booking_list_item,
     make_create_booking_command,
     make_ministry_detail,
     make_preview_quote_result,
@@ -303,3 +304,87 @@ async def test_create_booking_scheduling_conflict_is_first_fail(monkeypatch):
         await service.create_booking(command)
     assert exc_info.value.context == {"facility_id": str(first_room_id)}
     assert exc_info.value.error_code == "FACILITY_BOOKING_SCHEDULING_CONFLICT"
+
+
+@pytest.mark.asyncio
+async def test_get_booking_range_rejects_oversize_window():
+    date_from = datetime(2026, 1, 1, 0, 0, tzinfo=timezone.utc)
+    date_to = date_from + timedelta(days=62, seconds=1)
+    service = _booking_service(StubBookingRepository())
+    with pytest.raises(BadRequestException) as exc_info:
+        await service.get_booking_range(BookingRangeQueryCommand(date_from=date_from, date_to=date_to))
+    assert exc_info.value.error_code == "FACILITY_BOOKING_RANGE_WINDOW_TOO_LARGE"
+
+
+@pytest.mark.asyncio
+async def test_get_booking_range_includes_bookings_that_span_window_edge():
+    """Overlap match: booking starts before window and ends inside; start-in-window alone would miss it."""
+    window_start = datetime(2026, 5, 1, 0, 0, tzinfo=timezone.utc)
+    window_end = datetime(2026, 5, 8, 0, 0, tzinfo=timezone.utc)
+    spanning = make_booking_list_item(
+        start_at=datetime(2026, 4, 30, 22, 0, tzinfo=timezone.utc), end_at=datetime(2026, 5, 1, 2, 0, tzinfo=timezone.utc), status=BookingStatus.CONFIRMED.value
+    )
+    starts_inside = make_booking_list_item(
+        start_at=datetime(2026, 5, 2, 10, 0, tzinfo=timezone.utc), end_at=datetime(2026, 5, 2, 12, 0, tzinfo=timezone.utc), status=BookingStatus.CONFIRMED.value
+    )
+    entirely_before = make_booking_list_item(
+        start_at=datetime(2026, 4, 29, 10, 0, tzinfo=timezone.utc),
+        end_at=datetime(2026, 4, 29, 12, 0, tzinfo=timezone.utc),
+        status=BookingStatus.CONFIRMED.value,
+    )
+    stub = StubBookingRepository(range_items=[spanning, starts_inside, entirely_before])
+    service = _booking_service(stub)
+    result = await service.get_booking_range(BookingRangeQueryCommand(date_from=window_start, date_to=window_end))
+    returned_ids = {item.id for item in result.items}
+    assert spanning.id in returned_ids
+    assert starts_inside.id in returned_ids
+    assert entirely_before.id not in returned_ids
+
+
+@pytest.mark.asyncio
+async def test_get_booking_range_excludes_cancelled_by_default():
+    window_start = datetime(2026, 5, 1, 0, 0, tzinfo=timezone.utc)
+    window_end = datetime(2026, 5, 8, 0, 0, tzinfo=timezone.utc)
+    confirmed = make_booking_list_item(
+        start_at=datetime(2026, 5, 2, 10, 0, tzinfo=timezone.utc), end_at=datetime(2026, 5, 2, 12, 0, tzinfo=timezone.utc), status=BookingStatus.CONFIRMED.value
+    )
+    cancelled = make_booking_list_item(
+        start_at=datetime(2026, 5, 3, 10, 0, tzinfo=timezone.utc), end_at=datetime(2026, 5, 3, 12, 0, tzinfo=timezone.utc), status=BookingStatus.CANCELLED.value
+    )
+    stub = StubBookingRepository(range_items=[confirmed, cancelled])
+    service = _booking_service(stub)
+    result = await service.get_booking_range(BookingRangeQueryCommand(date_from=window_start, date_to=window_end))
+    returned_ids = {item.id for item in result.items}
+    assert confirmed.id in returned_ids
+    assert cancelled.id not in returned_ids
+
+
+@pytest.mark.asyncio
+async def test_get_booking_range_include_cancelled_flag():
+    window_start = datetime(2026, 5, 1, 0, 0, tzinfo=timezone.utc)
+    window_end = datetime(2026, 5, 8, 0, 0, tzinfo=timezone.utc)
+    cancelled = make_booking_list_item(
+        start_at=datetime(2026, 5, 3, 10, 0, tzinfo=timezone.utc), end_at=datetime(2026, 5, 3, 12, 0, tzinfo=timezone.utc), status=BookingStatus.CANCELLED.value
+    )
+    stub = StubBookingRepository(range_items=[cancelled])
+    service = _booking_service(stub)
+    result = await service.get_booking_range(BookingRangeQueryCommand(date_from=window_start, date_to=window_end, include_cancelled=True))
+    assert {item.id for item in result.items} == {cancelled.id}
+
+
+@pytest.mark.asyncio
+async def test_get_booking_range_excludes_soft_deleted():
+    window_start = datetime(2026, 5, 1, 0, 0, tzinfo=timezone.utc)
+    window_end = datetime(2026, 5, 8, 0, 0, tzinfo=timezone.utc)
+    active = make_booking_list_item(
+        start_at=datetime(2026, 5, 2, 10, 0, tzinfo=timezone.utc), end_at=datetime(2026, 5, 2, 12, 0, tzinfo=timezone.utc), status=BookingStatus.CONFIRMED.value
+    )
+    deleted = make_booking_list_item(
+        start_at=datetime(2026, 5, 3, 10, 0, tzinfo=timezone.utc), end_at=datetime(2026, 5, 3, 12, 0, tzinfo=timezone.utc), status=BookingStatus.CONFIRMED.value
+    )
+    stub = StubBookingRepository(range_items=[active, deleted], deleted_ids={deleted.id})
+    service = _booking_service(stub)
+    result = await service.get_booking_range(BookingRangeQueryCommand(date_from=window_start, date_to=window_end))
+    returned_ids = {item.id for item in result.items}
+    assert active.id in returned_ids
+    assert deleted.id not in returned_ids
