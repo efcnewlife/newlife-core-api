@@ -9,11 +9,13 @@ import pytest
 from portal.application.cli.ministry_seed_service import assert_seed_prerequisites
 from portal.cli.datas.ministry_seed_data import (
     DEMO_PRIMARY_USER_EMAIL,
+    DEMO_SECONDARY_2_USER_EMAIL,
     DEMO_SECONDARY_USER_EMAIL,
     SEED_LOCALE_CODES,
     SEED_NAME_PREFIX,
     demo_ministry_user_seed_rows,
     ministry_seed_rows,
+    secondary_steward_emails_for_ministry_index,
 )
 from portal.domain.facility.constants import DayOfWeek
 from portal.domain.org.catalog_codes import (
@@ -210,13 +212,25 @@ def test_every_schedule_has_a_weekday_or_an_effective_window():
                 assert schedule["start_time"] < schedule["end_time"]
 
 
-def test_demo_users_are_two_non_admin_stewards():
-    assert [row["email"] for row in demo_ministry_user_seed_rows] == [DEMO_PRIMARY_USER_EMAIL, DEMO_SECONDARY_USER_EMAIL]
+def test_demo_steward_users_are_one_primary_and_two_secondaries():
+    assert [row["email"] for row in demo_ministry_user_seed_rows] == [DEMO_PRIMARY_USER_EMAIL, DEMO_SECONDARY_USER_EMAIL, DEMO_SECONDARY_2_USER_EMAIL]
     assert DEMO_PRIMARY_USER_EMAIL == "seed.ministry.primary@local.test"
     assert DEMO_SECONDARY_USER_EMAIL == "seed.ministry.secondary@local.test"
+    assert DEMO_SECONDARY_2_USER_EMAIL == "seed.ministry.secondary2@local.test"
     for row in demo_ministry_user_seed_rows:
         assert row["first_name"]
         assert row["last_name"]
+
+
+def test_first_half_ministries_get_two_secondaries_second_half_get_one():
+    total = len(ministry_seed_rows)
+    midpoint = total // 2
+    for index in range(total):
+        emails = secondary_steward_emails_for_ministry_index(index, total=total)
+        if index < midpoint:
+            assert emails == [DEMO_SECONDARY_USER_EMAIL, DEMO_SECONDARY_2_USER_EMAIL]
+        else:
+            assert emails == [DEMO_SECONDARY_USER_EMAIL]
 
 
 def _prerequisites(**overrides):

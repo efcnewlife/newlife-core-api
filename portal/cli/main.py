@@ -7,8 +7,7 @@ import click
 from .init_locale import init_locales_process
 from .rbac import init_rbac_process, reset_rbac_process
 from .seed_facility_rental import seed_facility_rental_process
-from .seed_facility_slots import seed_facility_slots_process
-from .seed_ministry import seed_ministries_process
+from .seed_local_demo import seed_local_demo_process
 from .seed_ministry_type import seed_ministry_types_process
 from .seed_position import seed_positions_process
 from .seed_position_assignment import seed_position_assignments_process
@@ -69,13 +68,6 @@ def seed_ministry_types_cmd(force: bool):
     seed_ministry_types_process(force=force)
 
 
-@cli.command(name="seed-ministries")
-@click.option("--force", is_flag=True, default=False, help="Skip confirmation and allow running when ENV is prod or stg.")
-def seed_ministries_cmd(force: bool):
-    """Seed ten demo Active ministries with a simulated approval."""
-    seed_ministries_process(force=force)
-
-
 @cli.command(name="seed-target-audiences")
 @click.option("--force", is_flag=True, default=False, help="Skip confirmation and allow running when ENV is prod or stg.")
 def seed_target_audiences_cmd(force: bool):
@@ -96,11 +88,11 @@ def seed_facility_rental_cmd(force: bool, reset: bool):
     seed_facility_rental_process(force=force, reset=reset)
 
 
-@cli.command(name="seed-facility-slots")
+@cli.command(name="seed-local-demo")
 @click.option("--force", is_flag=True, default=False, help="Skip confirmation and allow running when ENV is prod or stg.")
-def seed_facility_slots_cmd(force: bool):
-    """Seed demo room slot templates and blackouts for existing rooms."""
-    seed_facility_slots_process(force=force)
+def seed_local_demo_cmd(force: bool):
+    """Seed demo ministries, slots/blackouts, and bookings (catalog must already exist)."""
+    seed_local_demo_process(force=force)
 
 
 @cli.command(name="seed-system-settings")
