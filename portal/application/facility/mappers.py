@@ -460,6 +460,15 @@ def booking_pages_query_to_command(model) -> "BookingPagesQueryCommand":
     )
 
 
+def booking_range_query_to_command(model) -> "BookingRangeQueryCommand":
+    from portal.application.facility.commands import BookingRangeQueryCommand
+    from portal.serializers.admin.v1.facility.booking import AdminBookingRangeQuery
+
+    if not isinstance(model, AdminBookingRangeQuery):
+        raise TypeError("Expected AdminBookingRangeQuery")
+    return BookingRangeQueryCommand(date_from=model.date_from, date_to=model.date_to, include_cancelled=model.include_cancelled)
+
+
 def override_log_pages_query_to_command(model) -> "OverrideLogPagesQueryCommand":
     from portal.application.facility.commands import OverrideLogPagesQueryCommand
     from portal.serializers.admin.v1.facility.override_log import AdminOverrideLogQuery
@@ -520,6 +529,12 @@ def booking_page_to_api(result) -> "AdminBookingPages":
     return AdminBookingPages(
         page=result.page, page_size=result.page_size, total=result.total, items=[AdminBookingDetail.model_validate(item.model_dump()) for item in result.items]
     )
+
+
+def booking_range_to_api(result) -> "AdminBookingRange":
+    from portal.serializers.admin.v1.facility.booking import AdminBookingListItem, AdminBookingRange
+
+    return AdminBookingRange(items=[AdminBookingListItem.model_validate(item.model_dump()) for item in result.items])
 
 
 def booking_detail_to_api(result) -> "AdminBookingDetail":

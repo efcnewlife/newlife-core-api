@@ -386,6 +386,12 @@ class BookingPageResult(BaseModel):
     items: list[BookingListItemResult] = Field(default_factory=list)
 
 
+class BookingRangeResult(BaseModel):
+    """Complete booking set for a Calendar/Grid time window."""
+
+    items: list[BookingListItemResult] = Field(default_factory=list)
+
+
 class OverrideLogResult(UUIDBaseModel):
     """Override audit log row."""
 

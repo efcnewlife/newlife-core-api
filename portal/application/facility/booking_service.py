@@ -2,7 +2,7 @@
 Facility booking admin application service.
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Optional
 from uuid import UUID, uuid4
@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 
 from portal.application.facility.commands import (
     BookingPagesQueryCommand,
+    BookingRangeQueryCommand,
     CancelBookingCommand,
     CreateBookingCommand,
     PreviewQuoteCommand,
@@ -17,10 +18,18 @@ from portal.application.facility.commands import (
     UpdateBookingCommand,
 )
 from portal.application.facility.pricing_service import PricingService
-from portal.application.facility.results import BookingDetailResult, BookingListItemResult, BookingPageResult
+from portal.application.facility.results import BookingDetailResult, BookingListItemResult, BookingPageResult, BookingRangeResult
 from portal.application.org.results import CreateIdResult
 from portal.application.system.setting_service import SettingService
-from portal.domain.facility.constants import BookingErrorCode, BookingSlotStatus, BookingStatus, BookingType, FacilityErrorCode, RentalPolicySettingKey
+from portal.domain.facility.constants import (
+    BOOKING_RANGE_MAX_DAYS,
+    BookingErrorCode,
+    BookingSlotStatus,
+    BookingStatus,
+    BookingType,
+    FacilityErrorCode,
+    RentalPolicySettingKey,
+)
 from portal.domain.org.constants import MinistryStatus
 from portal.exceptions.responses import BadRequestException, ConflictErrorException, ForbiddenException, NotFoundException
 from portal.infrastructure.persistence.repositories.facility.booking_repository import BookingRepository
@@ -70,24 +79,27 @@ class BookingService:
         return BookingPageResult(page=command.page, page_size=command.page_size, total=count, items=items)
 
     @distributed_trace()
+    async def get_booking_range(self, command: BookingRangeQueryCommand) -> BookingRangeResult:
+        if command.date_to <= command.date_from:
+            raise BadRequestException(detail="date_to must be after date_from", error_code=FacilityErrorCode.BOOKING_INVALID_TIME_RANGE.value)
+        if command.date_to - command.date_from > timedelta(days=BOOKING_RANGE_MAX_DAYS):
+            raise BadRequestException(
+                detail=f"Booking range window must be at most {BOOKING_RANGE_MAX_DAYS} days", error_code=FacilityErrorCode.BOOKING_RANGE_WINDOW_TOO_LARGE.value
+            )
+        items = await self._repository.fetch_range(command, self._resolved_locale_id())
+        return BookingRangeResult(items=items)
+
+    @distributed_trace()
     async def get_booking_by_id(self, booking_id: UUID) -> BookingDetailResult:
         row = await self._repository.get_detail(booking_id, self._resolved_locale_id())
         if not row:
-            raise NotFoundException(
-                detail="Booking not found",
-                error_code=BookingErrorCode.NOT_FOUND.value,
-                context={"booking_id": str(booking_id)},
-            )
+            raise NotFoundException(detail="Booking not found", error_code=BookingErrorCode.NOT_FOUND.value, context={"booking_id": str(booking_id)})
         return row
 
     @distributed_trace()
     async def cancel_booking(self, booking_id: UUID, command: CancelBookingCommand) -> None:
         if not await self._repository.exists_by_id(booking_id):
-            raise NotFoundException(
-                detail="Booking not found",
-                error_code=BookingErrorCode.NOT_FOUND.value,
-                context={"booking_id": str(booking_id)},
-            )
+            raise NotFoundException(detail="Booking not found", error_code=BookingErrorCode.NOT_FOUND.value, context={"booking_id": str(booking_id)})
         cancelled_by_id = self._user_ctx.user_id if self._user_ctx else None
         cancel_slots = command.scope != "series"
         await self._repository.cancel_booking(

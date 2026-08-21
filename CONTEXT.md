@@ -19,8 +19,12 @@ The booking's main room id used for list filters (`facility_id` / list `facility
 _Avoid_: room (ambiguous when multiple), main room (synonym drift), treating Primary facility as the only room shown on Booking Grid
 
 **Booking view mode**:
-How the admin booking management page presents bookings: `list`, `calendar`, or `grid`. Default is `list`. v1 syncs `view` and an ISO `date` (calendar/grid anchor day) into the page URL query; list may ignore `date`. Calendar week-vs-day is UI state only, not part of the URL. Calendar is the time overview of bookings: overlapping bookings are distinct clickable blocks in side-by-side lanes, up to a density cap; beyond that, occupancy is read on Grid. Grid is the single-day room-row occupancy view: a multi-room booking appears on every occupied room row. List is the paginated record set.
-_Avoid_: tab (UI chrome only), layout, perspective, treating Calendar and Grid as interchangeable concurrent-booking surfaces, summarizing concurrent Calendar bookings into one representative block
+How the admin booking management page presents bookings: `list`, `calendar`, or `grid`. Default is `list`. v1 syncs `view` and an ISO `date` (calendar/grid anchor day) into the page URL query; list may ignore `date`. Calendar week-vs-day is UI state only, not part of the URL. Calendar is the time overview of bookings: overlapping bookings are distinct clickable blocks in side-by-side lanes, up to a density cap; beyond that, occupancy is read on Grid. Grid is the single-day room-row occupancy view: a multi-room booking appears on every occupied room row. List is the paginated record set. Calendar and Grid load bookings via a Booking range query for the visible window, not via List pagination.
+_Avoid_: tab (UI chrome only), layout, perspective, treating Calendar and Grid as interchangeable concurrent-booking surfaces, summarizing concurrent Calendar bookings into one representative block, using paginated List pages as the Calendar/Grid completeness contract
+
+**Booking range query**:
+A non-paginated admin read: every booking whose interval overlaps a required time window. Used by Calendar and Booking Grid so the visible window is complete. Matching is interval overlap, not `start_at`-in-window. Cancelled bookings are omitted by default and may be requested via an explicit flag. The allowed window length is capped. Distinct from the paginated List `pages` query.
+_Avoid_: List `pages` with a large page size, silent truncation as acceptable Calendar/Grid behavior, `start_at`-only window filters for occupancy views
 
 **Scheduling Conflict**:
 A booking create or update rejected because a requested room interval overlaps a confirmed booking slot. Distinct from uniqueness conflicts (duplicate codes) and from Blackout overlap.

@@ -10,7 +10,7 @@ from uuid import UUID
 
 import sqlalchemy as sa
 
-from portal.application.facility.commands import BookingPagesQueryCommand, UpdateBookingCommand
+from portal.application.facility.commands import BookingPagesQueryCommand, BookingRangeQueryCommand, UpdateBookingCommand
 from portal.application.facility.results import BookingDetailResult, BookingListItemResult, BookingRoomLineResult, BookingSlotResult
 from portal.domain.facility.constants import BookingSlotStatus, BookingStatus
 from portal.libs.database import Session
@@ -129,6 +129,30 @@ class BookingRepository:
                 for item in items
             ]
         return items, count
+
+    async def fetch_range(self, model: BookingRangeQueryCommand, locale_id: Optional[UUID]) -> list[BookingListItemResult]:
+        items = await (
+            self._list_query(locale_id)
+            .where(FacilityBooking.is_deleted == False)
+            .where(FacilityBooking.start_at < model.date_to)
+            .where(FacilityBooking.end_at > model.date_from)
+            .where(not model.include_cancelled, lambda: FacilityBooking.status != BookingStatus.CANCELLED.value)
+            .order_by(FacilityBooking.start_at.asc())
+            .fetch(as_model=BookingListItemResult)
+        )
+        items = items or []
+        if items:
+            ids_by_booking_id, names_by_booking_id = await self._fetch_facility_lines_by_booking_ids([item.id for item in items], locale_id)
+            items = [
+                item.model_copy(
+                    update={
+                        "facility_ids": ids_by_booking_id.get(item.id) or [],
+                        "facility_names": names_by_booking_id.get(item.id) or ([item.facility_name] if item.facility_name else []),
+                    }
+                )
+                for item in items
+            ]
+        return items
 
     @staticmethod
     def group_facility_lines(rows: list[dict[str, Any]]) -> tuple[dict[UUID, list[UUID]], dict[UUID, list[str]]]:
