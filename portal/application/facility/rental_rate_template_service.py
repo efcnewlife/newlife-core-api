@@ -74,7 +74,9 @@ class RentalRateTemplateService:
         except Exception as error:
             if self._repository.is_unique_violation(error):
                 raise ConflictErrorException(
-                    detail="Rental rate template name already exists", error_code=FacilityErrorCode.RENTAL_RATE_TEMPLATE_NAME_EXISTS.value
+                    detail="Rental rate template name already exists",
+                    error_code=FacilityErrorCode.RENTAL_RATE_TEMPLATE_NAME_EXISTS.value,
+                    context={"name": command.name},
                 )
             logger.exception(error)
             raise ApiBaseException(status_code=500, detail="Internal Server Error", debug_detail=str(error))
@@ -113,7 +115,9 @@ class RentalRateTemplateService:
         except Exception as error:
             if self._repository.is_unique_violation(error):
                 raise ConflictErrorException(
-                    detail="Rental rate template name already exists", error_code=FacilityErrorCode.RENTAL_RATE_TEMPLATE_NAME_EXISTS.value
+                    detail="Rental rate template name already exists",
+                    error_code=FacilityErrorCode.RENTAL_RATE_TEMPLATE_NAME_EXISTS.value,
+                    context={"name": command.name},
                 )
             raise
 
@@ -129,7 +133,9 @@ class RentalRateTemplateService:
         rate_count = await self._repository.count_rates_for_template(template_id)
         if rate_count > 0:
             raise BadRequestException(
-                detail="Cannot delete rental rate template while rates still reference it", error_code=FacilityErrorCode.RENTAL_RATE_TEMPLATE_IN_USE.value
+                detail="Cannot delete rental rate template while rates still reference it",
+                error_code=FacilityErrorCode.RENTAL_RATE_TEMPLATE_IN_USE.value,
+                context={"template_id": str(template_id)},
             )
         if command.permanent:
             raise BadRequestException(detail="Permanent delete is not supported for rental rate templates")

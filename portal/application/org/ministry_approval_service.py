@@ -57,19 +57,30 @@ class MinistryApprovalService:
         await self.submit_ministry(create_result.id, SubmitMinistryCommand())
         return create_result
 
+    def _ministry_not_found(self, ministry_id: UUID) -> NotFoundException:
+        return NotFoundException(
+            detail=f"Ministry {ministry_id} not found",
+            error_code=OrgErrorCode.MINISTRY_NOT_FOUND.value,
+            context={"ministry_id": str(ministry_id)},
+        )
+
     @distributed_trace()
     async def submit_ministry(self, ministry_id: UUID, command: SubmitMinistryCommand) -> None:
         ministry = await self._repository.get_by_id(ministry_id)
         if not ministry:
-            raise NotFoundException(
-                detail=f"Ministry {ministry_id} not found", error_code=OrgErrorCode.MINISTRY_NOT_FOUND.value, context={"ministry_id": str(ministry_id)}
-            )
+            raise self._ministry_not_found(ministry_id)
         if ministry.status not in {MinistryStatus.DRAFT.value, MinistryStatus.REJECTED.value}:
             raise BadRequestException(
-                detail="Ministry cannot be submitted in its current status", error_code=OrgErrorCode.MINISTRY_INVALID_STATUS_FOR_SUBMIT.value
+                detail="Ministry cannot be submitted in its current status",
+                error_code=OrgErrorCode.MINISTRY_INVALID_STATUS_FOR_SUBMIT.value,
+                context={"ministry_id": str(ministry_id)},
             )
         if not ministry.owner_position_id:
-            raise BadRequestException(detail="owner_position_id is required before submit", error_code=OrgErrorCode.MINISTRY_OWNER_POSITION_REQUIRED.value)
+            raise BadRequestException(
+                detail="owner_position_id is required before submit",
+                error_code=OrgErrorCode.MINISTRY_OWNER_POSITION_REQUIRED.value,
+                context={"ministry_id": str(ministry_id)},
+            )
         await self._ministry_service.validate_members_for_submit(ministry_id)
 
         now = datetime.now(timezone.utc)
@@ -99,11 +110,13 @@ class MinistryApprovalService:
     async def approve_ministry(self, ministry_id: UUID, command: ApproveMinistryCommand) -> None:
         ministry = await self._repository.get_by_id(ministry_id)
         if not ministry:
-            raise NotFoundException(
-                detail=f"Ministry {ministry_id} not found", error_code=OrgErrorCode.MINISTRY_NOT_FOUND.value, context={"ministry_id": str(ministry_id)}
-            )
+            raise self._ministry_not_found(ministry_id)
         if ministry.status != MinistryStatus.PENDING_APPROVAL.value:
-            raise BadRequestException(detail="Ministry is not pending approval", error_code=OrgErrorCode.MINISTRY_NOT_PENDING_APPROVAL.value)
+            raise BadRequestException(
+                detail="Ministry is not pending approval",
+                error_code=OrgErrorCode.MINISTRY_NOT_PENDING_APPROVAL.value,
+                context={"ministry_id": str(ministry_id)},
+            )
 
         now = datetime.now(timezone.utc)
         user_id = self._current_user_id()
@@ -116,11 +129,13 @@ class MinistryApprovalService:
     async def reject_ministry(self, ministry_id: UUID, command: RejectMinistryCommand) -> None:
         ministry = await self._repository.get_by_id(ministry_id)
         if not ministry:
-            raise NotFoundException(
-                detail=f"Ministry {ministry_id} not found", error_code=OrgErrorCode.MINISTRY_NOT_FOUND.value, context={"ministry_id": str(ministry_id)}
-            )
+            raise self._ministry_not_found(ministry_id)
         if ministry.status != MinistryStatus.PENDING_APPROVAL.value:
-            raise BadRequestException(detail="Ministry is not pending approval", error_code=OrgErrorCode.MINISTRY_NOT_PENDING_APPROVAL.value)
+            raise BadRequestException(
+                detail="Ministry is not pending approval",
+                error_code=OrgErrorCode.MINISTRY_NOT_PENDING_APPROVAL.value,
+                context={"ministry_id": str(ministry_id)},
+            )
 
         now = datetime.now(timezone.utc)
         user_id = self._current_user_id()

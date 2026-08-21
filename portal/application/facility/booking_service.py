@@ -73,13 +73,21 @@ class BookingService:
     async def get_booking_by_id(self, booking_id: UUID) -> BookingDetailResult:
         row = await self._repository.get_detail(booking_id, self._resolved_locale_id())
         if not row:
-            raise NotFoundException(detail="Booking not found", error_code=FacilityErrorCode.BOOKING_NOT_FOUND.value, context={"booking_id": str(booking_id)})
+            raise NotFoundException(
+                detail="Booking not found",
+                error_code=BookingErrorCode.NOT_FOUND.value,
+                context={"booking_id": str(booking_id)},
+            )
         return row
 
     @distributed_trace()
     async def cancel_booking(self, booking_id: UUID, command: CancelBookingCommand) -> None:
         if not await self._repository.exists_by_id(booking_id):
-            raise NotFoundException(detail="Booking not found", error_code=FacilityErrorCode.BOOKING_NOT_FOUND.value, context={"booking_id": str(booking_id)})
+            raise NotFoundException(
+                detail="Booking not found",
+                error_code=BookingErrorCode.NOT_FOUND.value,
+                context={"booking_id": str(booking_id)},
+            )
         cancelled_by_id = self._user_ctx.user_id if self._user_ctx else None
         cancel_slots = command.scope != "series"
         await self._repository.cancel_booking(

@@ -15,11 +15,11 @@ The authenticated admin (or member) who performed the create action. For admin o
 _Avoid_: admin (role, not the act), creator (too generic), booked-by field, 代訂人-only label when self-booked
 
 **Primary facility**:
-The booking's main room id used for list filters and v1 Room×Time grid placement (`facility_id` / list `facilityId`). For multi-room bookings this is the first room line; other rooms are not drawn as separate grid blocks in v1.
-_Avoid_: room (ambiguous when multiple), main room (synonym drift)
+The booking's main room id used for list filters (`facility_id` / list `facilityId`). For multi-room bookings this is the first room line.
+_Avoid_: room (ambiguous when multiple), main room (synonym drift), treating Primary facility as the only room shown on Booking Grid
 
 **Booking view mode**:
-How the admin booking management page presents bookings: `list`, `calendar`, or `grid`. Default is `list`. v1 syncs `view` and an ISO `date` (calendar/grid anchor day) into the page URL query; list may ignore `date`. Calendar week-vs-day is UI state only, not part of the URL. Calendar is the time overview of bookings: overlapping bookings are distinct clickable blocks in side-by-side lanes, up to a density cap; beyond that, occupancy is read on Grid. Grid is the single-day room-row occupancy view. List is the paginated record set.
+How the admin booking management page presents bookings: `list`, `calendar`, or `grid`. Default is `list`. v1 syncs `view` and an ISO `date` (calendar/grid anchor day) into the page URL query; list may ignore `date`. Calendar week-vs-day is UI state only, not part of the URL. Calendar is the time overview of bookings: overlapping bookings are distinct clickable blocks in side-by-side lanes, up to a density cap; beyond that, occupancy is read on Grid. Grid is the single-day room-row occupancy view: a multi-room booking appears on every occupied room row. List is the paginated record set.
 _Avoid_: tab (UI chrome only), layout, perspective, treating Calendar and Grid as interchangeable concurrent-booking surfaces, summarizing concurrent Calendar bookings into one representative block
 
 **Scheduling Conflict**:
@@ -31,6 +31,34 @@ A room-closed interval that makes the room unbookable. Overlap with a Blackout i
 _Avoid_: scheduling conflict, "closed" without naming the Blackout rule
 
 ### Org / ministry
+
+**Ministry**:
+A church organizational unit with localized names, a ministry type, and a lifecycle status.
+_Avoid_: MinistryType (catalog), Ministry Application (the submit-for-approval request)
+
+**Ministry Type**:
+A catalog classification of a Ministry: Outreach, Internal, or Worship.
+_Avoid_: Ministry, free-text type on the Ministry row
+
+**Active**:
+The Ministry lifecycle status after approval. Booking and owned-ministry lists include Active Ministries.
+_Avoid_: Approved as a Ministry status, using Approval status in place of Ministry status
+
+**Ministry Approval**:
+A submit-and-decide record on a Ministry. Its status is pending, approved, or rejected. Approving it moves the Ministry to Active.
+_Avoid_: treating Approval status as the Ministry's own status
+
+**Ministry Member**:
+A primary or secondary steward on a Ministry who may book on behalf of that Ministry.
+_Avoid_: member (church person), Booker, owner position
+
+**Annual Ministry**:
+A Ministry that occurs once per calendar year (or that year's season). Each year is a new Ministry record.
+_Avoid_: mutating last year's Ministry to reuse it, treating effective_from / effective_to as a forever-recurring annual rule
+
+**Seasonal schedule**:
+`effective_from` / `effective_to` on a schedule row that bound when a weekly pattern applies during that Ministry's life (for example except summer).
+_Avoid_: opening a new Ministry each season for an ongoing weekly program, confusing this with Annual Ministry
 
 **Ministry Steward**:
 A user assigned to a Ministry as `primary` or `secondary` (`org.ministry_member`). This is who may represent the Ministry. It is not a pastoral Person record and not the facility-booking priority-member identity.
