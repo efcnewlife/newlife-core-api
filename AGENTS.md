@@ -36,6 +36,9 @@ This document helps AI agents quickly understand the **NewLife Core API** codeba
 # Install
 uv sync
 
+# Git hooks (once per clone)
+./scripts/install-git-hooks.sh
+
 # Local infra
 docker compose up -d
 
@@ -52,11 +55,16 @@ uv run uvicorn portal.main:app --reload
 # Tests
 uv run pytest
 uv run pytest tests/application/rbac/test_permission_service.py -v
+./scripts/check-branch-name.test.sh
 
 # Format (layout, then import sort — I only)
 uv run ruff format
 uv run ruff check --fix
 ```
+
+### Branch names
+
+Topic branches: `{type}/{issue-number}-{short-description}` (types: `feat` `fix` `hotfix` `refactor` `perf` `test` `docs` `chore` `build` `ci`). Exceptions: `release/x.y.z`, `spike/{short-description}`, plus `main` / `develop`. Enforced by `.githooks/pre-push` (after install) and `.github/workflows/branch-name.yml` on PRs. Emergency local bypass: `git push --no-verify`. Consider marking the `Branch name` check required in GitHub branch protection.
 
 Python layout is Ruff, not PyCharm Reformat. Disable PyCharm's built-in Python formatter, or use a Ruff plugin that reads `[tool.ruff]`. EditorConfig `ij_python_*` wrap/align keys are not the contract.
 
