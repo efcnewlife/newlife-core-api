@@ -2,7 +2,7 @@
 Facility room slot template and blackout demo seed data.
 
 Names use the ``seed:`` prefix so the seed command can replace only demo rows.
-Room codes match ``facility_rental_seed_data.facility_room_seed_rows``.
+Slot templates are built per room code at seed time (every room in the database).
 """
 
 from datetime import date, time
@@ -13,8 +13,13 @@ from portal.domain.facility.days_of_week_mask import days_to_mask
 
 SEED_NAME_PREFIX = "seed:"
 
-WEEKDAYS = [DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY, DayOfWeek.FRIDAY]
-WEEKEND = [DayOfWeek.SATURDAY, DayOfWeek.SUNDAY]
+ALL_DAYS = [DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY, DayOfWeek.FRIDAY, DayOfWeek.SATURDAY, DayOfWeek.SUNDAY]
+
+SUNDAY_MORNING_BLACKOUT_ROOM_CODES = ("sanctuary-hall", "gym", "lobby")
+
+# Demo one-off dates (fixed calendar days for local Toronto wall clock).
+CAMPUS_HOLIDAY_DEMO_DATE = date(2027, 1, 1)
+SANCTUARY_MAINTENANCE_DEMO_DATE = date(2027, 1, 15)
 
 
 def _slot(
@@ -31,6 +36,14 @@ def _slot(
         "effective_from": None,
         "effective_to": None,
     }
+
+
+def build_slot_template_rows_for_room_codes(room_codes: list[str]) -> list[dict[str, Any]]:
+    """One all-week 08:00-22:00 template per room, 60-minute grid."""
+    return [
+        _slot(room_code=room_code, name="All-week daytime", days_of_week=ALL_DAYS, start_time=time(8, 0), end_time=time(22, 0), slot_duration_minutes=60)
+        for room_code in room_codes
+    ]
 
 
 def _blackout(
@@ -77,17 +90,6 @@ def _blackout(
     }
 
 
-# Demo one-off dates (fixed calendar days for local Toronto wall clock).
-CAMPUS_HOLIDAY_DEMO_DATE = date(2027, 1, 1)
-SANCTUARY_MAINTENANCE_DEMO_DATE = date(2027, 1, 15)
-
-facility_slot_template_seed_rows: list[dict[str, Any]] = [
-    _slot(room_code="sanctuary-hall", name="Weekday daytime", days_of_week=WEEKDAYS, start_time=time(9, 0), end_time=time(17, 0)),
-    _slot(room_code="gym", name="Weekday extended", days_of_week=WEEKDAYS, start_time=time(9, 0), end_time=time(21, 0)),
-    _slot(room_code="gym", name="Weekend daytime", days_of_week=WEEKEND, start_time=time(10, 0), end_time=time(18, 0)),
-    _slot(room_code="lobby", name="Weekday daytime", days_of_week=WEEKDAYS, start_time=time(9, 0), end_time=time(17, 0)),
-]
-
 facility_blackout_seed_rows: list[dict[str, Any]] = [
     _blackout(
         room_code=None,
@@ -116,4 +118,16 @@ facility_blackout_seed_rows: list[dict[str, Any]] = [
         start_time=time(13, 0),
         end_time=time(17, 0),
     ),
+    *[
+        _blackout(
+            room_code=room_code,
+            name=f"Sunday morning closed ({room_code})",
+            reason="Demo Sunday morning Blackout",
+            kind=RoomBlackoutKind.RECURRING,
+            days_of_week=[DayOfWeek.SUNDAY],
+            start_time=time(8, 0),
+            end_time=time(13, 0),
+        )
+        for room_code in SUNDAY_MORNING_BLACKOUT_ROOM_CODES
+    ],
 ]

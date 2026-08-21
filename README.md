@@ -480,12 +480,11 @@ uv run python -m portal.cli.main seed-positions
 uv run python -m portal.cli.main seed-ministry-types
 uv run python -m portal.cli.main seed-target-audiences
 
-# 6. Optional: demo Active ministries (needs steps 1, 4, and 5)
-uv run python -m portal.cli.main seed-ministries
-
-# 7. Optional: facility rooms/rates, then demo slot templates + blackouts
+# 6. Optional: facility rooms/rates (catalog)
 uv run python -m portal.cli.main seed-facility-rental
-uv run python -m portal.cli.main seed-facility-slots
+
+# 7. Optional: demo ministries, slot templates/blackouts, and bookings
+uv run python -m portal.cli.main seed-local-demo
 ```
 
 | Command                 | Purpose                                                                                                                       |
@@ -496,17 +495,16 @@ uv run python -m portal.cli.main seed-facility-slots
 | `seed-positions`        | Upsert org positions and translations from `portal/cli/datas/position_seed_data.py`.                                          |
 | `seed-ministry-types`   | Upsert ministry type catalog (`outreach`, `internal`, `worship`) and translations.                                            |
 | `seed-target-audiences` | Upsert target audience catalog (`children`, `youths`, `adults`, `family`, `all_ages`) and translations.                       |
-| `seed-ministries`       | Replace demo (`seed: Demo `-prefixed) ministries with ten Active ministries plus a simulated approval.                        |
 | `seed-facility-rental`  | Upsert facility rooms, rates, discounts, surcharges, and policy settings.                                                     |
-| `seed-facility-slots`   | Replace demo (`seed:`-prefixed) room slot templates and blackouts for existing rooms.                                         |
+| `seed-local-demo`       | Replace demo ministries, room slot templates, blackouts, and bookings (requires catalog rooms + ministry prerequisites).      |
 | `reset-rbac`            | **Destructive:** delete all RBAC data and re-seed from `rbac_seed_data`.                                                      |
 
 Notes:
 
 - Run `init-locales` before `init-rbac`; RBAC translations depend on locale rows.
-- `seed-positions`, `seed-ministry-types`, `seed-target-audiences`, `seed-ministries`, `seed-facility-rental`, `seed-facility-slots`, and `reset-rbac` are blocked when `ENV` is not `dev` unless `--force` is passed.
-- Run `seed-facility-rental` before `seed-facility-slots` so room codes exist.
-- Run `init-locales`, `seed-ministry-types`, `seed-target-audiences`, and `seed-positions` before `seed-ministries`; it fails fast and names the missing prerequisite. It also creates two non-admin demo stewards (`seed.ministry.primary@local.test`, `seed.ministry.secondary@local.test`) if they do not exist, and never deletes them on re-run.
+- `seed-positions`, `seed-ministry-types`, `seed-target-audiences`, `seed-facility-rental`, `seed-local-demo`, and `reset-rbac` are blocked when `ENV` is not `dev` unless `--force` is passed.
+- Suggested empty-DB flow: catalog seeds (`init-locales`, `init-rbac`, positions/types/audiences, `seed-facility-rental`) → `create-superuser` (optional) → `seed-local-demo`.
+- `seed-local-demo` fails fast when rooms, locales, ministry types, audiences, or owning positions are missing. It creates demo stewards and personal Booker accounts if needed and never deletes those users on re-run (only demo-prefixed ministries / slots / blackouts / booking remarks are replaced).
 - Seed logic lives in `portal/application/cli/*_seed_service.py`; `portal/cli/` provides thin Click entrypoints only.
 
 ## Run FastAPI server

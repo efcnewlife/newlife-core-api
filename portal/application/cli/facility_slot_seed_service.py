@@ -8,7 +8,7 @@ from uuid import UUID
 
 import click
 
-from portal.cli.datas.facility_slot_seed_data import SEED_NAME_PREFIX
+from portal.cli.datas.facility_slot_seed_data import SEED_NAME_PREFIX, build_slot_template_rows_for_room_codes
 from portal.libs.database import Session
 from portal.libs.logger import logger
 from portal.models import FacilityRoom, FacilityRoomBlackout, FacilityRoomSlotTemplate
@@ -31,20 +31,27 @@ async def _clear_seed_rows(session: Session) -> None:
     await session.delete(FacilityRoomSlotTemplate).where(FacilityRoomSlotTemplate.name.like(pattern)).execute()
 
 
-async def run_facility_slot_seed(session: Session, *, slot_rows: list[dict[str, Any]], blackout_rows: list[dict[str, Any]]) -> None:
+async def run_facility_slot_seed(
+    session: Session, *, blackout_rows: list[dict[str, Any]], slot_rows: Optional[list[dict[str, Any]]] = None, commit: bool = True
+) -> None:
     """
     Replace ``seed:``-prefixed slot templates and blackouts, then insert demo rows.
 
-    Looks up rooms by stable code. Missing rooms are skipped with a warning.
+    When ``slot_rows`` is omitted, builds one all-week 08:00-22:00 template per room in the database.
+    Looks up rooms by stable code. Missing rooms on explicit blackout rows are skipped with a warning.
     """
     room_ids = await _load_room_ids_by_code(session)
+    if not room_ids:
+        raise ValueError("No facility rooms found. Run seed-facility-rental first.")
+
+    resolved_slot_rows = slot_rows if slot_rows is not None else build_slot_template_rows_for_room_codes(sorted(room_ids.keys()))
     await _clear_seed_rows(session)
 
     skipped_codes: set[str] = set()
     slots_inserted = 0
     blackouts_inserted = 0
 
-    for row in slot_rows:
+    for row in resolved_slot_rows:
         room_code = row["room_code"]
         facility_id = room_ids.get(room_code)
         if facility_id is None:
@@ -98,7 +105,8 @@ async def run_facility_slot_seed(session: Session, *, slot_rows: list[dict[str, 
         )
         blackouts_inserted += 1
 
-    await session.commit()
+    if commit:
+        await session.commit()
     summary = f"Facility slot seed done: {slots_inserted} slot template(s), {blackouts_inserted} blackout(s)"
     if skipped_codes:
         summary += f"; skipped room codes: {', '.join(sorted(skipped_codes))}"

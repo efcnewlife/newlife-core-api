@@ -14,7 +14,7 @@ from uuid import UUID
 import click
 
 from portal.application.org.ministry_schedule import encode_schedule_days_mask
-from portal.cli.datas.ministry_seed_data import SEED_LOCALE_CODES, SEED_NAME_PREFIX
+from portal.cli.datas.ministry_seed_data import SEED_LOCALE_CODES, SEED_NAME_PREFIX, secondary_steward_emails_for_ministry_index
 from portal.domain.org.constants import MinistryApprovalStatus, MinistryMemberRole, MinistryStatus
 from portal.libs.consts.enums import Gender
 from portal.libs.database import Session
@@ -36,7 +36,7 @@ from portal.models import (
 
 # Offset so submitted_at reads earlier than approved_at on demo detail views.
 SUBMITTED_BEFORE_APPROVED = timedelta(days=7)
-APPROVAL_COMMENT = "Simulated approval from seed-ministries"
+APPROVAL_COMMENT = "Simulated approval from seed-local-demo"
 
 
 def assert_seed_prerequisites(
@@ -117,8 +117,8 @@ async def _load_owning_position_ids(session: Session) -> list[UUID]:
     return [_as_uuid(position_id) for position_id in position_ids or []]
 
 
-async def _ensure_demo_user(session: Session, row: dict[str, Any]) -> UUID:
-    """Return the demo steward user id, creating a non-admin account when missing."""
+async def ensure_demo_user(session: Session, row: dict[str, Any]) -> UUID:
+    """Return the demo user id, creating a non-admin account when missing."""
     email = (row["email"] or "").strip().lower()
     first_name = row["first_name"]
     last_name = row["last_name"]
@@ -138,7 +138,7 @@ async def _ensure_demo_user(session: Session, row: dict[str, Any]) -> UUID:
             .values(id=user_id, email=email, password_hash=None, verified=True, is_active=True, is_superuser=False, is_admin=False)
             .execute()
         )
-        click.echo(f"Created demo ministry user: {email}")
+        click.echo(f"Created demo user: {email}")
 
     await (
         session.insert(AuthUserProfile)
@@ -168,10 +168,13 @@ async def _insert_ministry(
     target_audience_ids: dict[str, UUID],
     owner_position_id: UUID,
     primary_user_id: UUID,
-    secondary_user_id: UUID,
+    secondary_user_ids: list[UUID],
     submitted_at: datetime,
     approved_at: datetime,
 ) -> None:
+    if not secondary_user_ids:
+        raise ValueError("secondary_user_ids must contain at least one Steward")
+    resolver_user_id = secondary_user_ids[0]
     ministry_id = uuid.uuid4()
     await (
         session.insert(OrgMinistry)
@@ -185,7 +188,7 @@ async def _insert_ministry(
             submitted_at=submitted_at,
             submitted_by_id=primary_user_id,
             approved_at=approved_at,
-            approved_by_id=secondary_user_id,
+            approved_by_id=resolver_user_id,
             created_by_id=primary_user_id,
         )
         .execute()
@@ -204,8 +207,17 @@ async def _insert_ministry(
             .execute()
         )
 
-    for member_role, user_id in ((MinistryMemberRole.PRIMARY, primary_user_id), (MinistryMemberRole.SECONDARY, secondary_user_id)):
-        await session.insert(OrgMinistryMember).values(id=uuid.uuid4(), ministry_id=ministry_id, user_id=user_id, member_role=member_role.value).execute()
+    await (
+        session.insert(OrgMinistryMember)
+        .values(id=uuid.uuid4(), ministry_id=ministry_id, user_id=primary_user_id, member_role=MinistryMemberRole.PRIMARY.value)
+        .execute()
+    )
+    for secondary_user_id in secondary_user_ids:
+        await (
+            session.insert(OrgMinistryMember)
+            .values(id=uuid.uuid4(), ministry_id=ministry_id, user_id=secondary_user_id, member_role=MinistryMemberRole.SECONDARY.value)
+            .execute()
+        )
 
     for index, schedule in enumerate(row["schedules"]):
         await (
@@ -238,7 +250,7 @@ async def _insert_ministry(
             owner_position_id=owner_position_id,
             status=MinistryApprovalStatus.APPROVED.value,
             requested_by_id=primary_user_id,
-            resolved_by_id=secondary_user_id,
+            resolved_by_id=resolver_user_id,
             decided_at=approved_at,
             comment=APPROVAL_COMMENT,
         )
@@ -246,7 +258,7 @@ async def _insert_ministry(
     )
 
 
-async def run_ministry_seed(session: Session, rows: list[dict[str, Any]], *, demo_user_rows: list[dict[str, Any]]) -> None:
+async def run_ministry_seed(session: Session, rows: list[dict[str, Any]], *, demo_user_rows: list[dict[str, Any]], commit: bool = True) -> None:
     """Replace demo ministries and insert Active ministries with a simulated approval."""
     locale_ids = await _load_locale_ids(session)
     ministry_type_ids = await _load_catalog_ids_by_code(session, OrgMinistryType)
@@ -261,8 +273,11 @@ async def run_ministry_seed(session: Session, rows: list[dict[str, Any]], *, dem
         owning_position_count=len(owning_position_ids),
     )
 
-    primary_user_id = await _ensure_demo_user(session, demo_user_rows[0])
-    secondary_user_id = await _ensure_demo_user(session, demo_user_rows[1])
+    if len(demo_user_rows) < 3:
+        raise ValueError("demo_user_rows must include primary and two secondary Steward accounts")
+
+    users_by_email = {row["email"]: await ensure_demo_user(session, row) for row in demo_user_rows}
+    primary_user_id = users_by_email[demo_user_rows[0]["email"]]
 
     deleted = await _clear_seed_ministries(session)
 
@@ -270,6 +285,8 @@ async def run_ministry_seed(session: Session, rows: list[dict[str, Any]], *, dem
     submitted_at = approved_at - SUBMITTED_BEFORE_APPROVED
 
     for index, row in enumerate(rows):
+        secondary_emails = secondary_steward_emails_for_ministry_index(index, total=len(rows))
+        secondary_user_ids = [users_by_email[email] for email in secondary_emails]
         await _insert_ministry(
             session,
             row,
@@ -278,12 +295,13 @@ async def run_ministry_seed(session: Session, rows: list[dict[str, Any]], *, dem
             target_audience_ids=target_audience_ids,
             owner_position_id=owning_position_ids[index % len(owning_position_ids)],
             primary_user_id=primary_user_id,
-            secondary_user_id=secondary_user_id,
+            secondary_user_ids=secondary_user_ids,
             submitted_at=submitted_at,
             approved_at=approved_at,
         )
 
-    await session.commit()
+    if commit:
+        await session.commit()
     summary = f"Ministry seed done: {len(rows)} ministry(ies) inserted, {deleted} demo ministry(ies) replaced"
     click.echo(click.style(summary, fg="green"))
     logger.info(summary)

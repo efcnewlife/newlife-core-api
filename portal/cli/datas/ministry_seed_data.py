@@ -30,11 +30,29 @@ SEED_LOCALE_CODES = ("en", "zh-TW", "zh-CN")
 
 DEMO_PRIMARY_USER_EMAIL = "seed.ministry.primary@local.test"
 DEMO_SECONDARY_USER_EMAIL = "seed.ministry.secondary@local.test"
+DEMO_SECONDARY_2_USER_EMAIL = "seed.ministry.secondary2@local.test"
 
 demo_ministry_user_seed_rows: list[dict[str, Any]] = [
     {"email": DEMO_PRIMARY_USER_EMAIL, "first_name": "Seed", "last_name": "Primary"},
     {"email": DEMO_SECONDARY_USER_EMAIL, "first_name": "Seed", "last_name": "Secondary"},
+    {"email": DEMO_SECONDARY_2_USER_EMAIL, "first_name": "Seed", "last_name": "Secondary Two"},
 ]
+
+
+def secondary_steward_emails_for_ministry_index(index: int, *, total: int) -> list[str]:
+    """
+    First half of the ordered ministry list gets two secondaries; the rest get one.
+
+    Shares the same steward emails across all demo ministries.
+    """
+    if total <= 0:
+        raise ValueError("total must be positive")
+    if index < 0 or index >= total:
+        raise ValueError(f"index {index} out of range for total {total}")
+    if index < total // 2:
+        return [DEMO_SECONDARY_USER_EMAIL, DEMO_SECONDARY_2_USER_EMAIL]
+    return [DEMO_SECONDARY_USER_EMAIL]
+
 
 # Demo calendar year is 2026.
 SUMMER_FROM = date(2026, 6, 1)

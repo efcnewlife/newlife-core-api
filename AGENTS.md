@@ -58,6 +58,9 @@ uv run pytest tests/application/rbac/test_permission_service.py -v
 ./scripts/check-branch-name.test.sh
 ./scripts/format-staged.test.sh
 
+# Demo pack (after catalog seeds; optional create-superuser first)
+uv run python -m portal.cli.main seed-local-demo
+
 # Format (layout, then import sort — I only)
 uv run ruff format
 uv run ruff check --fix
