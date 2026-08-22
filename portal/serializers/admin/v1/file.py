@@ -102,6 +102,22 @@ class AdminFileBulkAction(BaseModel):
     ids: list[UUID] = Field(..., description="File IDs")
 
 
+class AdminFileAssociationBinding(BaseModel):
+    """Named File association for delete preview."""
+
+    file_id: UUID = Field(..., description="File ID", serialization_alias="fileId")
+    resource_kind: str = Field(..., description="Resource kind token", serialization_alias="resourceKind")
+    resource_id: UUID = Field(..., description="Bound resource ID", serialization_alias="resourceId")
+    display_name: str = Field(..., description="Room name or code", serialization_alias="displayName")
+    is_deleted: bool = Field(..., description="Whether the bound Room is soft-deleted", serialization_alias="isDeleted")
+
+
+class AdminFileAssociationPreview(BaseModel):
+    """Named File associations for selected files."""
+
+    items: list[AdminFileAssociationBinding] = Field(..., description="Bindings")
+
+
 class AdminBulkActionResponseModel(BaseModel):
     """Bulk Action Response Model"""
 

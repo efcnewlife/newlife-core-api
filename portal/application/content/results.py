@@ -97,6 +97,22 @@ class BulkDeleteFilesResult(BaseModel):
     failed_items: Optional[list[FileBaseResult]] = Field(default=None)
 
 
+class FileAssociationBindingResult(BaseModel):
+    """One File association with a named resource for delete preview."""
+
+    file_id: UUID = Field(...)
+    resource_kind: str = Field(...)
+    resource_id: UUID = Field(...)
+    display_name: str = Field(...)
+    is_deleted: bool = Field(...)
+
+
+class FileAssociationPreviewResult(BaseModel):
+    """Named File associations for selected files."""
+
+    items: list[FileAssociationBindingResult] = Field(default_factory=list)
+
+
 class SignedUrlFileByResourceResult(FileBaseResult):
     """File row joined with resource association."""
 

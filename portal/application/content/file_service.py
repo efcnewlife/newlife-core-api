@@ -18,11 +18,18 @@ from azure.core.exceptions import AzureError
 from fastapi import status
 from PIL import Image
 
-from portal.application.content.commands import BulkDeleteFilesCommand, FilePagesQueryCommand, UpdateFileAssociationCommand, UploadFileCommand
+from portal.application.content.commands import (
+    BulkDeleteFilesCommand,
+    FilePagesQueryCommand,
+    PreviewFileAssociationsCommand,
+    UpdateFileAssociationCommand,
+    UploadFileCommand,
+)
 from portal.application.content.results import (
     BatchUploadFilesResult,
     BulkDeleteFilesResult,
     FailedUploadFileResult,
+    FileAssociationPreviewResult,
     FileBaseResult,
     FileDetailResult,
     FileGridItemResult,
@@ -37,6 +44,7 @@ from portal.domain.content.ports import FileCachePort, FileRepositoryPort, FileS
 from portal.domain.rbac.ports import RbacAuditPort
 from portal.exceptions.responses import ApiBaseException, BadRequestException, ConflictErrorException
 from portal.libs.consts.enums import OperationType
+from portal.libs.contexts.request_context import get_resolved_locale_id
 from portal.libs.tracing.distributed_trace import distributed_trace
 
 
@@ -187,6 +195,10 @@ class FileService:
         failed_items = [file_key_mapping[key] for key in keys if key not in success_keys and key in file_key_mapping]
         if success_keys:
             await self._repository.mark_deleted_by_keys(success_keys)
+            success_file_ids = [file_key_mapping[key].id for key in success_keys if key in file_key_mapping]
+            resource_ids = await self._repository.delete_associations_by_file_ids(success_file_ids)
+            for resource_id in set(resource_ids):
+                await self._cache.invalidate_resource_association(resource_id)
             for key in success_keys:
                 file_item = file_key_mapping.get(key)
                 if file_item:
@@ -195,6 +207,11 @@ class FileService:
                 OperationType.DELETE, operation_code=CONTENT_FILE_TABLE, old_data={"file_keys": success_keys}, new_data={"status": FileStatus.DELETED.value}
             )
         return BulkDeleteFilesResult(success_count=len(success_keys), failed_items=failed_items or None)
+
+    @distributed_trace()
+    async def preview_file_associations(self, command: PreviewFileAssociationsCommand) -> FileAssociationPreviewResult:
+        items = await self._repository.fetch_association_preview_by_file_ids(command.ids, get_resolved_locale_id())
+        return FileAssociationPreviewResult(items=items or [])
 
     @distributed_trace()
     async def update_file_association(self, command: UpdateFileAssociationCommand) -> None:

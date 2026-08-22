@@ -9,12 +9,14 @@ from fastapi import Depends, Query, UploadFile, status
 
 from portal.application.content.file_service import FileService
 from portal.application.content.mappers import (
+    association_preview_to_api,
     batch_upload_result_to_api,
     bulk_action_to_command,
     bulk_delete_result_to_api,
     file_page_result_to_api,
     file_summary_result_to_api,
     pages_query_to_command,
+    preview_associations_to_command,
     upload_file_result_to_api,
     upload_file_to_command,
     upload_files_to_commands,
@@ -27,6 +29,7 @@ from portal.routers.auth_router import AuthRouter
 from portal.serializers.admin.v1.file import (
     AdminBatchFileUploadResponseModel,
     AdminBulkActionResponseModel,
+    AdminFileAssociationPreview,
     AdminFileBulkAction,
     AdminFilePages,
     AdminFileQuery,
@@ -103,6 +106,15 @@ async def upload_multiple_files(
     commands = await upload_files_to_commands(validated_files, upload_source=FileUploadSource.ADMIN)
     result = await file_service.upload_multiple_files(commands)
     return batch_upload_result_to_api(result)
+
+
+@router.post(
+    path="/association-preview", status_code=status.HTTP_200_OK, response_model=AdminFileAssociationPreview, permissions=[Permission.CONTENT_FILE.read]
+)
+@inject
+async def preview_file_associations(model: AdminFileBulkAction, file_service: FileService = Depends(Provide[Container.file_service])):
+    result = await file_service.preview_file_associations(command=preview_associations_to_command(model))
+    return association_preview_to_api(result)
 
 
 @router.delete(
