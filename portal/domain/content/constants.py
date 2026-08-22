@@ -5,6 +5,7 @@ Content domain constants and enums.
 from enum import IntEnum, StrEnum
 
 CONTENT_FILE_TABLE = "file"
+FILE_RESOURCE_KIND_FACILITY_ROOM = "facility.room"
 
 
 class MediaCategory(StrEnum):

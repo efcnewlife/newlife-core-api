@@ -10,14 +10,14 @@ from azure.core.exceptions import AzureError
 from portal.application.content.commands import BulkDeleteFilesCommand, FilePagesQueryCommand, UpdateFileAssociationCommand, UploadFileCommand
 from portal.application.content.file_service import FileService
 from portal.application.content.results import FileBaseResult, FileDetailResult, FileGridItemResult
-from portal.domain.content.constants import FileStatus, FileUploadSource
+from portal.domain.content.constants import FILE_RESOURCE_KIND_FACILITY_ROOM, FileStatus, FileUploadSource
 from portal.exceptions.responses import ApiBaseException, BadRequestException
 
 
 class StubFileRepository:
     def __init__(self):
         self.files: dict = {}
-        self.associations: dict = {}
+        self.association_rows: list = []
         self.insert_calls: list = []
         self.status_updates: list = []
         self.deleted_keys: list = []
@@ -125,10 +125,14 @@ class StubFileRepository:
         ]
 
     async def replace_associations(self, resource_id, resource_name, file_ids):
-        self.associations[resource_id] = list(file_ids)
+        resource_kind = resource_name or ""
+        self.association_rows = [row for row in self.association_rows if not (row["resource_id"] == resource_id and row["resource_name"] == resource_kind)]
+        self.association_rows.extend(
+            {"resource_id": resource_id, "resource_name": resource_kind, "file_id": file_id, "sequence": index} for index, file_id in enumerate(file_ids)
+        )
 
     async def fetch_by_resource_id(self, resource_id):
-        file_ids = self.associations.get(resource_id, [])
+        file_ids = [row["file_id"] for row in sorted(self.association_rows, key=lambda row: row["sequence"]) if row["resource_id"] == resource_id]
         return [
             FileGridItemResult(
                 id=f.id,
@@ -343,7 +347,61 @@ async def test_update_file_association_replaces_and_invalidates_cache():
     resource_id = uuid4()
     file_id = uuid4()
 
-    await service.update_file_association(UpdateFileAssociationCommand(file_ids=[file_id], resource_id=resource_id, resource_name="room"))
+    await service.update_file_association(
+        UpdateFileAssociationCommand(file_ids=[file_id], resource_id=resource_id, resource_name=FILE_RESOURCE_KIND_FACILITY_ROOM)
+    )
 
-    assert repo.associations[resource_id] == [file_id]
+    assert repo.association_rows == [{"resource_id": resource_id, "resource_name": FILE_RESOURCE_KIND_FACILITY_ROOM, "file_id": file_id, "sequence": 0}]
     assert resource_id in cache.invalidated_associations
+
+
+@pytest.mark.asyncio
+async def test_update_file_association_stores_sequence_in_list_order():
+    repo = StubFileRepository()
+    service = _make_service(repo=repo)
+    resource_id = uuid4()
+    first_file_id = uuid4()
+    second_file_id = uuid4()
+
+    await service.update_file_association(
+        UpdateFileAssociationCommand(file_ids=[second_file_id, first_file_id], resource_id=resource_id, resource_name=FILE_RESOURCE_KIND_FACILITY_ROOM)
+    )
+
+    assert [row["file_id"] for row in repo.association_rows] == [second_file_id, first_file_id]
+    assert [row["sequence"] for row in repo.association_rows] == [0, 1]
+
+
+@pytest.mark.asyncio
+async def test_update_file_association_empty_list_clears_facility_room_gallery_only():
+    repo = StubFileRepository()
+    service = _make_service(repo=repo)
+    resource_id = uuid4()
+    gallery_file_id = uuid4()
+    other_file_id = uuid4()
+    other_kind = "ministry.ministry"
+    repo.association_rows = [
+        {"resource_id": resource_id, "resource_name": FILE_RESOURCE_KIND_FACILITY_ROOM, "file_id": gallery_file_id, "sequence": 0},
+        {"resource_id": resource_id, "resource_name": other_kind, "file_id": other_file_id, "sequence": 0},
+    ]
+
+    await service.update_file_association(UpdateFileAssociationCommand(file_ids=[], resource_id=resource_id, resource_name=FILE_RESOURCE_KIND_FACILITY_ROOM))
+
+    assert repo.association_rows == [{"resource_id": resource_id, "resource_name": other_kind, "file_id": other_file_id, "sequence": 0}]
+
+
+@pytest.mark.asyncio
+async def test_update_file_association_leaves_other_resource_kinds_on_same_id():
+    repo = StubFileRepository()
+    service = _make_service(repo=repo)
+    resource_id = uuid4()
+    gallery_file_id = uuid4()
+    other_file_id = uuid4()
+    other_kind = "ministry.ministry"
+    repo.association_rows = [{"resource_id": resource_id, "resource_name": other_kind, "file_id": other_file_id, "sequence": 0}]
+
+    await service.update_file_association(
+        UpdateFileAssociationCommand(file_ids=[gallery_file_id], resource_id=resource_id, resource_name=FILE_RESOURCE_KIND_FACILITY_ROOM)
+    )
+
+    kinds = {(row["resource_name"], row["file_id"]) for row in repo.association_rows}
+    assert kinds == {(FILE_RESOURCE_KIND_FACILITY_ROOM, gallery_file_id), (other_kind, other_file_id)}

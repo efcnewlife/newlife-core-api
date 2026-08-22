@@ -145,10 +145,16 @@ class FileRepository:
         return await self._base_select().where(ContentFile.id.in_(file_ids)).fetch(as_model=FileBaseResult) or []
 
     async def replace_associations(self, resource_id: UUID, resource_name: Optional[str], file_ids: list[UUID]) -> None:
-        await self._session.delete(ContentFileAssociation).where(ContentFileAssociation.resource_id == resource_id).execute()
+        resource_kind = resource_name or ""
+        await (
+            self._session.delete(ContentFileAssociation)
+            .where(ContentFileAssociation.resource_id == resource_id)
+            .where(ContentFileAssociation.resource_name == resource_kind)
+            .execute()
+        )
         if not file_ids:
             return
-        rows = [{"file_id": file_id, "resource_id": resource_id, "resource_name": resource_name or ""} for file_id in file_ids]
+        rows = [{"file_id": file_id, "resource_id": resource_id, "resource_name": resource_kind, "sequence": index} for index, file_id in enumerate(file_ids)]
         await self._session.insert(ContentFileAssociation).values(rows).execute()
 
     async def fetch_by_resource_id(self, resource_id: UUID) -> list[FileGridItemResult]:
