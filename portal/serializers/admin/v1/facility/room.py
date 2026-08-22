@@ -9,6 +9,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field, field_validator
 
 from portal.serializers.admin.v1.facility.translation import AdminFacilityTranslationInput, AdminFacilityTranslationItem, validate_unique_facility_locale_ids
+from portal.serializers.admin.v1.file import AdminFileGridItem
 from portal.serializers.mixins import PaginationBaseResponseModel
 from portal.serializers.mixins.model_mixins import UUIDBaseModel
 
@@ -39,6 +40,7 @@ class AdminRoomDetail(AdminRoomItem):
     delete_reason: Optional[str] = Field(None, serialization_alias="deleteReason", description="Delete reason")
     description: Optional[str] = Field(None, description="Description")
     translations: list[AdminFacilityTranslationItem] = Field(default_factory=list, description="Translations")
+    files: list[AdminFileGridItem] = Field(default_factory=list, description="Room gallery files")
 
 
 class AdminRoomPages(PaginationBaseResponseModel):
@@ -62,6 +64,7 @@ class AdminRoomWrite(BaseModel):
     is_active: bool = Field(True, description="Active flag")
     sequence: Optional[float] = Field(None, description="Sort sequence")
     translations: Optional[list[AdminFacilityTranslationInput]] = Field(None, description="Translations")
+    file_ids: Optional[list[UUID]] = Field(None, description="Ordered Room gallery Content File ids")
 
     @field_validator("translations")
     @classmethod

@@ -28,6 +28,7 @@ class FacilityContainer(containers.DeclarativeContainer):
 
     core = providers.DependenciesContainer()
     setting_service = providers.Dependency()
+    file_service = providers.Dependency()
 
     room_repository = providers.Factory(RoomRepository, session=core.request_session)
     room_slot_template_repository = providers.Factory(RoomSlotTemplateRepository, session=core.request_session)
@@ -37,7 +38,7 @@ class FacilityContainer(containers.DeclarativeContainer):
     booking_repository = providers.Factory(BookingRepository, session=core.request_session)
     override_log_repository = providers.Factory(OverrideLogRepository, session=core.request_session)
 
-    room_service = providers.Factory(RoomService, room_repository=room_repository)
+    room_service = providers.Factory(RoomService, room_repository=room_repository, file_service=file_service)
     room_slot_template_service = providers.Factory(
         RoomSlotTemplateService, room_slot_template_repository=room_slot_template_repository, room_repository=room_repository
     )

@@ -9,6 +9,8 @@ from uuid import UUID
 
 from asyncpg import UniqueViolationError
 
+from portal.application.content.commands import UpdateFileAssociationCommand
+from portal.application.content.results import FileBaseResult, FileGridItemResult
 from portal.application.facility.commands import BookingPagesQueryCommand, BookingRangeQueryCommand, OverrideLogPagesQueryCommand, PagesQueryCommand
 from portal.application.facility.results import (
     BookingDetailResult,
@@ -175,6 +177,26 @@ class StubRentalRepository:
         return items
 
 
+class StubFileService:
+    """FileService subset used by RoomService gallery tests."""
+
+    def __init__(self, active_files: dict[UUID, FileBaseResult] | None = None, files_by_resource: dict[UUID, list[FileGridItemResult]] | None = None):
+        self.active_files = active_files or {}
+        self.files_by_resource = files_by_resource or {}
+        self.association_commands: list[UpdateFileAssociationCommand] = []
+        self.get_files_calls: list[UUID] = []
+
+    async def list_active_files_by_ids(self, file_ids: list[UUID]) -> list[FileBaseResult]:
+        return [self.active_files[file_id] for file_id in file_ids if file_id in self.active_files]
+
+    async def update_file_association(self, command: UpdateFileAssociationCommand) -> None:
+        self.association_commands.append(command)
+
+    async def get_files_by_resource_id(self, resource_id: UUID, resource_name: str | None = None) -> list[FileGridItemResult]:
+        self.get_files_calls.append(resource_id)
+        return list(self.files_by_resource.get(resource_id, []))
+
+
 class StubRoomRepository:
     """In-memory room stub."""
 
@@ -195,7 +217,7 @@ class StubRoomRepository:
     async def exists_by_id(self, room_id: UUID) -> bool:
         return room_id in self.existing_ids
 
-    async def get_by_id(self, room_id: UUID, locale_id=None) -> RoomDetailResult | None:
+    async def get_by_id(self, room_id: UUID, locale_id=None, all_locales: bool = False) -> RoomDetailResult | None:
         return self.room_by_id.get(room_id)
 
     async def insert_room(self, payload: dict) -> None:

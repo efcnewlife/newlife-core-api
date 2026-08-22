@@ -112,6 +112,6 @@ class AdminContainer(containers.DeclarativeContainer):
 
     permission_checker = providers.Factory(PermissionChecker, redis_client=core.redis_client)
 
-    facility = providers.Container(FacilityContainer, core=core, setting_service=setting_service)
     org = providers.Container(OrgContainer, core=core)
     content = providers.Container(ContentContainer, core=core, rbac_audit_service=rbac_audit_service)
+    facility = providers.Container(FacilityContainer, core=core, setting_service=setting_service, file_service=content.file_service)

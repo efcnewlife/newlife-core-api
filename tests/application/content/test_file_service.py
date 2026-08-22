@@ -124,6 +124,23 @@ class StubFileRepository:
             if fid in file_ids
         ]
 
+    async def list_active_by_ids(self, file_ids):
+        return [
+            FileBaseResult(
+                id=f.id,
+                original_name=f.original_name,
+                key=f.key,
+                storage=f.storage,
+                bucket=f.bucket,
+                region=f.region,
+                content_type=f.content_type,
+                extension=f.extension,
+                size_bytes=f.size_bytes,
+            )
+            for fid, f in self.files.items()
+            if fid in file_ids and f.status != FileStatus.DELETED
+        ]
+
     async def replace_associations(self, resource_id, resource_name, file_ids):
         resource_kind = resource_name or ""
         self.association_rows = [row for row in self.association_rows if not (row["resource_id"] == resource_id and row["resource_name"] == resource_kind)]
@@ -131,8 +148,12 @@ class StubFileRepository:
             {"resource_id": resource_id, "resource_name": resource_kind, "file_id": file_id, "sequence": index} for index, file_id in enumerate(file_ids)
         )
 
-    async def fetch_by_resource_id(self, resource_id):
-        file_ids = [row["file_id"] for row in sorted(self.association_rows, key=lambda row: row["sequence"]) if row["resource_id"] == resource_id]
+    async def fetch_by_resource_id(self, resource_id, resource_name=None):
+        file_ids = [
+            row["file_id"]
+            for row in sorted(self.association_rows, key=lambda row: row["sequence"])
+            if row["resource_id"] == resource_id and (resource_name is None or row["resource_name"] == resource_name)
+        ]
         return [
             FileGridItemResult(
                 id=f.id,

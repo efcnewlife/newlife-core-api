@@ -144,6 +144,18 @@ class FileRepository:
             return []
         return await self._base_select().where(ContentFile.id.in_(file_ids)).fetch(as_model=FileBaseResult) or []
 
+    async def list_active_by_ids(self, file_ids: list[UUID]) -> list[FileBaseResult]:
+        if not file_ids:
+            return []
+        return (
+            await self._base_select()
+            .select_from(ContentFile)
+            .where(ContentFile.id.in_(file_ids))
+            .where(ContentFile.status != FileStatus.DELETED)
+            .fetch(as_model=FileBaseResult)
+            or []
+        )
+
     async def replace_associations(self, resource_id: UUID, resource_name: Optional[str], file_ids: list[UUID]) -> None:
         resource_kind = resource_name or ""
         await (
@@ -157,12 +169,13 @@ class FileRepository:
         rows = [{"file_id": file_id, "resource_id": resource_id, "resource_name": resource_kind, "sequence": index} for index, file_id in enumerate(file_ids)]
         await self._session.insert(ContentFileAssociation).values(rows).execute()
 
-    async def fetch_by_resource_id(self, resource_id: UUID) -> list[FileGridItemResult]:
+    async def fetch_by_resource_id(self, resource_id: UUID, resource_name: Optional[str] = None) -> list[FileGridItemResult]:
         items = await (
             self._base_select()
             .select_from(ContentFile)
             .join(ContentFileAssociation, ContentFileAssociation.file_id == ContentFile.id)
             .where(ContentFileAssociation.resource_id == resource_id)
+            .where(resource_name is not None, lambda: ContentFileAssociation.resource_name == resource_name)
             .where(ContentFile.status != FileStatus.DELETED)
             .order_by(ContentFileAssociation.sequence.asc())
             .fetch(as_model=FileGridItemResult)

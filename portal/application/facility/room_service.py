@@ -6,9 +6,12 @@ import uuid
 from typing import Any, Optional
 from uuid import UUID
 
+from portal.application.content.commands import UpdateFileAssociationCommand
+from portal.application.content.file_service import FileService
 from portal.application.facility.commands import BulkIdsCommand, CreateRoomCommand, DeleteCommand, PagesQueryCommand, UpdateRoomCommand
 from portal.application.facility.results import CreateIdResult, RoomDetailResult, RoomListResult, RoomPageResult
-from portal.domain.facility.constants import FacilityErrorCode
+from portal.domain.content.constants import FILE_RESOURCE_KIND_FACILITY_ROOM
+from portal.domain.facility.constants import ROOM_GALLERY_MAX_FILES, FacilityErrorCode
 from portal.exceptions.responses import ApiBaseException, BadRequestException, ConflictErrorException, NotFoundException
 from portal.infrastructure.persistence.repositories.facility.room_repository import RoomRepository
 from portal.libs.contexts.request_context import RequestContext, get_request_context
@@ -18,8 +21,9 @@ from portal.libs.tracing.distributed_trace import distributed_trace
 class RoomService:
     """Admin facility room use cases."""
 
-    def __init__(self, room_repository: RoomRepository):
+    def __init__(self, room_repository: RoomRepository, file_service: FileService):
         self._repository = room_repository
+        self._file_service = file_service
         self._req_ctx: Optional[RequestContext] = get_request_context()
 
     def _resolved_locale_id(self) -> Optional[UUID]:
@@ -41,6 +45,25 @@ class RoomService:
         rows = [dict(room_id=room_id, **item) for item in translation_payloads]
         await self._repository.upsert_translations(rows)
 
+    async def _replace_gallery(self, room_id: UUID, file_ids: Optional[list[UUID]]) -> None:
+        if file_ids is None:
+            return
+        if len(file_ids) > ROOM_GALLERY_MAX_FILES:
+            raise BadRequestException(detail=f"Room gallery cannot exceed {ROOM_GALLERY_MAX_FILES} files")
+        if len(file_ids) != len(set(file_ids)):
+            raise BadRequestException(detail="Room gallery file ids must be unique")
+        if file_ids:
+            active_files = await self._file_service.list_active_files_by_ids(file_ids)
+            active_by_id = {item.id: item for item in active_files}
+            missing_ids = [file_id for file_id in file_ids if file_id not in active_by_id]
+            if missing_ids:
+                raise BadRequestException(detail="Room gallery file ids were not found")
+            if any(not item.content_type or not item.content_type.startswith("image/") for item in active_files):
+                raise BadRequestException(detail="Room gallery files must be images")
+        await self._file_service.update_file_association(
+            UpdateFileAssociationCommand(file_ids=file_ids, resource_id=room_id, resource_name=FILE_RESOURCE_KIND_FACILITY_ROOM)
+        )
+
     @distributed_trace()
     async def get_room_pages(self, command: PagesQueryCommand) -> RoomPageResult:
         items, count = await self._repository.fetch_pages(command, self._resolved_locale_id())
@@ -53,7 +76,11 @@ class RoomService:
 
     @distributed_trace()
     async def get_room_by_id(self, room_id: UUID, all_locales: bool = False) -> Optional[RoomDetailResult]:
-        return await self._repository.get_by_id(room_id, self._resolved_locale_id(), all_locales=all_locales)
+        room = await self._repository.get_by_id(room_id, self._resolved_locale_id(), all_locales=all_locales)
+        if not room:
+            return None
+        files = await self._file_service.get_files_by_resource_id(room_id, FILE_RESOURCE_KIND_FACILITY_ROOM)
+        return room.model_copy(update={"files": files})
 
     @distributed_trace()
     async def create_room(self, command: CreateRoomCommand) -> CreateIdResult:
@@ -67,6 +94,7 @@ class RoomService:
                 payload["sequence"] = command.sequence
             await self._repository.insert_room(payload)
             await self._validate_and_upsert_translations(room_id, translation_payloads)
+            await self._replace_gallery(room_id, command.file_ids)
         except ApiBaseException:
             raise
         except Exception as error:
@@ -84,33 +112,22 @@ class RoomService:
     async def update_room(self, room_id: UUID, command: UpdateRoomCommand) -> None:
         existing = await self._repository.get_by_id(room_id, self._resolved_locale_id())
         if not existing:
-            raise NotFoundException(
-                detail=f"Room {room_id} not found",
-                error_code=FacilityErrorCode.ROOM_NOT_FOUND.value,
-                context={"room_id": str(room_id)},
-            )
+            raise NotFoundException(detail=f"Room {room_id} not found", error_code=FacilityErrorCode.ROOM_NOT_FOUND.value, context={"room_id": str(room_id)})
         values = {"room_number": command.room_number, "capacity": command.capacity, "is_active": command.is_active}
         if command.sequence is not None:
             values["sequence"] = command.sequence
         affected = await self._repository.update_room(room_id, values)
         if affected == 0:
-            raise NotFoundException(
-                detail=f"Room {room_id} not found",
-                error_code=FacilityErrorCode.ROOM_NOT_FOUND.value,
-                context={"room_id": str(room_id)},
-            )
+            raise NotFoundException(detail=f"Room {room_id} not found", error_code=FacilityErrorCode.ROOM_NOT_FOUND.value, context={"room_id": str(room_id)})
         translation_payloads = self._build_translation_payloads(command)
         if translation_payloads:
             await self._validate_and_upsert_translations(room_id, translation_payloads)
+        await self._replace_gallery(room_id, command.file_ids)
 
     @distributed_trace()
     async def delete_room(self, room_id: UUID, command: DeleteCommand) -> None:
         if not await self._repository.get_by_id(room_id, self._resolved_locale_id()):
-            raise NotFoundException(
-                detail=f"Room {room_id} not found",
-                error_code=FacilityErrorCode.ROOM_NOT_FOUND.value,
-                context={"room_id": str(room_id)},
-            )
+            raise NotFoundException(detail=f"Room {room_id} not found", error_code=FacilityErrorCode.ROOM_NOT_FOUND.value, context={"room_id": str(room_id)})
         if command.permanent:
             await self._repository.delete_hard(room_id)
         else:

@@ -18,6 +18,9 @@ class BookingType(str, Enum):
 # Max inclusive span for Booking range query (Calendar / Grid visible window).
 BOOKING_RANGE_MAX_DAYS = 62
 
+# Max images in one Room gallery.
+ROOM_GALLERY_MAX_FILES = 10
+
 
 class BookingStatus(str, Enum):
     """Booking lifecycle status."""

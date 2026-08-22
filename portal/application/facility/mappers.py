@@ -4,6 +4,7 @@ Map between facility API serializers and application commands/results.
 
 from uuid import UUID
 
+from portal.application.content.mappers import file_grid_item_to_api
 from portal.application.facility.commands import (
     BulkIdsCommand,
     CreateDiscountRuleCommand,
@@ -142,6 +143,7 @@ def create_room_to_command(model: AdminRoomCreate) -> CreateRoomCommand:
         is_active=model.is_active,
         sequence=model.sequence,
         translations=_translation_commands(model.translations),
+        file_ids=model.file_ids,
     )
 
 
@@ -153,6 +155,7 @@ def update_room_to_command(model: AdminRoomUpdate) -> UpdateRoomCommand:
         is_active=model.is_active,
         sequence=model.sequence,
         translations=_translation_commands(model.translations),
+        file_ids=model.file_ids,
     )
 
 
@@ -172,6 +175,7 @@ def room_detail_to_api(result: RoomDetailResult) -> AdminRoomDetail:
         delete_reason=result.delete_reason,
         description=result.description,
         translations=_translation_items_to_api(result.translations),
+        files=[file_grid_item_to_api(item) for item in result.files],
     )
 
 
