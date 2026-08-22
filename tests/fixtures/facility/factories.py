@@ -6,6 +6,7 @@ from datetime import date, datetime, time, timezone
 from decimal import Decimal
 from uuid import UUID, uuid4
 
+from portal.application.content.results import FileBaseResult, FileGridItemResult
 from portal.application.facility.commands import (
     BookingRoomLineCommand,
     CreateBookingCommand,
@@ -45,8 +46,40 @@ def make_translation(locale_id: UUID | None = None, name: str = "Test Room") -> 
     return FacilityTranslationCommand(locale_id=locale_id or new_uuid(), name=name)
 
 
-def make_create_room_command(code: str = "room-a", locale_id: UUID | None = None, name: str = "Room A") -> CreateRoomCommand:
-    return CreateRoomCommand(code=code, translations=[make_translation(locale_id, name=name)])
+def make_create_room_command(
+    code: str = "room-a", locale_id: UUID | None = None, name: str = "Room A", file_ids: list[UUID] | None = None
+) -> CreateRoomCommand:
+    return CreateRoomCommand(code=code, translations=[make_translation(locale_id, name=name)], file_ids=file_ids)
+
+
+def make_file_base(file_id: UUID | None = None, content_type: str = "image/jpeg") -> FileBaseResult:
+    return FileBaseResult(
+        id=file_id or new_uuid(),
+        original_name="room.jpg",
+        key="files/room.jpg",
+        storage="azure",
+        bucket="content",
+        region="eastus",
+        content_type=content_type,
+        extension="jpg",
+        size_bytes=1024,
+    )
+
+
+def make_file_grid_item(file_id: UUID | None = None, url: str = "https://signed.example/room.jpg") -> FileGridItemResult:
+    item = make_file_base(file_id)
+    return FileGridItemResult(
+        id=item.id,
+        original_name=item.original_name,
+        key=item.key,
+        storage=item.storage,
+        bucket=item.bucket,
+        region=item.region,
+        content_type=item.content_type,
+        extension=item.extension,
+        size_bytes=item.size_bytes,
+        url=url,
+    )
 
 
 def make_ministry_translation(locale_id: UUID | None = None, name: str = "Youth Ministry") -> OrgTranslationCommand:

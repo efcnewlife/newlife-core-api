@@ -204,8 +204,12 @@ class FileService:
             await self._cache.invalidate_resource_association(command.resource_id)
 
     @distributed_trace()
-    async def get_files_by_resource_id(self, resource_id: UUID) -> list[FileGridItemResult]:
-        files = await self._repository.fetch_by_resource_id(resource_id)
+    async def list_active_files_by_ids(self, file_ids: list[UUID]) -> list[FileBaseResult]:
+        return await self._repository.list_active_by_ids(file_ids)
+
+    @distributed_trace()
+    async def get_files_by_resource_id(self, resource_id: UUID, resource_name: Optional[str] = None) -> list[FileGridItemResult]:
+        files = await self._repository.fetch_by_resource_id(resource_id, resource_name)
         urls = await asyncio.gather(*[self.get_signed_url(file=item) for item in files])
         for item, url in zip(files, urls):
             item.url = url

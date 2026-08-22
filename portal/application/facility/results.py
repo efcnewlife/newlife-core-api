@@ -10,6 +10,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
 
+from portal.application.content.results import FileGridItemResult
 from portal.application.org.results import (
     CreateIdResult,
     MinistryDetailResult,
@@ -48,6 +49,7 @@ class RoomDetailResult(UUIDBaseModel):
     delete_reason: Optional[str] = Field(default=None)
     description: Optional[str] = Field(default=None)
     translations: list[TranslationItemResult] = Field(default_factory=list)
+    files: list[FileGridItemResult] = Field(default_factory=list)
 
 
 class RoomPageResult(BaseModel):
