@@ -6,7 +6,14 @@ from typing import Any, Optional, Protocol
 from uuid import UUID
 
 from portal.application.content.commands import FilePagesQueryCommand
-from portal.application.content.results import FileBaseResult, FileDetailResult, FileGridItemResult, FileSummaryResult, SignedUrlFileByResourceResult
+from portal.application.content.results import (
+    FileAssociationBindingResult,
+    FileBaseResult,
+    FileDetailResult,
+    FileGridItemResult,
+    FileSummaryResult,
+    SignedUrlFileByResourceResult,
+)
 
 
 class FileRepositoryPort(Protocol):
@@ -30,11 +37,17 @@ class FileRepositoryPort(Protocol):
 
     async def list_by_ids(self, file_ids: list[UUID]) -> list[FileBaseResult]: ...
 
+    async def list_active_by_ids(self, file_ids: list[UUID]) -> list[FileBaseResult]: ...
+
     async def replace_associations(self, resource_id: UUID, resource_name: Optional[str], file_ids: list[UUID]) -> None: ...
 
-    async def fetch_by_resource_id(self, resource_id: UUID) -> list[FileGridItemResult]: ...
+    async def fetch_by_resource_id(self, resource_id: UUID, resource_name: Optional[str] = None) -> list[FileGridItemResult]: ...
 
     async def fetch_associations_by_resource_ids(self, resource_ids: list[UUID]) -> list[SignedUrlFileByResourceResult]: ...
+
+    async def fetch_association_preview_by_file_ids(self, file_ids: list[UUID], locale_id: Optional[UUID]) -> list[FileAssociationBindingResult]: ...
+
+    async def delete_associations_by_file_ids(self, file_ids: list[UUID]) -> list[UUID]: ...
 
 
 class FileStoragePort(Protocol):

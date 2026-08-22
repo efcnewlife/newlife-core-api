@@ -34,6 +34,18 @@ _Avoid_: generic "conflict", treating Blackout as the same failure, parsing the 
 A room-closed interval that makes the room unbookable. Overlap with a Blackout is a distinct rejection from a Scheduling Conflict; the client must show a different prompt.
 _Avoid_: scheduling conflict, "closed" without naming the Blackout rule
 
+**Room gallery**:
+An optional ordered set of at most ten image Content Files bound to one Room. Each file appears at most once in that gallery. The same Content File may appear in many Rooms' galleries. Order is Operator-controlled (including drag reorder on the Room form). Saving the Room replaces the whole gallery. Soft-deleting a Room keeps its File associations so restore brings the gallery back. Admin Room list does not include gallery files; Room detail (and create response) does, with signed URLs for preview.
+_Avoid_: cover, required gallery, room image URL field, treating the first file as a separate Cover entity in v1 admin, unbounded gallery, clearing associations on Room soft-delete, non-image Content Files, duplicate files in one gallery, list-page thumbnails as the v1 contract, a separate files GET for v1 admin preview
+
+**Content File**:
+A stored media object in the content library (metadata plus blob). Rooms bind to Content Files; they do not own uploads as a separate room-file type.
+_Avoid_: attachment, asset, location file, inline URL as the bound object
+
+**File association**:
+The bind between one Content File and one resource (for example a Room). A Room gallery association is identified by resource kind `facility.room`, not by a class or table name. Binding or reordering a Room gallery is part of editing that Room. Putting a new file into the content library (including upload inside the Room picker) is a Content File upload. Deleting a Content File is allowed while associations exist: one confirmation lists every selected file's bound resources by name or code, including soft-deleted Rooms marked as deleted; then the files and all of their File associations are removed together. No orphan association rows remain. A gallery of ten images cannot accept another file; the picker is disabled and the server also rejects an over-cap save.
+_Avoid_: blocking delete until unbind, leftover association rows after file delete, silent delete with no association warning, a count-only warning with no names, hiding soft-deleted Rooms from the warning, handler class names as resource kind, treating library upload as only a Room permission, toast for over-cap instead of blocking the picker
+
 ### Org / ministry
 
 **Ministry**:

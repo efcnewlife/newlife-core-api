@@ -34,6 +34,7 @@ class CreateRoomCommand(BaseModel):
     is_active: bool = Field(default=True)
     sequence: Optional[float] = Field(default=None)
     translations: list[FacilityTranslationCommand] = Field(..., min_length=1)
+    file_ids: Optional[list[UUID]] = Field(default=None)
 
 
 class UpdateRoomCommand(BaseModel):
@@ -45,6 +46,7 @@ class UpdateRoomCommand(BaseModel):
     is_active: bool = Field(default=True)
     sequence: Optional[float] = Field(default=None)
     translations: Optional[list[FacilityTranslationCommand]] = Field(default=None)
+    file_ids: Optional[list[UUID]] = Field(default=None)
 
 
 class CreateRoomSlotTemplateCommand(BaseModel):

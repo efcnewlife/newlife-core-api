@@ -27,6 +27,12 @@ class BulkDeleteFilesCommand(BaseModel):
     ids: list[UUID] = Field(...)
 
 
+class PreviewFileAssociationsCommand(BaseModel):
+    """List named File associations for selected files."""
+
+    ids: list[UUID] = Field(...)
+
+
 class UpdateFileAssociationCommand(BaseModel):
     """Replace file associations for a resource."""
 

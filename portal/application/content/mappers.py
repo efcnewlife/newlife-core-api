@@ -4,10 +4,12 @@ Map between content file API serializers and application commands/results.
 
 from fastapi import UploadFile
 
-from portal.application.content.commands import BulkDeleteFilesCommand, FilePagesQueryCommand, UploadFileCommand
+from portal.application.content.commands import BulkDeleteFilesCommand, FilePagesQueryCommand, PreviewFileAssociationsCommand, UploadFileCommand
 from portal.application.content.results import (
     BatchUploadFilesResult,
     BulkDeleteFilesResult,
+    FileAssociationBindingResult,
+    FileAssociationPreviewResult,
     FileBaseResult,
     FileCategoryStatsResult,
     FileGridItemResult,
@@ -20,6 +22,8 @@ from portal.serializers.admin.v1.file import (
     AdminBatchFileUploadResponseModel,
     AdminBulkActionResponseModel,
     AdminFailedUploadFile,
+    AdminFileAssociationBinding,
+    AdminFileAssociationPreview,
     AdminFileBase,
     AdminFileBulkAction,
     AdminFileCategoryStats,
@@ -59,6 +63,10 @@ def pages_query_to_command(model: AdminFileQuery) -> FilePagesQueryCommand:
 
 def bulk_action_to_command(model: AdminFileBulkAction) -> BulkDeleteFilesCommand:
     return BulkDeleteFilesCommand(ids=model.ids)
+
+
+def preview_associations_to_command(model: AdminFileBulkAction) -> PreviewFileAssociationsCommand:
+    return PreviewFileAssociationsCommand(ids=model.ids)
 
 
 def file_base_result_to_api(result: FileBaseResult) -> AdminFileBase:
@@ -121,3 +129,17 @@ def bulk_delete_result_to_api(result: BulkDeleteFilesResult) -> AdminBulkActionR
     if result.failed_items:
         failed_items = [file_base_result_to_api(item) for item in result.failed_items]
     return AdminBulkActionResponseModel(success_count=result.success_count, failed_items=failed_items)
+
+
+def association_binding_to_api(result: FileAssociationBindingResult) -> AdminFileAssociationBinding:
+    return AdminFileAssociationBinding(
+        file_id=result.file_id,
+        resource_kind=result.resource_kind,
+        resource_id=result.resource_id,
+        display_name=result.display_name,
+        is_deleted=result.is_deleted,
+    )
+
+
+def association_preview_to_api(result: FileAssociationPreviewResult) -> AdminFileAssociationPreview:
+    return AdminFileAssociationPreview(items=[association_binding_to_api(item) for item in result.items])
