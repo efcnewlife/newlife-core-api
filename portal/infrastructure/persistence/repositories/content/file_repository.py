@@ -9,6 +9,7 @@ import sqlalchemy as sa
 
 from portal.application.content.commands import FilePagesQueryCommand
 from portal.application.content.results import (
+    FileAssociationBindingResult,
     FileBaseResult,
     FileCategoryStatsResult,
     FileDetailResult,
@@ -16,10 +17,10 @@ from portal.application.content.results import (
     FileSummaryResult,
     SignedUrlFileByResourceResult,
 )
-from portal.domain.content.constants import FileStatus, MediaCategory
+from portal.domain.content.constants import FILE_RESOURCE_KIND_FACILITY_ROOM, FileStatus, MediaCategory
 from portal.libs.database import Session
 from portal.libs.database.execute_result import affected_rows
-from portal.models import ContentFile, ContentFileAssociation
+from portal.models import ContentFile, ContentFileAssociation, FacilityRoom, FacilityRoomTranslation
 
 
 class FileRepository:
@@ -193,3 +194,42 @@ class FileRepository:
             .fetch(as_model=SignedUrlFileByResourceResult)
         )
         return items or []
+
+    async def fetch_association_preview_by_file_ids(self, file_ids: list[UUID], locale_id: Optional[UUID]) -> list[FileAssociationBindingResult]:
+        if not file_ids:
+            return []
+        room_name = FacilityRoom.code
+        if locale_id:
+            room_name = sa.func.coalesce(
+                sa.select(FacilityRoomTranslation.name)
+                .where(FacilityRoomTranslation.room_id == FacilityRoom.id, FacilityRoomTranslation.locale_id == locale_id)
+                .limit(1)
+                .scalar_subquery(),
+                FacilityRoom.code,
+            )
+        display_name = sa.func.coalesce(room_name, sa.cast(ContentFileAssociation.resource_id, sa.String))
+        items = await (
+            self._session.select(
+                ContentFileAssociation.file_id,
+                ContentFileAssociation.resource_name.label("resource_kind"),
+                ContentFileAssociation.resource_id,
+                display_name.label("display_name"),
+                sa.func.coalesce(FacilityRoom.is_deleted, False).label("is_deleted"),
+            )
+            .select_from(ContentFileAssociation)
+            .outerjoin(
+                FacilityRoom,
+                sa.and_(FacilityRoom.id == ContentFileAssociation.resource_id, ContentFileAssociation.resource_name == FILE_RESOURCE_KIND_FACILITY_ROOM),
+            )
+            .where(ContentFileAssociation.file_id.in_(file_ids))
+            .order_by(ContentFileAssociation.file_id, ContentFileAssociation.sequence.asc())
+            .fetch(as_model=FileAssociationBindingResult)
+        )
+        return items or []
+
+    async def delete_associations_by_file_ids(self, file_ids: list[UUID]) -> list[UUID]:
+        if not file_ids:
+            return []
+        resource_ids = await self._session.select(ContentFileAssociation.resource_id).where(ContentFileAssociation.file_id.in_(file_ids)).fetchvals()
+        await self._session.delete(ContentFileAssociation).where(ContentFileAssociation.file_id.in_(file_ids)).execute()
+        return resource_ids or []

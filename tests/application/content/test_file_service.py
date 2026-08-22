@@ -7,9 +7,15 @@ from uuid import uuid4
 import pytest
 from azure.core.exceptions import AzureError
 
-from portal.application.content.commands import BulkDeleteFilesCommand, FilePagesQueryCommand, UpdateFileAssociationCommand, UploadFileCommand
+from portal.application.content.commands import (
+    BulkDeleteFilesCommand,
+    FilePagesQueryCommand,
+    PreviewFileAssociationsCommand,
+    UpdateFileAssociationCommand,
+    UploadFileCommand,
+)
 from portal.application.content.file_service import FileService
-from portal.application.content.results import FileBaseResult, FileDetailResult, FileGridItemResult
+from portal.application.content.results import FileAssociationBindingResult, FileBaseResult, FileDetailResult, FileGridItemResult
 from portal.domain.content.constants import FILE_RESOURCE_KIND_FACILITY_ROOM, FileStatus, FileUploadSource
 from portal.exceptions.responses import ApiBaseException, BadRequestException
 
@@ -18,9 +24,11 @@ class StubFileRepository:
     def __init__(self):
         self.files: dict = {}
         self.association_rows: list = []
+        self.preview_bindings: list = []
         self.insert_calls: list = []
         self.status_updates: list = []
         self.deleted_keys: list = []
+        self.deleted_association_file_ids: list = []
 
     async def fetch_pages(self, command):
         items = [
@@ -151,6 +159,21 @@ class StubFileRepository:
 
     async def fetch_associations_by_resource_ids(self, resource_ids):
         return []
+
+    async def fetch_association_preview_by_file_ids(self, file_ids, locale_id):
+        return [row for row in self.preview_bindings if row.file_id in file_ids]
+
+    async def delete_associations_by_file_ids(self, file_ids):
+        self.deleted_association_file_ids.extend(file_ids)
+        remaining = []
+        resource_ids = []
+        for row in self.association_rows:
+            if row["file_id"] in file_ids:
+                resource_ids.append(row["resource_id"])
+            else:
+                remaining.append(row)
+        self.association_rows = remaining
+        return resource_ids
 
 
 class StubFileStorage:
@@ -314,6 +337,79 @@ async def test_delete_files_success():
     assert result.success_count == 1
     assert file_id in cache.invalidated_urls
     assert repo.files[file_id].status == FileStatus.DELETED
+
+
+@pytest.mark.asyncio
+async def test_preview_file_associations_includes_names_and_deleted_rooms():
+    repo = StubFileRepository()
+    file_id = uuid4()
+    room_id = uuid4()
+    deleted_room_id = uuid4()
+    repo.preview_bindings = [
+        FileAssociationBindingResult(
+            file_id=file_id, resource_kind=FILE_RESOURCE_KIND_FACILITY_ROOM, resource_id=room_id, display_name="Sanctuary", is_deleted=False
+        ),
+        FileAssociationBindingResult(
+            file_id=file_id, resource_kind=FILE_RESOURCE_KIND_FACILITY_ROOM, resource_id=deleted_room_id, display_name="OLD-HALL", is_deleted=True
+        ),
+    ]
+    service = _make_service(repo=repo)
+
+    result = await service.preview_file_associations(PreviewFileAssociationsCommand(ids=[file_id]))
+
+    assert {(item.display_name, item.is_deleted, item.resource_kind) for item in result.items} == {
+        ("Sanctuary", False, FILE_RESOURCE_KIND_FACILITY_ROOM),
+        ("OLD-HALL", True, FILE_RESOURCE_KIND_FACILITY_ROOM),
+    }
+
+
+@pytest.mark.asyncio
+async def test_delete_files_clears_associations_for_deleted_files_only():
+    repo = StubFileRepository()
+    deleted_file_id = uuid4()
+    kept_file_id = uuid4()
+    bound_room_id = uuid4()
+    other_room_id = uuid4()
+    repo.files[deleted_file_id] = FileDetailResult(
+        id=deleted_file_id,
+        original_name="a.png",
+        key="original_files/dev/a.png",
+        storage="azure_blob",
+        bucket="files",
+        region="eastus",
+        status=FileStatus.UPLOADED,
+    )
+    repo.association_rows = [
+        {"resource_id": bound_room_id, "resource_name": FILE_RESOURCE_KIND_FACILITY_ROOM, "file_id": deleted_file_id, "sequence": 0},
+        {"resource_id": other_room_id, "resource_name": FILE_RESOURCE_KIND_FACILITY_ROOM, "file_id": kept_file_id, "sequence": 0},
+    ]
+    cache = StubFileCache()
+    service = _make_service(repo=repo, cache=cache)
+
+    result = await service.delete_files(BulkDeleteFilesCommand(ids=[deleted_file_id]))
+
+    assert result.success_count == 1
+    assert repo.association_rows == [{"resource_id": other_room_id, "resource_name": FILE_RESOURCE_KIND_FACILITY_ROOM, "file_id": kept_file_id, "sequence": 0}]
+    assert bound_room_id in cache.invalidated_associations
+    assert other_room_id not in cache.invalidated_associations
+
+
+@pytest.mark.asyncio
+async def test_delete_files_keeps_associations_when_storage_delete_fails():
+    repo = StubFileRepository()
+    file_id = uuid4()
+    room_id = uuid4()
+    repo.files[file_id] = FileDetailResult(
+        id=file_id, original_name="a.png", key="original_files/dev/a.png", storage="azure_blob", bucket="files", region="eastus", status=FileStatus.UPLOADED
+    )
+    repo.association_rows = [{"resource_id": room_id, "resource_name": FILE_RESOURCE_KIND_FACILITY_ROOM, "file_id": file_id, "sequence": 0}]
+    service = _make_service(repo=repo, storage=StubFileStorage(delete_success=False))
+
+    result = await service.delete_files(BulkDeleteFilesCommand(ids=[file_id]))
+
+    assert result.success_count == 0
+    assert repo.association_rows == [{"resource_id": room_id, "resource_name": FILE_RESOURCE_KIND_FACILITY_ROOM, "file_id": file_id, "sequence": 0}]
+    assert repo.files[file_id].status == FileStatus.UPLOADED
 
 
 @pytest.mark.asyncio
