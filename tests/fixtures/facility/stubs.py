@@ -196,7 +196,7 @@ class StubFileService:
         self.get_files_calls.append(resource_id)
         return list(self.files_by_resource.get(resource_id, []))
 
-    async def get_signed_urls_by_resource_ids(self, resource_ids: list[UUID]) -> dict[UUID, list[str]]:
+    async def get_signed_urls_by_resource_ids(self, resource_ids: list[UUID], resource_name: str | None = None) -> dict[UUID, list[str]]:
         return {resource_id: [file.url for file in self.files_by_resource.get(resource_id, []) if file.url] for resource_id in resource_ids}
 
 
@@ -289,6 +289,8 @@ class StubBookingRepository:
         return self.exists
 
     async def get_detail(self, booking_id: UUID, locale_id=None) -> BookingDetailResult | None:
+        if self.detail is None or self.detail.id != booking_id:
+            return None
         return self.detail
 
     async def get_booking_type_and_flags(self, booking_id: UUID):

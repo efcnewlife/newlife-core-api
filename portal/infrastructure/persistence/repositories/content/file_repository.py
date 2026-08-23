@@ -183,7 +183,7 @@ class FileRepository:
         )
         return items or []
 
-    async def fetch_associations_by_resource_ids(self, resource_ids: list[UUID]) -> list[SignedUrlFileByResourceResult]:
+    async def fetch_associations_by_resource_ids(self, resource_ids: list[UUID], resource_name: Optional[str] = None) -> list[SignedUrlFileByResourceResult]:
         if not resource_ids:
             return []
         items = await (
@@ -202,6 +202,7 @@ class FileRepository:
             .select_from(ContentFile)
             .join(ContentFileAssociation, ContentFileAssociation.file_id == ContentFile.id)
             .where(ContentFileAssociation.resource_id.in_(resource_ids))
+            .where(resource_name is not None, lambda: ContentFileAssociation.resource_name == resource_name)
             .where(ContentFile.status != FileStatus.DELETED)
             .order_by(ContentFileAssociation.sequence.asc())
             .fetch(as_model=SignedUrlFileByResourceResult)

@@ -14,17 +14,18 @@ from portal.application.facility.booking_service import BookingService
 from portal.application.facility.commands import BookingRoomLineCommand, CancelBookingCommand, CreateBookingCommand, RoomAvailabilityQueryCommand
 from portal.application.facility.mappers import (
     create_id_result_to_api,
+    member_booking_detail_to_api,
     member_preview_quote_result_to_api,
     member_preview_quote_to_command,
     room_availability_list_to_api,
 )
-from portal.application.facility.pricing_service import PricingService
 from portal.application.facility.results import BookingListItemResult
 from portal.container import Container
 from portal.routers.auth_router import AuthRouter
 from portal.serializers.apis.v1.facility import (
     MemberBookingCancel,
     MemberBookingCreate,
+    MemberBookingDetail,
     MemberBookingList,
     MemberBookingListItem,
     MemberPreviewQuoteRequest,
@@ -63,8 +64,8 @@ async def get_rooms_availability(
 
 @router.post(path="/preview-quote", status_code=status.HTTP_200_OK, response_model=MemberPreviewQuoteResponse, response_model_by_alias=True)
 @inject
-async def preview_quote(model: MemberPreviewQuoteRequest, pricing_service: PricingService = Depends(Provide[Container.pricing_service])):
-    result = await pricing_service.preview_quote(command=member_preview_quote_to_command(model))
+async def preview_quote(model: MemberPreviewQuoteRequest, booking_service: BookingService = Depends(Provide[Container.booking_service])):
+    result = await booking_service.preview_quote_for_member(member_preview_quote_to_command(model))
     return member_preview_quote_result_to_api(result)
 
 
@@ -73,6 +74,13 @@ async def preview_quote(model: MemberPreviewQuoteRequest, pricing_service: Prici
 async def get_my_bookings(booking_service: BookingService = Depends(Provide[Container.booking_service])):
     items = await booking_service.list_my_bookings()
     return MemberBookingList(items=[_booking_list_item_to_api(item) for item in items])
+
+
+@router.get(path="/bookings/{booking_id}", status_code=status.HTTP_200_OK, response_model=MemberBookingDetail, response_model_by_alias=True)
+@inject
+async def get_my_booking(booking_id: UUID, booking_service: BookingService = Depends(Provide[Container.booking_service])):
+    result = await booking_service.get_my_booking_by_id(booking_id)
+    return member_booking_detail_to_api(result)
 
 
 @router.post(path="/bookings", status_code=status.HTTP_201_CREATED, response_model=UUIDBaseModel)

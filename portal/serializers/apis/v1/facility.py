@@ -93,6 +93,24 @@ class MemberBookingList(BaseModel):
     items: list[MemberBookingListItem] = Field(default_factory=list)
 
 
+class MemberBookingDetailRoom(BaseModel):
+    """Room line on member booking detail."""
+
+    facility_id: UUID = Field(..., serialization_alias="facilityId")
+    facility_name: Optional[str] = Field(default=None, serialization_alias="facilityName")
+
+
+class MemberBookingDetail(UUIDBaseModel):
+    """Booker-scoped booking read for Payment."""
+
+    status: str = Field(...)
+    start_at: datetime = Field(..., serialization_alias="startAt")
+    end_at: datetime = Field(..., serialization_alias="endAt")
+    quoted_amount: Optional[Decimal] = Field(default=None, serialization_alias="quotedAmount")
+    currency: Optional[str] = Field(default=None)
+    rooms: list[MemberBookingDetailRoom] = Field(default_factory=list)
+
+
 class MemberPreviewQuoteRoomInput(BaseModel):
     """Room line for member preview quote."""
 
@@ -105,9 +123,10 @@ class MemberPreviewQuoteRequest(BaseModel):
     start_at: datetime = Field(...)
     end_at: datetime = Field(...)
     is_mission_aligned: bool = Field(default=False)
+    ministry_id: Optional[UUID] = Field(default=None)
     currency: str = Field(default="CAD")
     surcharge_codes: list[str] = Field(default_factory=list)
-    rooms: list[MemberPreviewQuoteRoomInput] = Field(min_length=1)
+    rooms: list[MemberPreviewQuoteRoomInput] = Field(min_length=1, max_length=3)
 
 
 class MemberPreviewQuoteRoomLineResult(BaseModel):

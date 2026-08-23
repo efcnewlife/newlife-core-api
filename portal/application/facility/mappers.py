@@ -31,6 +31,7 @@ from portal.application.facility.commands import (
     UpdateSurchargeCommand,
 )
 from portal.application.facility.results import (
+    BookingDetailResult,
     CreateIdResult,
     DayAvailabilityResult,
     DiscountRuleListResult,
@@ -110,6 +111,8 @@ from portal.serializers.admin.v1.facility.room_slot_template import (
 )
 from portal.serializers.admin.v1.facility.translation import AdminFacilityTranslationInput, AdminFacilityTranslationItem
 from portal.serializers.apis.v1.facility import (
+    MemberBookingDetail,
+    MemberBookingDetailRoom,
     MemberDayAvailability,
     MemberPreviewQuoteRequest,
     MemberPreviewQuoteResponse,
@@ -430,6 +433,7 @@ def member_preview_quote_to_command(model: MemberPreviewQuoteRequest) -> Preview
         currency=model.currency,
         room_lines=[PreviewQuoteRoomLineCommand(facility_id=line.facility_id, billed_hours=billed_hours) for line in model.rooms],
         surcharge_codes=model.surcharge_codes,
+        ministry_id=model.ministry_id,
     )
 
 
@@ -479,6 +483,18 @@ def room_availability_item_to_api(item: RoomAvailabilityResult) -> MemberRoomAva
 
 def room_availability_list_to_api(result: RoomAvailabilityListResult) -> MemberRoomAvailabilityList:
     return MemberRoomAvailabilityList(date=result.date, items=[room_availability_item_to_api(item) for item in result.items])
+
+
+def member_booking_detail_to_api(result: BookingDetailResult) -> MemberBookingDetail:
+    return MemberBookingDetail(
+        id=result.id,
+        status=result.status,
+        start_at=result.start_at,
+        end_at=result.end_at,
+        quoted_amount=result.quoted_amount,
+        currency=result.currency,
+        rooms=[MemberBookingDetailRoom(facility_id=line.facility_id, facility_name=line.facility_name) for line in result.rooms],
+    )
 
 
 def create_discount_rule_to_command(model: AdminDiscountRuleCreate) -> CreateDiscountRuleCommand:

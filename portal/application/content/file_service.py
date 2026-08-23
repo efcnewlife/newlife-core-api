@@ -233,11 +233,11 @@ class FileService:
         return files
 
     @distributed_trace()
-    async def get_signed_urls_by_resource_ids(self, resource_ids: list[UUID]) -> dict[UUID, list[str]]:
+    async def get_signed_urls_by_resource_ids(self, resource_ids: list[UUID], resource_name: Optional[str] = None) -> dict[UUID, list[str]]:
         unique_ids = list(set(resource_ids))
         if not unique_ids:
             return {}
-        rows = await self._repository.fetch_associations_by_resource_ids(unique_ids)
+        rows = await self._repository.fetch_associations_by_resource_ids(unique_ids, resource_name=resource_name)
         url_by_resource: dict[UUID, list[str]] = {}
         for row in rows:
             signed_url = await self.get_signed_url(file=row)

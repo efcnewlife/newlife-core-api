@@ -178,8 +178,34 @@ class StubFileRepository:
             if fid in file_ids and f.status != FileStatus.DELETED
         ]
 
-    async def fetch_associations_by_resource_ids(self, resource_ids):
-        return []
+    async def fetch_associations_by_resource_ids(self, resource_ids, resource_name=None):
+        from portal.application.content.results import SignedUrlFileByResourceResult
+        from portal.domain.content.constants import FileStatus
+
+        rows = []
+        for assoc in sorted(self.association_rows, key=lambda row: row["sequence"]):
+            if assoc["resource_id"] not in resource_ids:
+                continue
+            if resource_name is not None and assoc["resource_name"] != resource_name:
+                continue
+            file_row = self.files.get(assoc["file_id"])
+            if file_row is None or file_row.status == FileStatus.DELETED:
+                continue
+            rows.append(
+                SignedUrlFileByResourceResult(
+                    id=file_row.id,
+                    original_name=file_row.original_name,
+                    key=file_row.key,
+                    storage=file_row.storage,
+                    bucket=file_row.bucket,
+                    region=file_row.region,
+                    content_type=file_row.content_type,
+                    extension=file_row.extension,
+                    size_bytes=file_row.size_bytes,
+                    resource_id=assoc["resource_id"],
+                )
+            )
+        return rows
 
     async def fetch_association_preview_by_file_ids(self, file_ids, locale_id):
         return [row for row in self.preview_bindings if row.file_id in file_ids]
@@ -522,3 +548,29 @@ async def test_update_file_association_leaves_other_resource_kinds_on_same_id():
 
     kinds = {(row["resource_name"], row["file_id"]) for row in repo.association_rows}
     assert kinds == {(FILE_RESOURCE_KIND_FACILITY_ROOM, gallery_file_id), (other_kind, other_file_id)}
+
+
+def _uploaded_file(file_id, name="a.png"):
+    return FileDetailResult(
+        id=file_id, original_name=name, key=f"original_files/dev/{name}", storage="azure_blob", bucket="files", region="eastus", status=FileStatus.UPLOADED
+    )
+
+
+@pytest.mark.asyncio
+async def test_get_signed_urls_by_resource_ids_keeps_facility_room_kind_only():
+    repo = StubFileRepository()
+    resource_id = uuid4()
+    gallery_file_id = uuid4()
+    other_file_id = uuid4()
+    repo.files[gallery_file_id] = _uploaded_file(gallery_file_id, "gallery.png")
+    repo.files[other_file_id] = _uploaded_file(other_file_id, "other.png")
+    repo.association_rows = [
+        {"resource_id": resource_id, "resource_name": FILE_RESOURCE_KIND_FACILITY_ROOM, "file_id": gallery_file_id, "sequence": 0},
+        {"resource_id": resource_id, "resource_name": "ministry.ministry", "file_id": other_file_id, "sequence": 1},
+    ]
+    service = _make_service(repo=repo)
+
+    urls = await service.get_signed_urls_by_resource_ids([resource_id], resource_name=FILE_RESOURCE_KIND_FACILITY_ROOM)
+
+    assert len(urls[resource_id]) == 1
+    assert "sas=1" in urls[resource_id][0]
