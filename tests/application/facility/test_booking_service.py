@@ -9,9 +9,15 @@ from uuid import uuid4
 import pytest
 
 from portal.application.facility.booking_service import BookingService
-from portal.application.facility.commands import BookingRangeQueryCommand, BookingRoomLineCommand, CancelBookingCommand
-from portal.application.facility.results import BookingDetailResult
-from portal.domain.facility.constants import BookingStatus, RentalPolicySettingKey
+from portal.application.facility.commands import (
+    BookingRangeQueryCommand,
+    BookingRoomLineCommand,
+    CancelBookingCommand,
+    PreviewQuoteCommand,
+    PreviewQuoteRoomLineCommand,
+)
+from portal.application.facility.results import BookingDetailResult, BookingRoomLineResult
+from portal.domain.facility.constants import BookingStatus, BookingType, RentalPolicySettingKey
 from portal.exceptions.responses import BadRequestException, ConflictErrorException, ForbiddenException, NotFoundException
 from tests.fixtures.facility.factories import (
     make_booking_list_item,
@@ -388,3 +394,80 @@ async def test_get_booking_range_excludes_soft_deleted():
     returned_ids = {item.id for item in result.items}
     assert active.id in returned_ids
     assert deleted.id not in returned_ids
+
+
+def _booking_detail(*, booking_id, user_id, quoted_amount=Decimal("85")) -> BookingDetailResult:
+    start = datetime(2026, 8, 22, 14, 0, tzinfo=timezone.utc)
+    end = datetime(2026, 8, 22, 18, 0, tzinfo=timezone.utc)
+    room_id = uuid4()
+    return BookingDetailResult(
+        id=booking_id,
+        user_id=user_id,
+        booking_type="one_time",
+        start_at=start,
+        end_at=end,
+        status="confirmed",
+        quoted_amount=quoted_amount,
+        currency="CAD",
+        rooms=[BookingRoomLineResult(id=uuid4(), facility_id=room_id, start_at=start, end_at=end, sequence=0)],
+    )
+
+
+@pytest.mark.asyncio
+async def test_booker_can_read_own_quoted_amount(monkeypatch):
+    owner_id = uuid4()
+    _user_ctx(monkeypatch, user_id=owner_id)
+    booking_id = uuid4()
+    detail = _booking_detail(booking_id=booking_id, user_id=owner_id, quoted_amount=Decimal("85"))
+    service = _booking_service(StubBookingRepository(detail=detail))
+    result = await service.get_my_booking_by_id(booking_id)
+    assert result.quoted_amount == Decimal("85")
+    assert result.currency == "CAD"
+
+
+@pytest.mark.asyncio
+async def test_booker_cannot_read_another_bookers_booking(monkeypatch):
+    _user_ctx(monkeypatch, user_id=uuid4())
+    other_booking_id = uuid4()
+    detail = _booking_detail(booking_id=other_booking_id, user_id=uuid4(), quoted_amount=Decimal("85"))
+    service = _booking_service(StubBookingRepository(detail=detail))
+    with pytest.raises(NotFoundException) as exc_info:
+        await service.get_my_booking_by_id(other_booking_id)
+    assert exc_info.value.error_code == "FACILITY_BOOKING_NOT_FOUND"
+
+
+@pytest.mark.asyncio
+async def test_preview_quote_for_member_honors_ministry_gate(monkeypatch):
+    user_id = uuid4()
+    _user_ctx(monkeypatch, user_id=user_id)
+    ministry_id = uuid4()
+    ministry = make_ministry_detail(ministry_id)
+    service = _booking_service(
+        StubBookingRepository(), ministry_stub=StubMinistryRepository(ministry_by_id={ministry_id: ministry}, booking_member_user_ids={user_id})
+    )
+    room_id = uuid4()
+    command = PreviewQuoteCommand(
+        booking_type=BookingType.ONE_TIME,
+        is_mission_aligned=True,
+        ministry_id=ministry_id,
+        room_lines=[PreviewQuoteRoomLineCommand(facility_id=room_id, billed_hours=Decimal("4"))],
+    )
+    result = await service.preview_quote_for_member(command)
+    assert result.quoted_amount == Decimal("150")
+    assert service._pricing_service.preview_calls[-1].is_mission_aligned is True
+    assert service._pricing_service.preview_calls[-1].ministry_id == ministry_id
+
+
+@pytest.mark.asyncio
+async def test_preview_quote_for_member_rejects_non_steward(monkeypatch):
+    _user_ctx(monkeypatch, user_id=uuid4())
+    ministry_id = uuid4()
+    ministry = make_ministry_detail(ministry_id)
+    service = _booking_service(
+        StubBookingRepository(), ministry_stub=StubMinistryRepository(ministry_by_id={ministry_id: ministry}, booking_member_user_ids=set())
+    )
+    command = PreviewQuoteCommand(
+        booking_type=BookingType.ONE_TIME, ministry_id=ministry_id, room_lines=[PreviewQuoteRoomLineCommand(facility_id=uuid4(), billed_hours=Decimal("4"))]
+    )
+    with pytest.raises(ForbiddenException):
+        await service.preview_quote_for_member(command)

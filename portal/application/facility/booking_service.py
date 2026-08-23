@@ -18,7 +18,7 @@ from portal.application.facility.commands import (
     UpdateBookingCommand,
 )
 from portal.application.facility.pricing_service import PricingService
-from portal.application.facility.results import BookingDetailResult, BookingListItemResult, BookingPageResult, BookingRangeResult
+from portal.application.facility.results import BookingDetailResult, BookingListItemResult, BookingPageResult, BookingRangeResult, PreviewQuoteResult
 from portal.application.org.results import CreateIdResult
 from portal.application.system.setting_service import SettingService
 from portal.domain.facility.constants import (
@@ -93,13 +93,13 @@ class BookingService:
     async def get_booking_by_id(self, booking_id: UUID) -> BookingDetailResult:
         row = await self._repository.get_detail(booking_id, self._resolved_locale_id())
         if not row:
-            raise NotFoundException(detail="Booking not found", error_code=BookingErrorCode.NOT_FOUND.value, context={"booking_id": str(booking_id)})
+            raise NotFoundException(detail="Booking not found", error_code=FacilityErrorCode.BOOKING_NOT_FOUND.value, context={"booking_id": str(booking_id)})
         return row
 
     @distributed_trace()
     async def cancel_booking(self, booking_id: UUID, command: CancelBookingCommand) -> None:
         if not await self._repository.exists_by_id(booking_id):
-            raise NotFoundException(detail="Booking not found", error_code=BookingErrorCode.NOT_FOUND.value, context={"booking_id": str(booking_id)})
+            raise NotFoundException(detail="Booking not found", error_code=FacilityErrorCode.BOOKING_NOT_FOUND.value, context={"booking_id": str(booking_id)})
         cancelled_by_id = self._user_ctx.user_id if self._user_ctx else None
         cancel_slots = command.scope != "series"
         await self._repository.cancel_booking(
@@ -331,6 +331,21 @@ class BookingService:
         if owner_id != user_id:
             raise ForbiddenException(detail="Cannot cancel another user's booking")
         await self.cancel_booking(booking_id, command)
+
+    @distributed_trace()
+    async def get_my_booking_by_id(self, booking_id: UUID) -> BookingDetailResult:
+        user_id = self._user_ctx.user_id if self._user_ctx else None
+        if not user_id:
+            raise ForbiddenException(detail="Authenticated user required")
+        row = await self._repository.get_detail(booking_id, self._resolved_locale_id())
+        if not row or row.user_id != user_id:
+            raise NotFoundException(detail="Booking not found", error_code=FacilityErrorCode.BOOKING_NOT_FOUND.value, context={"booking_id": str(booking_id)})
+        return row
+
+    @distributed_trace()
+    async def preview_quote_for_member(self, command: PreviewQuoteCommand) -> PreviewQuoteResult:
+        await self._validate_ministry_booking_gate(command.ministry_id)
+        return await self._pricing_service.preview_quote(command)
 
     async def _raise_if_room_unavailable(
         self, facility_id: UUID, start_at: datetime, end_at: datetime, local_tz: ZoneInfo, exclude_booking_id: Optional[UUID] = None

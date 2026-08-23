@@ -4,6 +4,7 @@ Member facility API serializers.
 
 from datetime import date as DateType
 from datetime import datetime
+from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
@@ -34,6 +35,7 @@ class MemberRoomAvailabilityItem(UUIDBaseModel):
     room_number: Optional[str] = Field(default=None, serialization_alias="roomNumber")
     capacity: Optional[int] = Field(default=None)
     is_active: bool = Field(default=True, serialization_alias="isActive")
+    photo_urls: list[str] = Field(default_factory=list, serialization_alias="photoUrls")
     availability: MemberDayAvailability = Field(default_factory=MemberDayAvailability)
 
 
@@ -89,3 +91,65 @@ class MemberBookingList(BaseModel):
     """Member bookings."""
 
     items: list[MemberBookingListItem] = Field(default_factory=list)
+
+
+class MemberBookingDetailRoom(BaseModel):
+    """Room line on member booking detail."""
+
+    facility_id: UUID = Field(..., serialization_alias="facilityId")
+    facility_name: Optional[str] = Field(default=None, serialization_alias="facilityName")
+
+
+class MemberBookingDetail(UUIDBaseModel):
+    """Booker-scoped booking read for Payment."""
+
+    status: str = Field(...)
+    start_at: datetime = Field(..., serialization_alias="startAt")
+    end_at: datetime = Field(..., serialization_alias="endAt")
+    quoted_amount: Optional[Decimal] = Field(default=None, serialization_alias="quotedAmount")
+    currency: Optional[str] = Field(default=None)
+    rooms: list[MemberBookingDetailRoom] = Field(default_factory=list)
+
+
+class MemberPreviewQuoteRoomInput(BaseModel):
+    """Room line for member preview quote."""
+
+    facility_id: UUID = Field(...)
+
+
+class MemberPreviewQuoteRequest(BaseModel):
+    """Preview quote for a One-time interval and room list."""
+
+    start_at: datetime = Field(...)
+    end_at: datetime = Field(...)
+    is_mission_aligned: bool = Field(default=False)
+    ministry_id: Optional[UUID] = Field(default=None)
+    currency: str = Field(default="CAD")
+    surcharge_codes: list[str] = Field(default_factory=list)
+    rooms: list[MemberPreviewQuoteRoomInput] = Field(min_length=1, max_length=3)
+
+
+class MemberPreviewQuoteRoomLineResult(BaseModel):
+    """Quoted room line."""
+
+    facility_id: UUID = Field(..., serialization_alias="facilityId")
+    billed_hours: Decimal = Field(..., serialization_alias="billedHours")
+    rental_rate_name: str = Field(..., serialization_alias="rentalRateName")
+    billing_unit: str = Field(..., serialization_alias="billingUnit")
+    unit_amount: Decimal = Field(..., serialization_alias="unitAmount")
+    currency: str = Field(...)
+    applicability: Optional[dict] = Field(default=None)
+    is_default: bool = Field(default=False, serialization_alias="isDefault")
+    line_subtotal: Decimal = Field(..., serialization_alias="lineSubtotal")
+
+
+class MemberPreviewQuoteResponse(BaseModel):
+    """Member preview quote totals."""
+
+    subtotal_amount: Decimal = Field(..., serialization_alias="subtotalAmount")
+    discount_percent: Decimal = Field(..., serialization_alias="discountPercent")
+    discount_amount: Decimal = Field(..., serialization_alias="discountAmount")
+    surcharge_amount: Decimal = Field(..., serialization_alias="surchargeAmount")
+    quoted_amount: Decimal = Field(..., serialization_alias="quotedAmount")
+    currency: str = Field(...)
+    room_lines: list[MemberPreviewQuoteRoomLineResult] = Field(default_factory=list, serialization_alias="roomLines")

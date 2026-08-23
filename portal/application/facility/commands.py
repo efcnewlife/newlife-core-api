@@ -215,6 +215,7 @@ class PreviewQuoteCommand(BaseModel):
     as_of_date: Optional[date] = Field(default=None)
     room_lines: list[PreviewQuoteRoomLineCommand] = Field(default_factory=list)
     surcharge_codes: list[str] = Field(default_factory=list)
+    ministry_id: Optional[UUID] = Field(default=None)
 
 
 class BookingPagesQueryCommand(PagesQueryCommand):

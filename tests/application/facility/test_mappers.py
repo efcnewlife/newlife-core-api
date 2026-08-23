@@ -6,6 +6,9 @@ from datetime import datetime, time, timezone
 from decimal import Decimal
 from uuid import uuid4
 
+import pytest
+from pydantic import ValidationError
+
 from portal.application.facility.mappers import (
     booking_page_to_api,
     booking_pages_query_to_command,
@@ -18,20 +21,28 @@ from portal.application.facility.mappers import (
     create_surcharge_to_command,
     delete_model_to_command,
     discount_rule_to_api,
+    member_booking_detail_to_api,
+    member_preview_quote_result_to_api,
+    member_preview_quote_to_command,
     override_log_pages_query_to_command,
     pages_query_to_command,
     preview_quote_result_to_api,
     preview_quote_to_command,
+    room_availability_item_to_api,
     room_detail_to_api,
     update_booking_to_command,
     update_policy_setting_to_command,
 )
 from portal.application.facility.results import (
+    BookingDetailResult,
     BookingListItemResult,
     BookingPageResult,
+    BookingRoomLineResult,
+    DayAvailabilityResult,
     DiscountRuleResult,
     PreviewQuoteResult,
     PreviewQuoteRoomLineResult,
+    RoomAvailabilityResult,
     RoomDetailResult,
     TranslationItemResult,
 )
@@ -49,6 +60,7 @@ from portal.serializers.admin.v1.facility.room_slot_template import AdminRoomSlo
 from portal.serializers.admin.v1.facility.translation import AdminFacilityTranslationInput
 from portal.serializers.admin.v1.ministry import AdminMinistryCreate, AdminMinistryMemberInput, AdminMinistryReplaceMembers
 from portal.serializers.admin.v1.org.translation import AdminOrgTranslationInput
+from portal.serializers.apis.v1.facility import MemberPreviewQuoteRequest, MemberPreviewQuoteRoomInput
 from portal.serializers.mixins import DeleteBaseModel, GenericQueryBaseModel
 
 
@@ -305,3 +317,104 @@ def test_override_log_pages_query_to_command():
     query = AdminOverrideLogQuery(page=1, page_size=10, facility_id=facility_id)
     command = override_log_pages_query_to_command(query)
     assert command.facility_id == facility_id
+
+
+def test_member_preview_quote_to_command_uses_one_time_interval_hours():
+    facility_id = uuid4()
+    model = MemberPreviewQuoteRequest(
+        start_at=datetime(2026, 8, 22, 14, 0, tzinfo=timezone.utc),
+        end_at=datetime(2026, 8, 22, 18, 0, tzinfo=timezone.utc),
+        is_mission_aligned=True,
+        surcharge_codes=["audio_system"],
+        rooms=[MemberPreviewQuoteRoomInput(facility_id=facility_id)],
+    )
+    command = member_preview_quote_to_command(model)
+    assert command.booking_type == BookingType.ONE_TIME
+    assert command.is_mission_aligned is True
+    assert command.ministry_id is None
+    assert command.surcharge_codes == ["audio_system"]
+    assert command.room_lines[0].facility_id == facility_id
+    assert command.room_lines[0].billed_hours == Decimal("4.00")
+
+
+def test_member_preview_quote_result_to_api_includes_money_fields():
+    facility_id = uuid4()
+    result = PreviewQuoteResult(
+        subtotal_amount=Decimal("100"),
+        discount_percent=Decimal("20"),
+        discount_amount=Decimal("20"),
+        surcharge_amount=Decimal("5"),
+        quoted_amount=Decimal("85"),
+        currency="CAD",
+        room_lines=[
+            PreviewQuoteRoomLineResult(
+                facility_id=facility_id,
+                billed_hours=Decimal("4"),
+                rental_rate_name="Daily flat",
+                billing_unit=RentalRateBillingUnit.DAILY_FLAT.value,
+                unit_amount=Decimal("100"),
+                currency="CAD",
+                applicability={"all": [{"op": "hours_gte", "value": 5}]},
+                is_default=False,
+                line_subtotal=Decimal("100"),
+            )
+        ],
+    )
+    api = member_preview_quote_result_to_api(result)
+    dumped = api.model_dump(by_alias=True)
+    assert dumped["quotedAmount"] == Decimal("85")
+    assert dumped["discountAmount"] == Decimal("20")
+    assert dumped["surchargeAmount"] == Decimal("5")
+    assert dumped["currency"] == "CAD"
+    assert dumped["roomLines"][0]["facilityId"] == facility_id
+
+
+def test_room_availability_item_to_api_includes_photo_urls():
+    room_id = uuid4()
+    item = RoomAvailabilityResult(id=room_id, code="gym", name="Gym", photo_urls=["https://cdn.example/a.jpg"], availability=DayAvailabilityResult())
+    api = room_availability_item_to_api(item)
+    dumped = api.model_dump(by_alias=True)
+    assert dumped["photoUrls"] == ["https://cdn.example/a.jpg"]
+
+
+def test_member_preview_quote_maps_three_rooms_from_one_interval():
+    rooms = [uuid4(), uuid4(), uuid4()]
+    model = MemberPreviewQuoteRequest(
+        start_at=datetime(2026, 8, 22, 14, 0, tzinfo=timezone.utc),
+        end_at=datetime(2026, 8, 22, 18, 0, tzinfo=timezone.utc),
+        rooms=[MemberPreviewQuoteRoomInput(facility_id=room_id) for room_id in rooms],
+    )
+    command = member_preview_quote_to_command(model)
+    assert [line.facility_id for line in command.room_lines] == rooms
+    assert all(line.billed_hours == Decimal("4.00") for line in command.room_lines)
+
+
+def test_member_preview_quote_rejects_empty_and_more_than_three_rooms():
+    interval = dict(start_at=datetime(2026, 8, 22, 14, 0, tzinfo=timezone.utc), end_at=datetime(2026, 8, 22, 18, 0, tzinfo=timezone.utc))
+    with pytest.raises(ValidationError):
+        MemberPreviewQuoteRequest(**interval, rooms=[])
+    with pytest.raises(ValidationError):
+        MemberPreviewQuoteRequest(**interval, rooms=[MemberPreviewQuoteRoomInput(facility_id=uuid4()) for _ in range(4)])
+
+
+def test_member_booking_detail_to_api_includes_quoted_amount():
+    booking_id = uuid4()
+    room_id = uuid4()
+    start = datetime(2026, 8, 22, 14, 0, tzinfo=timezone.utc)
+    end = datetime(2026, 8, 22, 18, 0, tzinfo=timezone.utc)
+    result = BookingDetailResult(
+        id=booking_id,
+        user_id=uuid4(),
+        booking_type="one_time",
+        start_at=start,
+        end_at=end,
+        status="confirmed",
+        quoted_amount=Decimal("85"),
+        currency="CAD",
+        rooms=[BookingRoomLineResult(id=uuid4(), facility_id=room_id, facility_name="Gym", start_at=start, end_at=end)],
+    )
+    api = member_booking_detail_to_api(result)
+    dumped = api.model_dump(by_alias=True)
+    assert dumped["quotedAmount"] == Decimal("85")
+    assert dumped["currency"] == "CAD"
+    assert dumped["rooms"][0]["facilityId"] == room_id

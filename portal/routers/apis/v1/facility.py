@@ -12,47 +12,29 @@ from fastapi import Depends, Query, status
 from portal.application.facility.availability_service import AvailabilityService
 from portal.application.facility.booking_service import BookingService
 from portal.application.facility.commands import BookingRoomLineCommand, CancelBookingCommand, CreateBookingCommand, RoomAvailabilityQueryCommand
-from portal.application.facility.mappers import create_id_result_to_api
-from portal.application.facility.results import BookingListItemResult, DayAvailabilityResult, RoomAvailabilityListResult, RoomAvailabilityResult, TimeSlotResult
+from portal.application.facility.mappers import (
+    create_id_result_to_api,
+    member_booking_detail_to_api,
+    member_preview_quote_result_to_api,
+    member_preview_quote_to_command,
+    room_availability_list_to_api,
+)
+from portal.application.facility.results import BookingListItemResult
 from portal.container import Container
 from portal.routers.auth_router import AuthRouter
 from portal.serializers.apis.v1.facility import (
     MemberBookingCancel,
     MemberBookingCreate,
+    MemberBookingDetail,
     MemberBookingList,
     MemberBookingListItem,
-    MemberDayAvailability,
-    MemberRoomAvailabilityItem,
+    MemberPreviewQuoteRequest,
+    MemberPreviewQuoteResponse,
     MemberRoomAvailabilityList,
-    MemberTimeSlot,
 )
 from portal.serializers.mixins.model_mixins import UUIDBaseModel
 
 router: AuthRouter = AuthRouter()
-
-
-def _slot_to_api(slot: TimeSlotResult) -> MemberTimeSlot:
-    return MemberTimeSlot(start=slot.start, end=slot.end)
-
-
-def _day_to_api(day: DayAvailabilityResult) -> MemberDayAvailability:
-    return MemberDayAvailability(am=[_slot_to_api(s) for s in day.am], pm=[_slot_to_api(s) for s in day.pm])
-
-
-def _room_availability_to_api(item: RoomAvailabilityResult) -> MemberRoomAvailabilityItem:
-    return MemberRoomAvailabilityItem(
-        id=item.id,
-        code=item.code,
-        name=item.name,
-        room_number=item.room_number,
-        capacity=item.capacity,
-        is_active=item.is_active,
-        availability=_day_to_api(item.availability),
-    )
-
-
-def _availability_list_to_api(result: RoomAvailabilityListResult) -> MemberRoomAvailabilityList:
-    return MemberRoomAvailabilityList(date=result.date, items=[_room_availability_to_api(item) for item in result.items])
 
 
 def _booking_list_item_to_api(item: BookingListItemResult) -> MemberBookingListItem:
@@ -77,7 +59,14 @@ async def get_rooms_availability(
     availability_service: AvailabilityService = Depends(Provide[Container.availability_service]),
 ):
     result = await availability_service.get_rooms_availability(RoomAvailabilityQueryCommand(target_date=date, ministry_id=ministry_id))
-    return _availability_list_to_api(result)
+    return room_availability_list_to_api(result)
+
+
+@router.post(path="/preview-quote", status_code=status.HTTP_200_OK, response_model=MemberPreviewQuoteResponse, response_model_by_alias=True)
+@inject
+async def preview_quote(model: MemberPreviewQuoteRequest, booking_service: BookingService = Depends(Provide[Container.booking_service])):
+    result = await booking_service.preview_quote_for_member(member_preview_quote_to_command(model))
+    return member_preview_quote_result_to_api(result)
 
 
 @router.get(path="/bookings/mine", status_code=status.HTTP_200_OK, response_model=MemberBookingList, response_model_by_alias=True)
@@ -85,6 +74,13 @@ async def get_rooms_availability(
 async def get_my_bookings(booking_service: BookingService = Depends(Provide[Container.booking_service])):
     items = await booking_service.list_my_bookings()
     return MemberBookingList(items=[_booking_list_item_to_api(item) for item in items])
+
+
+@router.get(path="/bookings/{booking_id}", status_code=status.HTTP_200_OK, response_model=MemberBookingDetail, response_model_by_alias=True)
+@inject
+async def get_my_booking(booking_id: UUID, booking_service: BookingService = Depends(Provide[Container.booking_service])):
+    result = await booking_service.get_my_booking_by_id(booking_id)
+    return member_booking_detail_to_api(result)
 
 
 @router.post(path="/bookings", status_code=status.HTTP_201_CREATED, response_model=UUIDBaseModel)
