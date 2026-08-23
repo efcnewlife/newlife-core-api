@@ -440,6 +440,7 @@ class RoomAvailabilityResult(UUIDBaseModel):
     room_number: Optional[str] = Field(default=None)
     capacity: Optional[int] = Field(default=None)
     is_active: bool = Field(default=True)
+    photo_urls: list[str] = Field(default_factory=list)
     availability: DayAvailabilityResult = Field(default_factory=DayAvailabilityResult)
 
 

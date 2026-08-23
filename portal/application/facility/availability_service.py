@@ -7,6 +7,7 @@ from typing import Optional
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
+from portal.application.content.file_service import FileService
 from portal.application.facility.commands import RoomAvailabilityQueryCommand
 from portal.application.facility.results import DayAvailabilityResult, RoomAvailabilityListResult, RoomAvailabilityResult, TimeSlotResult
 from portal.application.system.setting_service import SettingService
@@ -33,6 +34,7 @@ class AvailabilityService:
         ministry_repository: MinistryRepository,
         room_blackout_repository: RoomBlackoutRepository,
         setting_service: SettingService,
+        file_service: FileService,
     ):
         self._room_repository = room_repository
         self._slot_template_repository = room_slot_template_repository
@@ -40,6 +42,7 @@ class AvailabilityService:
         self._ministry_repository = ministry_repository
         self._blackout_repository = room_blackout_repository
         self._setting_service = setting_service
+        self._file_service = file_service
         self._req_ctx: Optional[RequestContext] = get_request_context()
         self._user_ctx: Optional[UserContext] = get_user_context()
 
@@ -122,5 +125,9 @@ class AvailabilityService:
                         availability=DayAvailabilityResult(am=am_slots, pm=pm_slots),
                     )
                 )
+
+        photo_urls_by_room = await self._file_service.get_signed_urls_by_resource_ids([item.id for item in items])
+        for item in items:
+            item.photo_urls = photo_urls_by_room.get(item.id, [])
 
         return RoomAvailabilityListResult(date=day, items=items)

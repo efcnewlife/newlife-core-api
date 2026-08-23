@@ -35,8 +35,12 @@ A room-closed interval that makes the room unbookable. Overlap with a Blackout i
 _Avoid_: scheduling conflict, "closed" without naming the Blackout rule
 
 **Room gallery**:
-An optional ordered set of at most ten image Content Files bound to one Room. Each file appears at most once in that gallery. The same Content File may appear in many Rooms' galleries. Order is Operator-controlled (including drag reorder on the Room form). Saving the Room replaces the whole gallery. Soft-deleting a Room keeps its File associations so restore brings the gallery back. Admin Room list does not include gallery files; Room detail (and create response) does, with signed URLs for preview.
+An optional ordered set of at most ten image Content Files bound to one Room. Each file appears at most once in that gallery. The same Content File may appear in many Rooms' galleries. Order is Operator-controlled (including drag reorder on the Room form). Saving the Room replaces the whole gallery. Soft-deleting a Room keeps its File associations so restore brings the gallery back. Admin Room list does not include gallery files; Room detail (and create response) does, with signed URLs for preview. Member availability includes those same signed photo URLs when files exist, or an empty list when none.
 _Avoid_: cover, required gallery, room image URL field, treating the first file as a separate Cover entity in v1 admin, unbounded gallery, clearing associations on Room soft-delete, non-image Content Files, duplicate files in one gallery, list-page thumbnails as the v1 contract, a separate files GET for v1 admin preview
+
+**Preview quote**:
+Server-computed rental totals for a proposed One-time interval and room list: rate lines, ministry discount, surcharge, quoted amount, and currency. Distinct from creating a booking.
+_Avoid_: client-side HST or totals, treating Preview quote as a created booking
 
 **Content File**:
 A stored media object in the content library (metadata plus blob). Rooms bind to Content Files; they do not own uploads as a separate room-file type.

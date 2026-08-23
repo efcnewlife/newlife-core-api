@@ -2,6 +2,8 @@
 Map between facility API serializers and application commands/results.
 """
 
+from datetime import datetime
+from decimal import Decimal
 from uuid import UUID
 
 from portal.application.content.mappers import file_grid_item_to_api
@@ -30,6 +32,7 @@ from portal.application.facility.commands import (
 )
 from portal.application.facility.results import (
     CreateIdResult,
+    DayAvailabilityResult,
     DiscountRuleListResult,
     DiscountRuleResult,
     PolicySettingListResult,
@@ -41,6 +44,8 @@ from portal.application.facility.results import (
     RentalRateTemplateListResult,
     RentalRateTemplatePageResult,
     RentalRateTemplateResult,
+    RoomAvailabilityListResult,
+    RoomAvailabilityResult,
     RoomBlackoutListResult,
     RoomBlackoutPageResult,
     RoomBlackoutResult,
@@ -52,6 +57,7 @@ from portal.application.facility.results import (
     RoomSlotTemplateResult,
     SurchargeListResult,
     SurchargeResult,
+    TimeSlotResult,
     TranslationItemResult,
 )
 from portal.domain.common.mixins import UUIDBaseModel
@@ -103,6 +109,15 @@ from portal.serializers.admin.v1.facility.room_slot_template import (
     AdminRoomSlotTemplateUpdate,
 )
 from portal.serializers.admin.v1.facility.translation import AdminFacilityTranslationInput, AdminFacilityTranslationItem
+from portal.serializers.apis.v1.facility import (
+    MemberDayAvailability,
+    MemberPreviewQuoteRequest,
+    MemberPreviewQuoteResponse,
+    MemberPreviewQuoteRoomLineResult,
+    MemberRoomAvailabilityItem,
+    MemberRoomAvailabilityList,
+    MemberTimeSlot,
+)
 from portal.serializers.mixins import DeleteBaseModel, GenericQueryBaseModel
 
 
@@ -400,6 +415,70 @@ def preview_quote_result_to_api(result: PreviewQuoteResult) -> AdminPreviewQuote
             for line in result.room_lines
         ],
     )
+
+
+def _billed_hours(start_at: datetime, end_at: datetime) -> Decimal:
+    hours = Decimal(str((end_at - start_at).total_seconds())) / Decimal("3600")
+    return hours.quantize(Decimal("0.01"))
+
+
+def member_preview_quote_to_command(model: MemberPreviewQuoteRequest) -> PreviewQuoteCommand:
+    billed_hours = _billed_hours(model.start_at, model.end_at)
+    return PreviewQuoteCommand(
+        booking_type=BookingType.ONE_TIME,
+        is_mission_aligned=model.is_mission_aligned,
+        currency=model.currency,
+        room_lines=[PreviewQuoteRoomLineCommand(facility_id=line.facility_id, billed_hours=billed_hours) for line in model.rooms],
+        surcharge_codes=model.surcharge_codes,
+    )
+
+
+def member_preview_quote_result_to_api(result: PreviewQuoteResult) -> MemberPreviewQuoteResponse:
+    return MemberPreviewQuoteResponse(
+        subtotal_amount=result.subtotal_amount,
+        discount_percent=result.discount_percent,
+        discount_amount=result.discount_amount,
+        surcharge_amount=result.surcharge_amount,
+        quoted_amount=result.quoted_amount,
+        currency=result.currency,
+        room_lines=[
+            MemberPreviewQuoteRoomLineResult(
+                facility_id=line.facility_id,
+                billed_hours=line.billed_hours,
+                rental_rate_name=line.rental_rate_name,
+                billing_unit=line.billing_unit,
+                unit_amount=line.unit_amount,
+                currency=line.currency,
+                applicability=line.applicability,
+                is_default=line.is_default,
+                line_subtotal=line.line_subtotal,
+            )
+            for line in result.room_lines
+        ],
+    )
+
+
+def room_availability_item_to_api(item: RoomAvailabilityResult) -> MemberRoomAvailabilityItem:
+    def slot_to_api(slot: TimeSlotResult) -> MemberTimeSlot:
+        return MemberTimeSlot(start=slot.start, end=slot.end)
+
+    def day_to_api(day: DayAvailabilityResult) -> MemberDayAvailability:
+        return MemberDayAvailability(am=[slot_to_api(s) for s in day.am], pm=[slot_to_api(s) for s in day.pm])
+
+    return MemberRoomAvailabilityItem(
+        id=item.id,
+        code=item.code,
+        name=item.name,
+        room_number=item.room_number,
+        capacity=item.capacity,
+        is_active=item.is_active,
+        photo_urls=item.photo_urls,
+        availability=day_to_api(item.availability),
+    )
+
+
+def room_availability_list_to_api(result: RoomAvailabilityListResult) -> MemberRoomAvailabilityList:
+    return MemberRoomAvailabilityList(date=result.date, items=[room_availability_item_to_api(item) for item in result.items])
 
 
 def create_discount_rule_to_command(model: AdminDiscountRuleCreate) -> CreateDiscountRuleCommand:

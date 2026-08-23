@@ -64,5 +64,6 @@ class FacilityContainer(containers.DeclarativeContainer):
         ministry_repository=ministry_repository,
         room_blackout_repository=room_blackout_repository,
         setting_service=setting_service,
+        file_service=file_service,
     )
     override_log_service = providers.Factory(OverrideLogService, override_log_repository=override_log_repository)

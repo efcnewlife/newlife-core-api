@@ -196,6 +196,9 @@ class StubFileService:
         self.get_files_calls.append(resource_id)
         return list(self.files_by_resource.get(resource_id, []))
 
+    async def get_signed_urls_by_resource_ids(self, resource_ids: list[UUID]) -> dict[UUID, list[str]]:
+        return {resource_id: [file.url for file in self.files_by_resource.get(resource_id, []) if file.url] for resource_id in resource_ids}
+
 
 class StubRoomRepository:
     """In-memory room stub."""
