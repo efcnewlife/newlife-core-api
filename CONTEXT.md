@@ -46,6 +46,30 @@ _Avoid_: client-side HST or totals, treating Preview quote as a created booking
 A stored media object in the content library (metadata plus blob). Rooms bind to Content Files; they do not own uploads as a separate room-file type.
 _Avoid_: attachment, asset, location file, inline URL as the bound object
 
+**Product**:
+A product line that owns its legal texts, identified by a built-in code. Operators do not invent Product codes; create picks from the built-in catalog only. This slice seeds `facility-booking` and `portal`, each with Terms of Service and Privacy Policy rows (bodies may start empty).
+_Avoid_: App, Audience, git repo name as the identity, Operator-invented codes, seeding only one Product when both codes are required
+
+**Legal Document**:
+A living Markdown body for one Product and one Legal Document Kind, with locale translations. Saving replaces the current wording. Body is Markdown only (headings, lists, links); no embedded HTML and no images. Operators may soft-delete and restore under RBAC; there is no built-in hard block on delete. Soft-delete removes it from the public current set; restore brings the same row back. Create is allowed only for a built-in Product × Kind that has no row at all (including none in the recycle bin); if a soft-deleted row exists for that pair, create is rejected and the Operator must restore. There is no version history and no recorded acceptance. Distinct from Content File and from System Setting.
+_Avoid_: ToS as the only document type, a single church-wide blob, HTML as the stored body, free-titled CMS pages, inline images, program-forbidden delete for built-in rows, creating a second active row while a soft-deleted twin exists, free-text Product codes
+
+**Legal Document Kind**:
+Which legal text a Legal Document is: Terms of Service or Privacy Policy. Identity is Kind plus Product code, not the display title. Both kinds ship for each seeded Product in this slice. Page/Footer titles come from client i18n by Kind, not from an editable title field.
+_Avoid_: free-text type, title-as-key, treating Privacy Policy as another name for Terms of Service, deferring Privacy Policy to a later schema, Operator-edited display title as identity
+
+**Terms of Service**:
+The Legal Document Kind for the Product's terms of use.
+_Avoid_: using Terms of Service to mean every legal page, acceptance log
+
+**Privacy Policy**:
+The Legal Document Kind for how the Product handles personal information. Same living, public-read, no-acceptance rules as Terms of Service.
+_Avoid_: burying privacy copy inside Terms of Service, a separate acceptance workflow
+
+**Public Legal Document read**:
+Anyone may fetch the current Legal Document for a Product and Kind without signing in, via one read that takes Product code and Kind. Locale follows Accept-Language with fallback to the default locale. An empty body on an active row is still that document (200 + empty body). A soft-deleted or missing row is not found for the public read. Facility Booking's Product code is `facility-booking`; the Portal Product code is `portal`.
+_Avoid_: requiring member JWT to read, treating empty body the same as soft-delete, one hard-coded route per Kind, locale query string as the v1 contract
+
 **File association**:
 The bind between one Content File and one resource (for example a Room). A Room gallery association is identified by resource kind `facility.room`, not by a class or table name. Binding or reordering a Room gallery is part of editing that Room. Putting a new file into the content library (including upload inside the Room picker) is a Content File upload. Deleting a Content File is allowed while associations exist: one confirmation lists every selected file's bound resources by name or code, including soft-deleted Rooms marked as deleted; then the files and all of their File associations are removed together. No orphan association rows remain. A gallery of ten images cannot accept another file; the picker is disabled and the server also rejects an over-cap save.
 _Avoid_: blocking delete until unbind, leftover association rows after file delete, silent delete with no association warning, a count-only warning with no names, hiding soft-deleted Rooms from the warning, handler class names as resource kind, treating library upload as only a Room permission, toast for over-cap instead of blocking the picker
