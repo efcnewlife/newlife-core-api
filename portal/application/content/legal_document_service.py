@@ -1,16 +1,23 @@
 """
-Legal Document application service (admin list/detail/create/update/delete/restore).
+Legal Document application service (admin CRUD + public read).
 """
 
-from typing import Any
+from typing import Any, Optional
 from uuid import UUID, uuid4
 
 from portal.application.content.commands import CreateLegalDocumentCommand, LegalDocumentPagesQueryCommand, UpdateLegalDocumentCommand
-from portal.application.content.results import CreateIdResult, LegalDocumentDetailResult, LegalDocumentPageResult
+from portal.application.content.results import (
+    CreateIdResult,
+    LegalDocumentDetailResult,
+    LegalDocumentPageResult,
+    LegalDocumentPublicResult,
+    LegalDocumentTranslationItemResult,
+)
 from portal.application.rbac.commands import BulkIdsCommand, DeleteCommand
 from portal.domain.content.constants import ContentErrorCode, LegalDocumentKind, ProductCode
 from portal.domain.content.ports import LegalDocumentRepositoryPort
 from portal.exceptions.responses import BadRequestException, ConflictErrorException, NotFoundException
+from portal.libs.contexts.request_context import get_resolved_locale_id
 from portal.libs.tracing.distributed_trace import distributed_trace
 
 _CATALOG_PRODUCTS = {item.value for item in ProductCode}
@@ -18,7 +25,7 @@ _CATALOG_KINDS = {item.value for item in LegalDocumentKind}
 
 
 class LegalDocumentService:
-    """Admin Legal Document list, detail, create, living Markdown update, soft-delete, restore."""
+    """Admin Legal Document CRUD plus unauthenticated public Product x Kind read."""
 
     def __init__(self, legal_document_repository: LegalDocumentRepositoryPort):
         self._repository = legal_document_repository
@@ -31,6 +38,26 @@ class LegalDocumentService:
     def _assert_catalog_pair(product: str, kind: str) -> None:
         if product not in _CATALOG_PRODUCTS or kind not in _CATALOG_KINDS:
             raise BadRequestException(detail="product and kind must be from the built-in Legal Document catalog", context={"product": product, "kind": kind})
+
+    @staticmethod
+    def _body_for_locale(translations: list[LegalDocumentTranslationItemResult], locale_id: Optional[UUID]) -> Optional[str]:
+        if locale_id is None:
+            return None
+        for item in translations:
+            if item.locale_id == locale_id:
+                return item.body
+        return None
+
+    async def _resolve_public_body(self, translations: list[LegalDocumentTranslationItemResult]) -> str:
+        resolved_locale_id = get_resolved_locale_id()
+        resolved_body = self._body_for_locale(translations, resolved_locale_id)
+        if resolved_body is not None:
+            return resolved_body
+        default_locale_id = await self._repository.fetch_default_locale_id()
+        default_body = self._body_for_locale(translations, default_locale_id)
+        if default_body is not None:
+            return default_body
+        return ""
 
     async def _validate_and_upsert_translations(self, document_id: UUID, translation_rows: list[dict[str, Any]]) -> None:
         if not translation_rows:
@@ -56,6 +83,16 @@ class LegalDocumentService:
                 detail="Legal Document not found", error_code=ContentErrorCode.LEGAL_DOCUMENT_NOT_FOUND.value, context={"document_id": str(document_id)}
             )
         return row
+
+    @distributed_trace()
+    async def get_public_legal_document(self, product: str, kind: str) -> LegalDocumentPublicResult:
+        row = await self._repository.get_by_product_kind(product, kind)
+        if not row:
+            raise NotFoundException(
+                detail="Legal Document not found", error_code=ContentErrorCode.LEGAL_DOCUMENT_NOT_FOUND.value, context={"product": product, "kind": kind}
+            )
+        body = await self._resolve_public_body(row.translations)
+        return LegalDocumentPublicResult(product=row.product, kind=row.kind, body=body)
 
     @distributed_trace()
     async def create_legal_document(self, command: CreateLegalDocumentCommand) -> CreateIdResult:
