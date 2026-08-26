@@ -156,3 +156,11 @@ class LegalDocumentPageResult(BaseModel):
     page_size: int = Field(...)
     total: int = Field(...)
     items: list[LegalDocumentListItemResult] = Field(default_factory=list)
+
+
+class LegalDocumentPublicResult(BaseModel):
+    """Public Legal Document read for one Product x Kind and resolved locale body."""
+
+    product: str = Field(...)
+    kind: str = Field(...)
+    body: str = Field(default="")

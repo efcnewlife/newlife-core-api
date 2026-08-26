@@ -8,6 +8,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
+from portal.application.auth.results import HeaderInfo
 from portal.application.content.commands import (
     CreateLegalDocumentCommand,
     LegalDocumentPagesQueryCommand,
@@ -20,11 +21,13 @@ from portal.application.content.results import (
     LegalDocumentDetailResult,
     LegalDocumentListItemResult,
     LegalDocumentPageResult,
+    LegalDocumentPublicResult,
     LegalDocumentTranslationItemResult,
 )
 from portal.application.rbac.commands import BulkIdsCommand, DeleteCommand
 from portal.domain.content.constants import ContentErrorCode, LegalDocumentKind, ProductCode
 from portal.exceptions.responses import BadRequestException, ConflictErrorException, NotFoundException
+from portal.libs.contexts.request_context import RequestContext, reset_request_context, set_request_context
 
 
 def _document(
@@ -50,9 +53,12 @@ def _document(
 
 
 class StubLegalDocumentRepository:
-    def __init__(self, rows: list[LegalDocumentDetailResult] | None = None, *, active_locale_ids: set[UUID] | None = None):
+    def __init__(
+        self, rows: list[LegalDocumentDetailResult] | None = None, *, active_locale_ids: set[UUID] | None = None, default_locale_id: UUID | None = None
+    ):
         self.rows = {row.id: row for row in (rows or [])}
         self.active_locale_ids = active_locale_ids if active_locale_ids is not None else set()
+        self.default_locale_id = default_locale_id
         self.upsert_calls: list[dict[str, Any]] = []
         self.insert_calls: list[dict[str, Any]] = []
         self.delete_soft_calls: list[dict[str, Any]] = []
@@ -130,6 +136,9 @@ class StubLegalDocumentRepository:
 
     async def fetch_active_locale_ids(self, locale_ids: list[UUID]) -> set[UUID]:
         return {locale_id for locale_id in locale_ids if locale_id in self.active_locale_ids}
+
+    async def fetch_default_locale_id(self) -> Optional[UUID]:
+        return self.default_locale_id
 
     async def upsert_translations(self, document_id: UUID, rows: list[dict[str, Any]]) -> None:
         self.upsert_calls.append({"document_id": document_id, "rows": rows})
@@ -299,3 +308,86 @@ async def test_restore_legal_document():
     assert repository.restore_calls == [[document.id]]
     assert repository.rows[document.id].is_deleted is False
     assert repository.rows[document.id].delete_reason is None
+
+
+@pytest.mark.asyncio
+async def test_get_public_legal_document_returns_empty_body_for_active_row():
+    locale_en = uuid4()
+    document = _document(translations=[LegalDocumentTranslationItemResult(locale_id=locale_en, body="")])
+    repository = StubLegalDocumentRepository([document], default_locale_id=locale_en)
+    service = LegalDocumentService(repository)
+    token = set_request_context(RequestContext(headers=HeaderInfo(), resolved_locale_id=locale_en))
+    try:
+        result = await service.get_public_legal_document(document.product, document.kind)
+    finally:
+        reset_request_context(token)
+
+    assert isinstance(result, LegalDocumentPublicResult)
+    assert result.product == document.product
+    assert result.kind == document.kind
+    assert result.body == ""
+
+
+@pytest.mark.asyncio
+async def test_get_public_legal_document_not_found_when_missing():
+    service = LegalDocumentService(StubLegalDocumentRepository())
+
+    with pytest.raises(NotFoundException) as exc_info:
+        await service.get_public_legal_document(ProductCode.FACILITY_BOOKING.value, LegalDocumentKind.TERMS_OF_SERVICE.value)
+
+    assert exc_info.value.error_code == ContentErrorCode.LEGAL_DOCUMENT_NOT_FOUND.value
+
+
+@pytest.mark.asyncio
+async def test_get_public_legal_document_not_found_when_soft_deleted():
+    document = _document(is_deleted=True, translations=[LegalDocumentTranslationItemResult(locale_id=uuid4(), body="# gone")])
+    service = LegalDocumentService(StubLegalDocumentRepository([document]))
+
+    with pytest.raises(NotFoundException) as exc_info:
+        await service.get_public_legal_document(document.product, document.kind)
+
+    assert exc_info.value.error_code == ContentErrorCode.LEGAL_DOCUMENT_NOT_FOUND.value
+
+
+@pytest.mark.asyncio
+async def test_get_public_legal_document_falls_back_to_default_locale_body():
+    locale_en = uuid4()
+    locale_zh = uuid4()
+    document = _document(
+        translations=[
+            LegalDocumentTranslationItemResult(locale_id=locale_en, body="# Default terms"),
+            LegalDocumentTranslationItemResult(locale_id=locale_zh, body="# 條款"),
+        ]
+    )
+    # Preferred locale has no translation row; only en/zh exist — use a third id as resolved.
+    locale_missing = uuid4()
+    repository = StubLegalDocumentRepository([document], default_locale_id=locale_en)
+    service = LegalDocumentService(repository)
+    token = set_request_context(RequestContext(headers=HeaderInfo(), resolved_locale_id=locale_missing))
+    try:
+        result = await service.get_public_legal_document(document.product, document.kind)
+    finally:
+        reset_request_context(token)
+
+    assert result.body == "# Default terms"
+
+
+@pytest.mark.asyncio
+async def test_get_public_legal_document_uses_resolved_locale_even_when_empty():
+    locale_en = uuid4()
+    locale_zh = uuid4()
+    document = _document(
+        translations=[
+            LegalDocumentTranslationItemResult(locale_id=locale_en, body="# Default terms"),
+            LegalDocumentTranslationItemResult(locale_id=locale_zh, body=""),
+        ]
+    )
+    repository = StubLegalDocumentRepository([document], default_locale_id=locale_en)
+    service = LegalDocumentService(repository)
+    token = set_request_context(RequestContext(headers=HeaderInfo(), resolved_locale_id=locale_zh))
+    try:
+        result = await service.get_public_legal_document(document.product, document.kind)
+    finally:
+        reset_request_context(token)
+
+    assert result.body == ""

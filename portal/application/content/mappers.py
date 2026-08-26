@@ -28,6 +28,7 @@ from portal.application.content.results import (
     LegalDocumentDetailResult,
     LegalDocumentListItemResult,
     LegalDocumentPageResult,
+    LegalDocumentPublicResult,
     UploadFileResult,
 )
 from portal.application.rbac.commands import BulkIdsCommand, DeleteCommand
@@ -56,6 +57,7 @@ from portal.serializers.admin.v1.legal_document import (
     AdminLegalDocumentQuery,
     AdminLegalDocumentUpdate,
 )
+from portal.serializers.apis.v1.legal_document import MemberLegalDocumentPublic
 from portal.serializers.mixins import DeleteBaseModel
 from portal.serializers.mixins.model_mixins import UUIDBaseModel
 
@@ -213,3 +215,7 @@ def legal_document_page_result_to_api(result: LegalDocumentPageResult) -> AdminL
     return AdminLegalDocumentPages(
         page=result.page, page_size=result.page_size, total=result.total, items=[legal_document_item_to_api(item) for item in result.items]
     )
+
+
+def legal_document_public_result_to_api(result: LegalDocumentPublicResult) -> MemberLegalDocumentPublic:
+    return MemberLegalDocumentPublic(product=result.product, kind=result.kind, body=result.body)

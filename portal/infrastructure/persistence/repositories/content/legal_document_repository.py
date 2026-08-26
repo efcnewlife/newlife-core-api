@@ -174,6 +174,9 @@ class LegalDocumentRepository:
         )
         return set(active_locale_ids)
 
+    async def fetch_default_locale_id(self) -> Optional[UUID]:
+        return await self._session.select(SystemLocale.id).where(SystemLocale.is_default == True).where(SystemLocale.is_deleted == False).limit(1).fetchval()
+
     async def upsert_translations(self, document_id: UUID, rows: list[dict[str, Any]]) -> None:
         payloads = [dict(legal_document_id=document_id, **row) for row in rows]
         payloads = apply_audit_fields_to_rows(payloads)
