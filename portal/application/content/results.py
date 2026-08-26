@@ -126,6 +126,10 @@ class LegalDocumentTranslationItemResult(BaseModel):
     body: str = Field(default="")
 
 
+class CreateIdResult(UUIDBaseModel):
+    """Created entity id."""
+
+
 class LegalDocumentListItemResult(UUIDBaseModel):
     """Legal Document list row (no translations)."""
 
@@ -135,6 +139,7 @@ class LegalDocumentListItemResult(UUIDBaseModel):
     created_by: Optional[str] = Field(default=None)
     updated_at: Optional[datetime] = Field(default=None)
     updated_by: Optional[str] = Field(default=None)
+    is_deleted: bool = Field(default=False)
     delete_reason: Optional[str] = Field(default=None)
 
 
