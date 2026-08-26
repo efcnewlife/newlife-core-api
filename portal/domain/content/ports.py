@@ -5,13 +5,15 @@ Content domain ports.
 from typing import Any, Optional, Protocol
 from uuid import UUID
 
-from portal.application.content.commands import FilePagesQueryCommand
+from portal.application.content.commands import FilePagesQueryCommand, LegalDocumentPagesQueryCommand
 from portal.application.content.results import (
     FileAssociationBindingResult,
     FileBaseResult,
     FileDetailResult,
     FileGridItemResult,
     FileSummaryResult,
+    LegalDocumentDetailResult,
+    LegalDocumentListItemResult,
     SignedUrlFileByResourceResult,
 )
 
@@ -88,3 +90,15 @@ class FileCachePort(Protocol):
     async def invalidate_signed_url(self, file_id: UUID) -> None: ...
 
     async def invalidate_resource_association(self, resource_id: UUID) -> None: ...
+
+
+class LegalDocumentRepositoryPort(Protocol):
+    """Persist and query Legal Documents and translations."""
+
+    async def fetch_pages(self, command: LegalDocumentPagesQueryCommand) -> tuple[list[LegalDocumentListItemResult], int]: ...
+
+    async def get_by_id(self, document_id: UUID, *, include_deleted: bool = False) -> Optional[LegalDocumentDetailResult]: ...
+
+    async def fetch_active_locale_ids(self, locale_ids: list[UUID]) -> set[UUID]: ...
+
+    async def upsert_translations(self, document_id: UUID, rows: list[dict[str, Any]]) -> None: ...
