@@ -4,7 +4,15 @@ Map between content file API serializers and application commands/results.
 
 from fastapi import UploadFile
 
-from portal.application.content.commands import BulkDeleteFilesCommand, FilePagesQueryCommand, PreviewFileAssociationsCommand, UploadFileCommand
+from portal.application.content.commands import (
+    BulkDeleteFilesCommand,
+    FilePagesQueryCommand,
+    LegalDocumentPagesQueryCommand,
+    LegalDocumentTranslationCommand,
+    PreviewFileAssociationsCommand,
+    UpdateLegalDocumentCommand,
+    UploadFileCommand,
+)
 from portal.application.content.results import (
     BatchUploadFilesResult,
     BulkDeleteFilesResult,
@@ -15,6 +23,9 @@ from portal.application.content.results import (
     FileGridItemResult,
     FilePageResult,
     FileSummaryResult,
+    LegalDocumentDetailResult,
+    LegalDocumentListItemResult,
+    LegalDocumentPageResult,
     UploadFileResult,
 )
 from portal.domain.content.constants import FileUploadSource
@@ -32,6 +43,13 @@ from portal.serializers.admin.v1.file import (
     AdminFileQuery,
     AdminFileSummary,
     AdminFileUploadResponseModel,
+)
+from portal.serializers.admin.v1.legal_document import (
+    AdminLegalDocumentDetail,
+    AdminLegalDocumentItem,
+    AdminLegalDocumentPages,
+    AdminLegalDocumentQuery,
+    AdminLegalDocumentUpdate,
 )
 from portal.serializers.mixins.model_mixins import UUIDBaseModel
 
@@ -143,3 +161,33 @@ def association_binding_to_api(result: FileAssociationBindingResult) -> AdminFil
 
 def association_preview_to_api(result: FileAssociationPreviewResult) -> AdminFileAssociationPreview:
     return AdminFileAssociationPreview(items=[association_binding_to_api(item) for item in result.items])
+
+
+def legal_document_pages_query_to_command(model: AdminLegalDocumentQuery) -> LegalDocumentPagesQueryCommand:
+    return LegalDocumentPagesQueryCommand(
+        page=model.page,
+        page_size=model.page_size,
+        order_by=model.order_by,
+        descending=model.descending,
+        deleted=model.deleted,
+        product=model.product,
+        kind=model.kind,
+    )
+
+
+def update_legal_document_to_command(model: AdminLegalDocumentUpdate) -> UpdateLegalDocumentCommand:
+    return UpdateLegalDocumentCommand(translations=[LegalDocumentTranslationCommand(locale_id=item.locale_id, body=item.body) for item in model.translations])
+
+
+def legal_document_item_to_api(result: LegalDocumentListItemResult) -> AdminLegalDocumentItem:
+    return AdminLegalDocumentItem.model_validate(result.model_dump())
+
+
+def legal_document_detail_to_api(result: LegalDocumentDetailResult) -> AdminLegalDocumentDetail:
+    return AdminLegalDocumentDetail.model_validate(result.model_dump())
+
+
+def legal_document_page_result_to_api(result: LegalDocumentPageResult) -> AdminLegalDocumentPages:
+    return AdminLegalDocumentPages(
+        page=result.page, page_size=result.page_size, total=result.total, items=[legal_document_item_to_api(item) for item in result.items]
+    )

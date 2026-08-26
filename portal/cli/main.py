@@ -7,6 +7,7 @@ import click
 from .init_locale import init_locales_process
 from .rbac import init_rbac_process, reset_rbac_process
 from .seed_facility_rental import seed_facility_rental_process
+from .seed_legal_documents import seed_legal_documents_process
 from .seed_local_demo import seed_local_demo_process
 from .seed_ministry_type import seed_ministry_types_process
 from .seed_position import seed_positions_process
@@ -99,6 +100,12 @@ def seed_local_demo_cmd(force: bool):
 def seed_system_settings_cmd():
     """Seed system settings (insert-if-missing; never overwrite existing values)."""
     seed_system_settings_process()
+
+
+@cli.command(name="seed-legal-documents")
+def seed_legal_documents_cmd():
+    """Seed Legal Documents (insert-if-missing for built-in Product x Kind pairs)."""
+    seed_legal_documents_process()
 
 
 @cli.command(name="sync-microsoft-users")

@@ -117,3 +117,37 @@ class SignedUrlFileByResourceResult(FileBaseResult):
     """File row joined with resource association."""
 
     resource_id: UUID = Field(...)
+
+
+class LegalDocumentTranslationItemResult(BaseModel):
+    """Localized Markdown body for one locale."""
+
+    locale_id: UUID = Field(...)
+    body: str = Field(default="")
+
+
+class LegalDocumentListItemResult(UUIDBaseModel):
+    """Legal Document list row (no translations)."""
+
+    product: str = Field(...)
+    kind: str = Field(...)
+    created_at: Optional[datetime] = Field(default=None)
+    created_by: Optional[str] = Field(default=None)
+    updated_at: Optional[datetime] = Field(default=None)
+    updated_by: Optional[str] = Field(default=None)
+    delete_reason: Optional[str] = Field(default=None)
+
+
+class LegalDocumentDetailResult(LegalDocumentListItemResult):
+    """Legal Document detail with locale translations."""
+
+    translations: list[LegalDocumentTranslationItemResult] = Field(default_factory=list)
+
+
+class LegalDocumentPageResult(BaseModel):
+    """Paginated Legal Documents."""
+
+    page: int = Field(...)
+    page_size: int = Field(...)
+    total: int = Field(...)
+    items: list[LegalDocumentListItemResult] = Field(default_factory=list)

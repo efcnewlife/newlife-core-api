@@ -483,7 +483,11 @@ uv run python -m portal.cli.main seed-target-audiences
 # 6. Optional: facility rooms/rates (catalog)
 uv run python -m portal.cli.main seed-facility-rental
 
-# 7. Optional: demo ministries, slot templates/blackouts, and bookings
+# 7. Optional: built-in Legal Documents (Product x Kind; empty bodies)
+#    Requires content.legal_document tables (human Alembic revision; see ADR 0010)
+uv run python -m portal.cli.main seed-legal-documents
+
+# 8. Optional: demo ministries, slot templates/blackouts, and bookings
 uv run python -m portal.cli.main seed-local-demo
 ```
 

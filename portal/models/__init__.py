@@ -20,7 +20,7 @@ from .auth import (
     AuthVerb,
     AuthVerbTranslation,
 )
-from .content import ContentFile, ContentFileAssociation
+from .content import ContentFile, ContentFileAssociation, ContentLegalDocument, ContentLegalDocumentTranslation
 from .facility import (
     FacilityBooking,
     FacilityBookingOverrideLog,
@@ -101,6 +101,8 @@ __all__ = [
     # content
     "ContentFile",
     "ContentFileAssociation",
+    "ContentLegalDocument",
+    "ContentLegalDocumentTranslation",
     # org
     "OrgPosition",
     "OrgPositionTranslation",

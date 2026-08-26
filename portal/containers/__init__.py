@@ -68,6 +68,7 @@ class RootContainer(containers.DeclarativeContainer):
     org_member_person_service = admin.org.member_person_service
 
     file_service = admin.content.file_service
+    legal_document_service = admin.content.legal_document_service
 
     event_bus = events.event_bus
 

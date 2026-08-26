@@ -52,3 +52,28 @@ class UploadFileCommand(BaseModel):
     check_duplicates: bool = Field(default=True)
 
     model_config = {"arbitrary_types_allowed": True}
+
+
+class LegalDocumentPagesQueryCommand(BaseModel):
+    """Paginated Legal Document list query."""
+
+    page: int = Field(default=0)
+    page_size: int = Field(default=10)
+    order_by: Optional[str] = Field(default=None)
+    descending: bool = Field(default=False)
+    deleted: bool = Field(default=False)
+    product: Optional[str] = Field(default=None)
+    kind: Optional[str] = Field(default=None)
+
+
+class LegalDocumentTranslationCommand(BaseModel):
+    """Localized Markdown body for one locale."""
+
+    locale_id: UUID = Field(...)
+    body: str = Field(default="")
+
+
+class UpdateLegalDocumentCommand(BaseModel):
+    """Replace current Legal Document translation wording."""
+
+    translations: list[LegalDocumentTranslationCommand] = Field(..., min_length=1)

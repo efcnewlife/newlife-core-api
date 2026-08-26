@@ -36,6 +36,7 @@ class Resource(Enum):
     ORG_POSITION = "org:position"
     MEMBER_PERSON = "member:person"
     CONTENT_FILE = "content:file"
+    CONTENT_LEGAL_DOCUMENT = "content:legal_document"
 
 
 class Permission:
@@ -87,3 +88,4 @@ class Permission:
     ORG_POSITION = PermissionCode(Resource.ORG_POSITION)
     MEMBER_PERSON = PermissionCode(Resource.MEMBER_PERSON)
     CONTENT_FILE = PermissionCode(Resource.CONTENT_FILE)
+    CONTENT_LEGAL_DOCUMENT = PermissionCode(Resource.CONTENT_LEGAL_DOCUMENT)
