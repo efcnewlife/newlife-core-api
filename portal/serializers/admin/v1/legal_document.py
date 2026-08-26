@@ -69,3 +69,16 @@ class AdminLegalDocumentUpdate(BaseModel):
         if len(locale_ids) != len(set(locale_ids)):
             raise ValueError("Duplicate locale_id in translations")
         return value
+
+
+class AdminLegalDocumentCreate(BaseModel):
+    """Create Legal Document from built-in Product x Kind catalog."""
+
+    product: str = Field(..., description="Built-in Product code")
+    kind: str = Field(..., description="Legal Document Kind")
+
+
+class AdminLegalDocumentBulkAction(BaseModel):
+    """Bulk Legal Document action (restore)."""
+
+    ids: list[UUID] = Field(..., description="Legal Document IDs")

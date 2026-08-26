@@ -8,16 +8,23 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from portal.application.content.commands import LegalDocumentPagesQueryCommand, LegalDocumentTranslationCommand, UpdateLegalDocumentCommand
+from portal.application.content.commands import (
+    CreateLegalDocumentCommand,
+    LegalDocumentPagesQueryCommand,
+    LegalDocumentTranslationCommand,
+    UpdateLegalDocumentCommand,
+)
 from portal.application.content.legal_document_service import LegalDocumentService
 from portal.application.content.results import (
+    CreateIdResult,
     LegalDocumentDetailResult,
     LegalDocumentListItemResult,
     LegalDocumentPageResult,
     LegalDocumentTranslationItemResult,
 )
+from portal.application.rbac.commands import BulkIdsCommand, DeleteCommand
 from portal.domain.content.constants import ContentErrorCode, LegalDocumentKind, ProductCode
-from portal.exceptions.responses import BadRequestException, NotFoundException
+from portal.exceptions.responses import BadRequestException, ConflictErrorException, NotFoundException
 
 
 def _document(
@@ -36,6 +43,7 @@ def _document(
         created_by=None,
         updated_at=now,
         updated_by=None,
+        is_deleted=is_deleted,
         delete_reason=None if not is_deleted else "removed",
         translations=list(translations or []),
     )
@@ -46,12 +54,15 @@ class StubLegalDocumentRepository:
         self.rows = {row.id: row for row in (rows or [])}
         self.active_locale_ids = active_locale_ids if active_locale_ids is not None else set()
         self.upsert_calls: list[dict[str, Any]] = []
+        self.insert_calls: list[dict[str, Any]] = []
+        self.delete_soft_calls: list[dict[str, Any]] = []
+        self.restore_calls: list[list[UUID]] = []
 
     async def fetch_pages(self, command: LegalDocumentPagesQueryCommand) -> tuple[list[LegalDocumentListItemResult], int]:
         items = [
             LegalDocumentListItemResult.model_validate(row.model_dump(exclude={"translations"}))
             for row in self.rows.values()
-            if (row.delete_reason is not None) == command.deleted
+            if row.is_deleted == command.deleted
         ]
         if command.product is not None:
             items = [item for item in items if item.product == command.product]
@@ -63,9 +74,59 @@ class StubLegalDocumentRepository:
         row = self.rows.get(document_id)
         if not row:
             return None
-        if row.delete_reason is not None and not include_deleted:
+        if row.is_deleted and not include_deleted:
             return None
         return row
+
+    async def get_by_product_kind(self, product: str, kind: str, *, include_deleted: bool = False) -> Optional[LegalDocumentDetailResult]:
+        for row in self.rows.values():
+            if row.product != product or row.kind != kind:
+                continue
+            if row.is_deleted and not include_deleted:
+                continue
+            return row
+        return None
+
+    async def insert_document(self, payload: dict[str, Any]) -> None:
+        self.insert_calls.append(payload)
+        now = datetime.now(timezone.utc)
+        document = LegalDocumentDetailResult(
+            id=payload["id"],
+            product=payload["product"],
+            kind=payload["kind"],
+            created_at=now,
+            created_by=None,
+            updated_at=now,
+            updated_by=None,
+            is_deleted=False,
+            delete_reason=None,
+            translations=[],
+        )
+        self.rows[document.id] = document
+
+    async def delete_soft(self, document_id: UUID, reason: Optional[str]) -> int:
+        row = self.rows.get(document_id)
+        if not row or row.is_deleted:
+            return 0
+        self.delete_soft_calls.append({"document_id": document_id, "reason": reason})
+        self.rows[document_id] = row.model_copy(update={"is_deleted": True, "delete_reason": reason})
+        return 1
+
+    async def delete_hard(self, document_id: UUID) -> int:
+        if document_id not in self.rows:
+            return 0
+        del self.rows[document_id]
+        return 1
+
+    async def restore(self, document_ids: list[UUID]) -> int:
+        self.restore_calls.append(list(document_ids))
+        count = 0
+        for document_id in document_ids:
+            row = self.rows.get(document_id)
+            if row and row.is_deleted:
+                self.rows[document_id] = row.model_copy(update={"is_deleted": False, "delete_reason": None})
+                count += 1
+        return count
 
     async def fetch_active_locale_ids(self, locale_ids: list[UUID]) -> set[UUID]:
         return {locale_id for locale_id in locale_ids if locale_id in self.active_locale_ids}
@@ -163,3 +224,78 @@ async def test_get_legal_document_by_id_not_found():
         await service.get_legal_document_by_id(uuid4())
 
     assert exc_info.value.error_code == ContentErrorCode.LEGAL_DOCUMENT_NOT_FOUND.value
+
+
+@pytest.mark.asyncio
+async def test_create_legal_document_when_absent():
+    repository = StubLegalDocumentRepository()
+    service = LegalDocumentService(repository)
+
+    result = await service.create_legal_document(
+        CreateLegalDocumentCommand(product=ProductCode.FACILITY_BOOKING.value, kind=LegalDocumentKind.PRIVACY_POLICY.value)
+    )
+
+    assert isinstance(result, CreateIdResult)
+    assert len(repository.insert_calls) == 1
+    assert repository.insert_calls[0]["product"] == ProductCode.FACILITY_BOOKING.value
+    assert repository.insert_calls[0]["kind"] == LegalDocumentKind.PRIVACY_POLICY.value
+    assert result.id in repository.rows
+
+
+@pytest.mark.asyncio
+async def test_create_legal_document_rejects_non_catalog_product_or_kind():
+    service = LegalDocumentService(StubLegalDocumentRepository())
+
+    with pytest.raises(BadRequestException, match="catalog"):
+        await service.create_legal_document(CreateLegalDocumentCommand(product="unknown-app", kind=LegalDocumentKind.TERMS_OF_SERVICE.value))
+
+    with pytest.raises(BadRequestException, match="catalog"):
+        await service.create_legal_document(CreateLegalDocumentCommand(product=ProductCode.PORTAL.value, kind="cookie_policy"))
+
+
+@pytest.mark.asyncio
+async def test_create_legal_document_rejects_when_active_exists():
+    existing = _document(product=ProductCode.PORTAL.value, kind=LegalDocumentKind.TERMS_OF_SERVICE.value)
+    service = LegalDocumentService(StubLegalDocumentRepository([existing]))
+
+    with pytest.raises(ConflictErrorException) as exc_info:
+        await service.create_legal_document(CreateLegalDocumentCommand(product=ProductCode.PORTAL.value, kind=LegalDocumentKind.TERMS_OF_SERVICE.value))
+
+    assert exc_info.value.error_code == ContentErrorCode.LEGAL_DOCUMENT_EXISTS.value
+
+
+@pytest.mark.asyncio
+async def test_create_legal_document_rejects_when_soft_deleted_twin_exists():
+    existing = _document(product=ProductCode.PORTAL.value, kind=LegalDocumentKind.PRIVACY_POLICY.value, is_deleted=True)
+    service = LegalDocumentService(StubLegalDocumentRepository([existing]))
+
+    with pytest.raises(ConflictErrorException) as exc_info:
+        await service.create_legal_document(CreateLegalDocumentCommand(product=ProductCode.PORTAL.value, kind=LegalDocumentKind.PRIVACY_POLICY.value))
+
+    assert exc_info.value.error_code == ContentErrorCode.LEGAL_DOCUMENT_IN_RECYCLE_BIN.value
+    assert "restore" in (exc_info.value.detail or "").lower()
+
+
+@pytest.mark.asyncio
+async def test_soft_delete_legal_document():
+    document = _document()
+    repository = StubLegalDocumentRepository([document])
+    service = LegalDocumentService(repository)
+
+    await service.delete_legal_document(document.id, DeleteCommand(reason="cleanup"))
+
+    assert repository.delete_soft_calls == [{"document_id": document.id, "reason": "cleanup"}]
+    assert repository.rows[document.id].is_deleted is True
+
+
+@pytest.mark.asyncio
+async def test_restore_legal_document():
+    document = _document(is_deleted=True)
+    repository = StubLegalDocumentRepository([document])
+    service = LegalDocumentService(repository)
+
+    await service.restore_legal_documents(BulkIdsCommand(ids=[document.id]))
+
+    assert repository.restore_calls == [[document.id]]
+    assert repository.rows[document.id].is_deleted is False
+    assert repository.rows[document.id].delete_reason is None

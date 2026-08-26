@@ -77,3 +77,10 @@ class UpdateLegalDocumentCommand(BaseModel):
     """Replace current Legal Document translation wording."""
 
     translations: list[LegalDocumentTranslationCommand] = Field(..., min_length=1)
+
+
+class CreateLegalDocumentCommand(BaseModel):
+    """Create a Legal Document from the built-in Product x Kind catalog."""
+
+    product: str = Field(...)
+    kind: str = Field(...)

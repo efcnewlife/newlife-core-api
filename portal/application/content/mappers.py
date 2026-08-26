@@ -6,6 +6,7 @@ from fastapi import UploadFile
 
 from portal.application.content.commands import (
     BulkDeleteFilesCommand,
+    CreateLegalDocumentCommand,
     FilePagesQueryCommand,
     LegalDocumentPagesQueryCommand,
     LegalDocumentTranslationCommand,
@@ -16,6 +17,7 @@ from portal.application.content.commands import (
 from portal.application.content.results import (
     BatchUploadFilesResult,
     BulkDeleteFilesResult,
+    CreateIdResult,
     FileAssociationBindingResult,
     FileAssociationPreviewResult,
     FileBaseResult,
@@ -28,6 +30,7 @@ from portal.application.content.results import (
     LegalDocumentPageResult,
     UploadFileResult,
 )
+from portal.application.rbac.commands import BulkIdsCommand, DeleteCommand
 from portal.domain.content.constants import FileUploadSource
 from portal.serializers.admin.v1.file import (
     AdminBatchFileUploadResponseModel,
@@ -45,12 +48,15 @@ from portal.serializers.admin.v1.file import (
     AdminFileUploadResponseModel,
 )
 from portal.serializers.admin.v1.legal_document import (
+    AdminLegalDocumentBulkAction,
+    AdminLegalDocumentCreate,
     AdminLegalDocumentDetail,
     AdminLegalDocumentItem,
     AdminLegalDocumentPages,
     AdminLegalDocumentQuery,
     AdminLegalDocumentUpdate,
 )
+from portal.serializers.mixins import DeleteBaseModel
 from portal.serializers.mixins.model_mixins import UUIDBaseModel
 
 
@@ -177,6 +183,22 @@ def legal_document_pages_query_to_command(model: AdminLegalDocumentQuery) -> Leg
 
 def update_legal_document_to_command(model: AdminLegalDocumentUpdate) -> UpdateLegalDocumentCommand:
     return UpdateLegalDocumentCommand(translations=[LegalDocumentTranslationCommand(locale_id=item.locale_id, body=item.body) for item in model.translations])
+
+
+def create_legal_document_to_command(model: AdminLegalDocumentCreate) -> CreateLegalDocumentCommand:
+    return CreateLegalDocumentCommand(product=model.product, kind=model.kind)
+
+
+def delete_legal_document_to_command(model: DeleteBaseModel) -> DeleteCommand:
+    return DeleteCommand(reason=model.reason, permanent=model.permanent)
+
+
+def legal_document_bulk_action_to_command(model: AdminLegalDocumentBulkAction) -> BulkIdsCommand:
+    return BulkIdsCommand(ids=model.ids)
+
+
+def create_id_result_to_api(result: CreateIdResult) -> UUIDBaseModel:
+    return UUIDBaseModel(id=result.id)
 
 
 def legal_document_item_to_api(result: LegalDocumentListItemResult) -> AdminLegalDocumentItem:

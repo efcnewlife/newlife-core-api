@@ -12,6 +12,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from portal.application.content.commands import LegalDocumentPagesQueryCommand
 from portal.application.content.results import LegalDocumentDetailResult, LegalDocumentListItemResult, LegalDocumentTranslationItemResult
 from portal.libs.database import Session
+from portal.libs.database.execute_result import affected_rows
 from portal.models import ContentLegalDocument, ContentLegalDocumentTranslation, SystemLocale
 from portal.models.mixins.context import apply_audit_fields_to_rows
 
@@ -47,6 +48,7 @@ class LegalDocumentRepository:
                 ContentLegalDocument.created_by,
                 ContentLegalDocument.updated_at,
                 ContentLegalDocument.updated_by,
+                ContentLegalDocument.is_deleted,
                 ContentLegalDocument.delete_reason,
             )
             .select_from(ContentLegalDocument)
@@ -70,12 +72,38 @@ class LegalDocumentRepository:
                 ContentLegalDocument.created_by,
                 ContentLegalDocument.updated_at,
                 ContentLegalDocument.updated_by,
+                ContentLegalDocument.is_deleted,
                 ContentLegalDocument.delete_reason,
                 self._translations_agg(),
             )
             .select_from(ContentLegalDocument)
             .outerjoin(ContentLegalDocumentTranslation, ContentLegalDocumentTranslation.legal_document_id == ContentLegalDocument.id)
             .where(ContentLegalDocument.id == document_id)
+            .group_by(ContentLegalDocument.id)
+        )
+        if not include_deleted:
+            query = query.where(ContentLegalDocument.is_deleted == False)
+        row: Optional[LegalDocumentDetailResult] = await query.fetchrow(as_model=LegalDocumentDetailResult)
+        return self._normalize_row(row)
+
+    async def get_by_product_kind(self, product: str, kind: str, *, include_deleted: bool = False) -> Optional[LegalDocumentDetailResult]:
+        query = (
+            self._session.select(
+                ContentLegalDocument.id,
+                ContentLegalDocument.product,
+                ContentLegalDocument.kind,
+                ContentLegalDocument.created_at,
+                ContentLegalDocument.created_by,
+                ContentLegalDocument.updated_at,
+                ContentLegalDocument.updated_by,
+                ContentLegalDocument.is_deleted,
+                ContentLegalDocument.delete_reason,
+                self._translations_agg(),
+            )
+            .select_from(ContentLegalDocument)
+            .outerjoin(ContentLegalDocumentTranslation, ContentLegalDocumentTranslation.legal_document_id == ContentLegalDocument.id)
+            .where(ContentLegalDocument.product == product)
+            .where(ContentLegalDocument.kind == kind)
             .group_by(ContentLegalDocument.id)
         )
         if not include_deleted:
@@ -106,6 +134,35 @@ class LegalDocumentRepository:
         translations = data.pop("translations", None)
         data["translations"] = self._parse_translations(translations)
         return LegalDocumentDetailResult.model_validate(data)
+
+    async def insert_document(self, payload: dict[str, Any]) -> None:
+        await self._session.insert(ContentLegalDocument).values(payload).execute()
+
+    async def delete_soft(self, document_id: UUID, reason: Optional[str]) -> int:
+        result = await (
+            self._session.update(ContentLegalDocument)
+            .values(is_deleted=True, delete_reason=reason)
+            .where(ContentLegalDocument.id == document_id)
+            .where(ContentLegalDocument.is_deleted == False)
+            .execute()
+        )
+        return affected_rows(result)
+
+    async def delete_hard(self, document_id: UUID) -> int:
+        result = await self._session.delete(ContentLegalDocument).where(ContentLegalDocument.id == document_id).execute()
+        return affected_rows(result)
+
+    async def restore(self, document_ids: list[UUID]) -> int:
+        if not document_ids:
+            return 0
+        result = await (
+            self._session.update(ContentLegalDocument)
+            .values(is_deleted=False, delete_reason=None)
+            .where(ContentLegalDocument.id.in_(document_ids))
+            .where(ContentLegalDocument.is_deleted == True)
+            .execute()
+        )
+        return affected_rows(result)
 
     async def fetch_active_locale_ids(self, locale_ids: list[UUID]) -> set[UUID]:
         active_locale_ids = await (
