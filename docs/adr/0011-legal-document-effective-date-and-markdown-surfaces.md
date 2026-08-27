@@ -18,3 +18,14 @@ Authoring and reading use `@efcnewlife/newlife-ui` **MarkdownEditor** / **Markdo
 - Admin create/edit require Effective Date; list and View show Effective Date and Last Updated as separate fields.
 - Public payload and Booking ToS/Privacy pages expose Effective Date; empty/not-found states omit that line.
 - Portal and Facility Booking bump to `newlife-ui` ^0.6.0; only Portal installs TipTap peers.
+
+## Human migration note (agents do not edit `alembic/versions/`)
+
+ORM: `portal/models/content/legal_document.py` — add non-null `effective_date` (`date`) on `content.legal_document`.
+
+Suggested human revision:
+
+1. Add nullable `effective_date` column (or add with a temporary server default).
+2. Backfill existing rows (e.g. `UPDATE content.legal_document SET effective_date = DATE(created_at AT TIME ZONE 'UTC') WHERE effective_date IS NULL`, or a fixed catalog date such as `2026-01-01`).
+3. Set `NOT NULL` and drop any temporary default.
+4. Re-run `seed-legal-documents` only for missing Product×Kind rows (seed already supplies `effective_date` for new installs).

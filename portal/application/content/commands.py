@@ -2,6 +2,7 @@
 Content application commands (snake_case, no API serialization aliases).
 """
 
+from datetime import date
 from typing import Optional
 from uuid import UUID
 
@@ -74,8 +75,9 @@ class LegalDocumentTranslationCommand(BaseModel):
 
 
 class UpdateLegalDocumentCommand(BaseModel):
-    """Replace current Legal Document translation wording."""
+    """Replace current Legal Document translation wording and Effective Date."""
 
+    effective_date: date = Field(...)
     translations: list[LegalDocumentTranslationCommand] = Field(..., min_length=1)
 
 
@@ -84,3 +86,4 @@ class CreateLegalDocumentCommand(BaseModel):
 
     product: str = Field(...)
     kind: str = Field(...)
+    effective_date: date = Field(...)

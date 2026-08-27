@@ -44,6 +44,7 @@ class LegalDocumentRepository:
                 ContentLegalDocument.id,
                 ContentLegalDocument.product,
                 ContentLegalDocument.kind,
+                ContentLegalDocument.effective_date,
                 ContentLegalDocument.created_at,
                 ContentLegalDocument.created_by,
                 ContentLegalDocument.updated_at,
@@ -68,6 +69,7 @@ class LegalDocumentRepository:
                 ContentLegalDocument.id,
                 ContentLegalDocument.product,
                 ContentLegalDocument.kind,
+                ContentLegalDocument.effective_date,
                 ContentLegalDocument.created_at,
                 ContentLegalDocument.created_by,
                 ContentLegalDocument.updated_at,
@@ -92,6 +94,7 @@ class LegalDocumentRepository:
                 ContentLegalDocument.id,
                 ContentLegalDocument.product,
                 ContentLegalDocument.kind,
+                ContentLegalDocument.effective_date,
                 ContentLegalDocument.created_at,
                 ContentLegalDocument.created_by,
                 ContentLegalDocument.updated_at,
@@ -137,6 +140,16 @@ class LegalDocumentRepository:
 
     async def insert_document(self, payload: dict[str, Any]) -> None:
         await self._session.insert(ContentLegalDocument).values(payload).execute()
+
+    async def update_document(self, document_id: UUID, values: dict[str, Any]) -> int:
+        result = await (
+            self._session.update(ContentLegalDocument)
+            .values(**values)
+            .where(ContentLegalDocument.id == document_id)
+            .where(ContentLegalDocument.is_deleted == False)
+            .execute()
+        )
+        return affected_rows(result)
 
     async def delete_soft(self, document_id: UUID, reason: Optional[str]) -> int:
         result = await (

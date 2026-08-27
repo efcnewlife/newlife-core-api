@@ -19,6 +19,7 @@ class ContentLegalDocument(ModelBase, AuditMixin, DeletedMixin):
 
     product = Column(sa.String(64), nullable=False, comment="Built-in Product code")
     kind = Column(sa.String(64), nullable=False, comment="Legal Document Kind")
+    effective_date = Column(sa.Date, nullable=False, comment="Calendar day when current wording takes effect")
 
     translations = relationship("ContentLegalDocumentTranslation", back_populates="legal_document", passive_deletes=True)
 

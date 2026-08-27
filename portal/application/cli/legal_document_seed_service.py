@@ -28,7 +28,11 @@ class LegalDocumentSeedService:
             )
             if existing_id:
                 continue
-            await self._session.insert(ContentLegalDocument).values(id=uuid4(), product=row["product"], kind=row["kind"]).execute()
+            await (
+                self._session.insert(ContentLegalDocument)
+                .values(id=uuid4(), product=row["product"], kind=row["kind"], effective_date=row["effective_date"])
+                .execute()
+            )
             inserted += 1
         await self._session.commit()
         click.echo(click.style(f"Legal Documents seeded. inserted={inserted} skipped={len(seed_rows) - inserted}", fg="bright_green"))

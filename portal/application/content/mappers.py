@@ -184,11 +184,14 @@ def legal_document_pages_query_to_command(model: AdminLegalDocumentQuery) -> Leg
 
 
 def update_legal_document_to_command(model: AdminLegalDocumentUpdate) -> UpdateLegalDocumentCommand:
-    return UpdateLegalDocumentCommand(translations=[LegalDocumentTranslationCommand(locale_id=item.locale_id, body=item.body) for item in model.translations])
+    return UpdateLegalDocumentCommand(
+        effective_date=model.effective_date,
+        translations=[LegalDocumentTranslationCommand(locale_id=item.locale_id, body=item.body) for item in model.translations],
+    )
 
 
 def create_legal_document_to_command(model: AdminLegalDocumentCreate) -> CreateLegalDocumentCommand:
-    return CreateLegalDocumentCommand(product=model.product, kind=model.kind)
+    return CreateLegalDocumentCommand(product=model.product, kind=model.kind, effective_date=model.effective_date)
 
 
 def delete_legal_document_to_command(model: DeleteBaseModel) -> DeleteCommand:
@@ -218,4 +221,4 @@ def legal_document_page_result_to_api(result: LegalDocumentPageResult) -> AdminL
 
 
 def legal_document_public_result_to_api(result: LegalDocumentPublicResult) -> MemberLegalDocumentPublic:
-    return MemberLegalDocumentPublic(product=result.product, kind=result.kind, body=result.body)
+    return MemberLegalDocumentPublic(product=result.product, kind=result.kind, body=result.body, effective_date=result.effective_date)

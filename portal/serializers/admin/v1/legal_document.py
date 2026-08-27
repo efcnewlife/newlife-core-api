@@ -2,7 +2,7 @@
 Admin Legal Document serializers.
 """
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional
 from uuid import UUID
 
@@ -38,9 +38,10 @@ class AdminLegalDocumentItem(UUIDBaseModel):
 
     product: str = Field(..., description="Built-in Product code")
     kind: str = Field(..., description="Legal Document Kind")
+    effective_date: date = Field(..., serialization_alias="effectiveDate", description="Effective Date (calendar day)")
     created_at: Optional[datetime] = Field(None, serialization_alias="createAt", description="Created at")
     created_by: Optional[str] = Field(None, serialization_alias="createdBy", description="Created by")
-    updated_at: Optional[datetime] = Field(None, serialization_alias="updateAt", description="Updated at")
+    updated_at: Optional[datetime] = Field(None, serialization_alias="updateAt", description="Updated at (Last Updated)")
     updated_by: Optional[str] = Field(None, serialization_alias="updatedBy", description="Updated by")
     delete_reason: Optional[str] = Field(None, serialization_alias="deleteReason", description="Delete reason")
 
@@ -58,8 +59,9 @@ class AdminLegalDocumentPages(PaginationBaseResponseModel):
 
 
 class AdminLegalDocumentUpdate(BaseModel):
-    """Replace current Legal Document translation wording."""
+    """Replace current Legal Document translation wording and Effective Date."""
 
+    effective_date: date = Field(..., description="Effective Date (calendar day)")
     translations: list[AdminLegalDocumentTranslationInput] = Field(..., min_length=1, description="Translations")
 
     @field_validator("translations")
@@ -76,6 +78,7 @@ class AdminLegalDocumentCreate(BaseModel):
 
     product: str = Field(..., description="Built-in Product code")
     kind: str = Field(..., description="Legal Document Kind")
+    effective_date: date = Field(..., description="Effective Date (calendar day)")
 
 
 class AdminLegalDocumentBulkAction(BaseModel):

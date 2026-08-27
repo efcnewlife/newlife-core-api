@@ -92,7 +92,7 @@ class LegalDocumentService:
                 detail="Legal Document not found", error_code=ContentErrorCode.LEGAL_DOCUMENT_NOT_FOUND.value, context={"product": product, "kind": kind}
             )
         body = await self._resolve_public_body(row.translations)
-        return LegalDocumentPublicResult(product=row.product, kind=row.kind, body=body)
+        return LegalDocumentPublicResult(product=row.product, kind=row.kind, body=body, effective_date=row.effective_date)
 
     @distributed_trace()
     async def create_legal_document(self, command: CreateLegalDocumentCommand) -> CreateIdResult:
@@ -113,7 +113,7 @@ class LegalDocumentService:
                 context={"product": product, "kind": kind, "document_id": str(existing.id)},
             )
         document_id = uuid4()
-        await self._repository.insert_document(dict(id=document_id, product=product, kind=kind))
+        await self._repository.insert_document(dict(id=document_id, product=product, kind=kind, effective_date=command.effective_date))
         return CreateIdResult(id=document_id)
 
     @distributed_trace()
@@ -125,6 +125,7 @@ class LegalDocumentService:
             )
         translation_rows = self._build_translation_rows(command)
         await self._validate_and_upsert_translations(document_id, translation_rows)
+        await self._repository.update_document(document_id, dict(effective_date=command.effective_date))
         updated = await self._repository.get_by_id(document_id)
         if not updated:
             raise NotFoundException(

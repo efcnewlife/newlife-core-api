@@ -28,7 +28,7 @@ ORM models live under `portal/models/content/legal_document.py`. A human should 
 
 | Schema    | Table                        | Notes                                                                                                                                                                     |
 | --------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `content` | `legal_document`             | Columns: `product` (varchar 64), `kind` (varchar 64), audit + soft-delete mixins; unique `(product, kind)`; index on `(product, kind, is_deleted)`                        |
+| `content` | `legal_document`             | Columns: `product` (varchar 64), `kind` (varchar 64), audit + soft-delete mixins; unique `(product, kind)`; index on `(product, kind, is_deleted)`. Required `effective_date` (calendar day) is ADR 0011 — add/backfill in a follow-up human revision if the table already exists without it. |
 | `content` | `legal_document_translation` | Columns: `legal_document_id` (FK cascade), `locale_id` (FK to `system_locale`), `body` (text, default empty string), audit mixin; unique `(legal_document_id, locale_id)` |
 
 After migrate: `uv run python -m portal.cli.main seed-legal-documents` (and re-run `init-rbac` / `reset-rbac` so `content:legal_document` permissions and menu exist).
