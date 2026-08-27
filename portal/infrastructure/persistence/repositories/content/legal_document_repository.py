@@ -6,11 +6,10 @@ from typing import Any, Optional
 from uuid import UUID
 
 import sqlalchemy as sa
-import ujson
 from sqlalchemy.dialects.postgresql import JSONB
 
 from portal.application.content.commands import LegalDocumentPagesQueryCommand
-from portal.application.content.results import LegalDocumentDetailResult, LegalDocumentListItemResult, LegalDocumentTranslationItemResult
+from portal.application.content.results import LegalDocumentDetailResult, LegalDocumentListItemResult
 from portal.libs.database import Session
 from portal.libs.database.execute_result import affected_rows
 from portal.models import ContentLegalDocument, ContentLegalDocumentTranslation, SystemLocale
@@ -85,8 +84,7 @@ class LegalDocumentRepository:
         )
         if not include_deleted:
             query = query.where(ContentLegalDocument.is_deleted == False)
-        row: Optional[LegalDocumentDetailResult] = await query.fetchrow(as_model=LegalDocumentDetailResult)
-        return self._normalize_row(row)
+        return await query.fetchrow(as_model=LegalDocumentDetailResult)
 
     async def get_by_product_kind(self, product: str, kind: str, *, include_deleted: bool = False) -> Optional[LegalDocumentDetailResult]:
         query = (
@@ -111,32 +109,7 @@ class LegalDocumentRepository:
         )
         if not include_deleted:
             query = query.where(ContentLegalDocument.is_deleted == False)
-        row: Optional[LegalDocumentDetailResult] = await query.fetchrow(as_model=LegalDocumentDetailResult)
-        return self._normalize_row(row)
-
-    @staticmethod
-    def _parse_translations(raw: Any) -> list[LegalDocumentTranslationItemResult]:
-        if not raw:
-            return []
-        items = []
-        for entry in raw:
-            if not entry:
-                continue
-            if isinstance(entry, str):
-                try:
-                    entry = ujson.loads(entry)
-                except ujson.JSONDecodeError:
-                    continue
-            items.append(LegalDocumentTranslationItemResult(locale_id=entry.get("locale_id") or entry.get("localeId"), body=entry.get("body") or ""))
-        return items
-
-    def _normalize_row(self, row: Optional[LegalDocumentDetailResult]) -> Optional[LegalDocumentDetailResult]:
-        if not row:
-            return None
-        data = row.model_dump()
-        translations = data.pop("translations", None)
-        data["translations"] = self._parse_translations(translations)
-        return LegalDocumentDetailResult.model_validate(data)
+        return await query.fetchrow(as_model=LegalDocumentDetailResult)
 
     async def insert_document(self, payload: dict[str, Any]) -> None:
         await self._session.insert(ContentLegalDocument).values(payload).execute()
