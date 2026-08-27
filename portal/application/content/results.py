@@ -3,10 +3,11 @@ Content application results (snake_case, no API serialization aliases).
 """
 
 from datetime import date, datetime
-from typing import Optional
+from typing import Any, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+import ujson
+from pydantic import BaseModel, Field, field_validator
 
 from portal.domain.common.mixins import UUIDBaseModel
 from portal.domain.content.constants import FileStatus, FileUploadSource
@@ -148,6 +149,27 @@ class LegalDocumentDetailResult(LegalDocumentListItemResult):
     """Legal Document detail with locale translations."""
 
     translations: list[LegalDocumentTranslationItemResult] = Field(default_factory=list)
+
+    @field_validator("translations", mode="before")
+    @classmethod
+    def coerce_translation_entries(cls, value: Any) -> list[Any]:
+        """Accept DB aggregate entries that arrive as JSON strings or dicts."""
+        if not value:
+            return []
+        items: list[Any] = []
+        for entry in value:
+            if not entry:
+                continue
+            if isinstance(entry, str):
+                try:
+                    entry = ujson.loads(entry)
+                except ujson.JSONDecodeError:
+                    continue
+            if isinstance(entry, dict):
+                items.append({"locale_id": entry.get("locale_id") or entry.get("localeId"), "body": entry.get("body") or ""})
+            else:
+                items.append(entry)
+        return items
 
 
 class LegalDocumentPageResult(BaseModel):
