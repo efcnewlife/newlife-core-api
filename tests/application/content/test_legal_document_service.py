@@ -2,7 +2,7 @@
 Tests for LegalDocumentService.
 """
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any, Optional
 from uuid import UUID, uuid4
 
@@ -29,12 +29,15 @@ from portal.domain.content.constants import ContentErrorCode, LegalDocumentKind,
 from portal.exceptions.responses import BadRequestException, ConflictErrorException, NotFoundException
 from portal.libs.contexts.request_context import RequestContext, reset_request_context, set_request_context
 
+_SEED_EFFECTIVE_DATE = date(2026, 1, 1)
+
 
 def _document(
     *,
     product: str = ProductCode.FACILITY_BOOKING.value,
     kind: str = LegalDocumentKind.TERMS_OF_SERVICE.value,
     is_deleted: bool = False,
+    effective_date: date = _SEED_EFFECTIVE_DATE,
     translations: list[LegalDocumentTranslationItemResult] | None = None,
 ) -> LegalDocumentDetailResult:
     now = datetime.now(timezone.utc)
@@ -42,6 +45,7 @@ def _document(
         id=uuid4(),
         product=product,
         kind=kind,
+        effective_date=effective_date,
         created_at=now,
         created_by=None,
         updated_at=now,
@@ -61,6 +65,7 @@ class StubLegalDocumentRepository:
         self.default_locale_id = default_locale_id
         self.upsert_calls: list[dict[str, Any]] = []
         self.insert_calls: list[dict[str, Any]] = []
+        self.update_calls: list[dict[str, Any]] = []
         self.delete_soft_calls: list[dict[str, Any]] = []
         self.restore_calls: list[list[UUID]] = []
 
@@ -100,6 +105,7 @@ class StubLegalDocumentRepository:
             id=payload["id"],
             product=payload["product"],
             kind=payload["kind"],
+            effective_date=payload["effective_date"],
             created_at=now,
             created_by=None,
             updated_at=now,
@@ -109,6 +115,14 @@ class StubLegalDocumentRepository:
             translations=[],
         )
         self.rows[document.id] = document
+
+    async def update_document(self, document_id: UUID, values: dict[str, Any]) -> int:
+        self.update_calls.append({"document_id": document_id, "values": values})
+        row = self.rows.get(document_id)
+        if not row or row.is_deleted:
+            return 0
+        self.rows[document_id] = row.model_copy(update=values)
+        return 1
 
     async def delete_soft(self, document_id: UUID, reason: Optional[str]) -> int:
         row = self.rows.get(document_id)
@@ -162,7 +176,8 @@ async def test_update_legal_document_replaces_translation_bodies():
     result = await service.update_legal_document(
         document.id,
         UpdateLegalDocumentCommand(
-            translations=[LegalDocumentTranslationCommand(locale_id=locale_en, body="# Terms"), LegalDocumentTranslationCommand(locale_id=locale_zh, body="")]
+            effective_date=document.effective_date,
+            translations=[LegalDocumentTranslationCommand(locale_id=locale_en, body="# Terms"), LegalDocumentTranslationCommand(locale_id=locale_zh, body="")],
         ),
     )
 
@@ -174,11 +189,48 @@ async def test_update_legal_document_replaces_translation_bodies():
 
 
 @pytest.mark.asyncio
+async def test_update_legal_document_body_save_does_not_auto_bump_effective_date():
+    locale_en = uuid4()
+    original_date = date(2024, 6, 15)
+    document = _document(effective_date=original_date, translations=[LegalDocumentTranslationItemResult(locale_id=locale_en, body="old")])
+    repository = StubLegalDocumentRepository([document], active_locale_ids={locale_en})
+    service = LegalDocumentService(repository)
+
+    result = await service.update_legal_document(
+        document.id,
+        UpdateLegalDocumentCommand(effective_date=original_date, translations=[LegalDocumentTranslationCommand(locale_id=locale_en, body="# revised body")]),
+    )
+
+    assert result.effective_date == original_date
+    assert result.effective_date != date.today()
+    assert repository.update_calls == [{"document_id": document.id, "values": {"effective_date": original_date}}]
+
+
+@pytest.mark.asyncio
+async def test_update_legal_document_can_change_effective_date():
+    locale_en = uuid4()
+    document = _document(effective_date=date(2024, 1, 1), translations=[LegalDocumentTranslationItemResult(locale_id=locale_en, body="old")])
+    repository = StubLegalDocumentRepository([document], active_locale_ids={locale_en})
+    service = LegalDocumentService(repository)
+    new_date = date(2025, 3, 1)
+
+    result = await service.update_legal_document(
+        document.id, UpdateLegalDocumentCommand(effective_date=new_date, translations=[LegalDocumentTranslationCommand(locale_id=locale_en, body="old")])
+    )
+
+    assert result.effective_date == new_date
+    assert repository.update_calls == [{"document_id": document.id, "values": {"effective_date": new_date}}]
+
+
+@pytest.mark.asyncio
 async def test_update_legal_document_not_found():
     service = LegalDocumentService(StubLegalDocumentRepository())
 
     with pytest.raises(NotFoundException) as exc_info:
-        await service.update_legal_document(uuid4(), UpdateLegalDocumentCommand(translations=[LegalDocumentTranslationCommand(locale_id=uuid4(), body="x")]))
+        await service.update_legal_document(
+            uuid4(),
+            UpdateLegalDocumentCommand(effective_date=_SEED_EFFECTIVE_DATE, translations=[LegalDocumentTranslationCommand(locale_id=uuid4(), body="x")]),
+        )
 
     assert exc_info.value.error_code == ContentErrorCode.LEGAL_DOCUMENT_NOT_FOUND.value
 
@@ -192,13 +244,14 @@ async def test_update_legal_document_rejects_inactive_locale():
 
     with pytest.raises(BadRequestException, match="Invalid or inactive locale_id"):
         await service.update_legal_document(
-            document.id, UpdateLegalDocumentCommand(translations=[LegalDocumentTranslationCommand(locale_id=locale_en, body="x")])
+            document.id,
+            UpdateLegalDocumentCommand(effective_date=document.effective_date, translations=[LegalDocumentTranslationCommand(locale_id=locale_en, body="x")]),
         )
 
 
 @pytest.mark.asyncio
 async def test_get_legal_document_pages_filters_product_and_kind():
-    matching = _document(product=ProductCode.PORTAL.value, kind=LegalDocumentKind.PRIVACY_POLICY.value)
+    matching = _document(product=ProductCode.PORTAL.value, kind=LegalDocumentKind.PRIVACY_POLICY.value, effective_date=date(2025, 2, 1))
     other = _document(product=ProductCode.FACILITY_BOOKING.value, kind=LegalDocumentKind.TERMS_OF_SERVICE.value)
     service = LegalDocumentService(StubLegalDocumentRepository([matching, other]))
 
@@ -211,17 +264,20 @@ async def test_get_legal_document_pages_filters_product_and_kind():
     assert result.items[0].id == matching.id
     assert result.items[0].product == ProductCode.PORTAL.value
     assert result.items[0].kind == LegalDocumentKind.PRIVACY_POLICY.value
+    assert result.items[0].effective_date == date(2025, 2, 1)
+    assert result.items[0].updated_at == matching.updated_at
 
 
 @pytest.mark.asyncio
 async def test_get_legal_document_by_id_returns_translations():
     locale_en = uuid4()
-    document = _document(translations=[LegalDocumentTranslationItemResult(locale_id=locale_en, body="hello")])
+    document = _document(effective_date=date(2025, 4, 10), translations=[LegalDocumentTranslationItemResult(locale_id=locale_en, body="hello")])
     service = LegalDocumentService(StubLegalDocumentRepository([document]))
 
     result = await service.get_legal_document_by_id(document.id)
 
     assert result.id == document.id
+    assert result.effective_date == date(2025, 4, 10)
     assert result.translations[0].body == "hello"
 
 
@@ -239,16 +295,19 @@ async def test_get_legal_document_by_id_not_found():
 async def test_create_legal_document_when_absent():
     repository = StubLegalDocumentRepository()
     service = LegalDocumentService(repository)
+    effective_date = date(2026, 8, 1)
 
     result = await service.create_legal_document(
-        CreateLegalDocumentCommand(product=ProductCode.FACILITY_BOOKING.value, kind=LegalDocumentKind.PRIVACY_POLICY.value)
+        CreateLegalDocumentCommand(product=ProductCode.FACILITY_BOOKING.value, kind=LegalDocumentKind.PRIVACY_POLICY.value, effective_date=effective_date)
     )
 
     assert isinstance(result, CreateIdResult)
     assert len(repository.insert_calls) == 1
     assert repository.insert_calls[0]["product"] == ProductCode.FACILITY_BOOKING.value
     assert repository.insert_calls[0]["kind"] == LegalDocumentKind.PRIVACY_POLICY.value
+    assert repository.insert_calls[0]["effective_date"] == effective_date
     assert result.id in repository.rows
+    assert repository.rows[result.id].effective_date == effective_date
 
 
 @pytest.mark.asyncio
@@ -256,10 +315,14 @@ async def test_create_legal_document_rejects_non_catalog_product_or_kind():
     service = LegalDocumentService(StubLegalDocumentRepository())
 
     with pytest.raises(BadRequestException, match="catalog"):
-        await service.create_legal_document(CreateLegalDocumentCommand(product="unknown-app", kind=LegalDocumentKind.TERMS_OF_SERVICE.value))
+        await service.create_legal_document(
+            CreateLegalDocumentCommand(product="unknown-app", kind=LegalDocumentKind.TERMS_OF_SERVICE.value, effective_date=_SEED_EFFECTIVE_DATE)
+        )
 
     with pytest.raises(BadRequestException, match="catalog"):
-        await service.create_legal_document(CreateLegalDocumentCommand(product=ProductCode.PORTAL.value, kind="cookie_policy"))
+        await service.create_legal_document(
+            CreateLegalDocumentCommand(product=ProductCode.PORTAL.value, kind="cookie_policy", effective_date=_SEED_EFFECTIVE_DATE)
+        )
 
 
 @pytest.mark.asyncio
@@ -268,7 +331,9 @@ async def test_create_legal_document_rejects_when_active_exists():
     service = LegalDocumentService(StubLegalDocumentRepository([existing]))
 
     with pytest.raises(ConflictErrorException) as exc_info:
-        await service.create_legal_document(CreateLegalDocumentCommand(product=ProductCode.PORTAL.value, kind=LegalDocumentKind.TERMS_OF_SERVICE.value))
+        await service.create_legal_document(
+            CreateLegalDocumentCommand(product=ProductCode.PORTAL.value, kind=LegalDocumentKind.TERMS_OF_SERVICE.value, effective_date=_SEED_EFFECTIVE_DATE)
+        )
 
     assert exc_info.value.error_code == ContentErrorCode.LEGAL_DOCUMENT_EXISTS.value
 
@@ -279,7 +344,9 @@ async def test_create_legal_document_rejects_when_soft_deleted_twin_exists():
     service = LegalDocumentService(StubLegalDocumentRepository([existing]))
 
     with pytest.raises(ConflictErrorException) as exc_info:
-        await service.create_legal_document(CreateLegalDocumentCommand(product=ProductCode.PORTAL.value, kind=LegalDocumentKind.PRIVACY_POLICY.value))
+        await service.create_legal_document(
+            CreateLegalDocumentCommand(product=ProductCode.PORTAL.value, kind=LegalDocumentKind.PRIVACY_POLICY.value, effective_date=_SEED_EFFECTIVE_DATE)
+        )
 
     assert exc_info.value.error_code == ContentErrorCode.LEGAL_DOCUMENT_IN_RECYCLE_BIN.value
     assert "restore" in (exc_info.value.detail or "").lower()
@@ -313,7 +380,7 @@ async def test_restore_legal_document():
 @pytest.mark.asyncio
 async def test_get_public_legal_document_returns_empty_body_for_active_row():
     locale_en = uuid4()
-    document = _document(translations=[LegalDocumentTranslationItemResult(locale_id=locale_en, body="")])
+    document = _document(effective_date=date(2025, 9, 1), translations=[LegalDocumentTranslationItemResult(locale_id=locale_en, body="")])
     repository = StubLegalDocumentRepository([document], default_locale_id=locale_en)
     service = LegalDocumentService(repository)
     token = set_request_context(RequestContext(headers=HeaderInfo(), resolved_locale_id=locale_en))
@@ -326,6 +393,7 @@ async def test_get_public_legal_document_returns_empty_body_for_active_row():
     assert result.product == document.product
     assert result.kind == document.kind
     assert result.body == ""
+    assert result.effective_date == date(2025, 9, 1)
 
 
 @pytest.mark.asyncio

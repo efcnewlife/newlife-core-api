@@ -2,7 +2,7 @@
 Content application results (snake_case, no API serialization aliases).
 """
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional
 from uuid import UUID
 
@@ -135,6 +135,7 @@ class LegalDocumentListItemResult(UUIDBaseModel):
 
     product: str = Field(...)
     kind: str = Field(...)
+    effective_date: date = Field(...)
     created_at: Optional[datetime] = Field(default=None)
     created_by: Optional[str] = Field(default=None)
     updated_at: Optional[datetime] = Field(default=None)
@@ -164,3 +165,4 @@ class LegalDocumentPublicResult(BaseModel):
     product: str = Field(...)
     kind: str = Field(...)
     body: str = Field(default="")
+    effective_date: date = Field(...)

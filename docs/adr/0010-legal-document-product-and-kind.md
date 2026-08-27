@@ -20,14 +20,15 @@ Admin follows normal RBAC and DataPage soft-delete / restore. Delete is not bloc
 - Portal Content owns the Legal Documents list; Portal Login / public legal pages for `portal` are out of this slice.
 - Facility Booking exposes `/terms-of-service` and `/privacy-policy` plus Footer and Login links; titles come from client i18n by Kind, not an editable title field.
 - Body storage is Markdown only (no HTML, no images) so public render stays a fixed, limited surface.
+- Effective Date vs Last Updated, and host MarkdownEditor / MarkdownPreview (`legal` profile), are decided in ADR 0011.
 
 ## Human migration note (agents do not edit `alembic/versions/`)
 
 ORM models live under `portal/models/content/legal_document.py`. A human should generate and apply an Alembic revision that creates:
 
-| Schema | Table | Notes |
-| ------ | ----- | ----- |
-| `content` | `legal_document` | Columns: `product` (varchar 64), `kind` (varchar 64), audit + soft-delete mixins; unique `(product, kind)`; index on `(product, kind, is_deleted)` |
+| Schema    | Table                        | Notes                                                                                                                                                                     |
+| --------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `content` | `legal_document`             | Columns: `product` (varchar 64), `kind` (varchar 64), audit + soft-delete mixins; unique `(product, kind)`; index on `(product, kind, is_deleted)`. Required `effective_date` (calendar day) is ADR 0011 — add/backfill in a follow-up human revision if the table already exists without it. |
 | `content` | `legal_document_translation` | Columns: `legal_document_id` (FK cascade), `locale_id` (FK to `system_locale`), `body` (text, default empty string), audit mixin; unique `(legal_document_id, locale_id)` |
 
 After migrate: `uv run python -m portal.cli.main seed-legal-documents` (and re-run `init-rbac` / `reset-rbac` so `content:legal_document` permissions and menu exist).
