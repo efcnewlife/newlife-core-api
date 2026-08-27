@@ -282,6 +282,18 @@ async def test_get_legal_document_by_id_returns_translations():
 
 
 @pytest.mark.asyncio
+async def test_get_legal_document_by_id_includes_soft_deleted():
+    document = _document(is_deleted=True, effective_date=date(2025, 5, 1))
+    service = LegalDocumentService(StubLegalDocumentRepository([document]))
+
+    result = await service.get_legal_document_by_id(document.id)
+
+    assert result.id == document.id
+    assert result.is_deleted is True
+    assert result.effective_date == date(2025, 5, 1)
+
+
+@pytest.mark.asyncio
 async def test_get_legal_document_by_id_not_found():
     service = LegalDocumentService(StubLegalDocumentRepository())
 

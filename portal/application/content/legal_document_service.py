@@ -77,7 +77,7 @@ class LegalDocumentService:
 
     @distributed_trace()
     async def get_legal_document_by_id(self, document_id: UUID) -> LegalDocumentDetailResult:
-        row = await self._repository.get_by_id(document_id)
+        row = await self._repository.get_by_id(document_id, include_deleted=True)
         if not row:
             raise NotFoundException(
                 detail="Legal Document not found", error_code=ContentErrorCode.LEGAL_DOCUMENT_NOT_FOUND.value, context={"document_id": str(document_id)}
