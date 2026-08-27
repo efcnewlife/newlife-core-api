@@ -51,8 +51,16 @@ A product line that owns its legal texts, identified by a built-in code. Operato
 _Avoid_: App, Audience, git repo name as the identity, Operator-invented codes, seeding only one Product when both codes are required
 
 **Legal Document**:
-A living Markdown body for one Product and one Legal Document Kind, with locale translations. Saving replaces the current wording. Body is Markdown only (headings, lists, links); no embedded HTML and no images. Operators may soft-delete and restore under RBAC; there is no built-in hard block on delete. Soft-delete removes it from the public current set; restore brings the same row back. Create is allowed only for a built-in Product × Kind that has no row at all (including none in the recycle bin); if a soft-deleted row exists for that pair, create is rejected and the Operator must restore. There is no version history and no recorded acceptance. Distinct from Content File and from System Setting.
-_Avoid_: ToS as the only document type, a single church-wide blob, HTML as the stored body, free-titled CMS pages, inline images, program-forbidden delete for built-in rows, creating a second active row while a soft-deleted twin exists, free-text Product codes
+A living Markdown body for one Product and one Legal Document Kind, with locale translations. Saving replaces the current wording. Body is Markdown only (headings, lists, links); no embedded HTML and no images. It has a required **Effective Date** (a single calendar day when the current wording takes effect). Operators set Effective Date manually; saving body changes does not auto-change it. **Last Updated** is the audit `updated_at` instant, not Effective Date. Operators may soft-delete and restore under RBAC; there is no built-in hard block on delete. Soft-delete removes it from the public current set; restore brings the same row back. Create is allowed only for a built-in Product × Kind that has no row at all (including none in the recycle bin); if a soft-deleted row exists for that pair, create is rejected and the Operator must restore. There is no version history and no recorded acceptance. Distinct from Content File and from System Setting.
+_Avoid_: ToS as the only document type, a single church-wide blob, HTML as the stored body, free-titled CMS pages, inline images, program-forbidden delete for built-in rows, creating a second active row while a soft-deleted twin exists, free-text Product codes, Effective from/to range as this field, treating Last Updated as Effective Date
+
+**Effective Date**:
+The single calendar day on which the Legal Document's current wording takes effect. Required. Stored and exchanged as a date (not a zoned instant). Distinct from Last Updated and from schedule Effective from / Effective to.
+_Avoid_: datetime-with-timezone as the stored meaning, auto-bumping on every body save, optional empty Effective Date on an active document
+
+**Last Updated**:
+When the Legal Document row was last changed, from audit `updated_at`. It is not the legal Effective Date.
+_Avoid_: showing Last Updated labeled as Effective Date, using Last Updated as the public "in force since" line
 
 **Legal Document Kind**:
 Which legal text a Legal Document is: Terms of Service or Privacy Policy. Identity is Kind plus Product code, not the display title. Both kinds ship for each seeded Product in this slice. Page/Footer titles come from client i18n by Kind, not from an editable title field.
@@ -67,8 +75,8 @@ The Legal Document Kind for how the Product handles personal information. Same l
 _Avoid_: burying privacy copy inside Terms of Service, a separate acceptance workflow
 
 **Public Legal Document read**:
-Anyone may fetch the current Legal Document for a Product and Kind without signing in, via one read that takes Product code and Kind. Locale follows Accept-Language with fallback to the default locale. An empty body on an active row is still that document (200 + empty body). A soft-deleted or missing row is not found for the public read. Facility Booking's Product code is `facility-booking`; the Portal Product code is `portal`.
-_Avoid_: requiring member JWT to read, treating empty body the same as soft-delete, one hard-coded route per Kind, locale query string as the v1 contract
+Anyone may fetch the current Legal Document for a Product and Kind without signing in, via one read that takes Product code and Kind. Locale follows Accept-Language with fallback to the default locale. The payload includes the Markdown body for the resolved locale and the document Effective Date (calendar day). An empty body on an active row is still that document (200 + empty body). A soft-deleted or missing row is not found for the public read. Facility Booking's Product code is `facility-booking`; the Portal Product code is `portal`.
+_Avoid_: requiring member JWT to read, treating empty body the same as soft-delete, one hard-coded route per Kind, locale query string as the v1 contract, omitting Effective Date from the public payload
 
 **File association**:
 The bind between one Content File and one resource (for example a Room). A Room gallery association is identified by resource kind `facility.room`, not by a class or table name. Binding or reordering a Room gallery is part of editing that Room. Putting a new file into the content library (including upload inside the Room picker) is a Content File upload. Deleting a Content File is allowed while associations exist: one confirmation lists every selected file's bound resources by name or code, including soft-deleted Rooms marked as deleted; then the files and all of their File associations are removed together. No orphan association rows remain. A gallery of ten images cannot accept another file; the picker is disabled and the server also rejects an over-cap save.
