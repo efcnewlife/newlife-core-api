@@ -377,6 +377,7 @@ When `GRAPH_MAIL_SEND_ENABLED=true`, successful Ministry Application submit send
 2. Set `GRAPH_MAIL_SENDER_MAILBOX` to the system mailbox UPN (the app must be allowed to send as that user).
 3. Set `FACILITY_BOOKING_BASE_URL` to the Facility Booking SPA origin (deep links: `/my-ministry`, `/my-ministry/approvals/{ministryId}`).
 4. Keep `AZURE_TENANT_ID`, `AZURE_APP_CLIENT_ID`, and `AZURE_APP_CLIENT_SECRET` configured (same as directory sync).
+5. Optional (non-`prod` only): set `GRAPH_MAIL_OVERRIDE_TO` to one or more comma-separated addresses so dev/stg mail never reaches real applicants or incumbents. The subject line is prefixed with `[DEV -> intended@recipient]`.
 
 ### Docker
 

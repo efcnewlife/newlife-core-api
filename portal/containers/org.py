@@ -49,6 +49,7 @@ class OrgContainer(containers.DeclarativeContainer):
         user_repository=user_repository,
         facility_booking_base_url=app_settings.FACILITY_BOOKING_BASE_URL,
         enabled=app_settings.GRAPH_MAIL_SEND_ENABLED,
+        override_recipients=app_settings.graph_mail_override_recipients(),
     )
     ministry_approval_service = providers.Factory(
         MinistryApprovalService,

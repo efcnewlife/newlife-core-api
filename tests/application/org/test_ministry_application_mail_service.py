@@ -86,6 +86,50 @@ async def test_send_submit_notifications_sends_applicant_and_incumbent_emails():
 
 
 @pytest.mark.asyncio
+async def test_send_submit_notifications_redirects_to_override_recipients():
+    ministry_id = uuid4()
+    owner_position_id = uuid4()
+    applicant_user_id = uuid4()
+    incumbent_user_id = uuid4()
+    mail_port = StubMailSendPort()
+    ministry_stub = StubMinistryRepository(
+        ministry_by_id={
+            ministry_id: MinistryDetailResult(
+                id=ministry_id,
+                name="Badminton",
+                status=MinistryStatus.PENDING_APPROVAL.value,
+                owner_position_id=owner_position_id,
+                has_priority_booking=False,
+                is_active=True,
+            )
+        }
+    )
+    user_stub = StubMailUserRepository(
+        users={
+            applicant_user_id: UserSensitive(id=applicant_user_id, email="applicant@example.com", verified=True, is_active=True, is_admin=False),
+            incumbent_user_id: UserSensitive(id=incumbent_user_id, email="incumbent@example.com", verified=True, is_active=True, is_admin=False),
+        }
+    )
+    service = MinistryApplicationMailService(
+        mail_port,
+        ministry_stub,
+        StubPositionRepository(incumbents={owner_position_id: incumbent_user_id}),
+        user_stub,
+        facility_booking_base_url="http://localhost:5174",
+        enabled=True,
+        override_recipients=["dev@local.test"],
+    )
+
+    await service.send_submit_notifications(ministry_id=ministry_id, owner_position_id=owner_position_id, applicant_user_id=applicant_user_id)
+
+    assert len(mail_port.calls) == 2
+    assert all(call["to_email"] == "dev@local.test" for call in mail_port.calls)
+    assert all(call["subject"].startswith("[DEV ->") for call in mail_port.calls)
+    assert any("[DEV -> applicant@example.com]" in call["subject"] for call in mail_port.calls)
+    assert any("[DEV -> incumbent@example.com]" in call["subject"] for call in mail_port.calls)
+
+
+@pytest.mark.asyncio
 async def test_send_submit_notifications_noop_when_disabled():
     mail_port = StubMailSendPort()
     service = MinistryApplicationMailService(

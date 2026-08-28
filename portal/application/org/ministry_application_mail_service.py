@@ -12,6 +12,7 @@ from portal.application.org.ministry_application_mail_content import (
     build_incumbent_notification_html,
     resolve_bilingual_ministry_names,
 )
+from portal.application.org.ministry_application_mail_delivery import resolve_mail_delivery_targets
 from portal.domain.org.ports import MailSendPort
 from portal.infrastructure.persistence.repositories.org.ministry_repository import MinistryRepository
 from portal.infrastructure.persistence.repositories.org.position_repository import PositionRepository
@@ -32,6 +33,7 @@ class MinistryApplicationMailService:
         *,
         facility_booking_base_url: str,
         enabled: bool,
+        override_recipients: list[str] | None = None,
     ):
         self._mail_send_port = mail_send_port
         self._ministry_repository = ministry_repository
@@ -39,6 +41,15 @@ class MinistryApplicationMailService:
         self._user_repository = user_repository
         self._facility_booking_base_url = facility_booking_base_url.rstrip("/")
         self._enabled = enabled
+        self._override_recipients = override_recipients or []
+
+    async def _deliver_html_mail(self, *, intended_recipient: str, subject: str, body_html: str) -> None:
+        recipients, subject_prefix = resolve_mail_delivery_targets(intended_recipient=intended_recipient, override_recipients=self._override_recipients)
+        if not recipients:
+            return
+        delivery_subject = f"{subject_prefix}{subject}"
+        for to_email in recipients:
+            await self._mail_send_port.send_html_mail(to_email=to_email, subject=delivery_subject, body_html=body_html)
 
     @distributed_trace()
     async def send_submit_notifications(self, *, ministry_id: UUID, owner_position_id: UUID, applicant_user_id: Optional[UUID]) -> None:
@@ -57,8 +68,8 @@ class MinistryApplicationMailService:
 
             applicant = await self._user_repository.get_sensitive_by_id(applicant_user_id) if applicant_user_id else None
             if applicant and applicant.email:
-                await self._mail_send_port.send_html_mail(
-                    to_email=applicant.email,
+                await self._deliver_html_mail(
+                    intended_recipient=applicant.email,
                     subject=APPLICANT_SUBMIT_SUBJECT,
                     body_html=build_applicant_submit_confirmation_html(
                         ministry_name_en=ministry_name_en, ministry_name_zh=ministry_name_zh, my_ministry_url=my_ministry_url
@@ -83,8 +94,8 @@ class MinistryApplicationMailService:
                 elif applicant and applicant.email:
                     applicant_display_name = applicant.email
 
-            await self._mail_send_port.send_html_mail(
-                to_email=incumbent.email,
+            await self._deliver_html_mail(
+                intended_recipient=incumbent.email,
                 subject=INCUMBENT_NOTIFICATION_SUBJECT,
                 body_html=build_incumbent_notification_html(
                     ministry_name_en=ministry_name_en,
