@@ -8,7 +8,7 @@ from uuid import UUID, uuid4
 import pytest
 from pydantic import ValidationError
 
-from portal.application.auth.results import UserSensitive
+from portal.application.auth.results import UserDetail, UserSensitive
 from portal.application.org.commands import (
     ApproveMinistryCommand,
     CreateMinistryCommand,
@@ -24,6 +24,7 @@ from portal.application.org.commands import (
     SubmitMinistryCommand,
     UpdateRejectedMinistryApplicationCommand,
 )
+from portal.application.org.mappers import approve_ministry_to_command, reject_ministry_to_command
 from portal.application.org.ministry_application_mail_content import EN_LOCALE_ID
 from portal.application.org.ministry_application_mail_service import MinistryApplicationMailService
 from portal.application.org.ministry_approval_service import MinistryApprovalService
@@ -46,6 +47,7 @@ from portal.domain.org.constants import MinistryMemberRole, MinistryStatus
 from portal.exceptions.responses import BadRequestException, ForbiddenException, NotFoundException
 from portal.libs.contexts.user_context import UserContext
 from portal.providers.template_render_provider import TemplateRenderProvider
+from portal.serializers.admin.v1.ministry import AdminMinistryApprove, AdminMinistryReject
 from tests.application.org.test_ministry_application_mail_service import StubMailSendPort, StubMailUserRepository, make_mail_service
 from tests.fixtures.org.stubs import (
     StubMinistryRepository,
@@ -819,10 +821,11 @@ async def test_reject_ministry_as_incumbent_dispatches_decision_mail():
 
 
 @pytest.mark.asyncio
-async def test_admin_approve_ministry_does_not_dispatch_decision_mail():
+async def test_admin_approve_ministry_dispatches_staff_decision_mails():
     ministry_id = uuid4()
     owner_position_id = uuid4()
     applicant_user_id = uuid4()
+    incumbent_user_id = uuid4()
     staff_user_id = uuid4()
     ministry = _pending_ministry(ministry_id=ministry_id, owner_position_id=owner_position_id, submitted_by_id=applicant_user_id)
     stub = StubMinistryRepository(ministry_by_id={ministry_id: ministry})
@@ -830,28 +833,47 @@ async def test_admin_approve_ministry_does_not_dispatch_decision_mail():
     mail_service = make_mail_service(
         mail_port,
         stub,
-        StubPositionRepository(incumbents={owner_position_id: uuid4()}),
+        StubPositionRepository(incumbents={owner_position_id: incumbent_user_id}),
         StubMailUserRepository(
             users={
                 applicant_user_id: UserSensitive(id=applicant_user_id, email="applicant@example.com", verified=True, is_active=True, is_admin=False),
+                incumbent_user_id: UserSensitive(id=incumbent_user_id, email="incumbent@example.com", verified=True, is_active=True, is_admin=False),
                 staff_user_id: UserSensitive(id=staff_user_id, email="staff@example.com", verified=True, is_active=True, is_admin=True),
-            }
+            },
+            profiles={
+                staff_user_id: UserDetail(id=staff_user_id, email="staff@example.com", preferred_name="Staff Member"),
+                incumbent_user_id: UserDetail(id=incumbent_user_id, email="incumbent@example.com", preferred_name="Incumbent Leader"),
+            },
         ),
     )
-    approval_service = make_approval_service(stub, mail_service=mail_service)
+    approval_service = make_approval_service(
+        stub, position_stub=StubPositionRepository(incumbents={owner_position_id: incumbent_user_id}), mail_service=mail_service
+    )
     approval_service._user_ctx = UserContext(user_id=staff_user_id, email="staff@example.com", is_admin=True, is_superuser=False)
 
-    await approval_service.approve_ministry(ministry_id, ApproveMinistryCommand())
+    await approval_service.approve_ministry(ministry_id, approve_ministry_to_command(AdminMinistryApprove()))
 
-    assert mail_port.calls == []
+    assert len(mail_port.calls) == 2
+    applicant_call = next(call for call in mail_port.calls if call["to_email"] == "applicant@example.com")
+    incumbent_call = next(call for call in mail_port.calls if call["to_email"] == "incumbent@example.com")
+    assert "Approved" in applicant_call["subject"]
+    assert "Decision on Your Behalf" in incumbent_call["subject"]
+    assert "Staff Member" in applicant_call["body_html"]
+    assert "Incumbent Leader" in applicant_call["body_html"]
+    assert "on behalf of" in applicant_call["body_html"]
+    assert "staff@example.com" not in applicant_call["body_html"]
+    assert "on your behalf" in incumbent_call["body_html"]
+    assert "No further action" in incumbent_call["body_html"]
     assert stub.update_calls[-1]["values"]["status"] == MinistryStatus.ACTIVE.value
+    assert stub.update_calls[-1]["values"]["approved_by_id"] == staff_user_id
 
 
 @pytest.mark.asyncio
-async def test_admin_reject_ministry_does_not_dispatch_decision_mail():
+async def test_admin_reject_ministry_dispatches_staff_decision_mails():
     ministry_id = uuid4()
     owner_position_id = uuid4()
     applicant_user_id = uuid4()
+    incumbent_user_id = uuid4()
     staff_user_id = uuid4()
     ministry = _pending_ministry(ministry_id=ministry_id, owner_position_id=owner_position_id, submitted_by_id=applicant_user_id)
     stub = StubMinistryRepository(ministry_by_id={ministry_id: ministry})
@@ -859,21 +881,34 @@ async def test_admin_reject_ministry_does_not_dispatch_decision_mail():
     mail_service = make_mail_service(
         mail_port,
         stub,
-        StubPositionRepository(incumbents={owner_position_id: uuid4()}),
+        StubPositionRepository(incumbents={owner_position_id: incumbent_user_id}),
         StubMailUserRepository(
             users={
                 applicant_user_id: UserSensitive(id=applicant_user_id, email="applicant@example.com", verified=True, is_active=True, is_admin=False),
+                incumbent_user_id: UserSensitive(id=incumbent_user_id, email="incumbent@example.com", verified=True, is_active=True, is_admin=False),
                 staff_user_id: UserSensitive(id=staff_user_id, email="staff@example.com", verified=True, is_active=True, is_admin=True),
-            }
+            },
+            profiles={staff_user_id: UserDetail(id=staff_user_id, email="staff@example.com", preferred_name="Staff Member")},
         ),
     )
-    approval_service = make_approval_service(stub, mail_service=mail_service)
+    approval_service = make_approval_service(
+        stub, position_stub=StubPositionRepository(incumbents={owner_position_id: incumbent_user_id}), mail_service=mail_service
+    )
     approval_service._user_ctx = UserContext(user_id=staff_user_id, email="staff@example.com", is_admin=True, is_superuser=False)
 
-    await approval_service.reject_ministry(ministry_id, RejectMinistryCommand(rejection_reason="Incomplete roster"))
+    await approval_service.reject_ministry(ministry_id, reject_ministry_to_command(AdminMinistryReject(rejection_reason="Incomplete roster")))
 
-    assert mail_port.calls == []
+    assert len(mail_port.calls) == 2
+    applicant_call = next(call for call in mail_port.calls if call["to_email"] == "applicant@example.com")
+    incumbent_call = next(call for call in mail_port.calls if call["to_email"] == "incumbent@example.com")
+    assert "Declined" in applicant_call["subject"]
+    assert "Incomplete roster" in applicant_call["body_html"]
+    assert "Staff Member" in applicant_call["body_html"]
+    assert "staff@example.com" not in applicant_call["body_html"]
+    assert "Staff Member" in incumbent_call["body_html"]
+    assert "No further action" in incumbent_call["body_html"]
     assert stub.update_calls[-1]["values"]["status"] == MinistryStatus.REJECTED.value
+    assert stub.update_calls[-1]["values"]["rejected_by_id"] == staff_user_id
 
 
 @pytest.mark.asyncio
