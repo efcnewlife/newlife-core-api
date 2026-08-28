@@ -40,6 +40,7 @@ from portal.models import (
     OrgMinistryTranslation,
     OrgMinistryType,
     OrgMinistryTypeTranslation,
+    OrgPositionAssignment,
     SystemLocale,
 )
 from portal.models.mixins.context import apply_audit_fields_to_rows
@@ -194,6 +195,35 @@ class MinistryRepository:
             .fetchpages(no_order_by=False, as_model=MinistryApprovalResult)
         )
         return items or [], count
+
+    async def fetch_pending_for_incumbent(self, user_id: UUID, locale_id: Optional[UUID]) -> list[MinistryListItemResult]:
+        current_incumbent = (
+            sa.select(OrgPositionAssignment.position_id, OrgPositionAssignment.user_id)
+            .distinct(OrgPositionAssignment.position_id)
+            .where(OrgPositionAssignment.end_at.is_(None))
+            .order_by(OrgPositionAssignment.position_id, OrgPositionAssignment.start_at.desc())
+            .subquery()
+        )
+        query = (
+            self._session.select(
+                OrgMinistry.id, ministry_name_fallback(locale_id).label("name"), OrgMinistry.status, OrgMinistry.has_priority_booking, OrgMinistry.is_active
+            )
+            .select_from(OrgMinistry)
+            .join(current_incumbent, current_incumbent.c.position_id == OrgMinistry.owner_position_id)
+            .where(OrgMinistry.is_deleted == False)
+            .where(OrgMinistry.status == MinistryStatus.PENDING_APPROVAL.value)
+            .where(current_incumbent.c.user_id == user_id)
+        )
+        if locale_id:
+            query = query.outerjoin(
+                OrgMinistryTranslation, sa.and_(OrgMinistryTranslation.ministry_id == OrgMinistry.id, OrgMinistryTranslation.locale_id == locale_id)
+            )
+        else:
+            query = query.outerjoin(OrgMinistryTranslation, sa.false())
+        items: list[MinistryListItemResult] = await (
+            query.group_by(OrgMinistry.id).order_by(OrgMinistry.submitted_at.desc().nullslast()).fetch(as_model=MinistryListItemResult)
+        )
+        return items or []
 
     async def list_active(self, locale_id: Optional[UUID]) -> list[MinistryListItemResult]:
         query = self._session.select(

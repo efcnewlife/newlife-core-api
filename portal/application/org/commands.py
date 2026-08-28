@@ -33,6 +33,7 @@ __all__ = [
     "SubmitMinistryCommand",
     "UpdateMemberPersonCommand",
     "UpdateMinistryCommand",
+    "UpdateRejectedMinistryApplicationCommand",
     "UpdatePositionCommand",
 ]
 
@@ -136,6 +137,16 @@ class RejectMinistryCommand(BaseModel):
 
     rejection_reason: str = Field(...)
     comment: Optional[str] = Field(default=None)
+
+
+class UpdateRejectedMinistryApplicationCommand(BaseModel):
+    """Update a rejected ministry application (owner position locked)."""
+
+    ministry_type_id: Optional[UUID] = Field(default=None)
+    target_audience_ids: Optional[list[UUID]] = Field(default=None)
+    has_priority_booking: bool = Field(default=False)
+    translations: Optional[list[OrgTranslationCommand]] = Field(default=None)
+    members: Optional[list[MinistryMemberEntryCommand]] = Field(default=None)
 
 
 class MinistryApplicationCommand(BaseModel):

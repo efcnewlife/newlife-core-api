@@ -7,6 +7,8 @@ from uuid import uuid4
 from portal.application.org.ministry_application_mail_content import (
     EN_LOCALE_ID,
     ZH_TW_LOCALE_ID,
+    build_applicant_approved_html,
+    build_applicant_rejected_html,
     build_applicant_submit_confirmation_html,
     build_incumbent_notification_html,
     resolve_bilingual_ministry_names,
@@ -42,3 +44,19 @@ def test_incumbent_notification_html_includes_approval_deep_link():
     assert approval_url in html
     assert "Jane Applicant" in html
     assert html.index("Review application") < html.index("審核申請")
+
+
+def test_applicant_approved_html_is_bilingual_en_then_zh():
+    html = build_applicant_approved_html(ministry_name_en="Badminton", ministry_name_zh="羽毛球", my_ministry_url="http://localhost:5174/my-ministry")
+    assert "has been approved" in html
+    assert "已獲核准" in html
+    assert html.index("Hello,") < html.index("您好")
+
+
+def test_applicant_rejected_html_includes_reason_bilingual():
+    html = build_applicant_rejected_html(
+        ministry_name_en="Badminton", ministry_name_zh="羽毛球", rejection_reason="Incomplete roster", my_ministry_url="http://localhost:5174/my-ministry"
+    )
+    assert "Incomplete roster" in html
+    assert "未獲核准" in html
+    assert html.index("Reason:") < html.index("原因：")

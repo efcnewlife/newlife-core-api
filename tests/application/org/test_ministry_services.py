@@ -10,6 +10,7 @@ from pydantic import ValidationError
 
 from portal.application.auth.results import UserSensitive
 from portal.application.org.commands import (
+    ApproveMinistryCommand,
     CreateMinistryCommand,
     MinistryApplicationCommand,
     MinistryMemberEntryCommand,
@@ -17,9 +18,11 @@ from portal.application.org.commands import (
     OrgTranslationCommand,
     OrgUserSearchCommand,
     PagesQueryCommand,
+    RejectMinistryCommand,
     ReplaceMinistryMembersCommand,
     StewardDirectoryQueryCommand,
     SubmitMinistryCommand,
+    UpdateRejectedMinistryApplicationCommand,
 )
 from portal.application.org.ministry_application_mail_content import EN_LOCALE_ID
 from portal.application.org.ministry_application_mail_service import MinistryApplicationMailService
@@ -27,13 +30,20 @@ from portal.application.org.ministry_approval_service import MinistryApprovalSer
 from portal.application.org.ministry_schedule import validate_ministry_schedules
 from portal.application.org.ministry_service import MinistryService
 from portal.application.org.org_user_search_service import OrgUserSearchService
-from portal.application.org.results import MinistryDetailResult, MinistryMemberResult, OrgUserSearchItemResult, TargetAudienceResult, TranslationItemResult
+from portal.application.org.results import (
+    MinistryDetailResult,
+    MinistryListItemResult,
+    MinistryMemberResult,
+    OrgUserSearchItemResult,
+    TargetAudienceResult,
+    TranslationItemResult,
+)
 from portal.application.org.steward_directory_query import matches_steward_directory_q
 from portal.application.org.target_audience_validation import validate_target_audience_ids
 from portal.domain.facility.days_of_week_mask import days_to_mask, mask_to_days
 from portal.domain.org.catalog_codes import TARGET_AUDIENCE_ADULTS, TARGET_AUDIENCE_ALL_AGES
 from portal.domain.org.constants import MinistryMemberRole, MinistryStatus
-from portal.exceptions.responses import BadRequestException, NotFoundException
+from portal.exceptions.responses import BadRequestException, ForbiddenException, NotFoundException
 from portal.libs.contexts.user_context import UserContext
 from tests.application.org.test_ministry_application_mail_service import StubMailSendPort, StubMailUserRepository
 from tests.fixtures.org.stubs import (
@@ -548,3 +558,277 @@ async def test_org_user_search_returns_active_users():
     result = await service.search_users(OrgUserSearchCommand(q="jane"))
     assert len(result.items) == 1
     assert result.items[0].email == "jane@example.com"
+
+
+def _pending_ministry(*, ministry_id, owner_position_id, submitted_by_id, status=MinistryStatus.PENDING_APPROVAL.value) -> MinistryDetailResult:
+    return MinistryDetailResult(
+        id=ministry_id,
+        name="Badminton",
+        status=status,
+        owner_position_id=owner_position_id,
+        submitted_by_id=submitted_by_id,
+        has_priority_booking=False,
+        is_active=True,
+        translations=[TranslationItemResult(locale_id=EN_LOCALE_ID, name="Badminton Club")],
+    )
+
+
+@pytest.mark.asyncio
+async def test_approve_ministry_as_incumbent_allows_self_approve():
+    ministry_id = uuid4()
+    owner_position_id = uuid4()
+    incumbent_user_id = uuid4()
+    ministry = _pending_ministry(ministry_id=ministry_id, owner_position_id=owner_position_id, submitted_by_id=incumbent_user_id)
+    stub = StubMinistryRepository(ministry_by_id={ministry_id: ministry})
+    approval_service = make_approval_service(stub, position_stub=StubPositionRepository(incumbents={owner_position_id: incumbent_user_id}))
+    approval_service._user_ctx = UserContext(user_id=incumbent_user_id, email="incumbent@example.com", is_admin=False, is_superuser=False)
+
+    await approval_service.approve_ministry_as_incumbent(ministry_id, ApproveMinistryCommand())
+
+    assert stub.update_calls[-1]["values"]["status"] == MinistryStatus.ACTIVE.value
+    assert stub.update_approval_calls[-1]["status"] == "approved"
+
+
+@pytest.mark.asyncio
+async def test_approve_ministry_as_incumbent_forbidden_for_non_incumbent():
+    ministry_id = uuid4()
+    owner_position_id = uuid4()
+    other_user_id = uuid4()
+    ministry = _pending_ministry(ministry_id=ministry_id, owner_position_id=owner_position_id, submitted_by_id=uuid4())
+    stub = StubMinistryRepository(ministry_by_id={ministry_id: ministry})
+    approval_service = make_approval_service(stub, position_stub=StubPositionRepository(incumbents={owner_position_id: uuid4()}))
+    approval_service._user_ctx = UserContext(user_id=other_user_id, email="other@example.com", is_admin=False, is_superuser=False)
+
+    with pytest.raises(ForbiddenException) as exc_info:
+        await approval_service.approve_ministry_as_incumbent(ministry_id, ApproveMinistryCommand())
+    assert exc_info.value.error_code == "ORG_MINISTRY_APPROVAL_FORBIDDEN"
+    assert stub.update_approval_calls == []
+
+
+@pytest.mark.asyncio
+async def test_reject_ministry_as_incumbent_requires_reason():
+    ministry_id = uuid4()
+    owner_position_id = uuid4()
+    incumbent_user_id = uuid4()
+    ministry = _pending_ministry(ministry_id=ministry_id, owner_position_id=owner_position_id, submitted_by_id=uuid4())
+    stub = StubMinistryRepository(ministry_by_id={ministry_id: ministry})
+    approval_service = make_approval_service(stub, position_stub=StubPositionRepository(incumbents={owner_position_id: incumbent_user_id}))
+    approval_service._user_ctx = UserContext(user_id=incumbent_user_id, email="incumbent@example.com", is_admin=False, is_superuser=False)
+
+    await approval_service.reject_ministry_as_incumbent(ministry_id, RejectMinistryCommand(rejection_reason="Incomplete roster"))
+
+    assert stub.update_calls[-1]["values"]["status"] == MinistryStatus.REJECTED.value
+    assert stub.update_calls[-1]["values"]["rejection_reason"] == "Incomplete roster"
+
+
+@pytest.mark.asyncio
+async def test_get_approval_detail_allows_steward_access():
+    ministry_id = uuid4()
+    steward_user_id = uuid4()
+    ministry = _pending_ministry(ministry_id=ministry_id, owner_position_id=uuid4(), submitted_by_id=uuid4())
+    stub = StubMinistryRepository(
+        ministry_by_id={ministry_id: ministry},
+        members_by_ministry={ministry_id: [MinistryMemberResult(user_id=steward_user_id, member_role=MinistryMemberRole.SECONDARY.value)]},
+    )
+    approval_service = make_approval_service(stub)
+    approval_service._user_ctx = UserContext(user_id=steward_user_id, email="steward@example.com", is_admin=False, is_superuser=False)
+
+    result = await approval_service.get_approval_detail(ministry_id)
+    assert result.id == ministry_id
+
+
+@pytest.mark.asyncio
+async def test_get_approval_detail_forbidden_without_access():
+    ministry_id = uuid4()
+    ministry = _pending_ministry(ministry_id=ministry_id, owner_position_id=uuid4(), submitted_by_id=uuid4())
+    stub = StubMinistryRepository(ministry_by_id={ministry_id: ministry})
+    approval_service = make_approval_service(stub)
+    approval_service._user_ctx = UserContext(user_id=uuid4(), email="stranger@example.com", is_admin=False, is_superuser=False)
+
+    with pytest.raises(ForbiddenException) as exc_info:
+        await approval_service.get_approval_detail(ministry_id)
+    assert exc_info.value.error_code == "ORG_MINISTRY_ACCESS_FORBIDDEN"
+
+
+@pytest.mark.asyncio
+async def test_list_pending_for_incumbent_filters_by_incumbent():
+    incumbent_user_id = uuid4()
+    owner_position_id = uuid4()
+    ministry_id = uuid4()
+
+    class PendingStub(StubMinistryRepository):
+        async def fetch_pending_for_incumbent(self, user_id, locale_id):
+            if user_id == incumbent_user_id:
+                return [
+                    MinistryListItemResult(
+                        id=ministry_id, name="Badminton", status=MinistryStatus.PENDING_APPROVAL.value, has_priority_booking=False, is_active=True
+                    )
+                ]
+            return []
+
+    stub = PendingStub()
+    approval_service = make_approval_service(stub, position_stub=StubPositionRepository(incumbents={owner_position_id: incumbent_user_id}))
+    approval_service._user_ctx = UserContext(user_id=incumbent_user_id, email="incumbent@example.com", is_admin=False, is_superuser=False)
+
+    result = await approval_service.list_pending_for_incumbent()
+    assert len(result.items) == 1
+    assert result.items[0].id == ministry_id
+
+
+@pytest.mark.asyncio
+async def test_update_rejected_application_locks_owner_position():
+    ministry_id = uuid4()
+    applicant_user_id = uuid4()
+    owner_position_id = uuid4()
+    secondary_id = uuid4()
+    locale_id = uuid4()
+    ministry = _pending_ministry(
+        ministry_id=ministry_id, owner_position_id=owner_position_id, submitted_by_id=applicant_user_id, status=MinistryStatus.REJECTED.value
+    )
+    stub = StubMinistryRepository(
+        ministry_by_id={ministry_id: ministry},
+        members_by_ministry={
+            ministry_id: [
+                MinistryMemberResult(user_id=applicant_user_id, member_role=MinistryMemberRole.PRIMARY.value),
+                MinistryMemberResult(user_id=secondary_id, member_role=MinistryMemberRole.SECONDARY.value),
+            ]
+        },
+    )
+    approval_service = make_approval_service(stub)
+    approval_service._user_ctx = UserContext(user_id=applicant_user_id, email="applicant@example.com", is_admin=False, is_superuser=False)
+
+    new_secondary_id = uuid4()
+    await approval_service.update_rejected_application(
+        ministry_id,
+        UpdateRejectedMinistryApplicationCommand(
+            translations=[OrgTranslationCommand(locale_id=locale_id, name="Updated Name")],
+            members=[
+                MinistryMemberEntryCommand(user_id=applicant_user_id, member_role=MinistryMemberRole.PRIMARY),
+                MinistryMemberEntryCommand(user_id=new_secondary_id, member_role=MinistryMemberRole.SECONDARY),
+            ],
+        ),
+    )
+
+    assert stub.upsert_translation_calls
+    assert stub.replace_members_calls
+    assert stub.update_calls[-1]["values"].get("owner_position_id") is None
+
+
+@pytest.mark.asyncio
+async def test_resubmit_rejected_application_returns_to_pending_approval():
+    ministry_id = uuid4()
+    applicant_user_id = uuid4()
+    owner_position_id = uuid4()
+    ministry = _pending_ministry(
+        ministry_id=ministry_id, owner_position_id=owner_position_id, submitted_by_id=applicant_user_id, status=MinistryStatus.REJECTED.value
+    )
+    stub = StubMinistryRepository(
+        ministry_by_id={ministry_id: ministry},
+        members_by_ministry={
+            ministry_id: [
+                MinistryMemberResult(user_id=applicant_user_id, member_role=MinistryMemberRole.PRIMARY.value),
+                MinistryMemberResult(user_id=uuid4(), member_role=MinistryMemberRole.SECONDARY.value),
+            ]
+        },
+    )
+    approval_service = make_approval_service(stub, position_stub=StubPositionRepository(incumbents={owner_position_id: uuid4()}))
+    approval_service._user_ctx = UserContext(user_id=applicant_user_id, email="applicant@example.com", is_admin=False, is_superuser=False)
+
+    await approval_service.resubmit_ministry(ministry_id)
+
+    assert stub.update_calls[-1]["values"]["status"] == MinistryStatus.PENDING_APPROVAL.value
+    assert stub.insert_approval_calls
+
+
+@pytest.mark.asyncio
+async def test_approve_ministry_as_incumbent_dispatches_decision_mail():
+    ministry_id = uuid4()
+    owner_position_id = uuid4()
+    incumbent_user_id = uuid4()
+    applicant_user_id = uuid4()
+    ministry = _pending_ministry(ministry_id=ministry_id, owner_position_id=owner_position_id, submitted_by_id=applicant_user_id)
+    stub = StubMinistryRepository(ministry_by_id={ministry_id: ministry})
+    mail_port = StubMailSendPort()
+    mail_service = MinistryApplicationMailService(
+        mail_port,
+        stub,
+        StubPositionRepository(incumbents={owner_position_id: incumbent_user_id}),
+        StubMailUserRepository(
+            users={applicant_user_id: UserSensitive(id=applicant_user_id, email="applicant@example.com", verified=True, is_active=True, is_admin=False)}
+        ),
+        facility_booking_base_url="http://localhost:5174",
+        enabled=True,
+    )
+    approval_service = make_approval_service(
+        stub, position_stub=StubPositionRepository(incumbents={owner_position_id: incumbent_user_id}), mail_service=mail_service
+    )
+    approval_service._user_ctx = UserContext(user_id=incumbent_user_id, email="incumbent@example.com", is_admin=False, is_superuser=False)
+
+    await approval_service.approve_ministry_as_incumbent(ministry_id, ApproveMinistryCommand())
+
+    assert len(mail_port.calls) == 1
+    assert mail_port.calls[0]["to_email"] == "applicant@example.com"
+    assert "Approved" in mail_port.calls[0]["subject"]
+
+
+@pytest.mark.asyncio
+async def test_reject_ministry_as_incumbent_forbidden_for_non_incumbent():
+    ministry_id = uuid4()
+    owner_position_id = uuid4()
+    ministry = _pending_ministry(ministry_id=ministry_id, owner_position_id=owner_position_id, submitted_by_id=uuid4())
+    stub = StubMinistryRepository(ministry_by_id={ministry_id: ministry})
+    approval_service = make_approval_service(stub, position_stub=StubPositionRepository(incumbents={owner_position_id: uuid4()}))
+    approval_service._user_ctx = UserContext(user_id=uuid4(), email="other@example.com", is_admin=False, is_superuser=False)
+
+    with pytest.raises(ForbiddenException) as exc_info:
+        await approval_service.reject_ministry_as_incumbent(ministry_id, RejectMinistryCommand(rejection_reason="No"))
+    assert exc_info.value.error_code == "ORG_MINISTRY_APPROVAL_FORBIDDEN"
+
+
+@pytest.mark.asyncio
+async def test_reject_ministry_as_incumbent_dispatches_decision_mail():
+    ministry_id = uuid4()
+    owner_position_id = uuid4()
+    incumbent_user_id = uuid4()
+    applicant_user_id = uuid4()
+    ministry = _pending_ministry(ministry_id=ministry_id, owner_position_id=owner_position_id, submitted_by_id=applicant_user_id)
+    stub = StubMinistryRepository(ministry_by_id={ministry_id: ministry})
+    mail_port = StubMailSendPort()
+    mail_service = MinistryApplicationMailService(
+        mail_port,
+        stub,
+        StubPositionRepository(incumbents={owner_position_id: incumbent_user_id}),
+        StubMailUserRepository(
+            users={applicant_user_id: UserSensitive(id=applicant_user_id, email="applicant@example.com", verified=True, is_active=True, is_admin=False)}
+        ),
+        facility_booking_base_url="http://localhost:5174",
+        enabled=True,
+    )
+    approval_service = make_approval_service(
+        stub, position_stub=StubPositionRepository(incumbents={owner_position_id: incumbent_user_id}), mail_service=mail_service
+    )
+    approval_service._user_ctx = UserContext(user_id=incumbent_user_id, email="incumbent@example.com", is_admin=False, is_superuser=False)
+
+    await approval_service.reject_ministry_as_incumbent(ministry_id, RejectMinistryCommand(rejection_reason="Incomplete roster"))
+
+    assert len(mail_port.calls) == 1
+    assert mail_port.calls[0]["to_email"] == "applicant@example.com"
+    assert "Declined" in mail_port.calls[0]["subject"]
+    assert "Incomplete roster" in mail_port.calls[0]["body_html"]
+
+
+@pytest.mark.asyncio
+async def test_admin_approve_ministry_does_not_dispatch_decision_mail():
+    ministry_id = uuid4()
+    owner_position_id = uuid4()
+    ministry = _pending_ministry(ministry_id=ministry_id, owner_position_id=owner_position_id, submitted_by_id=uuid4())
+    stub = StubMinistryRepository(ministry_by_id={ministry_id: ministry})
+    mail_port = StubMailSendPort()
+    mail_service = MinistryApplicationMailService(
+        mail_port, stub, StubPositionRepository(), StubMailUserRepository(users={}), facility_booking_base_url="http://localhost:5174", enabled=True
+    )
+    approval_service = make_approval_service(stub, mail_service=mail_service)
+
+    await approval_service.approve_ministry(ministry_id, ApproveMinistryCommand())
+
+    assert mail_port.calls == []

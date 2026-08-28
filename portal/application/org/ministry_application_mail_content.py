@@ -46,6 +46,34 @@ def build_incumbent_notification_html(*, ministry_name_en: str, ministry_name_zh
 
 APPLICANT_SUBMIT_SUBJECT = "Ministry Application Submitted / 事工申請已提交"
 INCUMBENT_NOTIFICATION_SUBJECT = "Ministry Application Pending Your Approval / 事工申請待您核准"
+APPLICANT_APPROVED_SUBJECT = "Ministry Application Approved / 事工申請已核准"
+APPLICANT_REJECTED_SUBJECT = "Ministry Application Declined / 事工申請未通過"
+
+
+def build_applicant_approved_html(*, ministry_name_en: str, ministry_name_zh: str, my_ministry_url: str) -> str:
+    return f"""<div>
+<p>Hello,</p>
+<p>Your ministry application for <strong>{_escape_html(ministry_name_en)}</strong> has been approved.</p>
+<p><a href="{_escape_html(my_ministry_url)}">View My Ministry</a></p>
+<hr />
+<p>您好，</p>
+<p>您的事工申請「<strong>{_escape_html(ministry_name_zh)}</strong>」已獲核准。</p>
+<p><a href="{_escape_html(my_ministry_url)}">查看我的事工</a></p>
+</div>"""
+
+
+def build_applicant_rejected_html(*, ministry_name_en: str, ministry_name_zh: str, rejection_reason: str, my_ministry_url: str) -> str:
+    return f"""<div>
+<p>Hello,</p>
+<p>Your ministry application for <strong>{_escape_html(ministry_name_en)}</strong> was not approved.</p>
+<p>Reason: {_escape_html(rejection_reason)}</p>
+<p><a href="{_escape_html(my_ministry_url)}">View My Ministry</a></p>
+<hr />
+<p>您好，</p>
+<p>您的事工申請「<strong>{_escape_html(ministry_name_zh)}</strong>」未獲核准。</p>
+<p>原因：{_escape_html(rejection_reason)}</p>
+<p><a href="{_escape_html(my_ministry_url)}">查看我的事工</a></p>
+</div>"""
 
 
 def _escape_html(value: str) -> str:

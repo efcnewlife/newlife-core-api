@@ -26,6 +26,7 @@ from portal.application.org.commands import (
     UpdateMemberPersonCommand,
     UpdateMinistryCommand,
     UpdatePositionCommand,
+    UpdateRejectedMinistryApplicationCommand,
 )
 from portal.application.org.results import (
     AssignablePositionResult,
@@ -92,6 +93,7 @@ from portal.serializers.admin.v1.org.translation import (
     AdminPositionTranslationInput,
     AdminPositionTranslationItem,
 )
+from portal.serializers.apis.v1.ministry import ApiMinistryApprovalPendingItem, ApiMinistryApprovalPendingList, ApiRejectedMinistryApplicationUpdate
 from portal.serializers.apis.v1.org import ApiOrgUserSearchItem, ApiOrgUserSearchList
 from portal.serializers.mixins import DeleteBaseModel, GenericQueryBaseModel
 
@@ -439,3 +441,22 @@ def org_user_search_to_command(q: str) -> OrgUserSearchCommand:
 
 def org_user_search_list_to_api(result: OrgUserSearchListResult) -> ApiOrgUserSearchList:
     return ApiOrgUserSearchList(items=[ApiOrgUserSearchItem(id=item.id, email=item.email, display_name=item.display_name) for item in result.items])
+
+
+def pending_approvals_for_incumbent_to_api(result: MinistryListResult) -> ApiMinistryApprovalPendingList:
+    return ApiMinistryApprovalPendingList(
+        items=[
+            ApiMinistryApprovalPendingItem(id=item.id, name=item.name, status=item.status, has_priority_booking=item.has_priority_booking)
+            for item in result.items
+        ]
+    )
+
+
+def update_rejected_ministry_application_to_command(model: ApiRejectedMinistryApplicationUpdate) -> UpdateRejectedMinistryApplicationCommand:
+    return UpdateRejectedMinistryApplicationCommand(
+        ministry_type_id=model.ministry_type_id,
+        target_audience_ids=model.target_audience_ids,
+        has_priority_booking=model.has_priority_booking,
+        translations=_org_translation_commands(model.translations) if model.translations is not None else None,
+        members=_member_commands(model.members) if model.members is not None else None,
+    )

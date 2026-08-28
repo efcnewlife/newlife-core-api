@@ -224,6 +224,13 @@ class StubMinistryRepository:
     async def fetch_approval_request_pages(self, command) -> tuple[list[MinistryApprovalResult], int]:
         return [], 0
 
+    async def fetch_pending_for_incumbent(self, user_id: UUID, locale_id) -> list[MinistryListItemResult]:
+        return []
+
+    async def is_user_booking_member(self, ministry_id: UUID, user_id: UUID) -> bool:
+        members = self.members_by_ministry.get(ministry_id, [])
+        return any(member.user_id == user_id for member in members)
+
     async def delete_hard(self, ministry_id):
         pass
 

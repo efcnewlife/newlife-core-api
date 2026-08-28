@@ -6,8 +6,12 @@ from typing import Optional
 from uuid import UUID
 
 from portal.application.org.ministry_application_mail_content import (
+    APPLICANT_APPROVED_SUBJECT,
+    APPLICANT_REJECTED_SUBJECT,
     APPLICANT_SUBMIT_SUBJECT,
     INCUMBENT_NOTIFICATION_SUBJECT,
+    build_applicant_approved_html,
+    build_applicant_rejected_html,
     build_applicant_submit_confirmation_html,
     build_incumbent_notification_html,
     resolve_bilingual_ministry_names,
@@ -106,3 +110,42 @@ class MinistryApplicationMailService:
             )
         except Exception:
             logger.exception("Failed to send ministry application submit emails for ministry %s", ministry_id)
+
+    @distributed_trace()
+    async def send_decision_notification(
+        self, *, ministry_id: UUID, applicant_user_id: Optional[UUID], approved: bool, rejection_reason: Optional[str] = None
+    ) -> None:
+        if not self._enabled:
+            return
+
+        try:
+            ministry = await self._ministry_repository.get_by_id(ministry_id, all_locales=True)
+            if not ministry:
+                logger.warning("Skip ministry decision mail: ministry %s not found", ministry_id)
+                return
+
+            resolved_applicant_id = applicant_user_id or ministry.submitted_by_id
+            if not resolved_applicant_id:
+                logger.warning("Skip ministry decision mail: ministry %s has no applicant", ministry_id)
+                return
+
+            applicant = await self._user_repository.get_sensitive_by_id(resolved_applicant_id)
+            if not applicant or not applicant.email:
+                logger.warning("Skip ministry decision mail: applicant %s has no email", resolved_applicant_id)
+                return
+
+            ministry_name_en, ministry_name_zh = resolve_bilingual_ministry_names(ministry.translations, ministry.name)
+            my_ministry_url = f"{self._facility_booking_base_url}/my-ministry"
+            if approved:
+                subject = APPLICANT_APPROVED_SUBJECT
+                body_html = build_applicant_approved_html(ministry_name_en=ministry_name_en, ministry_name_zh=ministry_name_zh, my_ministry_url=my_ministry_url)
+            else:
+                reason = (rejection_reason or ministry.rejection_reason or "No reason provided").strip()
+                subject = APPLICANT_REJECTED_SUBJECT
+                body_html = build_applicant_rejected_html(
+                    ministry_name_en=ministry_name_en, ministry_name_zh=ministry_name_zh, rejection_reason=reason, my_ministry_url=my_ministry_url
+                )
+
+            await self._deliver_html_mail(intended_recipient=applicant.email, subject=subject, body_html=body_html)
+        except Exception:
+            logger.exception("Failed to send ministry application decision email for ministry %s", ministry_id)
