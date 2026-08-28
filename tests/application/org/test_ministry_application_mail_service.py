@@ -155,6 +155,58 @@ async def test_send_submit_notifications_noop_when_disabled():
 
 
 @pytest.mark.asyncio
+async def test_send_decision_notification_incumbent_channel_sends_single_applicant_email():
+    ministry_id = uuid4()
+    owner_position_id = uuid4()
+    applicant_user_id = uuid4()
+    incumbent_user_id = uuid4()
+    mail_port = StubMailSendPort()
+    ministry_stub = StubMinistryRepository(
+        ministry_by_id={
+            ministry_id: MinistryDetailResult(
+                id=ministry_id,
+                name="Badminton",
+                status=MinistryStatus.PENDING_APPROVAL.value,
+                owner_position_id=owner_position_id,
+                submitted_by_id=applicant_user_id,
+                has_priority_booking=False,
+                is_active=True,
+                translations=[
+                    TranslationItemResult(locale_id=EN_LOCALE_ID, name="Badminton Club"),
+                    TranslationItemResult(locale_id=ZH_TW_LOCALE_ID, name="羽毛球社"),
+                ],
+            )
+        }
+    )
+    user_stub = StubMailUserRepository(
+        users={
+            applicant_user_id: UserSensitive(id=applicant_user_id, email="applicant@example.com", verified=True, is_active=True, is_admin=False),
+            incumbent_user_id: UserSensitive(id=incumbent_user_id, email="incumbent@example.com", verified=True, is_active=True, is_admin=False),
+        }
+    )
+    service = make_mail_service(mail_port, ministry_stub, StubPositionRepository(incumbents={owner_position_id: incumbent_user_id}), user_stub)
+
+    await service.send_decision_notification(
+        ministry_id=ministry_id,
+        applicant_user_id=applicant_user_id,
+        approved=False,
+        decision_channel=MinistryDecisionChannel.INCUMBENT,
+        decided_by_user_id=incumbent_user_id,
+        owner_position_id=owner_position_id,
+        rejection_reason="Incomplete roster",
+    )
+
+    assert len(mail_port.calls) == 1
+    assert mail_port.calls[0]["to_email"] == "applicant@example.com"
+    assert "Declined" in mail_port.calls[0]["subject"]
+    assert "was not approved" in mail_port.calls[0]["body_html"]
+    assert "Incomplete roster" in mail_port.calls[0]["body_html"]
+    assert "羽毛球社" in mail_port.calls[0]["body_html"]
+    assert "未獲核准" in mail_port.calls[0]["body_html"]
+    assert "on behalf of" not in mail_port.calls[0]["body_html"]
+
+
+@pytest.mark.asyncio
 async def test_send_decision_notification_staff_channel_sends_applicant_and_incumbent_emails():
     ministry_id = uuid4()
     owner_position_id = uuid4()
