@@ -5,11 +5,13 @@ Organization bounded context DI container.
 from dependency_injector import containers, providers
 
 from portal.application.org.member_person_service import MemberPersonService
+from portal.application.org.ministry_application_mail_service import MinistryApplicationMailService
 from portal.application.org.ministry_approval_service import MinistryApprovalService
 from portal.application.org.ministry_catalog_service import MinistryCatalogService
 from portal.application.org.ministry_service import MinistryService
 from portal.application.org.org_user_search_service import OrgUserSearchService
 from portal.application.org.position_service import PositionService
+from portal.config import settings as app_settings
 from portal.infrastructure.persistence.repositories.member.person_repository import PersonRepository
 from portal.infrastructure.persistence.repositories.org.ministry_repository import MinistryRepository
 from portal.infrastructure.persistence.repositories.org.ministry_type_repository import MinistryTypeRepository
@@ -39,8 +41,22 @@ class OrgContainer(containers.DeclarativeContainer):
     ministry_catalog_service = providers.Factory(
         MinistryCatalogService, ministry_type_repository=ministry_type_repository, target_audience_repository=target_audience_repository
     )
+    ministry_application_mail_service = providers.Factory(
+        MinistryApplicationMailService,
+        mail_send_port=core.graph_mail_provider,
+        ministry_repository=ministry_repository,
+        position_repository=position_repository,
+        user_repository=user_repository,
+        facility_booking_base_url=app_settings.FACILITY_BOOKING_BASE_URL,
+        enabled=app_settings.GRAPH_MAIL_SEND_ENABLED,
+        override_recipients=app_settings.graph_mail_override_recipients(),
+    )
     ministry_approval_service = providers.Factory(
-        MinistryApprovalService, ministry_repository=ministry_repository, ministry_service=ministry_service, position_repository=position_repository
+        MinistryApprovalService,
+        ministry_repository=ministry_repository,
+        ministry_service=ministry_service,
+        position_repository=position_repository,
+        ministry_application_mail_service=ministry_application_mail_service,
     )
     position_service = providers.Factory(PositionService, position_repository=position_repository)
     member_person_service = providers.Factory(MemberPersonService, person_repository=person_repository)

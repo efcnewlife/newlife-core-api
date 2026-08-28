@@ -16,6 +16,7 @@ from portal.application.org.commands import (
     ReplaceMinistryMembersCommand,
     SubmitMinistryCommand,
 )
+from portal.application.org.ministry_application_mail_service import MinistryApplicationMailService
 from portal.application.org.ministry_service import MinistryService
 from portal.application.org.results import CreateIdResult, MinistryApprovalResult, MinistryPageResult
 from portal.domain.org.constants import MinistryApprovalStatus, MinistryStatus, OrgErrorCode
@@ -30,10 +31,17 @@ from portal.libs.tracing.distributed_trace import distributed_trace
 class MinistryApprovalService:
     """Ministry submission and approval workflow."""
 
-    def __init__(self, ministry_repository: MinistryRepository, ministry_service: MinistryService, position_repository: PositionRepository):
+    def __init__(
+        self,
+        ministry_repository: MinistryRepository,
+        ministry_service: MinistryService,
+        position_repository: PositionRepository,
+        ministry_application_mail_service: MinistryApplicationMailService | None = None,
+    ):
         self._repository = ministry_repository
         self._ministry_service = ministry_service
         self._position_repository = position_repository
+        self._ministry_application_mail_service = ministry_application_mail_service
         self._req_ctx: Optional[RequestContext] = get_request_context()
         self._user_ctx: Optional[UserContext] = get_user_context()
 
@@ -120,6 +128,10 @@ class MinistryApprovalService:
                 requested_by_id=user_id,
             )
         )
+        if self._ministry_application_mail_service:
+            await self._ministry_application_mail_service.send_submit_notifications(
+                ministry_id=ministry_id, owner_position_id=ministry.owner_position_id, applicant_user_id=user_id
+            )
 
     @distributed_trace()
     async def approve_ministry(self, ministry_id: UUID, command: ApproveMinistryCommand) -> None:

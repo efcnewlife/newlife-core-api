@@ -114,6 +114,12 @@ class Configuration(BaseSettings):
     AZURE_APP_CLIENT_SECRET: Optional[str] = os.getenv(key="AZURE_APP_CLIENT_SECRET", default=None)
     AZURE_ALLOWED_ISSUERS: Optional[str] = os.getenv(key="AZURE_ALLOWED_ISSUERS", default=None)
 
+    # [Microsoft Graph Mail.Send — ministry application notifications]
+    GRAPH_MAIL_SEND_ENABLED: bool = Converter.to_bool(os.getenv(key="GRAPH_MAIL_SEND_ENABLED", default="false"), default=False)
+    GRAPH_MAIL_SENDER_MAILBOX: Optional[str] = os.getenv(key="GRAPH_MAIL_SENDER_MAILBOX", default=None)
+    GRAPH_MAIL_OVERRIDE_TO: Optional[str] = os.getenv(key="GRAPH_MAIL_OVERRIDE_TO", default=None)
+    FACILITY_BOOKING_BASE_URL: str = os.getenv(key="FACILITY_BOOKING_BASE_URL", default="http://localhost:5174")
+
     # [Member web apps — Origin -> app_code for /api/v1 auth]
     # Format: code|origin|origin,code|origin
     # Example: facility-booking|http://localhost:5174,another-app|http://localhost:5180
@@ -177,6 +183,12 @@ class Configuration(BaseSettings):
     @property
     def is_dev(self) -> bool:
         return self.ENV.lower() not in ("prod", "stg")
+
+    def graph_mail_override_recipients(self) -> list[str]:
+        """Non-prod only: redirect ministry application mail to these addresses."""
+        if self.is_prod or not self.GRAPH_MAIL_OVERRIDE_TO:
+            return []
+        return [part.strip() for part in self.GRAPH_MAIL_OVERRIDE_TO.split(",") if part.strip()]
 
 
 @lru_cache()

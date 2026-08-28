@@ -369,6 +369,16 @@ The Admin Portal SPA can sign in with Microsoft and exchange the Entra **ID toke
 4. Ensure `CORS_ALLOWED_ORIGINS` includes the Admin Portal origin.
 5. The portal user must already exist with `is_admin`, `is_active`, and `verified`; matching is by **email** from the token.
 
+#### Microsoft Graph Mail.Send (Ministry Application notifications)
+
+When `GRAPH_MAIL_SEND_ENABLED=true`, successful Ministry Application submit sends bilingual Outlook messages (English first, then Chinese) from `GRAPH_MAIL_SENDER_MAILBOX` via Graph `Mail.Send`:
+
+1. On the same Entra app registration used for `sync-microsoft-users`, add **Application** permission **Microsoft Graph → Mail.Send** and grant **admin consent**.
+2. Set `GRAPH_MAIL_SENDER_MAILBOX` to the system mailbox UPN (the app must be allowed to send as that user).
+3. Set `FACILITY_BOOKING_BASE_URL` to the Facility Booking SPA origin (deep links: `/my-ministry`, `/my-ministry/approvals/{ministryId}`).
+4. Keep `AZURE_TENANT_ID`, `AZURE_APP_CLIENT_ID`, and `AZURE_APP_CLIENT_SECRET` configured (same as directory sync).
+5. Optional (non-`prod` only): set `GRAPH_MAIL_OVERRIDE_TO` to one or more comma-separated addresses so dev/stg mail never reaches real applicants or incumbents. The subject line is prefixed with `[DEV -> intended@recipient]`.
+
 ### Docker
 
 Make sure you have Docker installed and running.
