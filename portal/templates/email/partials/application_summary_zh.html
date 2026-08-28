@@ -1,0 +1,29 @@
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin: 16px 0; background-color: #e9f3f5; border-radius: 6px;">
+  <tr>
+    <td style="padding: 16px;">
+      <p style="margin: 0 0 12px; font-size: 14px; font-weight: bold; color: #1e283f;">申請摘要</p>
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="font-size: 14px; color: #1e283f;">
+        <tr>
+          <td style="padding: 4px 0; width: 40%; color: #5a6478;">事工類型</td>
+          <td style="padding: 4px 0;">{{ application_summary.ministry_type_name_zh }}</td>
+        </tr>
+        <tr>
+          <td style="padding: 4px 0; color: #5a6478;">申請人</td>
+          <td style="padding: 4px 0;">{{ application_summary.applicant_display_name }}</td>
+        </tr>
+        <tr>
+          <td style="padding: 4px 0; color: #5a6478;">提交時間</td>
+          <td style="padding: 4px 0;">{{ application_summary.submitted_at_display }}</td>
+        </tr>
+        <tr>
+          <td style="padding: 4px 0; color: #5a6478;">目標對象</td>
+          <td style="padding: 4px 0;">{{ application_summary.target_audience_names_zh }}</td>
+        </tr>
+        <tr>
+          <td style="padding: 4px 0; color: #5a6478;">主要同工</td>
+          <td style="padding: 4px 0;">{{ application_summary.primary_steward_display_name }}</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
