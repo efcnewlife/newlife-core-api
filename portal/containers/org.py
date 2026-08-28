@@ -46,6 +46,7 @@ class OrgContainer(containers.DeclarativeContainer):
         mail_send_port=core.graph_mail_provider,
         email_template_render_port=core.email_template_render_provider,
         ministry_repository=ministry_repository,
+        ministry_type_repository=ministry_type_repository,
         position_repository=position_repository,
         user_repository=user_repository,
         facility_booking_base_url=app_settings.FACILITY_BOOKING_BASE_URL,

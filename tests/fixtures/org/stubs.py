@@ -45,11 +45,15 @@ class StubStewardDirectoryRow:
 class StubMinistryTypeRepository:
     """In-memory ministry type catalog stub."""
 
-    def __init__(self, default_type_id: UUID | None = None):
+    def __init__(self, default_type_id: UUID | None = None, names_by_locale: dict[UUID, dict[UUID, str]] | None = None):
         self.default_type_id = default_type_id or UUID("00000000-0000-4000-8000-000000000001")
+        self.names_by_locale = names_by_locale or {}
 
     async def get_active_by_id(self, ministry_type_id: UUID) -> MinistryTypeResult | None:
         return MinistryTypeResult(id=ministry_type_id, code=MINISTRY_TYPE_INTERNAL)
+
+    async def get_translated_name_by_id(self, ministry_type_id: UUID, locale_id: UUID) -> str | None:
+        return self.names_by_locale.get(ministry_type_id, {}).get(locale_id)
 
     async def get_id_by_code(self, code: str) -> UUID | None:
         if code == MINISTRY_TYPE_INTERNAL:
@@ -84,10 +88,12 @@ class StubMinistryRepository:
         ministry_by_id: dict[UUID, MinistryDetailResult] | None = None,
         members_by_ministry: dict[UUID, list[MinistryMemberResult]] | None = None,
         directory_rows: list[StubStewardDirectoryRow] | None = None,
+        target_audiences_by_ministry_locale: dict[tuple[UUID, UUID | None], list[TargetAudienceResult]] | None = None,
     ):
         self.ministry_by_id = ministry_by_id or {}
         self.members_by_ministry = members_by_ministry or {}
         self.directory_rows = directory_rows or []
+        self.target_audiences_by_ministry_locale = target_audiences_by_ministry_locale or {}
         self.insert_calls: list[dict] = []
         self.update_calls: list[dict] = []
         self.upsert_translation_calls: list[list] = []
@@ -142,7 +148,7 @@ class StubMinistryRepository:
         return []
 
     async def list_target_audiences(self, ministry_id: UUID, locale_id):
-        return []
+        return self.target_audiences_by_ministry_locale.get((ministry_id, locale_id), [])
 
     async def insert_approval(self, payload: dict) -> None:
         self.insert_approval_calls.append(payload)

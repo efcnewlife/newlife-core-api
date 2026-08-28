@@ -47,6 +47,16 @@ class MinistryTypeRepository:
         )
         return row
 
+    async def get_translated_name_by_id(self, ministry_type_id: UUID, locale_id: UUID) -> Optional[str]:
+        name = await (
+            self._session.select(OrgMinistryTypeTranslation.name)
+            .select_from(OrgMinistryTypeTranslation)
+            .where(OrgMinistryTypeTranslation.ministry_type_id == ministry_type_id)
+            .where(OrgMinistryTypeTranslation.locale_id == locale_id)
+            .fetchval()
+        )
+        return name
+
     async def get_id_by_code(self, code: str) -> Optional[UUID]:
         ministry_type_id = await (
             self._session.select(OrgMinistryType.id).where(OrgMinistryType.code == code).where(OrgMinistryType.is_active == True).fetchval()

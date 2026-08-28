@@ -13,7 +13,7 @@ from portal.application.org.ministry_application_mail_service import MinistryApp
 from portal.application.org.results import MinistryDetailResult, MinistryMemberResult, TargetAudienceResult, TranslationItemResult
 from portal.domain.org.constants import MinistryDecisionChannel, MinistryMemberRole, MinistryStatus
 from portal.providers.template_render_provider import TemplateRenderProvider
-from tests.fixtures.org.stubs import StubMinistryRepository, StubPositionRepository
+from tests.fixtures.org.stubs import StubMinistryRepository, StubMinistryTypeRepository, StubPositionRepository
 
 
 class StubMailSendPort:
@@ -42,6 +42,7 @@ def make_mail_service(
     position_stub: StubPositionRepository,
     user_stub: StubMailUserRepository,
     *,
+    ministry_type_stub: StubMinistryTypeRepository | None = None,
     enabled: bool = True,
     override_recipients: list[str] | None = None,
 ) -> MinistryApplicationMailService:
@@ -49,6 +50,7 @@ def make_mail_service(
         mail_port,
         TemplateRenderProvider(),
         ministry_stub,
+        ministry_type_stub or StubMinistryTypeRepository(),
         position_stub,
         user_stub,
         facility_booking_base_url="http://localhost:5174",
@@ -58,11 +60,13 @@ def make_mail_service(
 
 
 @pytest.mark.asyncio
-async def test_send_submit_notifications_sends_applicant_and_incumbent_emails():
+async def test_send_submit_notifications_incumbent_email_has_locale_aware_summary():
     ministry_id = uuid4()
     owner_position_id = uuid4()
     applicant_user_id = uuid4()
     incumbent_user_id = uuid4()
+    ministry_type_id = uuid4()
+    audience_id = uuid4()
     mail_port = StubMailSendPort()
     ministry_stub = StubMinistryRepository(
         ministry_by_id={
@@ -71,7 +75,7 @@ async def test_send_submit_notifications_sends_applicant_and_incumbent_emails():
                 name="Fallback",
                 status=MinistryStatus.PENDING_APPROVAL.value,
                 owner_position_id=owner_position_id,
-                ministry_type_name="Sports",
+                ministry_type_id=ministry_type_id,
                 submitted_at=datetime(2026, 1, 15, 18, 30, tzinfo=timezone.utc),
                 has_priority_booking=False,
                 is_active=True,
@@ -79,11 +83,15 @@ async def test_send_submit_notifications_sends_applicant_and_incumbent_emails():
                     TranslationItemResult(locale_id=EN_LOCALE_ID, name="Badminton Club"),
                     TranslationItemResult(locale_id=ZH_TW_LOCALE_ID, name="羽毛球社"),
                 ],
-                target_audiences=[TargetAudienceResult(id=uuid4(), code="adults", name="Adults")],
                 members=[MinistryMemberResult(user_id=applicant_user_id, member_role=MinistryMemberRole.PRIMARY.value, display_name="Primary Steward")],
             )
-        }
+        },
+        target_audiences_by_ministry_locale={
+            (ministry_id, EN_LOCALE_ID): [TargetAudienceResult(id=audience_id, code="all_ages", name="All ages")],
+            (ministry_id, ZH_TW_LOCALE_ID): [TargetAudienceResult(id=audience_id, code="all_ages", name="全年龄")],
+        },
     )
+    ministry_type_stub = StubMinistryTypeRepository(names_by_locale={ministry_type_id: {EN_LOCALE_ID: "Sports", ZH_TW_LOCALE_ID: "運動事工"}})
     user_stub = StubMailUserRepository(
         users={
             applicant_user_id: UserSensitive(id=applicant_user_id, email="applicant@example.com", verified=True, is_active=True, is_admin=False),
@@ -91,7 +99,75 @@ async def test_send_submit_notifications_sends_applicant_and_incumbent_emails():
         },
         profiles={applicant_user_id: UserDetail(id=applicant_user_id, email="applicant@example.com", preferred_name="Applicant Name")},
     )
-    service = make_mail_service(mail_port, ministry_stub, StubPositionRepository(incumbents={owner_position_id: incumbent_user_id}), user_stub)
+    service = make_mail_service(
+        mail_port, ministry_stub, StubPositionRepository(incumbents={owner_position_id: incumbent_user_id}), user_stub, ministry_type_stub=ministry_type_stub
+    )
+
+    await service.send_submit_notifications(ministry_id=ministry_id, owner_position_id=owner_position_id, applicant_user_id=applicant_user_id)
+
+    incumbent_call = next(call for call in mail_port.calls if call["to_email"] == "incumbent@example.com")
+    body_html = incumbent_call["body_html"]
+    english_marker_index = body_html.index("English")
+    zh_marker_index = body_html.index("中文")
+    divider_index = body_html.index("border-top: 1px solid #e9f3f5")
+    assert english_marker_index < divider_index < zh_marker_index
+    assert body_html.index("Application summary") < body_html.index("申請摘要")
+    assert body_html.index("Application summary") < divider_index
+    assert body_html.index("申請摘要") > divider_index
+    en_section = body_html[english_marker_index:divider_index]
+    zh_section = body_html[zh_marker_index:]
+    assert "Sports" in en_section
+    assert "All ages" in en_section
+    assert "全年龄" not in en_section
+    assert "運動事工" in zh_section
+    assert "全年龄" in zh_section
+    assert "All ages" not in zh_section
+    assert body_html.count("Application summary") == 1
+    assert body_html.count("申請摘要") == 1
+
+
+@pytest.mark.asyncio
+async def test_send_submit_notifications_sends_applicant_and_incumbent_emails():
+    ministry_id = uuid4()
+    owner_position_id = uuid4()
+    applicant_user_id = uuid4()
+    incumbent_user_id = uuid4()
+    ministry_type_id = uuid4()
+    mail_port = StubMailSendPort()
+    ministry_stub = StubMinistryRepository(
+        ministry_by_id={
+            ministry_id: MinistryDetailResult(
+                id=ministry_id,
+                name="Fallback",
+                status=MinistryStatus.PENDING_APPROVAL.value,
+                owner_position_id=owner_position_id,
+                ministry_type_id=ministry_type_id,
+                submitted_at=datetime(2026, 1, 15, 18, 30, tzinfo=timezone.utc),
+                has_priority_booking=False,
+                is_active=True,
+                translations=[
+                    TranslationItemResult(locale_id=EN_LOCALE_ID, name="Badminton Club"),
+                    TranslationItemResult(locale_id=ZH_TW_LOCALE_ID, name="羽毛球社"),
+                ],
+                members=[MinistryMemberResult(user_id=applicant_user_id, member_role=MinistryMemberRole.PRIMARY.value, display_name="Primary Steward")],
+            )
+        },
+        target_audiences_by_ministry_locale={
+            (ministry_id, EN_LOCALE_ID): [TargetAudienceResult(id=uuid4(), code="adults", name="Adults")],
+            (ministry_id, ZH_TW_LOCALE_ID): [TargetAudienceResult(id=uuid4(), code="adults", name="成人")],
+        },
+    )
+    ministry_type_stub = StubMinistryTypeRepository(names_by_locale={ministry_type_id: {EN_LOCALE_ID: "Sports", ZH_TW_LOCALE_ID: "運動事工"}})
+    user_stub = StubMailUserRepository(
+        users={
+            applicant_user_id: UserSensitive(id=applicant_user_id, email="applicant@example.com", verified=True, is_active=True, is_admin=False),
+            incumbent_user_id: UserSensitive(id=incumbent_user_id, email="incumbent@example.com", verified=True, is_active=True, is_admin=False),
+        },
+        profiles={applicant_user_id: UserDetail(id=applicant_user_id, email="applicant@example.com", preferred_name="Applicant Name")},
+    )
+    service = make_mail_service(
+        mail_port, ministry_stub, StubPositionRepository(incumbents={owner_position_id: incumbent_user_id}), user_stub, ministry_type_stub=ministry_type_stub
+    )
 
     await service.send_submit_notifications(ministry_id=ministry_id, owner_position_id=owner_position_id, applicant_user_id=applicant_user_id)
 

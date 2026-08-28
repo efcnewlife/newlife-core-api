@@ -9,6 +9,7 @@ from portal.application.org.ministry_application_mail_content import (
     APPLICANT_APPROVED_SUBJECT,
     APPLICANT_REJECTED_SUBJECT,
     APPLICANT_SUBMIT_SUBJECT,
+    EN_LOCALE_ID,
     INCUMBENT_NOTIFICATION_SUBJECT,
     INCUMBENT_STAFF_DECISION_SUBJECT,
     TEMPLATE_APPLICANT_DECISION_APPROVED,
@@ -16,15 +17,19 @@ from portal.application.org.ministry_application_mail_content import (
     TEMPLATE_APPLICANT_SUBMIT_CONFIRMATION,
     TEMPLATE_INCUMBENT_NOTIFICATION,
     TEMPLATE_INCUMBENT_STAFF_DECISION_NOTIFICATION,
+    ZH_CN_LOCALE_ID,
+    ZH_TW_LOCALE_ID,
     build_application_summary_context,
+    format_target_audience_names,
     resolve_bilingual_ministry_names,
+    resolve_ministry_type_names_for_mail,
     resolve_staff_display_name,
     resolve_user_display_name,
 )
 from portal.application.org.ministry_application_mail_delivery import resolve_mail_delivery_targets
 from portal.domain.email.ports import EmailTemplateRenderPort
 from portal.domain.org.constants import MinistryDecisionChannel
-from portal.domain.org.ports import MailSendPort
+from portal.domain.org.ports import MailSendPort, MinistryTypeNameLookupPort
 from portal.infrastructure.persistence.repositories.org.ministry_repository import MinistryRepository
 from portal.infrastructure.persistence.repositories.org.position_repository import PositionRepository
 from portal.infrastructure.persistence.repositories.user_repository import UserRepository
@@ -40,6 +45,7 @@ class MinistryApplicationMailService:
         mail_send_port: MailSendPort,
         email_template_render_port: EmailTemplateRenderPort,
         ministry_repository: MinistryRepository,
+        ministry_type_repository: MinistryTypeNameLookupPort,
         position_repository: PositionRepository,
         user_repository: UserRepository,
         *,
@@ -50,6 +56,7 @@ class MinistryApplicationMailService:
         self._mail_send_port = mail_send_port
         self._email_template_render_port = email_template_render_port
         self._ministry_repository = ministry_repository
+        self._ministry_type_repository = ministry_type_repository
         self._position_repository = position_repository
         self._user_repository = user_repository
         self._facility_booking_base_url = facility_booking_base_url.rstrip("/")
@@ -66,6 +73,28 @@ class MinistryApplicationMailService:
 
     async def _render(self, template_name: str, **context: object) -> str:
         return await self._email_template_render_port.render_email_template(template_name, **context)
+
+    async def _list_target_audiences_zh(self, ministry_id: UUID):
+        zh_tw_audiences = await self._ministry_repository.list_target_audiences(ministry_id, ZH_TW_LOCALE_ID)
+        if format_target_audience_names(zh_tw_audiences) != "—":
+            return zh_tw_audiences
+        return await self._ministry_repository.list_target_audiences(ministry_id, ZH_CN_LOCALE_ID)
+
+    async def _build_application_summary(self, *, ministry, applicant_display_name: str):
+        code_fallback = ministry.ministry_type_code or (ministry.ministry_type.code if ministry.ministry_type else None)
+        ministry_type_name_en, ministry_type_name_zh = await resolve_ministry_type_names_for_mail(
+            self._ministry_type_repository, ministry_type_id=ministry.ministry_type_id, code_fallback=code_fallback
+        )
+        target_audiences_en = await self._ministry_repository.list_target_audiences(ministry.id, EN_LOCALE_ID)
+        target_audiences_zh = await self._list_target_audiences_zh(ministry.id)
+        return build_application_summary_context(
+            ministry=ministry,
+            applicant_display_name=applicant_display_name,
+            ministry_type_name_en=ministry_type_name_en,
+            ministry_type_name_zh=ministry_type_name_zh,
+            target_audience_names_en=format_target_audience_names(target_audiences_en),
+            target_audience_names_zh=format_target_audience_names(target_audiences_zh),
+        )
 
     @distributed_trace()
     async def send_submit_notifications(self, *, ministry_id: UUID, owner_position_id: UUID, applicant_user_id: Optional[UUID]) -> None:
@@ -103,7 +132,7 @@ class MinistryApplicationMailService:
                 return
 
             applicant_display_name = await resolve_user_display_name(self._user_repository, applicant_user_id)
-            application_summary = build_application_summary_context(ministry=ministry, applicant_display_name=applicant_display_name)
+            application_summary = await self._build_application_summary(ministry=ministry, applicant_display_name=applicant_display_name)
             body_html = await self._render(
                 TEMPLATE_INCUMBENT_NOTIFICATION,
                 ministry_name_en=ministry_name_en,
