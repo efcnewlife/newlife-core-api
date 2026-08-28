@@ -10,9 +10,11 @@ from pydantic import ValidationError
 
 from portal.application.org.commands import (
     CreateMinistryCommand,
+    MinistryApplicationCommand,
     MinistryMemberEntryCommand,
     MinistryScheduleCommand,
     OrgTranslationCommand,
+    OrgUserSearchCommand,
     PagesQueryCommand,
     ReplaceMinistryMembersCommand,
     StewardDirectoryQueryCommand,
@@ -21,14 +23,23 @@ from portal.application.org.commands import (
 from portal.application.org.ministry_approval_service import MinistryApprovalService
 from portal.application.org.ministry_schedule import validate_ministry_schedules
 from portal.application.org.ministry_service import MinistryService
-from portal.application.org.results import MinistryDetailResult, MinistryMemberResult, TargetAudienceResult
+from portal.application.org.org_user_search_service import OrgUserSearchService
+from portal.application.org.results import MinistryDetailResult, MinistryMemberResult, OrgUserSearchItemResult, TargetAudienceResult
 from portal.application.org.steward_directory_query import matches_steward_directory_q
 from portal.application.org.target_audience_validation import validate_target_audience_ids
 from portal.domain.facility.days_of_week_mask import days_to_mask, mask_to_days
 from portal.domain.org.catalog_codes import TARGET_AUDIENCE_ADULTS, TARGET_AUDIENCE_ALL_AGES
 from portal.domain.org.constants import MinistryMemberRole, MinistryStatus
 from portal.exceptions.responses import BadRequestException, NotFoundException
-from tests.fixtures.org.stubs import StubMinistryRepository, StubMinistryTypeRepository, StubStewardDirectoryRow, StubTargetAudienceRepository
+from portal.libs.contexts.user_context import UserContext
+from tests.fixtures.org.stubs import (
+    StubMinistryRepository,
+    StubMinistryTypeRepository,
+    StubPositionRepository,
+    StubStewardDirectoryRow,
+    StubTargetAudienceRepository,
+    StubUserRepository,
+)
 
 
 def make_service(
@@ -38,6 +49,18 @@ def make_service(
 ) -> MinistryService:
     return MinistryService(
         ministry_stub or StubMinistryRepository(), type_stub or StubMinistryTypeRepository(), audience_stub or StubTargetAudienceRepository()
+    )
+
+
+def make_approval_service(
+    ministry_stub: StubMinistryRepository,
+    *,
+    type_stub: StubMinistryTypeRepository | None = None,
+    audience_stub: StubTargetAudienceRepository | None = None,
+    position_stub: StubPositionRepository | None = None,
+) -> MinistryApprovalService:
+    return MinistryApprovalService(
+        ministry_stub, make_service(ministry_stub, type_stub=type_stub, audience_stub=audience_stub), position_stub or StubPositionRepository()
     )
 
 
@@ -55,7 +78,7 @@ async def test_submit_ministry_requires_owner_position():
             ministry_id: MinistryDetailResult(id=ministry_id, name="Youth", status=MinistryStatus.DRAFT.value, has_priority_booking=False, is_active=True)
         }
     )
-    approval_service = MinistryApprovalService(stub, make_service(stub))
+    approval_service = make_approval_service(stub)
     with pytest.raises(BadRequestException, match="owner_position_id"):
         await approval_service.submit_ministry(ministry_id, SubmitMinistryCommand())
 
@@ -94,7 +117,7 @@ async def test_validate_members_for_submit_requires_primary():
 async def test_submit_ministry_not_found_error_code():
     ministry_id = uuid4()
     stub = StubMinistryRepository(ministry_by_id={})
-    approval_service = MinistryApprovalService(stub, make_service(stub))
+    approval_service = make_approval_service(stub)
     with pytest.raises(NotFoundException) as exc_info:
         await approval_service.submit_ministry(ministry_id, SubmitMinistryCommand())
     assert exc_info.value.error_code == "ORG_MINISTRY_NOT_FOUND"
@@ -175,11 +198,12 @@ def test_validate_time_tba_schedule_requires_anchor():
 def test_all_ages_target_audience_is_exclusive():
     adults_id = uuid4()
     all_ages_id = uuid4()
-    with pytest.raises(BadRequestException):
+    with pytest.raises(BadRequestException) as exc_info:
         validate_target_audience_ids(
             [all_ages_id, adults_id],
             [TargetAudienceResult(id=all_ages_id, code=TARGET_AUDIENCE_ALL_AGES), TargetAudienceResult(id=adults_id, code=TARGET_AUDIENCE_ADULTS)],
         )
+    assert exc_info.value.error_code == "ORG_MINISTRY_INVALID_TARGET_AUDIENCES"
 
 
 def _directory_fixture() -> tuple[UUID, UUID, UUID, StubMinistryRepository]:
@@ -315,3 +339,154 @@ async def test_replace_members_rejects_missing_secondary():
             ministry_id, ReplaceMinistryMembersCommand(members=[MinistryMemberEntryCommand(user_id=uuid4(), member_role=MinistryMemberRole.PRIMARY)])
         )
     assert stub.replace_members_calls == []
+
+
+@pytest.mark.asyncio
+async def test_submit_ministry_requires_owner_position_incumbent():
+    ministry_id = uuid4()
+    owner_position_id = uuid4()
+    stub = StubMinistryRepository(
+        ministry_by_id={
+            ministry_id: MinistryDetailResult(
+                id=ministry_id, name="Youth", status=MinistryStatus.DRAFT.value, owner_position_id=owner_position_id, has_priority_booking=False, is_active=True
+            )
+        },
+        members_by_ministry={
+            ministry_id: [
+                MinistryMemberResult(user_id=uuid4(), member_role=MinistryMemberRole.PRIMARY.value),
+                MinistryMemberResult(user_id=uuid4(), member_role=MinistryMemberRole.SECONDARY.value),
+            ]
+        },
+    )
+    approval_service = make_approval_service(stub, position_stub=StubPositionRepository(incumbents={}))
+    with pytest.raises(BadRequestException, match="incumbent") as exc_info:
+        await approval_service.submit_ministry(ministry_id, SubmitMinistryCommand())
+    assert exc_info.value.error_code == "ORG_POSITION_NO_INCUMBENT"
+
+
+@pytest.mark.asyncio
+async def test_create_application_persists_type_and_target_audiences():
+    owner_position_id = uuid4()
+    ministry_type_id = uuid4()
+    adults_id = uuid4()
+    primary_id = uuid4()
+    secondary_id = uuid4()
+    locale_id = uuid4()
+    stub = StubMinistryRepository()
+    audience_stub = StubTargetAudienceRepository({adults_id: TargetAudienceResult(id=adults_id, code=TARGET_AUDIENCE_ADULTS)})
+    type_stub = StubMinistryTypeRepository(default_type_id=ministry_type_id)
+    position_stub = StubPositionRepository(incumbents={owner_position_id: uuid4()})
+    approval_service = make_approval_service(stub, type_stub=type_stub, audience_stub=audience_stub, position_stub=position_stub)
+    result = await approval_service.create_application(
+        MinistryApplicationCommand(
+            owner_position_id=owner_position_id,
+            ministry_type_id=ministry_type_id,
+            target_audience_ids=[adults_id],
+            translations=[OrgTranslationCommand(locale_id=locale_id, name="Badminton")],
+            members=[
+                MinistryMemberEntryCommand(user_id=primary_id, member_role=MinistryMemberRole.PRIMARY),
+                MinistryMemberEntryCommand(user_id=secondary_id, member_role=MinistryMemberRole.SECONDARY),
+            ],
+        )
+    )
+    assert result.id is not None
+    assert stub.insert_calls[0]["ministry_type_id"] == ministry_type_id
+    assert stub.upsert_target_audiences_calls[0]["audience_ids"] == [adults_id]
+    assert stub.update_calls[-1]["values"]["status"] == MinistryStatus.PENDING_APPROVAL.value
+
+
+@pytest.mark.asyncio
+async def test_create_application_rejects_invalid_target_audiences():
+    owner_position_id = uuid4()
+    invalid_audience_id = uuid4()
+    locale_id = uuid4()
+    stub = StubMinistryRepository()
+    audience_stub = StubTargetAudienceRepository({})
+    position_stub = StubPositionRepository(incumbents={owner_position_id: uuid4()})
+    approval_service = make_approval_service(stub, audience_stub=audience_stub, position_stub=position_stub)
+    with pytest.raises(BadRequestException, match="target_audience") as exc_info:
+        await approval_service.create_application(
+            MinistryApplicationCommand(
+                owner_position_id=owner_position_id,
+                target_audience_ids=[invalid_audience_id],
+                translations=[OrgTranslationCommand(locale_id=locale_id, name="Badminton")],
+                members=[
+                    MinistryMemberEntryCommand(user_id=uuid4(), member_role=MinistryMemberRole.PRIMARY),
+                    MinistryMemberEntryCommand(user_id=uuid4(), member_role=MinistryMemberRole.SECONDARY),
+                ],
+            )
+        )
+    assert exc_info.value.error_code == "ORG_MINISTRY_INVALID_TARGET_AUDIENCES"
+    assert stub.insert_calls == []
+
+
+@pytest.mark.asyncio
+async def test_create_application_requires_secondary_member():
+    owner_position_id = uuid4()
+    locale_id = uuid4()
+    stub = StubMinistryRepository()
+    position_stub = StubPositionRepository(incumbents={owner_position_id: uuid4()})
+    approval_service = make_approval_service(stub, position_stub=position_stub)
+    with pytest.raises(BadRequestException, match="secondary") as exc_info:
+        await approval_service.create_application(
+            MinistryApplicationCommand(
+                owner_position_id=owner_position_id,
+                translations=[OrgTranslationCommand(locale_id=locale_id, name="Badminton")],
+                members=[MinistryMemberEntryCommand(user_id=uuid4(), member_role=MinistryMemberRole.PRIMARY)],
+            )
+        )
+    assert exc_info.value.error_code == "ORG_MINISTRY_SECONDARY_REQUIRED"
+
+
+@pytest.mark.asyncio
+async def test_create_application_rejects_vacant_owner_position():
+    owner_position_id = uuid4()
+    locale_id = uuid4()
+    stub = StubMinistryRepository()
+    position_stub = StubPositionRepository(incumbents={})
+    approval_service = make_approval_service(stub, position_stub=position_stub)
+    with pytest.raises(BadRequestException, match="incumbent") as exc_info:
+        await approval_service.create_application(
+            MinistryApplicationCommand(
+                owner_position_id=owner_position_id,
+                translations=[OrgTranslationCommand(locale_id=locale_id, name="Badminton")],
+                members=[
+                    MinistryMemberEntryCommand(user_id=uuid4(), member_role=MinistryMemberRole.PRIMARY),
+                    MinistryMemberEntryCommand(user_id=uuid4(), member_role=MinistryMemberRole.SECONDARY),
+                ],
+            )
+        )
+    assert exc_info.value.error_code == "ORG_POSITION_NO_INCUMBENT"
+    assert stub.insert_calls == []
+
+
+@pytest.mark.asyncio
+async def test_org_user_search_requires_minimum_query_length():
+    service = OrgUserSearchService(StubUserRepository())
+    with pytest.raises(BadRequestException, match="at least 2"):
+        await service.search_users(OrgUserSearchCommand(q="a"))
+
+
+@pytest.mark.asyncio
+async def test_org_user_search_excludes_requesting_user(monkeypatch):
+    current_user_id = uuid4()
+    monkeypatch.setattr(
+        "portal.application.org.org_user_search_service.get_user_context",
+        lambda: UserContext(user_id=current_user_id, email="me@example.com", is_admin=False, is_superuser=False),
+    )
+    repo = StubUserRepository()
+    service = OrgUserSearchService(repo)
+    await service.search_users(OrgUserSearchCommand(q="jane"))
+    assert repo.last_search is not None
+    assert repo.last_search["exclude_user_id"] == current_user_id
+    assert repo.last_search["limit"] == 20
+
+
+@pytest.mark.asyncio
+async def test_org_user_search_returns_active_users():
+    user_id = uuid4()
+    repo = StubUserRepository([OrgUserSearchItemResult(id=user_id, email="jane@example.com", display_name="Jane Steward")])
+    service = OrgUserSearchService(repo)
+    result = await service.search_users(OrgUserSearchCommand(q="jane"))
+    assert len(result.items) == 1
+    assert result.items[0].email == "jane@example.com"

@@ -24,6 +24,7 @@ __all__ = [
     "MinistryMemberEntryCommand",
     "MinistryScheduleCommand",
     "OrgTranslationCommand",
+    "OrgUserSearchCommand",
     "PagesQueryCommand",
     "PositionTranslationCommand",
     "RejectMinistryCommand",
@@ -141,6 +142,8 @@ class MinistryApplicationCommand(BaseModel):
     """Create ministry application with members."""
 
     owner_position_id: UUID = Field(...)
+    ministry_type_id: Optional[UUID] = Field(default=None)
+    target_audience_ids: list[UUID] = Field(default_factory=list)
     has_priority_booking: bool = Field(default=False)
     translations: list[OrgTranslationCommand] = Field(default_factory=list)
     members: list[MinistryMemberEntryCommand] = Field(default_factory=list)
@@ -150,6 +153,12 @@ class MinistryApplicationCommand(BaseModel):
         if self.translations:
             return self
         raise ValueError("translations are required")
+
+
+class OrgUserSearchCommand(BaseModel):
+    """Search active auth users for steward picker."""
+
+    q: str = Field(...)
 
 
 class CreatePositionCommand(BaseModel):

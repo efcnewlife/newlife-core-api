@@ -21,6 +21,7 @@ from portal.application.org.results import CreateIdResult, MinistryApprovalResul
 from portal.domain.org.constants import MinistryApprovalStatus, MinistryStatus, OrgErrorCode
 from portal.exceptions.responses import BadRequestException, NotFoundException
 from portal.infrastructure.persistence.repositories.org.ministry_repository import MinistryRepository
+from portal.infrastructure.persistence.repositories.org.position_repository import PositionRepository
 from portal.libs.contexts.request_context import RequestContext, get_request_context
 from portal.libs.contexts.user_context import UserContext, get_user_context
 from portal.libs.tracing.distributed_trace import distributed_trace
@@ -29,9 +30,10 @@ from portal.libs.tracing.distributed_trace import distributed_trace
 class MinistryApprovalService:
     """Ministry submission and approval workflow."""
 
-    def __init__(self, ministry_repository: MinistryRepository, ministry_service: MinistryService):
+    def __init__(self, ministry_repository: MinistryRepository, ministry_service: MinistryService, position_repository: PositionRepository):
         self._repository = ministry_repository
         self._ministry_service = ministry_service
+        self._position_repository = position_repository
         self._req_ctx: Optional[RequestContext] = get_request_context()
         self._user_ctx: Optional[UserContext] = get_user_context()
 
@@ -47,9 +49,14 @@ class MinistryApprovalService:
 
     @distributed_trace()
     async def create_application(self, command: MinistryApplicationCommand) -> CreateIdResult:
+        await self._require_owner_position_incumbent(command.owner_position_id)
         create_result = await self._ministry_service.create_ministry(
             CreateMinistryCommand(
-                owner_position_id=command.owner_position_id, has_priority_booking=command.has_priority_booking, translations=command.translations
+                owner_position_id=command.owner_position_id,
+                ministry_type_id=command.ministry_type_id,
+                target_audience_ids=command.target_audience_ids,
+                has_priority_booking=command.has_priority_booking,
+                translations=command.translations,
             )
         )
         if command.members:
@@ -57,11 +64,18 @@ class MinistryApprovalService:
         await self.submit_ministry(create_result.id, SubmitMinistryCommand())
         return create_result
 
+    async def _require_owner_position_incumbent(self, position_id: UUID) -> None:
+        incumbent_user_id = await self._position_repository.get_current_incumbent_user_id(position_id)
+        if not incumbent_user_id:
+            raise BadRequestException(
+                detail="Owner position must have a current incumbent",
+                error_code=OrgErrorCode.POSITION_NO_INCUMBENT.value,
+                context={"position_id": str(position_id)},
+            )
+
     def _ministry_not_found(self, ministry_id: UUID) -> NotFoundException:
         return NotFoundException(
-            detail=f"Ministry {ministry_id} not found",
-            error_code=OrgErrorCode.MINISTRY_NOT_FOUND.value,
-            context={"ministry_id": str(ministry_id)},
+            detail=f"Ministry {ministry_id} not found", error_code=OrgErrorCode.MINISTRY_NOT_FOUND.value, context={"ministry_id": str(ministry_id)}
         )
 
     @distributed_trace()
@@ -81,6 +95,7 @@ class MinistryApprovalService:
                 error_code=OrgErrorCode.MINISTRY_OWNER_POSITION_REQUIRED.value,
                 context={"ministry_id": str(ministry_id)},
             )
+        await self._require_owner_position_incumbent(ministry.owner_position_id)
         await self._ministry_service.validate_members_for_submit(ministry_id)
 
         now = datetime.now(timezone.utc)

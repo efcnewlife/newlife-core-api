@@ -37,9 +37,7 @@ class RentalRateService:
     async def _validate_facility(self, facility_id: UUID) -> None:
         if not await self._room_repository.exists_by_id(facility_id):
             raise NotFoundException(
-                detail=f"Room {facility_id} not found",
-                error_code=FacilityErrorCode.ROOM_NOT_FOUND.value,
-                context={"room_id": str(facility_id)},
+                detail=f"Room {facility_id} not found", error_code=FacilityErrorCode.ROOM_NOT_FOUND.value, context={"room_id": str(facility_id)}
             )
 
     @distributed_trace()
@@ -83,9 +81,7 @@ class RentalRateService:
         existing = await self._repository.get_rate_by_id(rate_id)
         if not existing:
             raise NotFoundException(
-                detail=f"Rental rate {rate_id} not found",
-                error_code=FacilityErrorCode.RENTAL_RATE_NOT_FOUND.value,
-                context={"rate_id": str(rate_id)},
+                detail=f"Rental rate {rate_id} not found", error_code=FacilityErrorCode.RENTAL_RATE_NOT_FOUND.value, context={"rate_id": str(rate_id)}
             )
         await self._validate_facility(command.facility_id)
         await self._validate_template_for_bind(command.template_id)
@@ -103,9 +99,7 @@ class RentalRateService:
             raise
         if affected == 0:
             raise NotFoundException(
-                detail=f"Rental rate {rate_id} not found",
-                error_code=FacilityErrorCode.RENTAL_RATE_NOT_FOUND.value,
-                context={"rate_id": str(rate_id)},
+                detail=f"Rental rate {rate_id} not found", error_code=FacilityErrorCode.RENTAL_RATE_NOT_FOUND.value, context={"rate_id": str(rate_id)}
             )
 
     @distributed_trace()
@@ -113,9 +107,7 @@ class RentalRateService:
         existing = await self._repository.get_rate_by_id(rate_id)
         if not existing:
             raise NotFoundException(
-                detail=f"Rental rate {rate_id} not found",
-                error_code=FacilityErrorCode.RENTAL_RATE_NOT_FOUND.value,
-                context={"rate_id": str(rate_id)},
+                detail=f"Rental rate {rate_id} not found", error_code=FacilityErrorCode.RENTAL_RATE_NOT_FOUND.value, context={"rate_id": str(rate_id)}
             )
         if command.permanent:
             await self._repository.delete_rate_hard(rate_id)

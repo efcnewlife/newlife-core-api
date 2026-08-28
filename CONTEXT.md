@@ -86,7 +86,11 @@ _Avoid_: blocking delete until unbind, leftover association rows after file dele
 
 **Ministry**:
 A church organizational unit with localized names, a ministry type, and a lifecycle status.
-_Avoid_: MinistryType (catalog), Ministry Application (the submit-for-approval request)
+_Avoid_: MinistryType (catalog), treating a pending Ministry Application as already the same as an Active Ministry
+
+**Ministry Application**:
+A Ministry in the pending-approval lifecycle: the member has submitted it and it awaits a Ministry Approver decision. It is not a separate aggregate from the Ministry row.
+_Avoid_: Application as a synonym for an Active Ministry, calling the approve/reject decision itself an Application
 
 **Ministry Type**:
 A catalog classification of a Ministry: Outreach, Internal, or Worship.
@@ -97,8 +101,27 @@ The Ministry lifecycle status after approval. Booking and owned-ministry lists i
 _Avoid_: Approved as a Ministry status, using Approval status in place of Ministry status
 
 **Ministry Approval**:
-A submit-and-decide record on a Ministry. Its status is pending, approved, or rejected. Approving it moves the Ministry to Active.
-_Avoid_: treating Approval status as the Ministry's own status
+The decide outcome on a Ministry Application: approved or rejected. Approving moves the Ministry to Active.
+_Avoid_: treating Approval as the Application itself, using Approval status as the Ministry's own status
+
+**Ministry Approver**:
+A person who may approve or reject a Ministry Application: the current incumbent of that Ministry's Owner position, or a user granted ministry approval authority in the admin portal.
+_Avoid_: incumbent-only as the sole rule, RBAC-only as the sole rule
+
+**Application notification email**:
+An Outlook message sent from a fixed system mailbox to the Owner-position incumbent when a member submits a Ministry Application. It deep-links into the facility-booking approval detail page after Microsoft sign-in. Body is bilingual: English first, then Chinese.
+_Avoid_: applicant confirmation as the same email, using the incumbent's personal mailbox as the sender
+
+**Application submit confirmation email**:
+An Outlook message to the applicant right after submit, summarizing the Ministry Application and linking to My Ministry. Body is bilingual: English first, then Chinese.
+
+**Application decision email**:
+An Outlook message to the applicant when a Ministry Application is approved or rejected.
+_Avoid_: treating this as the incumbent notification
+
+**Assignable Owner position**:
+An org position with `can_own_ministry` and a current incumbent. Booking create lists only these positions; submit is blocked if the chosen position has no incumbent.
+_Avoid_: vacant positions in the create picker, submit without a recipient for incumbent notification
 
 **Ministry Member**:
 A primary or secondary steward on a Ministry who may book on behalf of that Ministry.

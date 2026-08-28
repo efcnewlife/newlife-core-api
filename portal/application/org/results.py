@@ -240,6 +240,19 @@ class AssignablePositionResult(UUIDBaseModel):
     incumbent_display_name: Optional[str] = Field(default=None)
 
 
+class OrgUserSearchItemResult(UUIDBaseModel):
+    """Active auth user row for steward picker."""
+
+    email: Optional[str] = Field(default=None)
+    display_name: Optional[str] = Field(default=None)
+
+
+class OrgUserSearchListResult(BaseModel):
+    """Steward user search results."""
+
+    items: list[OrgUserSearchItemResult] = Field(default_factory=list)
+
+
 class MemberPersonDetailResult(UUIDBaseModel):
     """Member person detail."""
 

@@ -13,6 +13,7 @@ from portal.application.org.results import (
     MinistryListItemResult,
     MinistryMemberResult,
     MinistryTypeResult,
+    OrgUserSearchItemResult,
     TargetAudienceResult,
 )
 from portal.application.org.steward_directory_query import matches_steward_directory_q
@@ -101,9 +102,21 @@ class StubMinistryRepository:
 
     async def insert_ministry(self, payload: dict) -> None:
         self.insert_calls.append(payload)
+        ministry_id = payload["id"]
+        self.ministry_by_id[ministry_id] = MinistryDetailResult(
+            id=ministry_id,
+            name=None,
+            status=payload.get("status", MinistryStatus.DRAFT.value),
+            owner_position_id=payload.get("owner_position_id"),
+            has_priority_booking=payload.get("has_priority_booking", False),
+            is_active=payload.get("is_active", True),
+        )
 
     async def update_ministry(self, ministry_id: UUID, values: dict) -> int:
         self.update_calls.append({"ministry_id": ministry_id, "values": values})
+        existing = self.ministry_by_id.get(ministry_id)
+        if existing:
+            self.ministry_by_id[ministry_id] = existing.model_copy(update=values)
         return 1
 
     async def fetch_active_locale_ids(self, locale_ids: list[UUID]) -> set[UUID]:
@@ -117,6 +130,7 @@ class StubMinistryRepository:
 
     async def replace_members(self, ministry_id: UUID, members: list[dict]) -> None:
         self.replace_members_calls.append(dict(ministry_id=ministry_id, members=members))
+        self.members_by_ministry[ministry_id] = [MinistryMemberResult(user_id=member["user_id"], member_role=member["member_role"]) for member in members]
 
     async def upsert_schedules(self, ministry_id: UUID, rows: list[dict]) -> None:
         self.upsert_schedules_calls.append(dict(ministry_id=ministry_id, rows=rows))
@@ -222,3 +236,25 @@ class StubMinistryRepository:
     @staticmethod
     def is_unique_violation(exc: Exception) -> bool:
         return False
+
+
+class StubPositionRepository:
+    """In-memory position incumbent stub."""
+
+    def __init__(self, incumbents: dict[UUID, UUID] | None = None):
+        self.incumbents = incumbents or {}
+
+    async def get_current_incumbent_user_id(self, position_id: UUID) -> UUID | None:
+        return self.incumbents.get(position_id)
+
+
+class StubUserRepository:
+    """In-memory auth user search stub."""
+
+    def __init__(self, search_results: list[OrgUserSearchItemResult] | None = None):
+        self.search_results = search_results or []
+        self.last_search: dict | None = None
+
+    async def search_active_users(self, keyword: str, *, exclude_user_id: UUID | None = None, limit: int = 20):
+        self.last_search = {"keyword": keyword, "exclude_user_id": exclude_user_id, "limit": limit}
+        return self.search_results

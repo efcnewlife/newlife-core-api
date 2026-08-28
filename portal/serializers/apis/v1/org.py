@@ -38,3 +38,16 @@ class ApiAssignablePositionList(BaseModel):
     """Assignable positions."""
 
     items: list[ApiAssignablePositionItem] = Field(default_factory=list, description="Items")
+
+
+class ApiOrgUserSearchItem(UUIDBaseModel):
+    """Auth user row for steward picker."""
+
+    email: Optional[str] = Field(None, description="Login email")
+    display_name: Optional[str] = Field(None, serialization_alias="displayName", description="Display name")
+
+
+class ApiOrgUserSearchList(BaseModel):
+    """Steward user search results."""
+
+    items: list[ApiOrgUserSearchItem] = Field(default_factory=list, description="Items")
