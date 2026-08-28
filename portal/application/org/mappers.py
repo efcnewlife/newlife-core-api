@@ -50,7 +50,6 @@ from portal.application.org.results import (
     TranslationItemResult,
 )
 from portal.domain.common.mixins import UUIDBaseModel
-from portal.domain.org.constants import MinistryDecisionChannel
 from portal.serializers.admin.v1.ministry import (
     AdminMinistryApplicationCreate,
     AdminMinistryApprove,
@@ -255,11 +254,11 @@ def replace_ministry_members_to_command(model: AdminMinistryReplaceMembers) -> R
 
 
 def approve_ministry_to_command(model: AdminMinistryApprove) -> ApproveMinistryCommand:
-    return ApproveMinistryCommand(comment=model.comment, decision_channel=MinistryDecisionChannel.STAFF)
+    return ApproveMinistryCommand(comment=model.comment)
 
 
 def reject_ministry_to_command(model: AdminMinistryReject) -> RejectMinistryCommand:
-    return RejectMinistryCommand(rejection_reason=model.rejection_reason, comment=model.comment, decision_channel=MinistryDecisionChannel.STAFF)
+    return RejectMinistryCommand(rejection_reason=model.rejection_reason, comment=model.comment)
 
 
 def ministry_detail_to_api(result: MinistryDetailResult) -> AdminMinistryDetail:
