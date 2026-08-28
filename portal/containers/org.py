@@ -44,6 +44,7 @@ class OrgContainer(containers.DeclarativeContainer):
     ministry_application_mail_service = providers.Factory(
         MinistryApplicationMailService,
         mail_send_port=core.graph_mail_provider,
+        email_template_render_port=core.email_template_render_provider,
         ministry_repository=ministry_repository,
         position_repository=position_repository,
         user_repository=user_repository,

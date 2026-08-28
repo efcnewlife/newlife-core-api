@@ -1,19 +1,19 @@
 """
-Tests for ministry application bilingual mail content.
+Tests for ministry application bilingual mail content helpers.
 """
 
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from portal.application.org.ministry_application_mail_content import (
     EN_LOCALE_ID,
     ZH_TW_LOCALE_ID,
-    build_applicant_approved_html,
-    build_applicant_rejected_html,
-    build_applicant_submit_confirmation_html,
-    build_incumbent_notification_html,
+    build_application_summary_context,
+    format_submitted_at_toronto,
     resolve_bilingual_ministry_names,
 )
-from portal.application.org.results import TranslationItemResult
+from portal.application.org.results import MinistryDetailResult, MinistryMemberResult, MinistryTypeResult, TargetAudienceResult, TranslationItemResult
+from portal.domain.org.constants import MinistryMemberRole, MinistryStatus
 
 
 def test_resolve_bilingual_ministry_names_uses_locale_translations():
@@ -25,38 +25,32 @@ def test_resolve_bilingual_ministry_names_uses_locale_translations():
     assert chinese_name == zh_name
 
 
-def test_applicant_submit_confirmation_html_is_bilingual_en_then_zh():
-    html = build_applicant_submit_confirmation_html(
-        ministry_name_en="Badminton", ministry_name_zh="羽毛球", my_ministry_url="http://localhost:5174/my-ministry"
+def test_format_submitted_at_toronto_converts_utc_to_toronto():
+    submitted_at = datetime(2026, 1, 15, 18, 30, tzinfo=timezone.utc)
+    display = format_submitted_at_toronto(submitted_at)
+    assert "2026-01-15" in display
+    assert "EST" in display or "EDT" in display
+
+
+def test_build_application_summary_context_includes_key_fields():
+    applicant_user_id = uuid4()
+    ministry = MinistryDetailResult(
+        id=uuid4(),
+        name="Badminton",
+        status=MinistryStatus.PENDING_APPROVAL.value,
+        ministry_type_name="Sports",
+        submitted_at=datetime(2026, 1, 15, 18, 30, tzinfo=timezone.utc),
+        has_priority_booking=False,
+        is_active=True,
+        target_audiences=[TargetAudienceResult(id=uuid4(), code="youth", name="Youth")],
+        members=[
+            MinistryMemberResult(user_id=applicant_user_id, member_role=MinistryMemberRole.PRIMARY.value, display_name="Primary Steward"),
+            MinistryMemberResult(user_id=uuid4(), member_role=MinistryMemberRole.SECONDARY.value, display_name="Secondary"),
+        ],
     )
-    assert "Badminton" in html
-    assert "羽毛球" in html
-    assert html.index("Hello,") < html.index("您好")
-    assert "http://localhost:5174/my-ministry" in html
-
-
-def test_incumbent_notification_html_includes_approval_deep_link():
-    ministry_id = uuid4()
-    approval_url = f"http://localhost:5174/my-ministry/approvals/{ministry_id}"
-    html = build_incumbent_notification_html(
-        ministry_name_en="Badminton", ministry_name_zh="羽毛球", applicant_display_name="Jane Applicant", approval_detail_url=approval_url
-    )
-    assert approval_url in html
-    assert "Jane Applicant" in html
-    assert html.index("Review application") < html.index("審核申請")
-
-
-def test_applicant_approved_html_is_bilingual_en_then_zh():
-    html = build_applicant_approved_html(ministry_name_en="Badminton", ministry_name_zh="羽毛球", my_ministry_url="http://localhost:5174/my-ministry")
-    assert "has been approved" in html
-    assert "已獲核准" in html
-    assert html.index("Hello,") < html.index("您好")
-
-
-def test_applicant_rejected_html_includes_reason_bilingual():
-    html = build_applicant_rejected_html(
-        ministry_name_en="Badminton", ministry_name_zh="羽毛球", rejection_reason="Incomplete roster", my_ministry_url="http://localhost:5174/my-ministry"
-    )
-    assert "Incomplete roster" in html
-    assert "未獲核准" in html
-    assert html.index("Reason:") < html.index("原因：")
+    summary = build_application_summary_context(ministry=ministry, applicant_display_name="Jane Applicant")
+    assert summary.ministry_type_name == "Sports"
+    assert summary.applicant_display_name == "Jane Applicant"
+    assert summary.target_audience_names == "Youth"
+    assert summary.primary_steward_display_name == "Primary Steward"
+    assert "2026-01-15" in summary.submitted_at_display

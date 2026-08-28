@@ -9,7 +9,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field, model_validator
 
 from portal.application.rbac.commands import BulkIdsCommand, DeleteCommand, PagesQueryCommand
-from portal.domain.org.constants import MinistryMemberRole, MinistryStatus, PositionOffice, PositionTeam
+from portal.domain.org.constants import MinistryDecisionChannel, MinistryMemberRole, MinistryStatus, PositionOffice, PositionTeam
 
 __all__ = [
     "ApproveMinistryCommand",
@@ -130,6 +130,7 @@ class ApproveMinistryCommand(BaseModel):
     """Approve pending ministry."""
 
     comment: Optional[str] = Field(default=None)
+    decision_channel: Optional[MinistryDecisionChannel] = Field(default=None)
 
 
 class RejectMinistryCommand(BaseModel):
@@ -137,6 +138,7 @@ class RejectMinistryCommand(BaseModel):
 
     rejection_reason: str = Field(...)
     comment: Optional[str] = Field(default=None)
+    decision_channel: Optional[MinistryDecisionChannel] = Field(default=None)
 
 
 class UpdateRejectedMinistryApplicationCommand(BaseModel):

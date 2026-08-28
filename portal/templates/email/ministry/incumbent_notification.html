@@ -1,0 +1,26 @@
+{% extends "email/base.html" %}
+
+{% block title %}Ministry Application Pending Approval{% endblock %}
+
+{% block content %}
+<p style="margin: 0 0 16px; font-size: 16px;">Hello,</p>
+<p style="margin: 0 0 16px; font-size: 16px; line-height: 1.5;">
+  <strong>{{ applicant_display_name }}</strong> submitted a ministry application for <strong>{{ ministry_name_en }}</strong>.
+</p>
+
+{% include "email/partials/application_summary.html" %}
+
+<p style="margin: 0 0 16px;">
+  <a href="{{ approval_detail_url }}" style="display: inline-block; background-color: #1865d8; color: #ffffff; text-decoration: none; padding: 10px 18px; border-radius: 6px; font-weight: bold;">Review application</a>
+</p>
+
+{% include "email/partials/bilingual_divider.html" %}
+
+<p style="margin: 0 0 16px; font-size: 16px;">您好，</p>
+<p style="margin: 0 0 16px; font-size: 16px; line-height: 1.5;">
+  <strong>{{ applicant_display_name }}</strong> 提交了事工申請「<strong>{{ ministry_name_zh }}</strong>」。
+</p>
+<p style="margin: 0;">
+  <a href="{{ approval_detail_url }}" style="display: inline-block; background-color: #1865d8; color: #ffffff; text-decoration: none; padding: 10px 18px; border-radius: 6px; font-weight: bold;">審核申請</a>
+</p>
+{% endblock %}

@@ -42,10 +42,11 @@ from portal.application.org.steward_directory_query import matches_steward_direc
 from portal.application.org.target_audience_validation import validate_target_audience_ids
 from portal.domain.facility.days_of_week_mask import days_to_mask, mask_to_days
 from portal.domain.org.catalog_codes import TARGET_AUDIENCE_ADULTS, TARGET_AUDIENCE_ALL_AGES
-from portal.domain.org.constants import MinistryMemberRole, MinistryStatus
+from portal.domain.org.constants import MinistryDecisionChannel, MinistryMemberRole, MinistryStatus
 from portal.exceptions.responses import BadRequestException, ForbiddenException, NotFoundException
 from portal.libs.contexts.user_context import UserContext
-from tests.application.org.test_ministry_application_mail_service import StubMailSendPort, StubMailUserRepository
+from portal.providers.template_render_provider import TemplateRenderProvider
+from tests.application.org.test_ministry_application_mail_service import StubMailSendPort, StubMailUserRepository, make_mail_service
 from tests.fixtures.org.stubs import (
     StubMinistryRepository,
     StubMinistryTypeRepository,
@@ -504,7 +505,7 @@ async def test_submit_ministry_dispatches_submit_mail_notifications():
         },
     )
     mail_port = StubMailSendPort()
-    mail_service = MinistryApplicationMailService(
+    mail_service = make_mail_service(
         mail_port,
         stub,
         StubPositionRepository(incumbents={owner_position_id: incumbent_user_id}),
@@ -514,8 +515,6 @@ async def test_submit_ministry_dispatches_submit_mail_notifications():
                 incumbent_user_id: UserSensitive(id=incumbent_user_id, email="incumbent@example.com", verified=True, is_active=True, is_admin=False),
             }
         ),
-        facility_booking_base_url="http://localhost:5174",
-        enabled=True,
     )
     approval_service = make_approval_service(
         stub, position_stub=StubPositionRepository(incumbents={owner_position_id: incumbent_user_id}), mail_service=mail_service
@@ -749,15 +748,13 @@ async def test_approve_ministry_as_incumbent_dispatches_decision_mail():
     ministry = _pending_ministry(ministry_id=ministry_id, owner_position_id=owner_position_id, submitted_by_id=applicant_user_id)
     stub = StubMinistryRepository(ministry_by_id={ministry_id: ministry})
     mail_port = StubMailSendPort()
-    mail_service = MinistryApplicationMailService(
+    mail_service = make_mail_service(
         mail_port,
         stub,
         StubPositionRepository(incumbents={owner_position_id: incumbent_user_id}),
         StubMailUserRepository(
             users={applicant_user_id: UserSensitive(id=applicant_user_id, email="applicant@example.com", verified=True, is_active=True, is_admin=False)}
         ),
-        facility_booking_base_url="http://localhost:5174",
-        enabled=True,
     )
     approval_service = make_approval_service(
         stub, position_stub=StubPositionRepository(incumbents={owner_position_id: incumbent_user_id}), mail_service=mail_service
@@ -794,15 +791,13 @@ async def test_reject_ministry_as_incumbent_dispatches_decision_mail():
     ministry = _pending_ministry(ministry_id=ministry_id, owner_position_id=owner_position_id, submitted_by_id=applicant_user_id)
     stub = StubMinistryRepository(ministry_by_id={ministry_id: ministry})
     mail_port = StubMailSendPort()
-    mail_service = MinistryApplicationMailService(
+    mail_service = make_mail_service(
         mail_port,
         stub,
         StubPositionRepository(incumbents={owner_position_id: incumbent_user_id}),
         StubMailUserRepository(
             users={applicant_user_id: UserSensitive(id=applicant_user_id, email="applicant@example.com", verified=True, is_active=True, is_admin=False)}
         ),
-        facility_booking_base_url="http://localhost:5174",
-        enabled=True,
     )
     approval_service = make_approval_service(
         stub, position_stub=StubPositionRepository(incumbents={owner_position_id: incumbent_user_id}), mail_service=mail_service
@@ -818,17 +813,74 @@ async def test_reject_ministry_as_incumbent_dispatches_decision_mail():
 
 
 @pytest.mark.asyncio
-async def test_admin_approve_ministry_does_not_dispatch_decision_mail():
+async def test_admin_approve_ministry_dispatches_staff_decision_mails():
     ministry_id = uuid4()
     owner_position_id = uuid4()
-    ministry = _pending_ministry(ministry_id=ministry_id, owner_position_id=owner_position_id, submitted_by_id=uuid4())
+    applicant_user_id = uuid4()
+    incumbent_user_id = uuid4()
+    staff_user_id = uuid4()
+    ministry = _pending_ministry(ministry_id=ministry_id, owner_position_id=owner_position_id, submitted_by_id=applicant_user_id)
     stub = StubMinistryRepository(ministry_by_id={ministry_id: ministry})
     mail_port = StubMailSendPort()
-    mail_service = MinistryApplicationMailService(
-        mail_port, stub, StubPositionRepository(), StubMailUserRepository(users={}), facility_booking_base_url="http://localhost:5174", enabled=True
+    mail_service = make_mail_service(
+        mail_port,
+        stub,
+        StubPositionRepository(incumbents={owner_position_id: incumbent_user_id}),
+        StubMailUserRepository(
+            users={
+                applicant_user_id: UserSensitive(id=applicant_user_id, email="applicant@example.com", verified=True, is_active=True, is_admin=False),
+                incumbent_user_id: UserSensitive(id=incumbent_user_id, email="incumbent@example.com", verified=True, is_active=True, is_admin=False),
+                staff_user_id: UserSensitive(id=staff_user_id, email="staff@example.com", verified=True, is_active=True, is_admin=True),
+            }
+        ),
     )
-    approval_service = make_approval_service(stub, mail_service=mail_service)
+    approval_service = make_approval_service(
+        stub, position_stub=StubPositionRepository(incumbents={owner_position_id: incumbent_user_id}), mail_service=mail_service
+    )
+    approval_service._user_ctx = UserContext(user_id=staff_user_id, email="staff@example.com", is_admin=True, is_superuser=False)
 
-    await approval_service.approve_ministry(ministry_id, ApproveMinistryCommand())
+    await approval_service.approve_ministry(ministry_id, ApproveMinistryCommand(decision_channel=MinistryDecisionChannel.STAFF))
 
-    assert mail_port.calls == []
+    assert len(mail_port.calls) == 2
+    assert {call["to_email"] for call in mail_port.calls} == {"applicant@example.com", "incumbent@example.com"}
+    assert all("Approved" in call["subject"] or "Decision on Your Behalf" in call["subject"] for call in mail_port.calls)
+
+
+@pytest.mark.asyncio
+async def test_admin_reject_ministry_dispatches_staff_decision_mails():
+    ministry_id = uuid4()
+    owner_position_id = uuid4()
+    applicant_user_id = uuid4()
+    incumbent_user_id = uuid4()
+    staff_user_id = uuid4()
+    ministry = _pending_ministry(ministry_id=ministry_id, owner_position_id=owner_position_id, submitted_by_id=applicant_user_id)
+    stub = StubMinistryRepository(ministry_by_id={ministry_id: ministry})
+    mail_port = StubMailSendPort()
+    mail_service = make_mail_service(
+        mail_port,
+        stub,
+        StubPositionRepository(incumbents={owner_position_id: incumbent_user_id}),
+        StubMailUserRepository(
+            users={
+                applicant_user_id: UserSensitive(id=applicant_user_id, email="applicant@example.com", verified=True, is_active=True, is_admin=False),
+                incumbent_user_id: UserSensitive(id=incumbent_user_id, email="incumbent@example.com", verified=True, is_active=True, is_admin=False),
+                staff_user_id: UserSensitive(id=staff_user_id, email="staff@example.com", verified=True, is_active=True, is_admin=True),
+            }
+        ),
+    )
+    approval_service = make_approval_service(
+        stub, position_stub=StubPositionRepository(incumbents={owner_position_id: incumbent_user_id}), mail_service=mail_service
+    )
+    approval_service._user_ctx = UserContext(user_id=staff_user_id, email="staff@example.com", is_admin=True, is_superuser=False)
+
+    await approval_service.reject_ministry(
+        ministry_id, RejectMinistryCommand(rejection_reason="Incomplete roster", decision_channel=MinistryDecisionChannel.STAFF)
+    )
+
+    assert len(mail_port.calls) == 2
+    assert {call["to_email"] for call in mail_port.calls} == {"applicant@example.com", "incumbent@example.com"}
+    applicant_call = next(call for call in mail_port.calls if call["to_email"] == "applicant@example.com")
+    assert "Declined" in applicant_call["subject"]
+    assert "Incomplete roster" in applicant_call["body_html"]
+    assert "staff@example.com" not in applicant_call["body_html"]
+    assert "Church staff" in applicant_call["body_html"]

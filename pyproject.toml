@@ -34,6 +34,7 @@ dependencies = [
     "cryptography>=47,<48",
     "email-validator",
     "httpx",
+    "jinja2",
     "pillow",
     "python-multipart",
     "ujson",
