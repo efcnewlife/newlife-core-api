@@ -21,7 +21,7 @@ from portal.application.org.commands import (
 from portal.application.org.ministry_application_mail_service import MinistryApplicationMailService
 from portal.application.org.ministry_service import MinistryService
 from portal.application.org.results import CreateIdResult, MinistryApprovalResult, MinistryDetailResult, MinistryListResult, MinistryPageResult
-from portal.domain.org.constants import MinistryApprovalStatus, MinistryStatus, OrgErrorCode
+from portal.domain.org.constants import MinistryApprovalStatus, MinistryDecisionChannel, MinistryStatus, OrgErrorCode
 from portal.exceptions.responses import BadRequestException, ForbiddenException, NotFoundException
 from portal.infrastructure.persistence.repositories.org.ministry_repository import MinistryRepository
 from portal.infrastructure.persistence.repositories.org.position_repository import PositionRepository
@@ -195,6 +195,15 @@ class MinistryApprovalService:
         await self._repository.update_approval(
             ministry_id=ministry_id, status=MinistryApprovalStatus.APPROVED.value, resolved_by_id=user_id, decided_at=now, comment=command.comment
         )
+        if self._ministry_application_mail_service and command.decision_channel and user_id and ministry.owner_position_id:
+            await self._ministry_application_mail_service.send_decision_notification(
+                ministry_id=ministry_id,
+                applicant_user_id=ministry.submitted_by_id,
+                approved=True,
+                decision_channel=command.decision_channel,
+                decided_by_user_id=user_id,
+                owner_position_id=ministry.owner_position_id,
+            )
 
     @distributed_trace()
     async def reject_ministry(self, ministry_id: UUID, command: RejectMinistryCommand) -> None:
@@ -220,6 +229,16 @@ class MinistryApprovalService:
             decided_at=now,
             comment=command.comment or command.rejection_reason,
         )
+        if self._ministry_application_mail_service and command.decision_channel and user_id and ministry.owner_position_id:
+            await self._ministry_application_mail_service.send_decision_notification(
+                ministry_id=ministry_id,
+                applicant_user_id=ministry.submitted_by_id,
+                approved=False,
+                decision_channel=command.decision_channel,
+                decided_by_user_id=user_id,
+                owner_position_id=ministry.owner_position_id,
+                rejection_reason=command.rejection_reason,
+            )
 
     @distributed_trace()
     async def list_pending_for_incumbent(self) -> MinistryListResult:
@@ -241,11 +260,8 @@ class MinistryApprovalService:
         if not ministry:
             raise self._ministry_not_found(ministry_id)
         await self._require_incumbent(ministry)
-        await self.approve_ministry(ministry_id, command)
-        if self._ministry_application_mail_service:
-            await self._ministry_application_mail_service.send_decision_notification(
-                ministry_id=ministry_id, applicant_user_id=ministry.submitted_by_id, approved=True
-            )
+        command_with_channel = command.model_copy(update={"decision_channel": MinistryDecisionChannel.INCUMBENT})
+        await self.approve_ministry(ministry_id, command_with_channel)
 
     @distributed_trace()
     async def reject_ministry_as_incumbent(self, ministry_id: UUID, command: RejectMinistryCommand) -> None:
@@ -253,11 +269,8 @@ class MinistryApprovalService:
         if not ministry:
             raise self._ministry_not_found(ministry_id)
         await self._require_incumbent(ministry)
-        await self.reject_ministry(ministry_id, command)
-        if self._ministry_application_mail_service:
-            await self._ministry_application_mail_service.send_decision_notification(
-                ministry_id=ministry_id, applicant_user_id=ministry.submitted_by_id, approved=False, rejection_reason=command.rejection_reason
-            )
+        command_with_channel = command.model_copy(update={"decision_channel": MinistryDecisionChannel.INCUMBENT})
+        await self.reject_ministry(ministry_id, command_with_channel)
 
     @distributed_trace()
     async def update_rejected_application(self, ministry_id: UUID, command: UpdateRejectedMinistryApplicationCommand) -> None:

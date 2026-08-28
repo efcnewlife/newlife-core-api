@@ -1,0 +1,33 @@
+{% extends "email/base.html" %}
+
+{% block title %}Ministry Application Decision{% endblock %}
+
+{% block content %}
+<p style="margin: 0 0 16px; font-size: 16px;">Hello,</p>
+{% if approved %}
+<p style="margin: 0 0 16px; font-size: 16px; line-height: 1.5;">
+  <strong>{{ staff_display_name }}</strong> approved the ministry application for <strong>{{ ministry_name_en }}</strong> on your behalf as the Owner-position incumbent.
+</p>
+{% else %}
+<p style="margin: 0 0 16px; font-size: 16px; line-height: 1.5;">
+  <strong>{{ staff_display_name }}</strong> declined the ministry application for <strong>{{ ministry_name_en }}</strong> on your behalf as the Owner-position incumbent.
+</p>
+<p style="margin: 0 0 16px; font-size: 16px; line-height: 1.5;">Reason: {{ rejection_reason }}</p>
+{% endif %}
+<p style="margin: 0 0 16px; font-size: 16px; line-height: 1.5;">No further action is required from you.</p>
+
+{% include "email/partials/bilingual_divider.html" %}
+
+<p style="margin: 0 0 16px; font-size: 16px;">您好，</p>
+{% if approved %}
+<p style="margin: 0 0 16px; font-size: 16px; line-height: 1.5;">
+  <strong>{{ staff_display_name }}</strong> 已代表您（Owner 職位現任者）核准事工申請「<strong>{{ ministry_name_zh }}</strong>」。
+</p>
+{% else %}
+<p style="margin: 0 0 16px; font-size: 16px; line-height: 1.5;">
+  <strong>{{ staff_display_name }}</strong> 已代表您（Owner 職位現任者）拒絕事工申請「<strong>{{ ministry_name_zh }}</strong>」。
+</p>
+<p style="margin: 0 0 16px; font-size: 16px; line-height: 1.5;">原因：{{ rejection_reason }}</p>
+{% endif %}
+<p style="margin: 0; font-size: 16px; line-height: 1.5;">您無需再採取任何行動。</p>
+{% endblock %}

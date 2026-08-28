@@ -1,0 +1,35 @@
+{% extends "email/base.html" %}
+
+{% block title %}Ministry Application Approved{% endblock %}
+
+{% block content %}
+<p style="margin: 0 0 16px; font-size: 16px;">Hello,</p>
+{% if decision_channel == "staff" %}
+<p style="margin: 0 0 16px; font-size: 16px; line-height: 1.5;">
+  Your ministry application for <strong>{{ ministry_name_en }}</strong> has been approved by <strong>{{ staff_display_name }}</strong> on behalf of the Owner-position incumbent (<strong>{{ incumbent_display_name }}</strong>).
+</p>
+{% else %}
+<p style="margin: 0 0 16px; font-size: 16px; line-height: 1.5;">
+  Your ministry application for <strong>{{ ministry_name_en }}</strong> has been approved.
+</p>
+{% endif %}
+<p style="margin: 0 0 16px;">
+  <a href="{{ my_ministry_url }}" style="display: inline-block; background-color: #1865d8; color: #ffffff; text-decoration: none; padding: 10px 18px; border-radius: 6px; font-weight: bold;">View My Ministry</a>
+</p>
+
+{% include "email/partials/bilingual_divider.html" %}
+
+<p style="margin: 0 0 16px; font-size: 16px;">您好，</p>
+{% if decision_channel == "staff" %}
+<p style="margin: 0 0 16px; font-size: 16px; line-height: 1.5;">
+  您的事工申請「<strong>{{ ministry_name_zh }}</strong>」已由 <strong>{{ staff_display_name }}</strong> 代表 Owner 職位現任者（<strong>{{ incumbent_display_name }}</strong>）核准。
+</p>
+{% else %}
+<p style="margin: 0 0 16px; font-size: 16px; line-height: 1.5;">
+  您的事工申請「<strong>{{ ministry_name_zh }}</strong>」已獲核准。
+</p>
+{% endif %}
+<p style="margin: 0;">
+  <a href="{{ my_ministry_url }}" style="display: inline-block; background-color: #1865d8; color: #ffffff; text-decoration: none; padding: 10px 18px; border-radius: 6px; font-weight: bold;">查看我的事工</a>
+</p>
+{% endblock %}

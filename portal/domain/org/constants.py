@@ -30,6 +30,13 @@ class MinistryApprovalStatus(str, Enum):
     REJECTED = "rejected"
 
 
+class MinistryDecisionChannel(str, Enum):
+    """Who decided a ministry application and which email copy to use."""
+
+    INCUMBENT = "incumbent"
+    STAFF = "staff"
+
+
 class PositionTeam(str, Enum):
     """Church leadership team grouping."""
 

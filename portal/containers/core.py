@@ -15,6 +15,7 @@ from portal.providers.microsoft_oidc_provider import MicrosoftOidcProvider
 from portal.providers.ms_graph.container import MSGraphContainer
 from portal.providers.password_provider import PasswordProvider
 from portal.providers.refresh_token_provider import RefreshTokenProvider
+from portal.providers.template_render_provider import TemplateRenderProvider
 from portal.providers.token_blacklist_provider import TokenBlacklistProvider
 
 
@@ -40,3 +41,4 @@ class CoreContainer(containers.DeclarativeContainer):
     ms_graph = providers.Container(MSGraphContainer)
     microsoft_graph_provider = providers.Singleton(MicrosoftGraphProvider, users_factory=ms_graph.users.provider)
     graph_mail_provider = providers.Singleton(GraphMailProvider, mail_factory=ms_graph.mail.provider)
+    email_template_render_provider = providers.Singleton(TemplateRenderProvider)
