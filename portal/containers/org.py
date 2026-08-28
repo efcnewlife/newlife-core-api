@@ -8,12 +8,14 @@ from portal.application.org.member_person_service import MemberPersonService
 from portal.application.org.ministry_approval_service import MinistryApprovalService
 from portal.application.org.ministry_catalog_service import MinistryCatalogService
 from portal.application.org.ministry_service import MinistryService
+from portal.application.org.org_user_search_service import OrgUserSearchService
 from portal.application.org.position_service import PositionService
 from portal.infrastructure.persistence.repositories.member.person_repository import PersonRepository
 from portal.infrastructure.persistence.repositories.org.ministry_repository import MinistryRepository
 from portal.infrastructure.persistence.repositories.org.ministry_type_repository import MinistryTypeRepository
 from portal.infrastructure.persistence.repositories.org.position_repository import PositionRepository
 from portal.infrastructure.persistence.repositories.org.target_audience_repository import TargetAudienceRepository
+from portal.infrastructure.persistence.repositories.user_repository import UserRepository
 
 
 class OrgContainer(containers.DeclarativeContainer):
@@ -26,6 +28,7 @@ class OrgContainer(containers.DeclarativeContainer):
     target_audience_repository = providers.Factory(TargetAudienceRepository, session=core.request_session)
     position_repository = providers.Factory(PositionRepository, session=core.request_session)
     person_repository = providers.Factory(PersonRepository, session=core.request_session)
+    user_repository = providers.Factory(UserRepository, session=core.request_session)
 
     ministry_service = providers.Factory(
         MinistryService,
@@ -36,6 +39,9 @@ class OrgContainer(containers.DeclarativeContainer):
     ministry_catalog_service = providers.Factory(
         MinistryCatalogService, ministry_type_repository=ministry_type_repository, target_audience_repository=target_audience_repository
     )
-    ministry_approval_service = providers.Factory(MinistryApprovalService, ministry_repository=ministry_repository, ministry_service=ministry_service)
+    ministry_approval_service = providers.Factory(
+        MinistryApprovalService, ministry_repository=ministry_repository, ministry_service=ministry_service, position_repository=position_repository
+    )
     position_service = providers.Factory(PositionService, position_repository=position_repository)
     member_person_service = providers.Factory(MemberPersonService, person_repository=person_repository)
+    org_user_search_service = providers.Factory(OrgUserSearchService, user_repository=user_repository)

@@ -156,9 +156,7 @@ class MinistryService:
 
     def _ministry_not_found(self, ministry_id: UUID) -> NotFoundException:
         return NotFoundException(
-            detail=f"Ministry {ministry_id} not found",
-            error_code=OrgErrorCode.MINISTRY_NOT_FOUND.value,
-            context={"ministry_id": str(ministry_id)},
+            detail=f"Ministry {ministry_id} not found", error_code=OrgErrorCode.MINISTRY_NOT_FOUND.value, context={"ministry_id": str(ministry_id)}
         )
 
     @distributed_trace()
@@ -217,15 +215,9 @@ class MinistryService:
         primary_count = sum(1 for member in members if member.member_role == MinistryMemberRole.PRIMARY.value)
         secondary_count = sum(1 for member in members if member.member_role == MinistryMemberRole.SECONDARY.value)
         if primary_count != 1:
-            raise BadRequestException(
-                detail="Exactly one primary ministry member is required",
-                error_code=OrgErrorCode.MINISTRY_PRIMARY_REQUIRED.value,
-            )
+            raise BadRequestException(detail="Exactly one primary ministry member is required", error_code=OrgErrorCode.MINISTRY_PRIMARY_REQUIRED.value)
         if secondary_count < 1:
-            raise BadRequestException(
-                detail="At least one secondary ministry member is required",
-                error_code=OrgErrorCode.MINISTRY_SECONDARY_REQUIRED.value,
-            )
+            raise BadRequestException(detail="At least one secondary ministry member is required", error_code=OrgErrorCode.MINISTRY_SECONDARY_REQUIRED.value)
 
     @distributed_trace()
     async def replace_members(self, ministry_id: UUID, command: ReplaceMinistryMembersCommand) -> None:

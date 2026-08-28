@@ -73,9 +73,7 @@ class RoomSlotTemplateService:
     async def create_template(self, command: CreateRoomSlotTemplateCommand) -> CreateIdResult:
         if not await self._room_repository.exists_by_id(command.facility_id):
             raise NotFoundException(
-                detail=f"Room {command.facility_id} not found",
-                error_code=FacilityErrorCode.ROOM_NOT_FOUND.value,
-                context={"room_id": str(command.facility_id)},
+                detail=f"Room {command.facility_id} not found", error_code=FacilityErrorCode.ROOM_NOT_FOUND.value, context={"room_id": str(command.facility_id)}
             )
         self._validate_time_window(command)
         days_of_week_mask = self._encode_days_mask(command)
@@ -108,9 +106,7 @@ class RoomSlotTemplateService:
             )
         if not await self._room_repository.exists_by_id(command.facility_id):
             raise NotFoundException(
-                detail=f"Room {command.facility_id} not found",
-                error_code=FacilityErrorCode.ROOM_NOT_FOUND.value,
-                context={"room_id": str(command.facility_id)},
+                detail=f"Room {command.facility_id} not found", error_code=FacilityErrorCode.ROOM_NOT_FOUND.value, context={"room_id": str(command.facility_id)}
             )
         self._validate_time_window(command)
         days_of_week_mask = self._encode_days_mask(command)

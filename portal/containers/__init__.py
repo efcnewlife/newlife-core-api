@@ -66,6 +66,7 @@ class RootContainer(containers.DeclarativeContainer):
     org_ministry_approval_service = admin.org.ministry_approval_service
     org_position_service = admin.org.position_service
     org_member_person_service = admin.org.member_person_service
+    org_user_search_service = admin.org.org_user_search_service
 
     file_service = admin.content.file_service
     legal_document_service = admin.content.legal_document_service

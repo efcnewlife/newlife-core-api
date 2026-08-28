@@ -12,6 +12,7 @@ import sqlalchemy as sa
 from asyncpg import UniqueViolationError
 
 from portal.application.auth.results import UserDetail, UserSensitive
+from portal.application.org.results import OrgUserSearchItemResult
 from portal.application.rbac.commands import AdminUserPagesQueryCommand, CreateAdminUserCommand, DeleteCommand, UpdateAdminUserCommand
 from portal.application.rbac.results import AdminUserDetailResult, AdminUserListItem, AdminUserTableRow, CreateIdResult
 from portal.domain.auth.constants import AuthErrorCode
@@ -279,6 +280,22 @@ class UserRepository:
             .order_by(AuthUser.created_at.asc())
             .limit(100)
             .fetch(as_model=AdminUserListItem)
+        )
+        return users or []
+
+    async def search_active_users(self, keyword: str, *, exclude_user_id: Optional[UUID] = None, limit: int = 20) -> list[OrgUserSearchItemResult]:
+        pattern = f"%{keyword.strip()}%"
+        display_name = sa.func.coalesce(AuthUserProfile.preferred_name, AuthUser.email)
+        users: list[OrgUserSearchItemResult] = await (
+            self._session.select(AuthUser.id, AuthUser.email, display_name.label("display_name"))
+            .outerjoin(AuthUserProfile, AuthUser.id == AuthUserProfile.user_id)
+            .where(AuthUser.is_deleted == False)
+            .where(AuthUser.is_active == True)
+            .where(sa.or_(AuthUser.email.ilike(pattern), display_name.ilike(pattern)))
+            .where(exclude_user_id is not None, lambda: AuthUser.id != exclude_user_id)
+            .order_by(display_name.asc(), AuthUser.email.asc())
+            .limit(limit)
+            .fetch(as_model=OrgUserSearchItemResult)
         )
         return users or []
 

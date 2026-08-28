@@ -201,6 +201,8 @@ class AdminMinistryApplicationCreate(BaseModel):
     """Create and submit ministry application."""
 
     owner_position_id: UUID = Field(..., description="Owning position ID")
+    ministry_type_id: Optional[UUID] = Field(None, description="Ministry type ID")
+    target_audience_ids: list[UUID] = Field(default_factory=list, description="Target audience IDs")
     has_priority_booking: bool = Field(False, description="Priority booking flag")
     translations: list[AdminOrgTranslationInput] = Field(default_factory=list, description="Translations")
     members: list[AdminMinistryMemberInput] = Field(default_factory=list, description="Ministry members")

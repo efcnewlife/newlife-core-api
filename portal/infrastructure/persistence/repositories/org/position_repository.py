@@ -196,6 +196,10 @@ class PositionRepository:
             update={"current_user_id": incumbent[0] if incumbent else None, "current_user_display_name": incumbent[1] if incumbent else None}
         )
 
+    async def get_current_incumbent_user_id(self, position_id: UUID) -> Optional[UUID]:
+        incumbent = await self._current_incumbent(position_id)
+        return incumbent[0] if incumbent else None
+
     async def _current_incumbent(self, position_id: UUID) -> Optional[tuple[UUID, Optional[str]]]:
         display_name = sa.func.coalesce(AuthUserProfile.preferred_name, AuthUser.email)
         row = await (
@@ -253,14 +257,17 @@ class PositionRepository:
         else:
             query = query.outerjoin(OrgPositionTranslation, sa.false())
         query = (
-            query.outerjoin(OrgPositionAssignment, sa.and_(OrgPositionAssignment.position_id == OrgPosition.id, OrgPositionAssignment.end_at.is_(None)))
-            .outerjoin(AuthUser, AuthUser.id == OrgPositionAssignment.user_id)
+            query.join(OrgPositionAssignment, sa.and_(OrgPositionAssignment.position_id == OrgPosition.id, OrgPositionAssignment.end_at.is_(None)))
+            .join(AuthUser, AuthUser.id == OrgPositionAssignment.user_id)
             .outerjoin(AuthUserProfile, AuthUserProfile.user_id == AuthUser.id)
         )
         items: list[AssignablePositionResult] = await (
             query.where(OrgPosition.is_deleted == False)
             .where(OrgPosition.is_active == True)
             .where(OrgPosition.can_own_ministry == True)
+            .where(AuthUser.is_deleted == False)
+            .where(AuthUser.is_active == True)
+            .where(OrgPositionAssignment.user_id.isnot(None))
             .group_by(OrgPosition.id, OrgPosition.code, OrgPositionAssignment.user_id, AuthUser.email, AuthUserProfile.preferred_name)
             .order_by(OrgPosition.sequence)
             .fetch(as_model=AssignablePositionResult)

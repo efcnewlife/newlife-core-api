@@ -17,6 +17,7 @@ from portal.application.org.commands import (
     MinistryMemberEntryCommand,
     MinistryScheduleCommand,
     OrgTranslationCommand,
+    OrgUserSearchCommand,
     PagesQueryCommand,
     PositionTranslationCommand,
     RejectMinistryCommand,
@@ -38,6 +39,7 @@ from portal.application.org.results import (
     MinistryScheduleResult,
     MinistryTypeListResult,
     MinistryTypeResult,
+    OrgUserSearchListResult,
     PositionDetailResult,
     PositionPageResult,
     PositionTranslationItemResult,
@@ -90,6 +92,7 @@ from portal.serializers.admin.v1.org.translation import (
     AdminPositionTranslationInput,
     AdminPositionTranslationItem,
 )
+from portal.serializers.apis.v1.org import ApiOrgUserSearchItem, ApiOrgUserSearchList
 from portal.serializers.mixins import DeleteBaseModel, GenericQueryBaseModel
 
 
@@ -236,6 +239,8 @@ def update_ministry_to_command(model: AdminMinistryUpdate) -> UpdateMinistryComm
 def ministry_application_to_command(model: AdminMinistryApplicationCreate) -> MinistryApplicationCommand:
     return MinistryApplicationCommand(
         owner_position_id=model.owner_position_id,
+        ministry_type_id=model.ministry_type_id,
+        target_audience_ids=model.target_audience_ids,
         has_priority_booking=model.has_priority_booking,
         translations=_org_translation_commands(model.translations) or [],
         members=_member_commands(model.members),
@@ -426,3 +431,11 @@ def member_person_page_to_api(result: MemberPersonPageResult) -> AdminMemberPers
     return AdminMemberPersonPages(
         page=result.page, page_size=result.page_size, total=result.total, items=[member_person_detail_to_api(item) for item in result.items]
     )
+
+
+def org_user_search_to_command(q: str) -> OrgUserSearchCommand:
+    return OrgUserSearchCommand(q=q)
+
+
+def org_user_search_list_to_api(result: OrgUserSearchListResult) -> ApiOrgUserSearchList:
+    return ApiOrgUserSearchList(items=[ApiOrgUserSearchItem(id=item.id, email=item.email, display_name=item.display_name) for item in result.items])

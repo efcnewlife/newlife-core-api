@@ -60,9 +60,7 @@ class RoomBlackoutService:
             return
         if not await self._room_repository.exists_by_id(facility_id):
             raise NotFoundException(
-                detail=f"Room {facility_id} not found",
-                error_code=FacilityErrorCode.ROOM_NOT_FOUND.value,
-                context={"room_id": str(facility_id)},
+                detail=f"Room {facility_id} not found", error_code=FacilityErrorCode.ROOM_NOT_FOUND.value, context={"room_id": str(facility_id)}
             )
 
     async def _assert_no_overlap(
@@ -146,9 +144,7 @@ class RoomBlackoutService:
         existing = await self._repository.get_by_id(blackout_id)
         if not existing:
             raise NotFoundException(
-                detail=f"Blackout {blackout_id} not found",
-                error_code=FacilityErrorCode.BLACKOUT_NOT_FOUND.value,
-                context={"blackout_id": str(blackout_id)},
+                detail=f"Blackout {blackout_id} not found", error_code=FacilityErrorCode.BLACKOUT_NOT_FOUND.value, context={"blackout_id": str(blackout_id)}
             )
         await self._assert_room_exists(command.facility_id)
         kind, days_of_week_mask = self._validate_command(command)
@@ -156,18 +152,14 @@ class RoomBlackoutService:
         affected = await self._repository.update_blackout(blackout_id, self._to_payload(command, kind, days_of_week_mask))
         if affected == 0:
             raise NotFoundException(
-                detail=f"Blackout {blackout_id} not found",
-                error_code=FacilityErrorCode.BLACKOUT_NOT_FOUND.value,
-                context={"blackout_id": str(blackout_id)},
+                detail=f"Blackout {blackout_id} not found", error_code=FacilityErrorCode.BLACKOUT_NOT_FOUND.value, context={"blackout_id": str(blackout_id)}
             )
 
     @distributed_trace()
     async def delete_blackout(self, blackout_id: UUID, command: DeleteCommand) -> None:
         if not await self._repository.get_by_id(blackout_id):
             raise NotFoundException(
-                detail=f"Blackout {blackout_id} not found",
-                error_code=FacilityErrorCode.BLACKOUT_NOT_FOUND.value,
-                context={"blackout_id": str(blackout_id)},
+                detail=f"Blackout {blackout_id} not found", error_code=FacilityErrorCode.BLACKOUT_NOT_FOUND.value, context={"blackout_id": str(blackout_id)}
             )
         if command.permanent:
             await self._repository.delete_hard(blackout_id)
