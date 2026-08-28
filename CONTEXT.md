@@ -116,8 +116,16 @@ _Avoid_: applicant confirmation as the same email, using the incumbent's persona
 An Outlook message to the applicant right after submit, summarizing the Ministry Application and linking to My Ministry. Body is bilingual: English first, then Chinese.
 
 **Application decision email**:
-An Outlook message to the applicant when a Ministry Application is approved or rejected.
-_Avoid_: treating this as the incumbent notification
+An Outlook message to the applicant when a Ministry Application is approved or rejected. When the Owner-position incumbent decides via the member approval flow, the message reflects an incumbent decision. When church staff decide via the admin portal, the message names the staff member and states that the decision was made on the incumbent's behalf (staff acting for the Owner-position approver). The staff approver is also recorded on the Ministry row (`approved_by_id` / `rejected_by_id`) for audit.
+_Avoid_: treating this as the incumbent notification, using incumbent-only wording for a staff decision, exposing staff personal email in the body
+
+**Incumbent staff-decision notification email**:
+An Outlook message to the Owner-position incumbent when church staff approve or reject a Ministry Application via the admin portal. Names the staff member, states that staff acted on the incumbent's behalf, summarizes the outcome, and confirms no further action is required.
+_Avoid_: treating this as the pending Application notification email, asking the incumbent to approve again after staff already decided
+
+**Application summary (email)**:
+A structured block in ministry application emails listing key facts about the Ministry Application (for example ministry type, applicant, submitted date). Distinct from the free-form rejection reason on decline.
+_Avoid_: duplicating the full admin approval page, treating summary as a separate aggregate
 
 **Assignable Owner position**:
 An org position with `can_own_ministry` and a current incumbent. Booking create lists only these positions; submit is blocked if the chosen position has no incumbent.
