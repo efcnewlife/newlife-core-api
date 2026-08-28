@@ -7,6 +7,7 @@ from dependency_injector import containers, providers
 from portal.config import settings
 from portal.libs.database import PostgresConnection, RedisPool, Session
 from portal.libs.database.session_proxy import SessionProxy
+from portal.providers.graph_mail_provider import GraphMailProvider
 from portal.providers.jwt_provider import JWTProvider
 from portal.providers.member_refresh_app_binding_provider import MemberRefreshAppBindingProvider
 from portal.providers.microsoft_graph_provider import MicrosoftGraphProvider
@@ -38,3 +39,4 @@ class CoreContainer(containers.DeclarativeContainer):
 
     ms_graph = providers.Container(MSGraphContainer)
     microsoft_graph_provider = providers.Singleton(MicrosoftGraphProvider, users_factory=ms_graph.users.provider)
+    graph_mail_provider = providers.Singleton(GraphMailProvider, mail_factory=ms_graph.mail.provider)

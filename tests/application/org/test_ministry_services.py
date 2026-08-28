@@ -8,6 +8,7 @@ from uuid import UUID, uuid4
 import pytest
 from pydantic import ValidationError
 
+from portal.application.auth.results import UserSensitive
 from portal.application.org.commands import (
     CreateMinistryCommand,
     MinistryApplicationCommand,
@@ -20,11 +21,13 @@ from portal.application.org.commands import (
     StewardDirectoryQueryCommand,
     SubmitMinistryCommand,
 )
+from portal.application.org.ministry_application_mail_content import EN_LOCALE_ID
+from portal.application.org.ministry_application_mail_service import MinistryApplicationMailService
 from portal.application.org.ministry_approval_service import MinistryApprovalService
 from portal.application.org.ministry_schedule import validate_ministry_schedules
 from portal.application.org.ministry_service import MinistryService
 from portal.application.org.org_user_search_service import OrgUserSearchService
-from portal.application.org.results import MinistryDetailResult, MinistryMemberResult, OrgUserSearchItemResult, TargetAudienceResult
+from portal.application.org.results import MinistryDetailResult, MinistryMemberResult, OrgUserSearchItemResult, TargetAudienceResult, TranslationItemResult
 from portal.application.org.steward_directory_query import matches_steward_directory_q
 from portal.application.org.target_audience_validation import validate_target_audience_ids
 from portal.domain.facility.days_of_week_mask import days_to_mask, mask_to_days
@@ -32,6 +35,7 @@ from portal.domain.org.catalog_codes import TARGET_AUDIENCE_ADULTS, TARGET_AUDIE
 from portal.domain.org.constants import MinistryMemberRole, MinistryStatus
 from portal.exceptions.responses import BadRequestException, NotFoundException
 from portal.libs.contexts.user_context import UserContext
+from tests.application.org.test_ministry_application_mail_service import StubMailSendPort, StubMailUserRepository
 from tests.fixtures.org.stubs import (
     StubMinistryRepository,
     StubMinistryTypeRepository,
@@ -58,9 +62,13 @@ def make_approval_service(
     type_stub: StubMinistryTypeRepository | None = None,
     audience_stub: StubTargetAudienceRepository | None = None,
     position_stub: StubPositionRepository | None = None,
+    mail_service: MinistryApplicationMailService | None = None,
 ) -> MinistryApprovalService:
     return MinistryApprovalService(
-        ministry_stub, make_service(ministry_stub, type_stub=type_stub, audience_stub=audience_stub), position_stub or StubPositionRepository()
+        ministry_stub,
+        make_service(ministry_stub, type_stub=type_stub, audience_stub=audience_stub),
+        position_stub or StubPositionRepository(),
+        ministry_application_mail_service=mail_service,
     )
 
 
@@ -458,6 +466,56 @@ async def test_create_application_rejects_vacant_owner_position():
         )
     assert exc_info.value.error_code == "ORG_POSITION_NO_INCUMBENT"
     assert stub.insert_calls == []
+
+
+@pytest.mark.asyncio
+async def test_submit_ministry_dispatches_submit_mail_notifications():
+    ministry_id = uuid4()
+    owner_position_id = uuid4()
+    applicant_user_id = uuid4()
+    incumbent_user_id = uuid4()
+    stub = StubMinistryRepository(
+        ministry_by_id={
+            ministry_id: MinistryDetailResult(
+                id=ministry_id,
+                name="Badminton",
+                status=MinistryStatus.DRAFT.value,
+                owner_position_id=owner_position_id,
+                has_priority_booking=False,
+                is_active=True,
+                translations=[TranslationItemResult(locale_id=EN_LOCALE_ID, name="Badminton Club")],
+            )
+        },
+        members_by_ministry={
+            ministry_id: [
+                MinistryMemberResult(user_id=uuid4(), member_role=MinistryMemberRole.PRIMARY.value),
+                MinistryMemberResult(user_id=uuid4(), member_role=MinistryMemberRole.SECONDARY.value),
+            ]
+        },
+    )
+    mail_port = StubMailSendPort()
+    mail_service = MinistryApplicationMailService(
+        mail_port,
+        stub,
+        StubPositionRepository(incumbents={owner_position_id: incumbent_user_id}),
+        StubMailUserRepository(
+            users={
+                applicant_user_id: UserSensitive(id=applicant_user_id, email="applicant@example.com", verified=True, is_active=True, is_admin=False),
+                incumbent_user_id: UserSensitive(id=incumbent_user_id, email="incumbent@example.com", verified=True, is_active=True, is_admin=False),
+            }
+        ),
+        facility_booking_base_url="http://localhost:5174",
+        enabled=True,
+    )
+    approval_service = make_approval_service(
+        stub, position_stub=StubPositionRepository(incumbents={owner_position_id: incumbent_user_id}), mail_service=mail_service
+    )
+    approval_service._user_ctx = UserContext(user_id=applicant_user_id, email="applicant@example.com", is_admin=False, is_superuser=False)
+
+    await approval_service.submit_ministry(ministry_id, SubmitMinistryCommand())
+
+    assert len(mail_port.calls) == 2
+    assert {call["to_email"] for call in mail_port.calls} == {"applicant@example.com", "incumbent@example.com"}
 
 
 @pytest.mark.asyncio

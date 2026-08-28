@@ -114,6 +114,11 @@ class Configuration(BaseSettings):
     AZURE_APP_CLIENT_SECRET: Optional[str] = os.getenv(key="AZURE_APP_CLIENT_SECRET", default=None)
     AZURE_ALLOWED_ISSUERS: Optional[str] = os.getenv(key="AZURE_ALLOWED_ISSUERS", default=None)
 
+    # [Microsoft Graph Mail.Send — ministry application notifications]
+    GRAPH_MAIL_SEND_ENABLED: bool = Converter.to_bool(os.getenv(key="GRAPH_MAIL_SEND_ENABLED", default="false"), default=False)
+    GRAPH_MAIL_SENDER_MAILBOX: Optional[str] = os.getenv(key="GRAPH_MAIL_SENDER_MAILBOX", default=None)
+    FACILITY_BOOKING_BASE_URL: str = os.getenv(key="FACILITY_BOOKING_BASE_URL", default="http://localhost:5174")
+
     # [Member web apps — Origin -> app_code for /api/v1 auth]
     # Format: code|origin|origin,code|origin
     # Example: facility-booking|http://localhost:5174,another-app|http://localhost:5180
