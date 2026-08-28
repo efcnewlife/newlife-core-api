@@ -257,3 +257,59 @@ async def test_send_decision_notification_staff_channel_sends_applicant_and_incu
     assert "Incumbent Leader" in applicant_call["body_html"]
     assert "on your behalf" in incumbent_call["body_html"]
     assert "Staff Member" in incumbent_call["body_html"]
+
+
+@pytest.mark.asyncio
+async def test_send_decision_notification_staff_channel_reject_includes_reason_and_incumbent_notification():
+    ministry_id = uuid4()
+    owner_position_id = uuid4()
+    applicant_user_id = uuid4()
+    incumbent_user_id = uuid4()
+    staff_user_id = uuid4()
+    mail_port = StubMailSendPort()
+    ministry_stub = StubMinistryRepository(
+        ministry_by_id={
+            ministry_id: MinistryDetailResult(
+                id=ministry_id,
+                name="Badminton",
+                status=MinistryStatus.PENDING_APPROVAL.value,
+                owner_position_id=owner_position_id,
+                submitted_by_id=applicant_user_id,
+                has_priority_booking=False,
+                is_active=True,
+                translations=[TranslationItemResult(locale_id=EN_LOCALE_ID, name="Badminton Club")],
+            )
+        }
+    )
+    user_stub = StubMailUserRepository(
+        users={
+            applicant_user_id: UserSensitive(id=applicant_user_id, email="applicant@example.com", verified=True, is_active=True, is_admin=False),
+            incumbent_user_id: UserSensitive(id=incumbent_user_id, email="incumbent@example.com", verified=True, is_active=True, is_admin=False),
+            staff_user_id: UserSensitive(id=staff_user_id, email="staff@example.com", verified=True, is_active=True, is_admin=True),
+        },
+        profiles={
+            staff_user_id: UserDetail(id=staff_user_id, email="staff@example.com", preferred_name="Staff Member"),
+            incumbent_user_id: UserDetail(id=incumbent_user_id, email="incumbent@example.com", preferred_name="Incumbent Leader"),
+        },
+    )
+    service = make_mail_service(mail_port, ministry_stub, StubPositionRepository(incumbents={owner_position_id: incumbent_user_id}), user_stub)
+
+    await service.send_decision_notification(
+        ministry_id=ministry_id,
+        applicant_user_id=applicant_user_id,
+        approved=False,
+        decision_channel=MinistryDecisionChannel.STAFF,
+        decided_by_user_id=staff_user_id,
+        owner_position_id=owner_position_id,
+        rejection_reason="Incomplete roster",
+    )
+
+    assert len(mail_port.calls) == 2
+    applicant_call = next(call for call in mail_port.calls if call["to_email"] == "applicant@example.com")
+    incumbent_call = next(call for call in mail_port.calls if call["to_email"] == "incumbent@example.com")
+    assert "Incomplete roster" in applicant_call["body_html"]
+    assert "Staff Member" in applicant_call["body_html"]
+    assert "Incumbent Leader" in applicant_call["body_html"]
+    assert "staff@example.com" not in applicant_call["body_html"]
+    assert "Incomplete roster" in incumbent_call["body_html"]
+    assert "No further action" in incumbent_call["body_html"]
