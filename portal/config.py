@@ -125,6 +125,11 @@ class Configuration(BaseSettings):
     # Example: facility-booking|http://localhost:5174,another-app|http://localhost:5180
     MEMBER_WEB_APPS: str = os.getenv(key="MEMBER_WEB_APPS", default="facility-booking|http://localhost:5174")
 
+    # [Member mock login — dev/staging QA only; never enable in production]
+    MOCK_LOGIN_ENABLED: bool = Converter.to_bool(os.getenv(key="MOCK_LOGIN_ENABLED", default="false"), default=False)
+    MOCK_LOGIN_SECRET: Optional[str] = os.getenv(key="MOCK_LOGIN_SECRET", default=None)
+    TESTING_ACCOUNT_EMAIL_SUFFIX: str = os.getenv(key="TESTING_ACCOUNT_EMAIL_SUFFIX", default="@test.local")
+
     # [Token Blacklist]
     TOKEN_BLACKLIST_REDIS_DB: int = int(os.getenv(key="TOKEN_BLACKLIST_REDIS_DB", default="1"))
     TOKEN_BLACKLIST_CLEANUP_INTERVAL: int = int(os.getenv(key="TOKEN_BLACKLIST_CLEANUP_INTERVAL", default="3600"))

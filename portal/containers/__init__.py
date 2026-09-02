@@ -40,6 +40,7 @@ class RootContainer(containers.DeclarativeContainer):
     login_service = admin.login_service
     refresh_token_service = admin.refresh_token_service
     microsoft_auth_service = admin.microsoft_auth_service
+    mock_login_auth_service = admin.mock_login_auth_service
     member_web_app_registry = admin.member_web_app_registry
     locale_service = admin.locale_service
     setting_service = admin.setting_service

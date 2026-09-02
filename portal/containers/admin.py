@@ -8,6 +8,7 @@ from portal.application.audit.rbac_audit_service import RbacAuditService
 from portal.application.auth.admin_user_service import AdminUserService
 from portal.application.auth.login_service import LoginService
 from portal.application.auth.microsoft_auth_service import MicrosoftAuthService
+from portal.application.auth.mock_login_auth_service import MockLoginAuthService
 from portal.application.auth.refresh_token_service import RefreshTokenService
 from portal.application.auth.user_read_service import UserReadService
 from portal.application.locale.locale_service import LocaleService
@@ -104,6 +105,9 @@ class AdminContainer(containers.DeclarativeContainer):
         microsoft_oidc_provider=core.microsoft_oidc_provider,
         login_service=login_service,
         member_web_app_registry=member_web_app_registry,
+    )
+    mock_login_auth_service = providers.Factory(
+        MockLoginAuthService, user_repository=user_repository, login_service=login_service, member_web_app_registry=member_web_app_registry
     )
 
     verb_repository = providers.Factory(VerbRepository, session=core.request_session)

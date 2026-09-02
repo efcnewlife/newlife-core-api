@@ -32,6 +32,12 @@ class MicrosoftLoginCommand(BaseModel):
     id_token: str = Field(..., description="Microsoft ID token")
 
 
+class MockLoginCommand(BaseModel):
+    """Member mock login command (dev/staging testing accounts)."""
+
+    email: str = Field(..., description="Testing account email")
+
+
 class LogoutCommand(BaseModel):
     """Logout command."""
 

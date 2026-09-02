@@ -20,6 +20,7 @@ class HeaderInfo(BaseModel):
     host: Optional[str] = Field(None, description="Host")
     referer: Optional[str] = Field(None, description="Referer")
     origin: Optional[str] = Field(None, description="Origin")
+    mock_login_secret: Optional[str] = Field(None, description="X-Mock-Login-Secret")
 
 
 class TokenPayload(BaseModel):
