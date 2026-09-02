@@ -15,8 +15,16 @@ The authenticated admin (or member) who performed the create action. For admin o
 _Avoid_: admin (role, not the act), creator (too generic), booked-by field, 代訂人-only label when self-booked
 
 **Primary facility**:
-The booking's main room id used for list filters (`facility_id` / list `facilityId`). For multi-room bookings this is the first room line.
-_Avoid_: room (ambiguous when multiple), main room (synonym drift), treating Primary facility as the only room shown on Booking Grid
+The booking's main room id used for list filters (`facility_id` / list `facilityId`). For multi-line bookings this is the lowest `sequence` line's `facility_id` (first cart line), not the only room on the booking.
+_Avoid_: room (ambiguous when multiple), main room (synonym drift), treating Primary facility as the only room shown on Booking Grid, assuming one `booking_room` row per room
+
+**Booking line**:
+One room interval on a booking: `facility_id`, `start_at`, `end_at`, and `sequence`. A booking has 1-3 lines. The same room may appear on more than one line with different intervals on the same local calendar day. Distinct from Primary facility and from the booking header envelope.
+_Avoid_: room (when meaning a line), cart item without times, assuming one row per room in `booking_room`
+
+**Booking header interval**:
+`facility.booking.start_at` / `end_at` on the master row. For multi-line member bookings, these are the **envelope** (earliest line start, latest line end). ADR 0007 range query and member list rows use this interval. Per-line occupancy and pricing use each Booking line.
+_Avoid_: treating header times as the only interval when lines differ, using header alone for Grid bars when lines differ
 
 **Booking view mode**:
 How the admin booking management page presents bookings: `list`, `calendar`, or `grid`. Default is `list`. v1 syncs `view`, an ISO `date` (calendar/grid anchor day), and when `view=calendar` the Calendar layout (`week` / `day` / `month`) into the page URL query; list may ignore `date` and layout. Calendar is the time overview of bookings: overlapping bookings are distinct clickable blocks in side-by-side lanes, up to a density cap; beyond that, occupancy is read on Grid. Month Calendar layout is a month grid of compact booking summaries plus the selected day's time-axis. Grid is the single-day room-row occupancy view: a multi-room booking appears on every occupied room row. List is the paginated record set. Calendar and Grid load bookings via a Booking range query for the visible window, not via List pagination.
@@ -39,8 +47,8 @@ An optional ordered set of at most ten image Content Files bound to one Room. Ea
 _Avoid_: cover, required gallery, room image URL field, treating the first file as a separate Cover entity in v1 admin, unbounded gallery, clearing associations on Room soft-delete, non-image Content Files, duplicate files in one gallery, list-page thumbnails as the v1 contract, a separate files GET for v1 admin preview
 
 **Preview quote**:
-Server-computed rental totals for a proposed One-time interval and room list: rate lines, ministry discount, surcharge, quoted amount, and currency. Distinct from creating a booking.
-_Avoid_: client-side HST or totals, treating Preview quote as a created booking
+Server-computed rental totals for a proposed set of Booking lines (each with its own interval), plus booking-level ministry discount and surcharges: rate lines, quoted amount, and currency. Distinct from creating a booking.
+_Avoid_: client-side HST or totals, a single shared interval for all lines on member preview, treating Preview quote as a created booking
 
 **Content File**:
 A stored media object in the content library (metadata plus blob). Rooms bind to Content Files; they do not own uploads as a separate room-file type.
