@@ -5,6 +5,7 @@ Main Click CLI entry aggregating all subcommands.
 import click
 
 from .init_locale import init_locales_process
+from .mock_user import create_mock_user_process
 from .rbac import init_rbac_process, reset_rbac_process
 from .seed_facility_rental import seed_facility_rental_process
 from .seed_legal_documents import seed_legal_documents_process
@@ -27,6 +28,12 @@ def cli():
 def create_superuser_cmd():
     """Create a superuser via interactive prompts."""
     create_superuser_process()
+
+
+@cli.command(name="create-mock-user")
+def create_mock_user_cmd():
+    """Create a mock-login testing account (@test.local suffix) via interactive prompts."""
+    create_mock_user_process()
 
 
 @cli.command(name="init-rbac")

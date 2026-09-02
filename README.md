@@ -483,6 +483,9 @@ uv run python -m portal.cli.main init-rbac
 # 3. First portal admin (interactive prompts)
 uv run python -m portal.cli.main create-superuser
 
+# 3b. Optional: Facility Booking mock-login testing account (dev/staging QA)
+uv run python -m portal.cli.main create-mock-user
+
 # 4. Optional: org position seed data
 uv run python -m portal.cli.main seed-positions
 
@@ -506,6 +509,7 @@ uv run python -m portal.cli.main seed-local-demo
 | `init-locales`          | Insert supported `SystemLocale` rows from `portal/cli/datas/locale_data.py`.                                                  |
 | `init-rbac`             | Seed verbs, resources, permissions, and the `admin` role from `portal/cli/datas/rbac_seed_data.py`. Safe to re-run (upserts). |
 | `create-superuser`      | Create an `AuthUser` with `is_admin` / `is_superuser` via interactive prompts.                                                |
+| `create-mock-user`      | Create a member testing account for Facility Booking mock login (email must end with `TESTING_ACCOUNT_EMAIL_SUFFIX`, default `@test.local`). |
 | `seed-positions`        | Upsert org positions and translations from `portal/cli/datas/position_seed_data.py`.                                          |
 | `seed-ministry-types`   | Upsert ministry type catalog (`outreach`, `internal`, `worship`) and translations.                                            |
 | `seed-target-audiences` | Upsert target audience catalog (`children`, `youths`, `adults`, `family`, `all_ages`) and translations.                       |
