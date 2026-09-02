@@ -8,6 +8,7 @@ from typing import Optional
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
+from portal.application.facility.booking_line_validation import envelope_interval, primary_facility_id, resolve_booking_lines, validate_booking_lines
 from portal.application.facility.commands import (
     BookingPagesQueryCommand,
     BookingRangeQueryCommand,
@@ -108,8 +109,6 @@ class BookingService:
 
     @distributed_trace()
     async def update_booking(self, booking_id: UUID, command: UpdateBookingCommand) -> BookingDetailResult:
-        if command.end_at <= command.start_at:
-            raise BadRequestException(detail="end_at must be after start_at", error_code=FacilityErrorCode.BOOKING_INVALID_TIME_RANGE.value)
         if not command.rooms:
             raise BadRequestException(detail="At least one room is required", error_code=FacilityErrorCode.BOOKING_ROOMS_REQUIRED.value)
 
@@ -125,18 +124,18 @@ class BookingService:
             raise BadRequestException(detail=f"At most {max_rooms_int} rooms per booking", error_code=FacilityErrorCode.BOOKING_MAX_ROOMS.value)
 
         local_tz = await self._setting_service.get_facility_timezone()
-        for line in command.rooms:
-            start_at = line.start_at or command.start_at
-            end_at = line.end_at or command.end_at
+        resolved_lines = resolve_booking_lines(command.rooms, command.start_at, command.end_at)
+        validate_booking_lines(resolved_lines, local_tz)
+        header_start, header_end = envelope_interval(resolved_lines)
+
+        for line in resolved_lines:
             await self._raise_if_room_unavailable(
-                facility_id=line.facility_id, start_at=start_at, end_at=end_at, local_tz=local_tz, exclude_booking_id=booking_id
+                facility_id=line.facility_id, start_at=line.start_at, end_at=line.end_at, local_tz=local_tz, exclude_booking_id=booking_id
             )
 
-        quote_lines = []
-        for line in command.rooms:
-            start_at = line.start_at or command.start_at
-            end_at = line.end_at or command.end_at
-            quote_lines.append(PreviewQuoteRoomLineCommand(facility_id=line.facility_id, billed_hours=self._billed_hours(start_at, end_at)))
+        quote_lines = [
+            PreviewQuoteRoomLineCommand(facility_id=line.facility_id, billed_hours=self._billed_hours(line.start_at, line.end_at)) for line in resolved_lines
+        ]
 
         booking_type_value = meta["booking_type"] if isinstance(meta, dict) else meta.booking_type
         currency_value = meta.get("currency") if isinstance(meta, dict) else meta.currency
@@ -152,12 +151,10 @@ class BookingService:
             )
         )
 
-        primary_facility_id = command.rooms[0].facility_id
+        primary_facility_id_value = primary_facility_id(resolved_lines)
         room_rows = []
         slot_rows = []
-        for idx, line in enumerate(command.rooms):
-            start_at = line.start_at or command.start_at
-            end_at = line.end_at or command.end_at
+        for idx, line in enumerate(resolved_lines):
             quoted_line = quote.room_lines[idx]
             room_rows.append(
                 dict(
@@ -165,8 +162,8 @@ class BookingService:
                     facility_booking_id=booking_id,
                     facility_id=line.facility_id,
                     sequence=line.sequence,
-                    start_at=start_at,
-                    end_at=end_at,
+                    start_at=line.start_at,
+                    end_at=line.end_at,
                     billed_hours=quoted_line.billed_hours,
                     rental_rate_name=quoted_line.rental_rate_name,
                     billing_unit=quoted_line.billing_unit,
@@ -182,8 +179,8 @@ class BookingService:
                     id=uuid4(),
                     facility_booking_id=booking_id,
                     facility_id=line.facility_id,
-                    start_at=start_at,
-                    end_at=end_at,
+                    start_at=line.start_at,
+                    end_at=line.end_at,
                     status=BookingSlotStatus.CONFIRMED.value,
                 )
             )
@@ -192,10 +189,10 @@ class BookingService:
         await self._repository.update_booking_header(
             booking_id,
             dict(
-                facility_id=primary_facility_id,
+                facility_id=primary_facility_id_value,
                 ministry_id=command.ministry_id,
-                start_at=command.start_at,
-                end_at=command.end_at,
+                start_at=header_start,
+                end_at=header_end,
                 is_mission_aligned=command.is_mission_aligned,
                 billed_hours=total_billed,
                 subtotal_amount=quote.subtotal_amount,
@@ -212,8 +209,6 @@ class BookingService:
 
     @distributed_trace()
     async def create_booking(self, command: CreateBookingCommand) -> CreateIdResult:
-        if command.end_at <= command.start_at:
-            raise BadRequestException(detail="end_at must be after start_at", error_code=FacilityErrorCode.BOOKING_INVALID_TIME_RANGE.value)
         if not command.rooms:
             raise BadRequestException(detail="At least one room is required", error_code=FacilityErrorCode.BOOKING_ROOMS_REQUIRED.value)
         operator_id = self._user_ctx.user_id if self._user_ctx else None
@@ -229,16 +224,16 @@ class BookingService:
             raise BadRequestException(detail=f"At most {max_rooms_int} rooms per booking", error_code=FacilityErrorCode.BOOKING_MAX_ROOMS.value)
 
         local_tz = await self._setting_service.get_facility_timezone()
-        for line in command.rooms:
-            start_at = line.start_at or command.start_at
-            end_at = line.end_at or command.end_at
-            await self._raise_if_room_unavailable(facility_id=line.facility_id, start_at=start_at, end_at=end_at, local_tz=local_tz)
+        resolved_lines = resolve_booking_lines(command.rooms, command.start_at, command.end_at)
+        validate_booking_lines(resolved_lines, local_tz)
+        header_start, header_end = envelope_interval(resolved_lines)
 
-        quote_lines = []
-        for line in command.rooms:
-            start_at = line.start_at or command.start_at
-            end_at = line.end_at or command.end_at
-            quote_lines.append(PreviewQuoteRoomLineCommand(facility_id=line.facility_id, billed_hours=self._billed_hours(start_at, end_at)))
+        for line in resolved_lines:
+            await self._raise_if_room_unavailable(facility_id=line.facility_id, start_at=line.start_at, end_at=line.end_at, local_tz=local_tz)
+
+        quote_lines = [
+            PreviewQuoteRoomLineCommand(facility_id=line.facility_id, billed_hours=self._billed_hours(line.start_at, line.end_at)) for line in resolved_lines
+        ]
 
         quote = await self._pricing_service.preview_quote(
             PreviewQuoteCommand(
@@ -251,17 +246,17 @@ class BookingService:
         )
 
         booking_id = uuid4()
-        primary_facility_id = command.rooms[0].facility_id
+        primary_facility_id_value = primary_facility_id(resolved_lines)
         total_billed = sum((line.billed_hours for line in quote.room_lines), Decimal("0"))
         await self._repository.insert_booking(
             dict(
                 id=booking_id,
                 user_id=booker_id,
-                facility_id=primary_facility_id,
+                facility_id=primary_facility_id_value,
                 ministry_id=command.ministry_id,
                 booking_type=BookingType.ONE_TIME.value,
-                start_at=command.start_at,
-                end_at=command.end_at,
+                start_at=header_start,
+                end_at=header_end,
                 status=BookingStatus.CONFIRMED.value,
                 is_mission_aligned=command.is_mission_aligned,
                 billed_hours=total_billed,
@@ -277,9 +272,7 @@ class BookingService:
 
         room_rows = []
         slot_rows = []
-        for idx, line in enumerate(command.rooms):
-            start_at = line.start_at or command.start_at
-            end_at = line.end_at or command.end_at
+        for idx, line in enumerate(resolved_lines):
             quoted_line = quote.room_lines[idx]
             room_rows.append(
                 dict(
@@ -287,8 +280,8 @@ class BookingService:
                     facility_booking_id=booking_id,
                     facility_id=line.facility_id,
                     sequence=line.sequence,
-                    start_at=start_at,
-                    end_at=end_at,
+                    start_at=line.start_at,
+                    end_at=line.end_at,
                     billed_hours=quoted_line.billed_hours,
                     rental_rate_name=quoted_line.rental_rate_name,
                     billing_unit=quoted_line.billing_unit,
@@ -304,8 +297,8 @@ class BookingService:
                     id=uuid4(),
                     facility_booking_id=booking_id,
                     facility_id=line.facility_id,
-                    start_at=start_at,
-                    end_at=end_at,
+                    start_at=line.start_at,
+                    end_at=line.end_at,
                     status=BookingSlotStatus.CONFIRMED.value,
                 )
             )

@@ -16,7 +16,7 @@ from portal.application.facility.commands import (
     PreviewQuoteCommand,
     PreviewQuoteRoomLineCommand,
 )
-from portal.application.facility.results import BookingDetailResult, BookingRoomLineResult
+from portal.application.facility.results import BookingDetailResult, BookingRoomLineResult, PreviewQuoteRoomLineResult
 from portal.domain.facility.constants import BookingStatus, BookingType, RentalPolicySettingKey
 from portal.exceptions.responses import BadRequestException, ConflictErrorException, ForbiddenException, NotFoundException
 from tests.fixtures.facility.factories import (
@@ -291,6 +291,84 @@ async def test_create_booking_invalid_time_range_has_error_code(monkeypatch):
         await service.create_booking(command)
     assert "end_at" in str(exc_info.value.detail)
     assert exc_info.value.error_code == "FACILITY_BOOKING_INVALID_TIME_RANGE"
+
+
+@pytest.mark.asyncio
+async def test_create_booking_two_lines_same_room_different_times(monkeypatch):
+    _user_ctx(monkeypatch)
+    room_id = new_uuid()
+    morning_start = datetime(2026, 5, 1, 14, 0, tzinfo=timezone.utc)
+    morning_end = datetime(2026, 5, 1, 16, 0, tzinfo=timezone.utc)
+    afternoon_start = datetime(2026, 5, 1, 18, 0, tzinfo=timezone.utc)
+    afternoon_end = datetime(2026, 5, 1, 20, 0, tzinfo=timezone.utc)
+    command = make_create_booking_command(facility_id=room_id, start_at=morning_start, end_at=afternoon_end)
+    command.rooms = [
+        BookingRoomLineCommand(facility_id=room_id, start_at=morning_start, end_at=morning_end, sequence=0),
+        BookingRoomLineCommand(facility_id=room_id, start_at=afternoon_start, end_at=afternoon_end, sequence=1),
+    ]
+    stub = StubBookingRepository()
+    quote = make_preview_quote_result(quoted_amount=Decimal("150"))
+    quote.room_lines = [
+        PreviewQuoteRoomLineResult(
+            facility_id=room_id,
+            billed_hours=Decimal("2.00"),
+            rental_rate_name="Hourly",
+            billing_unit="hourly",
+            unit_amount=Decimal("10"),
+            currency="CAD",
+            applicability=None,
+            is_default=True,
+            line_subtotal=Decimal("75"),
+        ),
+        PreviewQuoteRoomLineResult(
+            facility_id=room_id,
+            billed_hours=Decimal("2.00"),
+            rental_rate_name="Hourly",
+            billing_unit="hourly",
+            unit_amount=Decimal("10"),
+            currency="CAD",
+            applicability=None,
+            is_default=True,
+            line_subtotal=Decimal("75"),
+        ),
+    ]
+    service = _booking_service(stub, pricing_stub=StubPricingService(quote))
+    result = await service.create_booking(command)
+    assert result.id is not None
+    assert stub.insert_calls[0]["facility_id"] == room_id
+    assert stub.insert_calls[0]["start_at"] == morning_start
+    assert stub.insert_calls[0]["end_at"] == afternoon_end
+    assert len(stub.replace_rooms_calls[0]) == 2
+    assert stub.replace_rooms_calls[0][0]["facility_id"] == room_id
+    assert stub.replace_rooms_calls[0][1]["facility_id"] == room_id
+
+
+@pytest.mark.asyncio
+async def test_create_booking_rejects_fourth_line(monkeypatch):
+    _user_ctx(monkeypatch)
+    room_ids = [new_uuid() for _ in range(4)]
+    command = make_create_booking_command()
+    command.rooms = [BookingRoomLineCommand(facility_id=room_id, sequence=idx) for idx, room_id in enumerate(room_ids)]
+    service = _booking_service(StubBookingRepository())
+    with pytest.raises(BadRequestException) as exc_info:
+        await service.create_booking(command)
+    assert exc_info.value.error_code == "FACILITY_BOOKING_MAX_ROOMS"
+
+
+@pytest.mark.asyncio
+async def test_create_booking_rejects_cross_midnight_line(monkeypatch):
+    _user_ctx(monkeypatch)
+    room_id = new_uuid()
+    command = make_create_booking_command(facility_id=room_id)
+    command.rooms = [
+        BookingRoomLineCommand(
+            facility_id=room_id, start_at=datetime(2026, 5, 1, 8, 0, tzinfo=timezone.utc), end_at=datetime(2026, 5, 2, 8, 0, tzinfo=timezone.utc), sequence=0
+        )
+    ]
+    service = _booking_service(StubBookingRepository())
+    with pytest.raises(BadRequestException) as exc_info:
+        await service.create_booking(command)
+    assert exc_info.value.error_code == "FACILITY_BOOKING_LINE_CROSS_MIDNIGHT"
 
 
 @pytest.mark.asyncio
