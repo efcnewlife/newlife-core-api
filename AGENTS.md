@@ -61,6 +61,9 @@ uv run pytest tests/application/rbac/test_permission_service.py -v
 # Demo pack (after catalog seeds; optional create-superuser first)
 uv run python -m portal.cli.main seed-local-demo
 
+# Facility Booking mock-login testing account (dev/staging QA; email suffix @test.local)
+uv run python -m portal.cli.main create-mock-user
+
 # Format (layout, then import sort — I only)
 uv run ruff format
 uv run ruff check --fix
