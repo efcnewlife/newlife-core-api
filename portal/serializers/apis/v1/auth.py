@@ -34,3 +34,9 @@ class MicrosoftIdTokenRequest(BaseModel):
     """Microsoft Entra ID token exchange body."""
 
     id_token: str = Field(..., description="Microsoft ID token")
+
+
+class MockLoginRequest(BaseModel):
+    """Mock login body for dev/staging testing accounts."""
+
+    email: str = Field(..., description="Testing account email")

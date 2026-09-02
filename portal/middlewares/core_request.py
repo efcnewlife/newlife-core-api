@@ -145,6 +145,7 @@ class CoreRequestMiddleware(BaseHTTPMiddleware):
             host=headers.get("host"),
             referer=headers.get("referer"),
             origin=headers.get("origin"),
+            mock_login_secret=headers.get("x-mock-login-secret"),
         )
 
     @inject

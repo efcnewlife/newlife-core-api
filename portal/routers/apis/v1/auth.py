@@ -5,17 +5,31 @@ Member authentication HTTP routes.
 from dependency_injector.wiring import Provide, inject
 from fastapi import Depends, status
 
-from portal.application.auth.commands import LogoutCommand, MicrosoftLoginCommand, RefreshTokenCommand
+from portal.application.auth.commands import LogoutCommand, MicrosoftLoginCommand, MockLoginCommand, RefreshTokenCommand
 from portal.application.auth.login_service import LoginService
 from portal.application.auth.mappers import member_login_result_to_api, member_profile_result_to_api, token_result_to_api
 from portal.application.auth.microsoft_auth_service import MicrosoftAuthService
+from portal.application.auth.mock_login_auth_service import MockLoginAuthService
 from portal.application.auth.refresh_token_service import RefreshTokenService
 from portal.container import Container
 from portal.routers.auth_router import AuthRouter
-from portal.serializers.apis.v1.auth import MemberInfo, MemberLoginResponse, MicrosoftIdTokenRequest
+from portal.serializers.apis.v1.auth import MemberInfo, MemberLoginResponse, MicrosoftIdTokenRequest, MockLoginRequest
 from portal.serializers.mixins import LogoutRequest, LogoutResponse, RefreshTokenRequest, TokenResponse
 
 router: AuthRouter = AuthRouter()
+
+
+@router.post(
+    "/mock-login",
+    response_model=MemberLoginResponse,
+    response_model_by_alias=True,
+    require_auth=False,
+    responses={401: {"description": "Unauthorized", "content": {"application/json": {"example": {"detail": "Unauthorized"}}}}},
+)
+@inject
+async def member_mock_login(body: MockLoginRequest, mock_login_auth_service: MockLoginAuthService = Depends(Provide[Container.mock_login_auth_service])):
+    result = await mock_login_auth_service.mock_member_login(MockLoginCommand(email=body.email))
+    return member_login_result_to_api(result)
 
 
 @router.post(
