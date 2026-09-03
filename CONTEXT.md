@@ -46,9 +46,17 @@ _Avoid_: scheduling conflict, "closed" without naming the Blackout rule
 An optional ordered set of at most ten image Content Files bound to one Room. Each file appears at most once in that gallery. The same Content File may appear in many Rooms' galleries. Order is Operator-controlled (including drag reorder on the Room form). Saving the Room replaces the whole gallery. Soft-deleting a Room keeps its File associations so restore brings the gallery back. Admin Room list does not include gallery files; Room detail (and create response) does, with signed URLs for preview. Member availability includes those same signed photo URLs when files exist, or an empty list when none.
 _Avoid_: cover, required gallery, room image URL field, treating the first file as a separate Cover entity in v1 admin, unbounded gallery, clearing associations on Room soft-delete, non-image Content Files, duplicate files in one gallery, list-page thumbnails as the v1 contract, a separate files GET for v1 admin preview
 
+**Rental Rate Template**:
+A shared billing rule for facility rental: unit amount, billing unit, and optional applicability (when the rule may be selected). Unit price always lives on the Template.
+_Avoid_: putting a separate price on the Room binding, treating applicability as a booking Policy Setting
+
+**Rental Rate**:
+The binding of one Rental Rate Template to one Room, used when selecting which Template prices a Booking line. Distinct from the Template itself.
+_Avoid_: Rate as a priced catalog row of its own, global NULL-facility Rate rows as the v1 model
+
 **Preview quote**:
-Server-computed rental totals for a proposed set of Booking lines (each with its own interval), plus booking-level ministry discount and surcharges: rate lines, quoted amount, and currency. Distinct from creating a booking.
-_Avoid_: client-side HST or totals, a single shared interval for all lines on member preview, treating Preview quote as a created booking
+Server-computed rental totals for a proposed set of Booking lines (each with its own interval): per-line amounts from the selected Rental Rate Template, then booking-level ministry discount and surcharges. The quoted amount is line subtotals minus discount plus surcharges. There is no minimum-fee floor and no Rental Policy Setting in the pricing model. Distinct from creating a booking.
+_Avoid_: client-side HST or totals, a single shared interval for all lines on member preview, treating Preview quote as a created booking, minimum fee / policy floor as part of the quote
 
 **Content File**:
 A stored media object in the content library (metadata plus blob). Rooms bind to Content Files; they do not own uploads as a separate room-file type.
