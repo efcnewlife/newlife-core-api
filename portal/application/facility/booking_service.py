@@ -8,12 +8,19 @@ from typing import Optional
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
-from portal.application.facility.booking_line_validation import envelope_interval, primary_facility_id, resolve_booking_lines, validate_booking_lines
+from portal.application.facility.booking_line_validation import (
+    ResolvedBookingLine,
+    envelope_interval,
+    primary_facility_id,
+    resolve_booking_lines,
+    validate_booking_lines,
+)
 from portal.application.facility.commands import (
     BookingPagesQueryCommand,
     BookingRangeQueryCommand,
     CancelBookingCommand,
     CreateBookingCommand,
+    MemberPreviewQuoteCommand,
     PreviewQuoteCommand,
     PreviewQuoteRoomLineCommand,
     UpdateBookingCommand,
@@ -336,9 +343,30 @@ class BookingService:
         return row
 
     @distributed_trace()
-    async def preview_quote_for_member(self, command: PreviewQuoteCommand) -> PreviewQuoteResult:
+    async def preview_quote_for_member(self, command: MemberPreviewQuoteCommand) -> PreviewQuoteResult:
         await self._validate_ministry_booking_gate(command.ministry_id)
-        return await self._pricing_service.preview_quote(command)
+
+        resolved_lines = [
+            ResolvedBookingLine(facility_id=line.facility_id, start_at=line.start_at, end_at=line.end_at, sequence=index)
+            for index, line in enumerate(command.lines)
+        ]
+        local_tz = await self._setting_service.get_facility_timezone()
+        validate_booking_lines(resolved_lines, local_tz)
+
+        quote_lines = [
+            PreviewQuoteRoomLineCommand(facility_id=line.facility_id, billed_hours=self._billed_hours(line.start_at, line.end_at)) for line in resolved_lines
+        ]
+
+        return await self._pricing_service.preview_quote(
+            PreviewQuoteCommand(
+                booking_type=BookingType.ONE_TIME,
+                is_mission_aligned=command.is_mission_aligned,
+                currency=command.currency,
+                room_lines=quote_lines,
+                surcharge_codes=command.surcharge_codes,
+                ministry_id=command.ministry_id,
+            )
+        )
 
     async def _raise_if_room_unavailable(
         self, facility_id: UUID, start_at: datetime, end_at: datetime, local_tz: ZoneInfo, exclude_booking_id: Optional[UUID] = None

@@ -13,21 +13,32 @@ from portal.application.facility.commands import (
     BookingRangeQueryCommand,
     BookingRoomLineCommand,
     CancelBookingCommand,
+    MemberPreviewQuoteCommand,
+    MemberPreviewQuoteLineCommand,
     PreviewQuoteCommand,
     PreviewQuoteRoomLineCommand,
 )
+from portal.application.facility.pricing_service import PricingService
 from portal.application.facility.results import BookingDetailResult, BookingRoomLineResult, PreviewQuoteRoomLineResult
 from portal.domain.facility.constants import BookingStatus, BookingType, RentalPolicySettingKey
 from portal.exceptions.responses import BadRequestException, ConflictErrorException, ForbiddenException, NotFoundException
 from tests.fixtures.facility.factories import (
     make_booking_list_item,
     make_create_booking_command,
+    make_hourly_and_daily_rates,
     make_ministry_detail,
     make_preview_quote_result,
     make_update_booking_command,
     new_uuid,
 )
-from tests.fixtures.facility.stubs import StubBookingRepository, StubMinistryRepository, StubPricingService, StubRentalRepository, StubRoomBlackoutRepository
+from tests.fixtures.facility.stubs import (
+    StubBookingRepository,
+    StubMinistryRepository,
+    StubPricingService,
+    StubRentalRepository,
+    StubRoomBlackoutRepository,
+    StubRoomRepository,
+)
 from tests.fixtures.system.stubs import StubSettingService
 
 
@@ -524,16 +535,77 @@ async def test_preview_quote_for_member_honors_ministry_gate(monkeypatch):
         StubBookingRepository(), ministry_stub=StubMinistryRepository(ministry_by_id={ministry_id: ministry}, booking_member_user_ids={user_id})
     )
     room_id = uuid4()
-    command = PreviewQuoteCommand(
-        booking_type=BookingType.ONE_TIME,
-        is_mission_aligned=True,
-        ministry_id=ministry_id,
-        room_lines=[PreviewQuoteRoomLineCommand(facility_id=room_id, billed_hours=Decimal("4"))],
+    start = datetime(2026, 8, 22, 14, 0, tzinfo=timezone.utc)
+    end = datetime(2026, 8, 22, 18, 0, tzinfo=timezone.utc)
+    command = MemberPreviewQuoteCommand(
+        is_mission_aligned=True, ministry_id=ministry_id, lines=[MemberPreviewQuoteLineCommand(facility_id=room_id, start_at=start, end_at=end)]
     )
     result = await service.preview_quote_for_member(command)
     assert result.quoted_amount == Decimal("150")
     assert service._pricing_service.preview_calls[-1].is_mission_aligned is True
     assert service._pricing_service.preview_calls[-1].ministry_id == ministry_id
+
+
+@pytest.mark.asyncio
+async def test_preview_quote_for_member_passes_per_line_billed_hours(monkeypatch):
+    _user_ctx(monkeypatch)
+    room_id = new_uuid()
+    service = _booking_service(StubBookingRepository())
+    command = MemberPreviewQuoteCommand(
+        lines=[
+            MemberPreviewQuoteLineCommand(
+                facility_id=room_id, start_at=datetime(2026, 8, 22, 9, 0, tzinfo=timezone.utc), end_at=datetime(2026, 8, 22, 11, 0, tzinfo=timezone.utc)
+            ),
+            MemberPreviewQuoteLineCommand(
+                facility_id=room_id, start_at=datetime(2026, 8, 22, 14, 0, tzinfo=timezone.utc), end_at=datetime(2026, 8, 22, 18, 0, tzinfo=timezone.utc)
+            ),
+        ]
+    )
+    await service.preview_quote_for_member(command)
+    preview_command = service._pricing_service.preview_calls[-1]
+    assert preview_command.room_lines[0].billed_hours == Decimal("2.00")
+    assert preview_command.room_lines[1].billed_hours == Decimal("4.00")
+
+
+@pytest.mark.asyncio
+async def test_preview_quote_for_member_same_room_different_subtotals(monkeypatch):
+    _user_ctx(monkeypatch)
+    room_id = new_uuid()
+    rental = StubRentalRepository(rates_by_facility={room_id: make_hourly_and_daily_rates(room_id, hourly_amount=Decimal("10"))})
+    pricing = PricingService(rental, StubRoomRepository(existing_ids={room_id}))
+    service = BookingService(StubBookingRepository(), pricing, rental, StubMinistryRepository(), StubRoomBlackoutRepository(), StubSettingService())
+    command = MemberPreviewQuoteCommand(
+        lines=[
+            MemberPreviewQuoteLineCommand(
+                facility_id=room_id, start_at=datetime(2026, 8, 22, 9, 0, tzinfo=timezone.utc), end_at=datetime(2026, 8, 22, 11, 0, tzinfo=timezone.utc)
+            ),
+            MemberPreviewQuoteLineCommand(
+                facility_id=room_id, start_at=datetime(2026, 8, 22, 14, 0, tzinfo=timezone.utc), end_at=datetime(2026, 8, 22, 18, 0, tzinfo=timezone.utc)
+            ),
+        ]
+    )
+    result = await service.preview_quote_for_member(command)
+    assert result.room_lines[0].line_subtotal == Decimal("20.00")
+    assert result.room_lines[1].line_subtotal == Decimal("40.00")
+    assert result.subtotal_amount == Decimal("60.00")
+
+
+@pytest.mark.asyncio
+async def test_preview_quote_for_member_rejects_duplicate_line(monkeypatch):
+    _user_ctx(monkeypatch)
+    room_id = new_uuid()
+    service = _booking_service(StubBookingRepository())
+    start = datetime(2026, 8, 22, 14, 0, tzinfo=timezone.utc)
+    end = datetime(2026, 8, 22, 18, 0, tzinfo=timezone.utc)
+    command = MemberPreviewQuoteCommand(
+        lines=[
+            MemberPreviewQuoteLineCommand(facility_id=room_id, start_at=start, end_at=end),
+            MemberPreviewQuoteLineCommand(facility_id=room_id, start_at=start, end_at=end),
+        ]
+    )
+    with pytest.raises(BadRequestException) as exc_info:
+        await service.preview_quote_for_member(command)
+    assert exc_info.value.error_code == "FACILITY_BOOKING_DUPLICATE_LINE"
 
 
 @pytest.mark.asyncio
@@ -544,8 +616,8 @@ async def test_preview_quote_for_member_rejects_non_steward(monkeypatch):
     service = _booking_service(
         StubBookingRepository(), ministry_stub=StubMinistryRepository(ministry_by_id={ministry_id: ministry}, booking_member_user_ids=set())
     )
-    command = PreviewQuoteCommand(
-        booking_type=BookingType.ONE_TIME, ministry_id=ministry_id, room_lines=[PreviewQuoteRoomLineCommand(facility_id=uuid4(), billed_hours=Decimal("4"))]
-    )
+    start = datetime(2026, 8, 22, 14, 0, tzinfo=timezone.utc)
+    end = datetime(2026, 8, 22, 18, 0, tzinfo=timezone.utc)
+    command = MemberPreviewQuoteCommand(ministry_id=ministry_id, lines=[MemberPreviewQuoteLineCommand(facility_id=uuid4(), start_at=start, end_at=end)])
     with pytest.raises(ForbiddenException):
         await service.preview_quote_for_member(command)

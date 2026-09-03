@@ -74,6 +74,24 @@ async def test_preview_quote_daily_flat_subtotal_for_six_hours():
 
 
 @pytest.mark.asyncio
+async def test_preview_quote_same_room_different_durations_different_subtotals():
+    room_id = new_uuid()
+    rental = StubRentalRepository(rates_by_facility={room_id: make_hourly_and_daily_rates(room_id, hourly_amount=Decimal("10"))})
+    service = _pricing_service(rental, {room_id})
+    command = PreviewQuoteCommand(
+        booking_type=BookingType.ONE_TIME,
+        room_lines=[
+            PreviewQuoteRoomLineCommand(facility_id=room_id, billed_hours=Decimal("2")),
+            PreviewQuoteRoomLineCommand(facility_id=room_id, billed_hours=Decimal("4")),
+        ],
+    )
+    result = await service.preview_quote(command)
+    assert result.room_lines[0].line_subtotal == Decimal("20.00")
+    assert result.room_lines[1].line_subtotal == Decimal("40.00")
+    assert result.subtotal_amount == Decimal("60.00")
+
+
+@pytest.mark.asyncio
 async def test_preview_quote_sums_multiple_room_lines():
     room_a = new_uuid()
     room_b = new_uuid()
