@@ -69,7 +69,6 @@ class FacilityBookingRoom(ModelBase, AuditMixin):
 
     __extra_table_args__ = (
         sa.CheckConstraint("end_at > start_at", name="end_after_start"),
-        sa.UniqueConstraint("facility_booking_id", "facility_id", name="uq_booking_room_booking_facility"),
         sa.Index("ix_booking_room_booking_id", "facility_booking_id"),
         sa.Index("ix_booking_room_facility_id", "facility_id"),
     )
