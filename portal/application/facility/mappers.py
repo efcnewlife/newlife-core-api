@@ -24,7 +24,6 @@ from portal.application.facility.commands import (
     PreviewQuoteCommand,
     PreviewQuoteRoomLineCommand,
     UpdateDiscountRuleCommand,
-    UpdatePolicySettingCommand,
     UpdateRentalRateCommand,
     UpdateRentalRateTemplateCommand,
     UpdateRoomBlackoutCommand,
@@ -38,8 +37,6 @@ from portal.application.facility.results import (
     DayAvailabilityResult,
     DiscountRuleListResult,
     DiscountRuleResult,
-    PolicySettingListResult,
-    PolicySettingResult,
     PreviewQuoteResult,
     RentalRateListResult,
     RentalRatePageResult,
@@ -70,9 +67,6 @@ from portal.serializers.admin.v1.facility.rental_catalog import (
     AdminDiscountRuleItem,
     AdminDiscountRuleList,
     AdminDiscountRuleUpdate,
-    AdminPolicySettingItem,
-    AdminPolicySettingList,
-    AdminPolicySettingUpdate,
     AdminSurchargeCreate,
     AdminSurchargeItem,
     AdminSurchargeList,
@@ -523,18 +517,6 @@ def surcharge_to_api(result: SurchargeResult) -> AdminSurchargeItem:
 
 def surcharge_list_to_api(result: SurchargeListResult) -> AdminSurchargeList:
     return AdminSurchargeList(items=[surcharge_to_api(item) for item in result.items])
-
-
-def update_policy_setting_to_command(model: AdminPolicySettingUpdate) -> UpdatePolicySettingCommand:
-    return UpdatePolicySettingCommand.model_validate(model.model_dump())
-
-
-def policy_setting_to_api(result: PolicySettingResult) -> AdminPolicySettingItem:
-    return AdminPolicySettingItem.model_validate(result.model_dump())
-
-
-def policy_setting_list_to_api(result: PolicySettingListResult) -> AdminPolicySettingList:
-    return AdminPolicySettingList(items=[policy_setting_to_api(item) for item in result.items])
 
 
 def booking_pages_query_to_command(model) -> "BookingPagesQueryCommand":

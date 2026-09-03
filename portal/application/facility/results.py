@@ -252,24 +252,6 @@ class SurchargeListResult(BaseModel):
     items: list[SurchargeResult] = Field(default_factory=list)
 
 
-class PolicySettingResult(UUIDBaseModel):
-    """Policy setting row."""
-
-    setting_key: str = Field(...)
-    facility_id: Optional[UUID] = Field(default=None)
-    amount: Decimal = Field(...)
-    currency: str = Field(...)
-    is_active: bool = Field(default=True)
-    created_at: Optional[datetime] = Field(default=None)
-    updated_at: Optional[datetime] = Field(default=None)
-
-
-class PolicySettingListResult(BaseModel):
-    """Policy settings list."""
-
-    items: list[PolicySettingResult] = Field(default_factory=list)
-
-
 class PreviewQuoteRoomLineResult(BaseModel):
     """Quoted room line with rule snapshot fields."""
 

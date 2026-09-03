@@ -31,7 +31,6 @@ from portal.application.facility.mappers import (
     room_availability_item_to_api,
     room_detail_to_api,
     update_booking_to_command,
-    update_policy_setting_to_command,
 )
 from portal.application.facility.results import (
     BookingDetailResult,
@@ -53,7 +52,7 @@ from portal.domain.org.constants import MinistryMemberRole
 from portal.infrastructure.persistence.repositories.facility.booking_repository import BookingRepository
 from portal.serializers.admin.v1.facility.booking import AdminBookingCancel, AdminBookingQuery, AdminBookingUpdate
 from portal.serializers.admin.v1.facility.override_log import AdminOverrideLogQuery
-from portal.serializers.admin.v1.facility.rental_catalog import AdminDiscountRuleCreate, AdminPolicySettingUpdate, AdminSurchargeCreate
+from portal.serializers.admin.v1.facility.rental_catalog import AdminDiscountRuleCreate, AdminSurchargeCreate
 from portal.serializers.admin.v1.facility.rental_rate import AdminPreviewQuoteRequest, AdminPreviewQuoteRoomLine, AdminRentalRateCreate
 from portal.serializers.admin.v1.facility.room import AdminRoomBulkAction, AdminRoomCreate
 from portal.serializers.admin.v1.facility.room_slot_template import AdminRoomSlotTemplateCreate
@@ -196,10 +195,6 @@ def test_catalog_mappers():
     surcharge = AdminSurchargeCreate(code="audio_system", charge_type="flat", unit_amount=Decimal("25"))
     surcharge_cmd = create_surcharge_to_command(surcharge)
     assert surcharge_cmd.unit_amount == Decimal("25")
-
-    policy = AdminPolicySettingUpdate(amount="100", currency="CAD")
-    policy_cmd = update_policy_setting_to_command(policy)
-    assert policy_cmd.amount == Decimal("100")
 
     rule_result = DiscountRuleResult(id=uuid4(), code="mission_aligned", percent_off=Decimal("30"))
     api_rule = discount_rule_to_api(rule_result)

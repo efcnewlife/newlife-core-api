@@ -3,7 +3,7 @@ Top-level package for facility models.
 """
 
 from .booking import FacilityBooking, FacilityBookingOverrideLog, FacilityBookingRoom, FacilityBookingSlot, FacilityBookingSurcharge
-from .rental import FacilityRentalDiscountRule, FacilityRentalPolicySetting, FacilityRentalRate, FacilityRentalRateTemplate, FacilityRentalSurcharge
+from .rental import FacilityRentalDiscountRule, FacilityRentalRate, FacilityRentalRateTemplate, FacilityRentalSurcharge
 from .room import FacilityRoom, FacilityRoomTranslation
 from .room_blackout import FacilityRoomBlackout
 from .room_slot_template import FacilityRoomSlotTemplate
@@ -17,7 +17,6 @@ __all__ = [
     "FacilityRentalRate",
     "FacilityRentalDiscountRule",
     "FacilityRentalSurcharge",
-    "FacilityRentalPolicySetting",
     "FacilityBooking",
     "FacilityBookingRoom",
     "FacilityBookingSlot",

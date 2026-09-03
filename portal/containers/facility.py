@@ -51,7 +51,6 @@ class FacilityContainer(containers.DeclarativeContainer):
         BookingService,
         booking_repository=booking_repository,
         pricing_service=pricing_service,
-        rental_repository=rental_repository,
         ministry_repository=ministry_repository,
         room_blackout_repository=room_blackout_repository,
         setting_service=setting_service,

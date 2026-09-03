@@ -89,10 +89,10 @@ def seed_target_audiences_cmd(force: bool):
     "--reset",
     is_flag=True,
     default=False,
-    help=("Hard-delete facility bookings, blackouts, slot templates, rooms, rates, discounts, surcharges, and policy settings, then re-seed from seed data."),
+    help=("Hard-delete facility bookings, blackouts, slot templates, rooms, rates, discounts, and surcharges, then re-seed from seed data."),
 )
 def seed_facility_rental_cmd(force: bool, reset: bool):
-    """Seed facility rooms, rates, discounts, surcharges, and policy settings."""
+    """Seed facility rooms, rates, discounts, and surcharges."""
     seed_facility_rental_process(force=force, reset=reset)
 
 

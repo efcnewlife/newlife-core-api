@@ -46,7 +46,7 @@ class FacilityBooking(ModelBase, AuditMixin, RemarkMixin, DeletedMixin):
     discount_percent = Column(sa.Numeric(5, 2), comment="Applied discount percent snapshot (0/20/30)")
     discount_amount = Column(sa.Numeric(12, 2), comment="Discount amount snapshot")
     surcharge_amount = Column(sa.Numeric(12, 2), comment="Surcharge subtotal snapshot")
-    quoted_amount = Column(sa.Numeric(12, 2), comment="Final quoted amount after floor rules")
+    quoted_amount = Column(sa.Numeric(12, 2), comment="Quoted amount: line subtotals minus discount plus surcharges")
     deposit_amount = Column(sa.Numeric(12, 2), comment="Deposit amount snapshot (not collected in this phase)")
     currency = Column(sa.String(8), comment="Currency code aligned with rental rates")
     cancelled_at = Column(sa.DateTime(timezone=True), comment="Cancellation timestamp")

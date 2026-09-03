@@ -6,7 +6,7 @@ Facility Rate effective 2021; policy rules from April/11/2022 usage policy.
 from decimal import Decimal
 from typing import Any, Optional
 
-from portal.domain.facility.constants import BookingType, RentalDiscountCode, RentalPolicySettingKey, RentalSurchargeChargeType, RentalSurchargeCode
+from portal.domain.facility.constants import BookingType, RentalDiscountCode, RentalSurchargeChargeType, RentalSurchargeCode
 
 
 def _translations(en_name: str, zh_name: str) -> dict[str, dict[str, str]]:
@@ -102,12 +102,6 @@ facility_surcharge_seed_rows: list[dict[str, Any]] = [
         "applies_to_booking_type": None,
         "remark": "Open/close door and operate audio system (policy 11)",
     },
-]
-
-# facility_code None = global default; "gym" resolves to gym room id at seed time.
-facility_policy_seed_rows: list[dict[str, Any]] = [
-    {"setting_key": RentalPolicySettingKey.MINIMUM_FEE_DEFAULT.value, "facility_code": None, "amount": Decimal("60.00"), "currency": "CAD", "is_active": True},
-    {"setting_key": RentalPolicySettingKey.MINIMUM_FEE_GYM.value, "facility_code": "gym", "amount": Decimal("35.00"), "currency": "CAD", "is_active": True},
 ]
 
 # Hours-only applicability (PDF: daily flat at 5+ hours).
