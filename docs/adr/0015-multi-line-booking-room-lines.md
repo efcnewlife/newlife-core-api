@@ -22,7 +22,7 @@ Admin Booking range query (ADR 0007) matches on the booking **header** interval.
 
 ### Member cart rules (v1)
 
-- At most **3** `booking_room` rows per booking (`MAX_ROOMS_PER_BOOKING` policy continues to cap **line count**, not distinct room count).
+- At most **3** `booking_room` rows per booking (hard product cap on **line count**, not distinct room count). ADR 0017 supersedes reading this cap from `MAX_ROOMS_PER_BOOKING` Policy Setting.
 - All lines must fall on the **same local calendar day** in the facility timezone (`SettingService.get_facility_timezone()`).
 - Each line must satisfy `end_at > start_at` and must not cross local midnight (one continuous interval within that day).
 - Member v1 create remains **One-time** (`booking_type = one_time`); Recurring is out of scope.

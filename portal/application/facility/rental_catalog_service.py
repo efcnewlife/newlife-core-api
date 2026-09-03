@@ -1,5 +1,5 @@
 """
-Facility rental catalog application service (discounts, surcharges, policy).
+Facility rental catalog application service (discounts, surcharges).
 """
 
 import uuid
@@ -10,18 +10,9 @@ from portal.application.facility.commands import (
     CreateSurchargeCommand,
     DeleteCommand,
     UpdateDiscountRuleCommand,
-    UpdatePolicySettingCommand,
     UpdateSurchargeCommand,
 )
-from portal.application.facility.results import (
-    CreateIdResult,
-    DiscountRuleListResult,
-    DiscountRuleResult,
-    PolicySettingListResult,
-    PolicySettingResult,
-    SurchargeListResult,
-    SurchargeResult,
-)
+from portal.application.facility.results import CreateIdResult, DiscountRuleListResult, DiscountRuleResult, SurchargeListResult, SurchargeResult
 from portal.exceptions.responses import ApiBaseException, ConflictErrorException, NotFoundException
 from portal.infrastructure.persistence.repositories.facility.rental_repository import RentalRepository
 from portal.libs.tracing.distributed_trace import distributed_trace
@@ -130,22 +121,3 @@ class RentalCatalogService:
         if not await self._repository.get_surcharge_by_id(surcharge_id):
             raise NotFoundException(detail=f"Surcharge {surcharge_id} not found")
         await self._repository.delete_surcharge_soft(surcharge_id, command.reason)
-
-    @distributed_trace()
-    async def list_policy_settings(self, facility_id: UUID | None = None) -> PolicySettingListResult:
-        return PolicySettingListResult(items=await self._repository.list_policy_settings(facility_id))
-
-    @distributed_trace()
-    async def get_policy_setting(self, setting_id: UUID) -> PolicySettingResult:
-        setting = await self._repository.get_policy_setting_by_id(setting_id)
-        if not setting:
-            raise NotFoundException(detail=f"Policy setting {setting_id} not found")
-        return setting
-
-    @distributed_trace()
-    async def update_policy_setting(self, setting_id: UUID, command: UpdatePolicySettingCommand) -> None:
-        affected = await self._repository.update_policy_setting(
-            setting_id, {"amount": command.amount, "currency": command.currency, "is_active": command.is_active}
-        )
-        if affected == 0:
-            raise NotFoundException(detail=f"Policy setting {setting_id} not found")

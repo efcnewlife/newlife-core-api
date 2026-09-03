@@ -10,13 +10,13 @@ from uuid import UUID
 import sqlalchemy as sa
 from asyncpg import UniqueViolationError
 
-from portal.application.facility.results import DiscountRuleResult, PolicySettingResult, RentalRateResult, RentalRateTemplateResult, SurchargeResult
+from portal.application.facility.results import DiscountRuleResult, RentalRateResult, RentalRateTemplateResult, SurchargeResult
 from portal.application.rbac.commands import PagesQueryCommand
-from portal.domain.facility.constants import RentalPolicySettingKey, RentalRateBillingUnit
+from portal.domain.facility.constants import RentalRateBillingUnit
 from portal.domain.facility.rate_applicability import RateSelectionContext, matches_applicability
 from portal.libs.database import Session
 from portal.libs.database.execute_result import affected_rows
-from portal.models import FacilityRentalDiscountRule, FacilityRentalPolicySetting, FacilityRentalRate, FacilityRentalRateTemplate, FacilityRentalSurcharge
+from portal.models import FacilityRentalDiscountRule, FacilityRentalRate, FacilityRentalRateTemplate, FacilityRentalSurcharge
 
 
 class RentalRepository:
@@ -331,73 +331,6 @@ class RentalRepository:
             .where(FacilityRentalSurcharge.id == surcharge_id)
             .execute()
         )
-
-    async def list_policy_settings(self, facility_id: Optional[UUID] = None) -> list[PolicySettingResult]:
-        query = self._session.select(
-            FacilityRentalPolicySetting.id,
-            FacilityRentalPolicySetting.setting_key,
-            FacilityRentalPolicySetting.facility_id,
-            FacilityRentalPolicySetting.amount,
-            FacilityRentalPolicySetting.currency,
-            FacilityRentalPolicySetting.is_active,
-            FacilityRentalPolicySetting.created_at,
-            FacilityRentalPolicySetting.updated_at,
-        ).where(FacilityRentalPolicySetting.is_deleted == False)
-        if facility_id is not None:
-            query = query.where(sa.or_(FacilityRentalPolicySetting.facility_id == facility_id, FacilityRentalPolicySetting.facility_id.is_(None)))
-        items: list[PolicySettingResult] = await query.order_by(FacilityRentalPolicySetting.setting_key).fetch(as_model=PolicySettingResult)
-        return items or []
-
-    async def get_policy_setting_by_id(self, setting_id: UUID) -> Optional[PolicySettingResult]:
-        return await (
-            self._session.select(
-                FacilityRentalPolicySetting.id,
-                FacilityRentalPolicySetting.setting_key,
-                FacilityRentalPolicySetting.facility_id,
-                FacilityRentalPolicySetting.amount,
-                FacilityRentalPolicySetting.currency,
-                FacilityRentalPolicySetting.is_active,
-                FacilityRentalPolicySetting.created_at,
-                FacilityRentalPolicySetting.updated_at,
-            )
-            .where(FacilityRentalPolicySetting.id == setting_id)
-            .where(FacilityRentalPolicySetting.is_deleted == False)
-            .fetchrow(as_model=PolicySettingResult)
-        )
-
-    async def get_policy_amount(self, setting_key: RentalPolicySettingKey, facility_id: Optional[UUID]) -> Optional[Decimal]:
-        if facility_id:
-            facility_amount = await (
-                self._session.select(FacilityRentalPolicySetting.amount)
-                .where(FacilityRentalPolicySetting.setting_key == setting_key.value)
-                .where(FacilityRentalPolicySetting.facility_id == facility_id)
-                .where(FacilityRentalPolicySetting.is_active == True)
-                .where(FacilityRentalPolicySetting.is_deleted == False)
-                .fetchval()
-            )
-            if facility_amount is not None:
-                return Decimal(str(facility_amount))
-        global_amount = await (
-            self._session.select(FacilityRentalPolicySetting.amount)
-            .where(FacilityRentalPolicySetting.setting_key == setting_key.value)
-            .where(FacilityRentalPolicySetting.facility_id.is_(None))
-            .where(FacilityRentalPolicySetting.is_active == True)
-            .where(FacilityRentalPolicySetting.is_deleted == False)
-            .fetchval()
-        )
-        if global_amount is None:
-            return None
-        return Decimal(str(global_amount))
-
-    async def update_policy_setting(self, setting_id: UUID, values: dict[str, Any]) -> int:
-        result = await (
-            self._session.update(FacilityRentalPolicySetting)
-            .values(**values)
-            .where(FacilityRentalPolicySetting.id == setting_id)
-            .where(FacilityRentalPolicySetting.is_deleted == False)
-            .execute()
-        )
-        return affected_rows(result)
 
     async def get_active_discount_percent(self, booking_type: str, is_mission_aligned: bool) -> Decimal:
         rules = await self.list_discount_rules()

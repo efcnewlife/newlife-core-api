@@ -92,8 +92,8 @@ class OrgMinistrySchedule(ModelBase, AuditMixin, SortableMixin):
     """Structured weekly schedule for a ministry."""
 
     __extra_table_args__ = (
-        sa.CheckConstraint("days_of_week_mask IS NULL OR (days_of_week_mask & 127) != 0", name="ministry_schedule_days_of_week_mask_nonzero"),
-        sa.CheckConstraint("days_of_week_mask IS NULL OR (days_of_week_mask & ~127) = 0", name="ministry_schedule_days_of_week_mask_valid_bits"),
+        sa.CheckConstraint("days_of_week_mask IS NULL OR (days_of_week_mask & 127) != 0", name="days_of_week_mask_nonzero"),
+        sa.CheckConstraint("days_of_week_mask IS NULL OR (days_of_week_mask & ~127) = 0", name="days_of_week_mask_valid_bits"),
         sa.CheckConstraint("start_time IS NULL OR end_time IS NULL OR start_time < end_time", name="ministry_schedule_start_before_end"),
         sa.CheckConstraint("effective_from IS NULL OR effective_to IS NULL OR effective_from <= effective_to", name="ministry_schedule_effective_date_order"),
         sa.Index("ix_ministry_schedule_ministry_id", "ministry_id"),

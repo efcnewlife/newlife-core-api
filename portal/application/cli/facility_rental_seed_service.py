@@ -1,5 +1,5 @@
 """
-Facility rental seed use case for CLI (rooms, templates, discounts, surcharges, policy).
+Facility rental seed use case for CLI (rooms, templates, discounts, surcharges).
 
 Seed creates rate templates only; rooms are not bound to rates (pricing falls back to active templates).
 """
@@ -23,7 +23,6 @@ from portal.models import (
     FacilityBookingSlot,
     FacilityBookingSurcharge,
     FacilityRentalDiscountRule,
-    FacilityRentalPolicySetting,
     FacilityRentalRate,
     FacilityRentalRateTemplate,
     FacilityRentalSurcharge,
@@ -47,7 +46,6 @@ async def clear_facility_rental_catalog(session: Session) -> None:
     await session.delete(FacilityBooking).execute()
     await session.delete(FacilityRoomBlackout).execute()
     await session.delete(FacilityRoomSlotTemplate).execute()
-    await session.delete(FacilityRentalPolicySetting).execute()
     await session.delete(FacilityRentalRate).execute()
     await session.delete(FacilityRentalRateTemplate).execute()
     await session.delete(FacilityRentalDiscountRule).execute()
@@ -214,34 +212,6 @@ async def _upsert_surcharge(session: Session, row: dict[str, Any]) -> None:
     )
 
 
-async def _upsert_policy_setting(session: Session, row: dict[str, Any], room_ids_by_code: dict[str, UUID]) -> None:
-    facility_code = row.get("facility_code")
-    facility_id: Optional[UUID] = None
-    if facility_code:
-        facility_id = room_ids_by_code.get(facility_code)
-        if not facility_id:
-            click.echo(click.style(f"Skip policy {row['setting_key']}: room code {facility_code} not found", fg="yellow"))
-            return
-
-    query = (
-        session.select(FacilityRentalPolicySetting.id)
-        .where(FacilityRentalPolicySetting.setting_key == row["setting_key"])
-        .where(FacilityRentalPolicySetting.is_deleted == False)
-    )
-    if facility_id is None:
-        query = query.where(FacilityRentalPolicySetting.facility_id.is_(None))
-    else:
-        query = query.where(FacilityRentalPolicySetting.facility_id == facility_id)
-    existing_id = await query.fetchval()
-
-    values = dict(amount=row["amount"], currency=row.get("currency", "CAD"), is_active=row.get("is_active", True))
-    if existing_id:
-        await session.update(FacilityRentalPolicySetting).values(**values).where(FacilityRentalPolicySetting.id == existing_id).execute()
-        return
-
-    await session.insert(FacilityRentalPolicySetting).values(id=uuid.uuid4(), setting_key=row["setting_key"], facility_id=facility_id, **values).execute()
-
-
 async def run_facility_rental_seed(
     session: Session,
     *,
@@ -249,11 +219,10 @@ async def run_facility_rental_seed(
     template_rows: list[dict[str, Any]],
     discount_rows: list[dict[str, Any]],
     surcharge_rows: list[dict[str, Any]],
-    policy_rows: list[dict[str, Any]],
     global_rate_unit_amount: Decimal,
     reset: bool = False,
 ) -> None:
-    """Upsert facility rooms, templates, rate bindings, discounts, surcharges, and policy settings."""
+    """Upsert facility rooms, templates, discounts, and surcharges."""
     _ = global_rate_unit_amount
     if reset:
         click.echo(click.style("Clearing facility booking and rental catalog data...", fg="yellow"))
@@ -278,36 +247,29 @@ async def run_facility_rental_seed(
     if "hourly" not in billing_units_seen or "daily_flat" not in billing_units_seen:
         raise click.ClickException("Seed requires hourly and daily_flat rental rate templates")
 
-    room_ids_by_code: dict[str, UUID] = {}
     rooms_seeded = 0
-
     for row in room_rows:
-        room_id = await _upsert_room(session, row, locale_rows)
-        room_ids_by_code[row["code"]] = room_id
+        await _upsert_room(session, row, locale_rows)
         rooms_seeded += 1
 
     for row in discount_rows:
         await _upsert_discount(session, row)
     for row in surcharge_rows:
         await _upsert_surcharge(session, row)
-    for row in policy_rows:
-        await _upsert_policy_setting(session, row, room_ids_by_code)
 
     await session.commit()
     click.echo(
         click.style(
             f"Seeded {templates_seeded} templates, {rooms_seeded} rooms "
             f"(no room rate bindings; pricing uses active templates), "
-            f"{len(discount_rows)} discounts, {len(surcharge_rows)} surcharges, "
-            f"{len(policy_rows)} policy settings",
+            f"{len(discount_rows)} discounts, {len(surcharge_rows)} surcharges",
             fg="green",
         )
     )
     logger.info(
-        "Facility rental seed completed: templates=%s rooms=%s discounts=%s surcharges=%s policy=%s",
+        "Facility rental seed completed: templates=%s rooms=%s discounts=%s surcharges=%s",
         templates_seeded,
         rooms_seeded,
         len(discount_rows),
         len(surcharge_rows),
-        len(policy_rows),
     )

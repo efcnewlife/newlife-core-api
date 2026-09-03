@@ -513,7 +513,7 @@ uv run python -m portal.cli.main seed-local-demo
 | `seed-positions`        | Upsert org positions and translations from `portal/cli/datas/position_seed_data.py`.                                          |
 | `seed-ministry-types`   | Upsert ministry type catalog (`outreach`, `internal`, `worship`) and translations.                                            |
 | `seed-target-audiences` | Upsert target audience catalog (`children`, `youths`, `adults`, `family`, `all_ages`) and translations.                       |
-| `seed-facility-rental`  | Upsert facility rooms, rates, discounts, surcharges, and policy settings.                                                     |
+| `seed-facility-rental`  | Upsert facility rooms, rates, discounts, and surcharges.                                                                      |
 | `seed-local-demo`       | Replace demo ministries, room slot templates, blackouts, and bookings (requires catalog rooms + ministry prerequisites).      |
 | `reset-rbac`            | **Destructive:** delete all RBAC data and re-seed from `rbac_seed_data`.                                                      |
 

@@ -8,7 +8,7 @@ import pytest
 
 from portal.application.facility.commands import PreviewQuoteCommand, PreviewQuoteRoomLineCommand
 from portal.application.facility.pricing_service import PricingService
-from portal.domain.facility.constants import BookingType, RentalDiscountCode, RentalPolicySettingKey, RentalRateBillingUnit, RentalSurchargeChargeType
+from portal.domain.facility.constants import BookingType, RentalDiscountCode, RentalRateBillingUnit, RentalSurchargeChargeType
 from portal.exceptions.responses import BadRequestException
 from tests.fixtures.facility.factories import (
     make_discount_rule,
@@ -58,6 +58,7 @@ async def test_preview_quote_hourly_subtotal_below_threshold():
     service = _pricing_service(rental, {room_id})
     result = await service.preview_quote(make_preview_quote_command(facility_id=room_id, billed_hours=Decimal("4")))
     assert result.subtotal_amount == Decimal("40.00")
+    assert result.quoted_amount == Decimal("40.00")
     assert result.room_lines[0].billing_unit == RentalRateBillingUnit.HOURLY.value
     assert result.room_lines[0].rental_rate_name
     assert result.room_lines[0].unit_amount == Decimal("10")
@@ -180,15 +181,13 @@ async def test_preview_quote_unknown_surcharge_raises():
 
 
 @pytest.mark.asyncio
-async def test_preview_quote_applies_minimum_fee_floor():
+async def test_preview_quote_has_no_minimum_fee_floor():
     room_id = new_uuid()
-    rental = StubRentalRepository(
-        rates_by_facility={room_id: [make_rental_rate(facility_id=room_id, unit_amount=Decimal("1"))]},
-        policy_amounts={(RentalPolicySettingKey.MINIMUM_FEE_DEFAULT.value, room_id): Decimal("100")},
-    )
+    rental = StubRentalRepository(rates_by_facility={room_id: [make_rental_rate(facility_id=room_id, unit_amount=Decimal("1"))]})
     service = _pricing_service(rental, {room_id})
     result = await service.preview_quote(make_preview_quote_command(facility_id=room_id, billed_hours=Decimal("1")))
-    assert result.quoted_amount == Decimal("100.00")
+    assert result.subtotal_amount == Decimal("1.00")
+    assert result.quoted_amount == Decimal("1.00")
 
 
 @pytest.mark.asyncio

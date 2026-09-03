@@ -23,7 +23,7 @@ from portal.application.facility.results import (
     RoomSlotTemplateResult,
     SurchargeResult,
 )
-from portal.domain.facility.constants import BookingStatus, RentalPolicySettingKey
+from portal.domain.facility.constants import BookingStatus
 from portal.infrastructure.persistence.repositories.facility.rental_repository import RentalRepository
 
 
@@ -35,20 +35,16 @@ class StubRentalRepository:
         rates_by_facility: dict[UUID, list[RentalRateResult]] | None = None,
         discount_rules: list[DiscountRuleResult] | None = None,
         surcharges: list[SurchargeResult] | None = None,
-        policy_amounts: dict[tuple[str, UUID | None], Decimal] | None = None,
         insert_raises_unique: bool = False,
         update_discount_affected: int = 1,
         update_surcharge_affected: int = 1,
-        update_policy_affected: int = 1,
     ):
         self.rates_by_facility = rates_by_facility or {}
         self.discount_rules = discount_rules or []
         self.surcharges = surcharges or []
-        self.policy_amounts = policy_amounts or {}
         self.insert_raises_unique = insert_raises_unique
         self.update_discount_affected = update_discount_affected
         self.update_surcharge_affected = update_surcharge_affected
-        self.update_policy_affected = update_policy_affected
         self.insert_discount_calls: list[dict] = []
         self.insert_surcharge_calls: list[dict] = []
         self.insert_rate_calls: list[dict] = []
@@ -67,10 +63,6 @@ class StubRentalRepository:
 
     async def list_surcharges(self) -> list[SurchargeResult]:
         return list(self.surcharges)
-
-    async def get_policy_amount(self, key: RentalPolicySettingKey | str, facility_id: UUID | None) -> Decimal | None:
-        setting_key = key.value if hasattr(key, "value") else key
-        return self.policy_amounts.get((setting_key, facility_id))
 
     @staticmethod
     def pick_rate_for_line(rates: list[RentalRateResult], billed_hours: Decimal, allow_first_active: bool = True):
@@ -111,15 +103,6 @@ class StubRentalRepository:
 
     async def delete_surcharge_soft(self, surcharge_id: UUID, reason: str | None) -> None:
         pass
-
-    async def list_policy_settings(self, facility_id: UUID | None = None) -> list:
-        return []
-
-    async def get_policy_setting_by_id(self, setting_id: UUID):
-        return None
-
-    async def update_policy_setting(self, setting_id: UUID, values: dict) -> int:
-        return self.update_policy_affected
 
     async def insert_rate(self, payload: dict) -> None:
         self.insert_rate_calls.append(payload)

@@ -8,13 +8,12 @@ from uuid import UUID
 
 from portal.application.facility.commands import PreviewQuoteCommand
 from portal.application.facility.results import PreviewQuoteResult, PreviewQuoteRoomLineResult, RentalRateResult
-from portal.domain.facility.constants import BookingType, RentalDiscountCode, RentalPolicySettingKey, RentalRateBillingUnit, RentalSurchargeChargeType
+from portal.domain.facility.constants import BookingType, RentalDiscountCode, RentalRateBillingUnit, RentalSurchargeChargeType
 from portal.exceptions.responses import BadRequestException
 from portal.infrastructure.persistence.repositories.facility.rental_repository import RentalRepository
 from portal.infrastructure.persistence.repositories.facility.room_repository import RoomRepository
 from portal.libs.tracing.distributed_trace import distributed_trace
 
-DEFAULT_MINIMUM_FEE = Decimal("0")
 MONEY_QUANT = Decimal("0.01")
 
 
@@ -44,14 +43,13 @@ class PricingService:
     @distributed_trace()
     async def preview_quote(self, command: PreviewQuoteCommand) -> PreviewQuoteResult:
         """
-        Compute preview quote for room lines, discounts, surcharges, and minimum fee.
+        Compute preview quote for room lines, discounts, and surcharges.
         """
         if not command.room_lines:
             raise BadRequestException(detail="At least one room line is required")
 
         room_lines: list[PreviewQuoteRoomLineResult] = []
         subtotal = Decimal("0")
-        primary_facility_id = command.room_lines[0].facility_id
 
         for line in command.room_lines:
             if not await self._room_repository.exists_by_id(line.facility_id):
@@ -89,9 +87,7 @@ class PricingService:
         discount_amount = self._quantize(subtotal * discount_percent / Decimal("100"))
         after_discount = subtotal - discount_amount
         surcharge_amount = await self._compute_surcharges(command, after_discount)
-        quoted_before_floor = after_discount + surcharge_amount
-        minimum_fee = await self._resolve_minimum_fee(primary_facility_id)
-        quoted_amount = max(quoted_before_floor, minimum_fee)
+        quoted_amount = after_discount + surcharge_amount
 
         return PreviewQuoteResult(
             subtotal_amount=self._quantize(subtotal),
@@ -129,14 +125,6 @@ class PricingService:
         if billing_unit == RentalRateBillingUnit.FLAT_PER_BOOKING.value:
             return amount
         return amount * billed_hours
-
-    async def _resolve_minimum_fee(self, facility_id: UUID) -> Decimal:
-        amount = await self._rental_repository.get_policy_amount(RentalPolicySettingKey.MINIMUM_FEE_GYM, facility_id)
-        if amount is None:
-            amount = await self._rental_repository.get_policy_amount(RentalPolicySettingKey.MINIMUM_FEE_DEFAULT, facility_id)
-        if amount is None:
-            return DEFAULT_MINIMUM_FEE
-        return amount
 
     async def _compute_surcharges(self, command: PreviewQuoteCommand, base_amount: Decimal) -> Decimal:
         if not command.surcharge_codes:

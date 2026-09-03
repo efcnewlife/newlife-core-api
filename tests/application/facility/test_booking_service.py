@@ -20,7 +20,7 @@ from portal.application.facility.commands import (
 )
 from portal.application.facility.pricing_service import PricingService
 from portal.application.facility.results import BookingDetailResult, BookingRoomLineResult, PreviewQuoteRoomLineResult
-from portal.domain.facility.constants import BookingStatus, BookingType, RentalPolicySettingKey
+from portal.domain.facility.constants import BookingStatus, BookingType
 from portal.exceptions.responses import BadRequestException, ConflictErrorException, ForbiddenException, NotFoundException
 from tests.fixtures.facility.factories import (
     make_booking_list_item,
@@ -56,7 +56,6 @@ def _user_ctx(monkeypatch, *, user_id=None):
 
 def _booking_service(
     booking_stub: StubBookingRepository,
-    rental_stub: StubRentalRepository | None = None,
     pricing_stub: StubPricingService | None = None,
     blackout_stub: StubRoomBlackoutRepository | None = None,
     ministry_stub: StubMinistryRepository | None = None,
@@ -65,7 +64,6 @@ def _booking_service(
     return BookingService(
         booking_stub,
         pricing_stub or StubPricingService(quote),
-        rental_stub or StubRentalRepository(),
         ministry_stub or StubMinistryRepository(),
         blackout_stub or StubRoomBlackoutRepository(),
         StubSettingService(),
@@ -121,15 +119,14 @@ async def test_update_booking_requires_rooms():
 
 
 @pytest.mark.asyncio
-async def test_update_booking_max_rooms_exceeded():
-    room_ids = [new_uuid(), new_uuid(), new_uuid()]
-    rental = StubRentalRepository(policy_amounts={(RentalPolicySettingKey.MAX_ROOMS_PER_BOOKING.value, None): Decimal("2")})
+async def test_update_booking_rejects_fourth_line():
+    room_ids = [new_uuid() for _ in range(4)]
     command = make_update_booking_command()
     command.rooms = [BookingRoomLineCommand(facility_id=room_id, sequence=idx) for idx, room_id in enumerate(room_ids)]
-    service = _booking_service(StubBookingRepository(), rental)
+    service = _booking_service(StubBookingRepository())
     with pytest.raises(BadRequestException) as exc_info:
         await service.update_booking(uuid4(), command)
-    assert "At most 2" in str(exc_info.value.detail)
+    assert "At most 3" in str(exc_info.value.detail)
     assert exc_info.value.error_code == "FACILITY_BOOKING_MAX_ROOMS"
 
 
@@ -280,20 +277,6 @@ async def test_create_booking_blackout_conflict(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_create_booking_max_rooms_exceeded(monkeypatch):
-    _user_ctx(monkeypatch)
-    room_ids = [new_uuid(), new_uuid(), new_uuid()]
-    rental = StubRentalRepository(policy_amounts={(RentalPolicySettingKey.MAX_ROOMS_PER_BOOKING.value, None): Decimal("2")})
-    command = make_create_booking_command()
-    command.rooms = [BookingRoomLineCommand(facility_id=room_id, sequence=idx) for idx, room_id in enumerate(room_ids)]
-    service = _booking_service(StubBookingRepository(), rental)
-    with pytest.raises(BadRequestException) as exc_info:
-        await service.create_booking(command)
-    assert "At most 2" in str(exc_info.value.detail)
-    assert exc_info.value.error_code == "FACILITY_BOOKING_MAX_ROOMS"
-
-
-@pytest.mark.asyncio
 async def test_create_booking_invalid_time_range_has_error_code(monkeypatch):
     _user_ctx(monkeypatch)
     command = make_create_booking_command(start_at=datetime(2026, 5, 1, 14, 0, tzinfo=timezone.utc), end_at=datetime(2026, 5, 1, 10, 0, tzinfo=timezone.utc))
@@ -363,6 +346,7 @@ async def test_create_booking_rejects_fourth_line(monkeypatch):
     service = _booking_service(StubBookingRepository())
     with pytest.raises(BadRequestException) as exc_info:
         await service.create_booking(command)
+    assert "At most 3" in str(exc_info.value.detail)
     assert exc_info.value.error_code == "FACILITY_BOOKING_MAX_ROOMS"
 
 
@@ -573,7 +557,7 @@ async def test_preview_quote_for_member_same_room_different_subtotals(monkeypatc
     room_id = new_uuid()
     rental = StubRentalRepository(rates_by_facility={room_id: make_hourly_and_daily_rates(room_id, hourly_amount=Decimal("10"))})
     pricing = PricingService(rental, StubRoomRepository(existing_ids={room_id}))
-    service = BookingService(StubBookingRepository(), pricing, rental, StubMinistryRepository(), StubRoomBlackoutRepository(), StubSettingService())
+    service = BookingService(StubBookingRepository(), pricing, StubMinistryRepository(), StubRoomBlackoutRepository(), StubSettingService())
     command = MemberPreviewQuoteCommand(
         lines=[
             MemberPreviewQuoteLineCommand(

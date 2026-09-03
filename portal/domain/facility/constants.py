@@ -21,6 +21,9 @@ BOOKING_RANGE_MAX_DAYS = 62
 # Max images in one Room gallery.
 ROOM_GALLERY_MAX_FILES = 10
 
+# Hard product cap on Booking lines (not a Policy Setting).
+MAX_BOOKING_LINES = 3
+
 
 class BookingStatus(str, Enum):
     """Booking lifecycle status."""
@@ -68,15 +71,6 @@ class RentalSurchargeChargeType(str, Enum):
     FLAT = "flat"
     PER_HOUR = "per_hour"
     PER_PROGRAM = "per_program"
-
-
-class RentalPolicySettingKey(str, Enum):
-    """Rental policy setting key."""
-
-    MINIMUM_FEE_DEFAULT = "minimum_fee_default"
-    MINIMUM_FEE_GYM = "minimum_fee_gym"
-    DAILY_FLAT_MIN_HOURS = "daily_flat_min_hours"
-    MAX_ROOMS_PER_BOOKING = "max_rooms_per_booking"
 
 
 class OverrideOutcome(str, Enum):

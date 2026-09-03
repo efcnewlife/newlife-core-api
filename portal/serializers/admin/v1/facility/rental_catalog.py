@@ -5,7 +5,6 @@ Rental catalog serializers.
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional
-from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -84,29 +83,3 @@ class AdminSurchargeCreate(AdminSurchargeWrite):
 
 class AdminSurchargeUpdate(AdminSurchargeWrite):
     """Update surcharge."""
-
-
-class AdminPolicySettingItem(UUIDBaseModel):
-    """Policy setting item."""
-
-    setting_key: str = Field(..., serialization_alias="settingKey", description="Setting key")
-    facility_id: Optional[UUID] = Field(None, serialization_alias="facilityId", description="Room ID")
-    amount: Decimal = Field(..., description="Amount")
-    currency: str = Field(..., description="Currency")
-    is_active: bool = Field(True, serialization_alias="isActive", description="Active flag")
-    created_at: Optional[datetime] = Field(None, serialization_alias="createAt", description="Created at")
-    updated_at: Optional[datetime] = Field(None, serialization_alias="updateAt", description="Updated at")
-
-
-class AdminPolicySettingList(BaseModel):
-    """Policy setting list."""
-
-    items: list[AdminPolicySettingItem] = Field(default_factory=list, description="Items")
-
-
-class AdminPolicySettingUpdate(BaseModel):
-    """Policy setting update."""
-
-    amount: Decimal = Field(..., description="Amount")
-    currency: str = Field("CAD", description="Currency")
-    is_active: bool = Field(True, description="Active flag")

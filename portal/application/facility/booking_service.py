@@ -18,6 +18,7 @@ from portal.application.facility.booking_line_validation import (
 from portal.application.facility.commands import (
     BookingPagesQueryCommand,
     BookingRangeQueryCommand,
+    BookingRoomLineCommand,
     CancelBookingCommand,
     CreateBookingCommand,
     MemberPreviewQuoteCommand,
@@ -31,17 +32,16 @@ from portal.application.org.results import CreateIdResult
 from portal.application.system.setting_service import SettingService
 from portal.domain.facility.constants import (
     BOOKING_RANGE_MAX_DAYS,
+    MAX_BOOKING_LINES,
     BookingErrorCode,
     BookingSlotStatus,
     BookingStatus,
     BookingType,
     FacilityErrorCode,
-    RentalPolicySettingKey,
 )
 from portal.domain.org.constants import MinistryStatus
 from portal.exceptions.responses import BadRequestException, ConflictErrorException, ForbiddenException, NotFoundException
 from portal.infrastructure.persistence.repositories.facility.booking_repository import BookingRepository
-from portal.infrastructure.persistence.repositories.facility.rental_repository import RentalRepository
 from portal.infrastructure.persistence.repositories.facility.room_blackout_repository import RoomBlackoutRepository
 from portal.infrastructure.persistence.repositories.org.ministry_repository import MinistryRepository
 from portal.libs.contexts.request_context import RequestContext, get_request_context
@@ -56,14 +56,12 @@ class BookingService:
         self,
         booking_repository: BookingRepository,
         pricing_service: PricingService,
-        rental_repository: RentalRepository,
         ministry_repository: MinistryRepository,
         room_blackout_repository: RoomBlackoutRepository,
         setting_service: SettingService,
     ):
         self._repository = booking_repository
         self._pricing_service = pricing_service
-        self._rental_repository = rental_repository
         self._ministry_repository = ministry_repository
         self._blackout_repository = room_blackout_repository
         self._setting_service = setting_service
@@ -80,6 +78,11 @@ class BookingService:
         delta = end_at - start_at
         hours = Decimal(str(delta.total_seconds())) / Decimal("3600")
         return hours.quantize(Decimal("0.01"))
+
+    @staticmethod
+    def _raise_if_too_many_booking_lines(rooms: list[BookingRoomLineCommand]) -> None:
+        if len(rooms) > MAX_BOOKING_LINES:
+            raise BadRequestException(detail=f"At most {MAX_BOOKING_LINES} rooms per booking", error_code=FacilityErrorCode.BOOKING_MAX_ROOMS.value)
 
     @distributed_trace()
     async def get_booking_pages(self, command: BookingPagesQueryCommand) -> BookingPageResult:
@@ -125,10 +128,7 @@ class BookingService:
         if not meta:
             raise NotFoundException(detail="Booking not found", error_code=FacilityErrorCode.BOOKING_NOT_FOUND.value, context={"booking_id": str(booking_id)})
 
-        max_rooms = await self._rental_repository.get_policy_amount(RentalPolicySettingKey.MAX_ROOMS_PER_BOOKING, None)
-        max_rooms_int = int(max_rooms) if max_rooms is not None else 3
-        if len(command.rooms) > max_rooms_int:
-            raise BadRequestException(detail=f"At most {max_rooms_int} rooms per booking", error_code=FacilityErrorCode.BOOKING_MAX_ROOMS.value)
+        self._raise_if_too_many_booking_lines(command.rooms)
 
         local_tz = await self._setting_service.get_facility_timezone()
         resolved_lines = resolve_booking_lines(command.rooms, command.start_at, command.end_at)
@@ -225,10 +225,7 @@ class BookingService:
 
         await self._validate_ministry_booking_gate(command.ministry_id, booker_id=booker_id)
 
-        max_rooms = await self._rental_repository.get_policy_amount(RentalPolicySettingKey.MAX_ROOMS_PER_BOOKING, None)
-        max_rooms_int = int(max_rooms) if max_rooms is not None else 3
-        if len(command.rooms) > max_rooms_int:
-            raise BadRequestException(detail=f"At most {max_rooms_int} rooms per booking", error_code=FacilityErrorCode.BOOKING_MAX_ROOMS.value)
+        self._raise_if_too_many_booking_lines(command.rooms)
 
         local_tz = await self._setting_service.get_facility_timezone()
         resolved_lines = resolve_booking_lines(command.rooms, command.start_at, command.end_at)

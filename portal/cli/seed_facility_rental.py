@@ -14,7 +14,6 @@ from portal.libs.logger import logger
 from .datas.facility_rental_seed_data import (
     GLOBAL_RATE_UNIT_AMOUNT,
     facility_discount_seed_rows,
-    facility_policy_seed_rows,
     facility_rental_rate_template_seed_rows,
     facility_room_seed_rows,
     facility_surcharge_seed_rows,
@@ -32,7 +31,6 @@ async def seed_facility_rental(*, reset: bool = False) -> None:
             template_rows=facility_rental_rate_template_seed_rows,
             discount_rows=facility_discount_seed_rows,
             surcharge_rows=facility_surcharge_seed_rows,
-            policy_rows=facility_policy_seed_rows,
             global_rate_unit_amount=GLOBAL_RATE_UNIT_AMOUNT,
             reset=reset,
         )
@@ -56,8 +54,8 @@ def seed_facility_rental_process(*, force: bool = False, reset: bool = False) ->
             click.echo(
                 click.style(
                     "WARNING: --reset hard-deletes facility bookings, slot templates, rooms, "
-                    "rental rate templates, rental rates, discounts, surcharges, and policy "
-                    "settings, then re-seeds from facility_rental_seed_data. This cannot be undone.",
+                    "rental rate templates, rental rates, discounts, and surcharges, "
+                    "then re-seeds from facility_rental_seed_data. This cannot be undone.",
                     fg="yellow",
                 )
             )
@@ -65,7 +63,7 @@ def seed_facility_rental_process(*, force: bool = False, reset: bool = False) ->
             click.echo(
                 click.style(
                     "WARNING: This upserts facility rooms, rental rate templates, rental rates, "
-                    "discounts, surcharges, and policy settings from facility_rental_seed_data. "
+                    "discounts, and surcharges from facility_rental_seed_data. "
                     "Existing matching rows will be updated.",
                     fg="yellow",
                 )

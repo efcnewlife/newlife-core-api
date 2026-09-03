@@ -1,5 +1,5 @@
 """
-Facility rental rate template, rate, discount, surcharge, and policy models.
+Facility rental rate template, rate, discount, and surcharge models.
 """
 
 import sqlalchemy as sa
@@ -68,17 +68,3 @@ class FacilityRentalSurcharge(ModelBase, AuditMixin, RemarkMixin, DeletedMixin):
     currency = Column(sa.String(8), nullable=False, server_default="CAD", comment="Currency code")
     is_active = Column(sa.Boolean, nullable=False, server_default=sa.text("true"), comment="Active flag")
     applies_to_booking_type = Column(sa.String(32), comment="Optional booking type filter (e.g. one_time for deposit)")
-
-
-class FacilityRentalPolicySetting(ModelBase, AuditMixin, DeletedMixin):
-    """Rental policy parameter (minimum fee, daily flat threshold, etc.)."""
-
-    __extra_table_args__ = (sa.UniqueConstraint("setting_key", "facility_id"),)
-
-    setting_key = Column(sa.String(64), nullable=False, comment="Setting key (RentalPolicySettingKey)")
-    facility_id = Column(UUID, sa.ForeignKey(FacilityRoom.id, ondelete="CASCADE"), nullable=True, index=True, comment="Room ID; NULL = global default")
-    amount = Column(sa.Numeric(12, 2), nullable=False, comment="Setting amount or numeric value")
-    currency = Column(sa.String(8), nullable=False, server_default="CAD", comment="Currency code")
-    is_active = Column(sa.Boolean, nullable=False, server_default=sa.text("true"), comment="Active flag")
-
-    room = relationship("FacilityRoom", passive_deletes=True)
