@@ -60,7 +60,7 @@ from portal.serializers.admin.v1.facility.room_slot_template import AdminRoomSlo
 from portal.serializers.admin.v1.facility.translation import AdminFacilityTranslationInput
 from portal.serializers.admin.v1.ministry import AdminMinistryCreate, AdminMinistryMemberInput, AdminMinistryReplaceMembers
 from portal.serializers.admin.v1.org.translation import AdminOrgTranslationInput
-from portal.serializers.apis.v1.facility import MemberPreviewQuoteRequest, MemberPreviewQuoteRoomInput
+from portal.serializers.apis.v1.facility import MemberPreviewQuoteLineInput, MemberPreviewQuoteRequest
 from portal.serializers.mixins import DeleteBaseModel, GenericQueryBaseModel
 
 
@@ -319,22 +319,29 @@ def test_override_log_pages_query_to_command():
     assert command.facility_id == facility_id
 
 
-def test_member_preview_quote_to_command_uses_one_time_interval_hours():
+def test_member_preview_quote_to_command_maps_per_line_intervals():
     facility_id = uuid4()
+    line_one_start = datetime(2026, 8, 22, 14, 0, tzinfo=timezone.utc)
+    line_one_end = datetime(2026, 8, 22, 16, 0, tzinfo=timezone.utc)
+    line_two_start = datetime(2026, 8, 22, 18, 0, tzinfo=timezone.utc)
+    line_two_end = datetime(2026, 8, 22, 22, 0, tzinfo=timezone.utc)
     model = MemberPreviewQuoteRequest(
-        start_at=datetime(2026, 8, 22, 14, 0, tzinfo=timezone.utc),
-        end_at=datetime(2026, 8, 22, 18, 0, tzinfo=timezone.utc),
         is_mission_aligned=True,
         surcharge_codes=["audio_system"],
-        rooms=[MemberPreviewQuoteRoomInput(facility_id=facility_id)],
+        lines=[
+            MemberPreviewQuoteLineInput(facility_id=facility_id, start_at=line_one_start, end_at=line_one_end),
+            MemberPreviewQuoteLineInput(facility_id=facility_id, start_at=line_two_start, end_at=line_two_end),
+        ],
     )
     command = member_preview_quote_to_command(model)
-    assert command.booking_type == BookingType.ONE_TIME
     assert command.is_mission_aligned is True
     assert command.ministry_id is None
     assert command.surcharge_codes == ["audio_system"]
-    assert command.room_lines[0].facility_id == facility_id
-    assert command.room_lines[0].billed_hours == Decimal("4.00")
+    assert command.lines[0].facility_id == facility_id
+    assert command.lines[0].start_at == line_one_start
+    assert command.lines[0].end_at == line_one_end
+    assert command.lines[1].start_at == line_two_start
+    assert command.lines[1].end_at == line_two_end
 
 
 def test_member_preview_quote_result_to_api_includes_money_fields():
@@ -377,24 +384,34 @@ def test_room_availability_item_to_api_includes_photo_urls():
     assert dumped["photoUrls"] == ["https://cdn.example/a.jpg"]
 
 
-def test_member_preview_quote_maps_three_rooms_from_one_interval():
+def test_member_preview_quote_maps_three_lines_with_distinct_intervals():
     rooms = [uuid4(), uuid4(), uuid4()]
     model = MemberPreviewQuoteRequest(
-        start_at=datetime(2026, 8, 22, 14, 0, tzinfo=timezone.utc),
-        end_at=datetime(2026, 8, 22, 18, 0, tzinfo=timezone.utc),
-        rooms=[MemberPreviewQuoteRoomInput(facility_id=room_id) for room_id in rooms],
+        lines=[
+            MemberPreviewQuoteLineInput(
+                facility_id=room_id, start_at=datetime(2026, 8, 22, 9, 0, tzinfo=timezone.utc), end_at=datetime(2026, 8, 22, 11, 0, tzinfo=timezone.utc)
+            )
+            for room_id in rooms
+        ]
     )
     command = member_preview_quote_to_command(model)
-    assert [line.facility_id for line in command.room_lines] == rooms
-    assert all(line.billed_hours == Decimal("4.00") for line in command.room_lines)
+    assert [line.facility_id for line in command.lines] == rooms
+    assert all(line.end_at > line.start_at for line in command.lines)
 
 
-def test_member_preview_quote_rejects_empty_and_more_than_three_rooms():
+def test_member_preview_quote_rejects_empty_and_more_than_three_lines():
     interval = dict(start_at=datetime(2026, 8, 22, 14, 0, tzinfo=timezone.utc), end_at=datetime(2026, 8, 22, 18, 0, tzinfo=timezone.utc))
     with pytest.raises(ValidationError):
-        MemberPreviewQuoteRequest(**interval, rooms=[])
+        MemberPreviewQuoteRequest(lines=[])
     with pytest.raises(ValidationError):
-        MemberPreviewQuoteRequest(**interval, rooms=[MemberPreviewQuoteRoomInput(facility_id=uuid4()) for _ in range(4)])
+        MemberPreviewQuoteRequest(
+            lines=[
+                MemberPreviewQuoteLineInput(facility_id=uuid4(), **interval),
+                MemberPreviewQuoteLineInput(facility_id=uuid4(), **interval),
+                MemberPreviewQuoteLineInput(facility_id=uuid4(), **interval),
+                MemberPreviewQuoteLineInput(facility_id=uuid4(), **interval),
+            ]
+        )
 
 
 def test_member_booking_detail_to_api_includes_quoted_amount():

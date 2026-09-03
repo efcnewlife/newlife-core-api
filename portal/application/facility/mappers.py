@@ -18,6 +18,8 @@ from portal.application.facility.commands import (
     CreateSurchargeCommand,
     DeleteCommand,
     FacilityTranslationCommand,
+    MemberPreviewQuoteCommand,
+    MemberPreviewQuoteLineCommand,
     PagesQueryCommand,
     PreviewQuoteCommand,
     PreviewQuoteRoomLineCommand,
@@ -114,6 +116,7 @@ from portal.serializers.apis.v1.facility import (
     MemberBookingDetail,
     MemberBookingDetailRoom,
     MemberDayAvailability,
+    MemberPreviewQuoteLineInput,
     MemberPreviewQuoteRequest,
     MemberPreviewQuoteResponse,
     MemberPreviewQuoteRoomLineResult,
@@ -420,20 +423,13 @@ def preview_quote_result_to_api(result: PreviewQuoteResult) -> AdminPreviewQuote
     )
 
 
-def _billed_hours(start_at: datetime, end_at: datetime) -> Decimal:
-    hours = Decimal(str((end_at - start_at).total_seconds())) / Decimal("3600")
-    return hours.quantize(Decimal("0.01"))
-
-
-def member_preview_quote_to_command(model: MemberPreviewQuoteRequest) -> PreviewQuoteCommand:
-    billed_hours = _billed_hours(model.start_at, model.end_at)
-    return PreviewQuoteCommand(
-        booking_type=BookingType.ONE_TIME,
+def member_preview_quote_to_command(model: MemberPreviewQuoteRequest) -> MemberPreviewQuoteCommand:
+    return MemberPreviewQuoteCommand(
         is_mission_aligned=model.is_mission_aligned,
-        currency=model.currency,
-        room_lines=[PreviewQuoteRoomLineCommand(facility_id=line.facility_id, billed_hours=billed_hours) for line in model.rooms],
-        surcharge_codes=model.surcharge_codes,
         ministry_id=model.ministry_id,
+        currency=model.currency,
+        surcharge_codes=model.surcharge_codes,
+        lines=[MemberPreviewQuoteLineCommand(facility_id=line.facility_id, start_at=line.start_at, end_at=line.end_at) for line in model.lines],
     )
 
 

@@ -206,6 +206,24 @@ class PreviewQuoteRoomLineCommand(BaseModel):
     billed_hours: Decimal = Field(...)
 
 
+class MemberPreviewQuoteLineCommand(BaseModel):
+    """Member preview quote line with interval."""
+
+    facility_id: UUID = Field(...)
+    start_at: datetime = Field(...)
+    end_at: datetime = Field(...)
+
+
+class MemberPreviewQuoteCommand(BaseModel):
+    """Member preview quote input."""
+
+    is_mission_aligned: bool = Field(default=False)
+    ministry_id: Optional[UUID] = Field(default=None)
+    currency: str = Field(default="CAD")
+    surcharge_codes: list[str] = Field(default_factory=list)
+    lines: list[MemberPreviewQuoteLineCommand] = Field(min_length=1, max_length=3)
+
+
 class PreviewQuoteCommand(BaseModel):
     """Preview rental quote."""
 

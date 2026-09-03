@@ -111,22 +111,22 @@ class MemberBookingDetail(UUIDBaseModel):
     rooms: list[MemberBookingDetailRoom] = Field(default_factory=list)
 
 
-class MemberPreviewQuoteRoomInput(BaseModel):
-    """Room line for member preview quote."""
+class MemberPreviewQuoteLineInput(BaseModel):
+    """Booking line for member preview quote."""
 
     facility_id: UUID = Field(...)
+    start_at: datetime = Field(...)
+    end_at: datetime = Field(...)
 
 
 class MemberPreviewQuoteRequest(BaseModel):
-    """Preview quote for a One-time interval and room list."""
+    """Preview quote for One-time booking lines (each with its own interval)."""
 
-    start_at: datetime = Field(...)
-    end_at: datetime = Field(...)
     is_mission_aligned: bool = Field(default=False)
     ministry_id: Optional[UUID] = Field(default=None)
     currency: str = Field(default="CAD")
     surcharge_codes: list[str] = Field(default_factory=list)
-    rooms: list[MemberPreviewQuoteRoomInput] = Field(min_length=1, max_length=3)
+    lines: list[MemberPreviewQuoteLineInput] = Field(min_length=1, max_length=3)
 
 
 class MemberPreviewQuoteRoomLineResult(BaseModel):
