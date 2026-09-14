@@ -529,6 +529,34 @@ class StubOverrideLogRepository:
         return self.items, self.total
 
 
+class StubBookingDraftRepository:
+    """In-memory Booking Draft stub."""
+
+    def __init__(self, draft_by_id: dict[UUID, dict] | None = None):
+        self.draft_by_id = draft_by_id or {}
+        self.insert_draft_calls: list[dict] = []
+        self.insert_lines_calls: list[list[dict]] = []
+        self.delete_draft_calls: list[UUID] = []
+
+    async def insert_draft(self, payload: dict) -> None:
+        self.insert_draft_calls.append(payload)
+        self.draft_by_id[payload["id"]] = {**payload, "lines": []}
+
+    async def insert_lines(self, line_rows: list[dict]) -> None:
+        self.insert_lines_calls.append(line_rows)
+        for row in line_rows:
+            draft = self.draft_by_id.get(row["booking_draft_id"])
+            if draft is not None:
+                draft["lines"].append(row)
+
+    async def get_detail(self, booking_draft_id: UUID) -> Optional[dict]:
+        return self.draft_by_id.get(booking_draft_id)
+
+    async def delete_draft(self, booking_draft_id: UUID) -> None:
+        self.delete_draft_calls.append(booking_draft_id)
+        self.draft_by_id.pop(booking_draft_id, None)
+
+
 class StubPricingService:
     """Fixed quote for booking service tests."""
 

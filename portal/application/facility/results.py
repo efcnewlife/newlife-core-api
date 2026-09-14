@@ -432,3 +432,27 @@ class RoomAvailabilityListResult(BaseModel):
     date: DateType = Field(...)
     items: list[RoomAvailabilityResult] = Field(default_factory=list)
     max_booking_lines: int = Field(...)
+
+
+class BookingDraftLineResult(BaseModel):
+    """Booking Draft line with live availability."""
+
+    facility_id: UUID = Field(...)
+    start_at: datetime = Field(...)
+    end_at: datetime = Field(...)
+    sequence: int = Field(default=0)
+    is_available: bool = Field(...)
+
+
+class BookingDraftResult(UUIDBaseModel):
+    """Booking Draft detail with live-computed price and availability (never cached)."""
+
+    date: DateType = Field(...)
+    ministry_id: Optional[UUID] = Field(default=None)
+    lines: list[BookingDraftLineResult] = Field(default_factory=list)
+    subtotal_amount: Decimal = Field(...)
+    discount_percent: Decimal = Field(...)
+    discount_amount: Decimal = Field(...)
+    surcharge_amount: Decimal = Field(...)
+    quoted_amount: Decimal = Field(...)
+    currency: str = Field(...)

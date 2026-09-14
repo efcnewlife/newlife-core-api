@@ -23,6 +23,8 @@ from .auth import (
 from .content import ContentFile, ContentFileAssociation, ContentLegalDocument, ContentLegalDocumentTranslation
 from .facility import (
     FacilityBooking,
+    FacilityBookingDraft,
+    FacilityBookingDraftLine,
     FacilityBookingOverrideLog,
     FacilityBookingRoom,
     FacilityBookingSlot,
@@ -94,6 +96,8 @@ __all__ = [
     "FacilityBookingSlot",
     "FacilityBookingSurcharge",
     "FacilityBookingOverrideLog",
+    "FacilityBookingDraft",
+    "FacilityBookingDraftLine",
     # member
     "MemberPerson",
     # content

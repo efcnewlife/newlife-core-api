@@ -303,14 +303,32 @@ class RoomAvailabilityQueryCommand(BaseModel):
     ministry_id: Optional[UUID] = Field(default=None)
 
 
+class BookingDraftLineCommand(BaseModel):
+    """Room line on a Booking Draft."""
+
+    facility_id: UUID = Field(...)
+    start_at: datetime = Field(...)
+    end_at: datetime = Field(...)
+    sequence: int = Field(default=0)
+
+
+class CreateBookingDraftCommand(BaseModel):
+    """Create a Booking Draft from a proposed set of lines."""
+
+    ministry_id: Optional[UUID] = Field(default=None)
+    lines: list[BookingDraftLineCommand] = Field(default_factory=list)
+
+
 __all__ = [
     "ReplaceMinistryMembersCommand",
+    "BookingDraftLineCommand",
     "BookingPagesQueryCommand",
     "BookingRangeQueryCommand",
     "BookingRoomLineCommand",
     "BulkIdsCommand",
     "CancelBookingCommand",
     "CreateBookingCommand",
+    "CreateBookingDraftCommand",
     "CreateDiscountRuleCommand",
     "CreateMinistryCommand",
     "CreateRentalRateCommand",

@@ -5,6 +5,7 @@ Facility bounded context DI container.
 from dependency_injector import containers, providers
 
 from portal.application.facility.availability_service import AvailabilityService
+from portal.application.facility.booking_draft_service import BookingDraftService
 from portal.application.facility.booking_service import BookingService
 from portal.application.facility.override_log_service import OverrideLogService
 from portal.application.facility.pricing_service import PricingService
@@ -14,6 +15,7 @@ from portal.application.facility.rental_rate_template_service import RentalRateT
 from portal.application.facility.room_blackout_service import RoomBlackoutService
 from portal.application.facility.room_service import RoomService
 from portal.application.facility.room_slot_template_service import RoomSlotTemplateService
+from portal.infrastructure.persistence.repositories.facility.booking_draft_repository import BookingDraftRepository
 from portal.infrastructure.persistence.repositories.facility.booking_repository import BookingRepository
 from portal.infrastructure.persistence.repositories.facility.override_log_repository import OverrideLogRepository
 from portal.infrastructure.persistence.repositories.facility.rental_repository import RentalRepository
@@ -36,6 +38,7 @@ class FacilityContainer(containers.DeclarativeContainer):
     rental_repository = providers.Factory(RentalRepository, session=core.request_session)
     ministry_repository = providers.Factory(MinistryRepository, session=core.request_session)
     booking_repository = providers.Factory(BookingRepository, session=core.request_session)
+    booking_draft_repository = providers.Factory(BookingDraftRepository, session=core.request_session)
     override_log_repository = providers.Factory(OverrideLogRepository, session=core.request_session)
 
     room_service = providers.Factory(RoomService, room_repository=room_repository, file_service=file_service)
@@ -53,6 +56,14 @@ class FacilityContainer(containers.DeclarativeContainer):
         pricing_service=pricing_service,
         ministry_repository=ministry_repository,
         room_blackout_repository=room_blackout_repository,
+        setting_service=setting_service,
+    )
+    booking_draft_service = providers.Factory(
+        BookingDraftService,
+        booking_draft_repository=booking_draft_repository,
+        booking_repository=booking_repository,
+        room_blackout_repository=room_blackout_repository,
+        pricing_service=pricing_service,
         setting_service=setting_service,
     )
     availability_service = providers.Factory(
