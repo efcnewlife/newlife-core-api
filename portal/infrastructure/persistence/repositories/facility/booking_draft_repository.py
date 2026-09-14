@@ -5,6 +5,7 @@ Facility booking draft repository.
 from typing import Optional
 from uuid import UUID
 
+from portal.application.facility.results import BookingDraftDetailResult, BookingDraftStoredLineResult
 from portal.libs.database import Session
 from portal.models import FacilityBookingDraft, FacilityBookingDraftLine
 from portal.models.mixins.context import apply_audit_fields_to_rows
@@ -24,11 +25,11 @@ class BookingDraftRepository:
             return
         await self._session.insert(FacilityBookingDraftLine).values(apply_audit_fields_to_rows(line_rows)).execute()
 
-    async def get_detail(self, booking_draft_id: UUID) -> Optional[dict]:
+    async def get_detail(self, booking_draft_id: UUID) -> Optional[BookingDraftDetailResult]:
         row = await (
             self._session.select(FacilityBookingDraft.id, FacilityBookingDraft.user_id, FacilityBookingDraft.date, FacilityBookingDraft.ministry_id)
             .where(FacilityBookingDraft.id == booking_draft_id)
-            .fetchrow()
+            .fetchrow(as_model=BookingDraftDetailResult)
         )
         if not row:
             return None
@@ -38,9 +39,6 @@ class BookingDraftRepository:
             )
             .where(FacilityBookingDraftLine.booking_draft_id == booking_draft_id)
             .order_by(FacilityBookingDraftLine.sequence.asc())
-            .fetch()
+            .fetch(as_model=BookingDraftStoredLineResult)
         )
-        return dict(row) | {"lines": [dict(line) for line in lines or []]}
-
-    async def delete_draft(self, booking_draft_id: UUID) -> None:
-        await self._session.delete(FacilityBookingDraft).where(FacilityBookingDraft.id == booking_draft_id).execute()
+        return row.model_copy(update={"lines": lines or []})

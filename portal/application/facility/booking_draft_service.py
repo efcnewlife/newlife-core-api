@@ -82,7 +82,7 @@ class BookingDraftService:
     async def get_draft(self, booking_draft_id: UUID) -> BookingDraftResult:
         user_id = self._authenticated_user_id()
         row = await self._repository.get_detail(booking_draft_id)
-        if not row or row["user_id"] != user_id:
+        if not row or row.user_id != user_id:
             raise NotFoundException(
                 detail="Booking draft not found",
                 error_code=FacilityErrorCode.BOOKING_DRAFT_NOT_FOUND.value,
@@ -92,33 +92,27 @@ class BookingDraftService:
         local_tz = await self._setting_service.get_facility_timezone()
         line_results: list[BookingDraftLineResult] = []
         quote_lines: list[PreviewQuoteRoomLineCommand] = []
-        for line in row["lines"]:
+        for line in row.lines:
             is_unavailable = await self._booking_repository.has_confirmed_slot_overlap(
-                facility_id=line["facility_id"], start_at=line["start_at"], end_at=line["end_at"]
-            ) or await self._blackout_repository.has_blackout_overlap(
-                facility_id=line["facility_id"], start_at=line["start_at"], end_at=line["end_at"], tz=local_tz
-            )
+                facility_id=line.facility_id, start_at=line.start_at, end_at=line.end_at
+            ) or await self._blackout_repository.has_blackout_overlap(facility_id=line.facility_id, start_at=line.start_at, end_at=line.end_at, tz=local_tz)
             line_results.append(
                 BookingDraftLineResult(
-                    facility_id=line["facility_id"],
-                    start_at=line["start_at"],
-                    end_at=line["end_at"],
-                    sequence=line["sequence"],
-                    is_available=not is_unavailable,
+                    facility_id=line.facility_id, start_at=line.start_at, end_at=line.end_at, sequence=line.sequence, is_available=not is_unavailable
                 )
             )
-            quote_lines.append(PreviewQuoteRoomLineCommand(facility_id=line["facility_id"], billed_hours=self._billed_hours(line["start_at"], line["end_at"])))
+            quote_lines.append(PreviewQuoteRoomLineCommand(facility_id=line.facility_id, billed_hours=self._billed_hours(line.start_at, line.end_at)))
 
         quote = await self._pricing_service.preview_quote(
             PreviewQuoteCommand(
-                booking_type=BookingType.ONE_TIME, is_mission_aligned=False, currency="CAD", room_lines=quote_lines, ministry_id=row["ministry_id"]
+                booking_type=BookingType.ONE_TIME, is_mission_aligned=False, currency="CAD", room_lines=quote_lines, ministry_id=row.ministry_id
             )
         )
 
         return BookingDraftResult(
             id=booking_draft_id,
-            date=row["date"],
-            ministry_id=row["ministry_id"],
+            date=row.date,
+            ministry_id=row.ministry_id,
             lines=line_results,
             subtotal_amount=quote.subtotal_amount,
             discount_percent=quote.discount_percent,

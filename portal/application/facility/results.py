@@ -434,6 +434,24 @@ class RoomAvailabilityListResult(BaseModel):
     max_booking_lines: int = Field(...)
 
 
+class BookingDraftStoredLineResult(BaseModel):
+    """One persisted Booking Draft line, as read from the repository (no computed availability)."""
+
+    facility_id: UUID = Field(...)
+    start_at: datetime = Field(...)
+    end_at: datetime = Field(...)
+    sequence: int = Field(default=0)
+
+
+class BookingDraftDetailResult(UUIDBaseModel):
+    """Persisted Booking Draft header and lines, as read from the repository."""
+
+    user_id: UUID = Field(...)
+    date: DateType = Field(...)
+    ministry_id: Optional[UUID] = Field(default=None)
+    lines: list[BookingDraftStoredLineResult] = Field(default_factory=list)
+
+
 class BookingDraftLineResult(BaseModel):
     """Booking Draft line with live availability."""
 

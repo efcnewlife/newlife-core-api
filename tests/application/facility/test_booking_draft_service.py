@@ -10,10 +10,19 @@ import pytest
 
 from portal.application.facility.booking_draft_service import BookingDraftService
 from portal.application.facility.commands import BookingDraftLineCommand, CreateBookingDraftCommand
+from portal.application.facility.results import BookingDraftDetailResult, BookingDraftStoredLineResult
 from portal.exceptions.responses import BadRequestException, ForbiddenException, NotFoundException
 from tests.fixtures.facility.factories import make_create_booking_draft_command, make_preview_quote_result, new_uuid
 from tests.fixtures.facility.stubs import StubBookingDraftRepository, StubBookingRepository, StubPricingService, StubRoomBlackoutRepository
 from tests.fixtures.system.stubs import StubSettingService
+
+
+def _stored_draft(*, draft_id, user_id, date_, lines: list[BookingDraftStoredLineResult] | None = None) -> BookingDraftDetailResult:
+    return BookingDraftDetailResult(id=draft_id, user_id=user_id, date=date_, ministry_id=None, lines=lines or [])
+
+
+def _stored_line(*, facility_id, start_at, end_at, sequence: int = 0) -> BookingDraftStoredLineResult:
+    return BookingDraftStoredLineResult(facility_id=facility_id, start_at=start_at, end_at=end_at, sequence=sequence)
 
 
 def _user_ctx(monkeypatch, *, user_id=None):
@@ -177,9 +186,7 @@ async def test_get_draft_another_members_draft_returns_same_not_found_response(m
     owner_id = uuid4()
     other_user_id = uuid4()
     draft_id = uuid4()
-    stub = StubBookingDraftRepository(
-        draft_by_id={draft_id: {"id": draft_id, "user_id": owner_id, "date": datetime(2026, 5, 1).date(), "ministry_id": None, "lines": []}}
-    )
+    stub = StubBookingDraftRepository(draft_by_id={draft_id: _stored_draft(draft_id=draft_id, user_id=owner_id, date_=datetime(2026, 5, 1).date())})
     _user_ctx(monkeypatch, user_id=other_user_id)
     service = _service(draft_stub=stub)
 
@@ -201,13 +208,9 @@ async def test_get_draft_returns_lines_with_live_price_and_availability(monkeypa
     end = datetime(2026, 5, 1, 12, 0, tzinfo=timezone.utc)
     stub = StubBookingDraftRepository(
         draft_by_id={
-            draft_id: {
-                "id": draft_id,
-                "user_id": user_id,
-                "date": start.date(),
-                "ministry_id": None,
-                "lines": [{"facility_id": room_id, "start_at": start, "end_at": end, "sequence": 0}],
-            }
+            draft_id: _stored_draft(
+                draft_id=draft_id, user_id=user_id, date_=start.date(), lines=[_stored_line(facility_id=room_id, start_at=start, end_at=end)]
+            )
         }
     )
     _user_ctx(monkeypatch, user_id=user_id)
@@ -235,13 +238,9 @@ async def test_get_draft_price_is_not_a_cached_creation_time_snapshot(monkeypatc
     end = datetime(2026, 5, 1, 12, 0, tzinfo=timezone.utc)
     stub = StubBookingDraftRepository(
         draft_by_id={
-            draft_id: {
-                "id": draft_id,
-                "user_id": user_id,
-                "date": start.date(),
-                "ministry_id": None,
-                "lines": [{"facility_id": room_id, "start_at": start, "end_at": end, "sequence": 0}],
-            }
+            draft_id: _stored_draft(
+                draft_id=draft_id, user_id=user_id, date_=start.date(), lines=[_stored_line(facility_id=room_id, start_at=start, end_at=end)]
+            )
         }
     )
     _user_ctx(monkeypatch, user_id=user_id)
@@ -267,13 +266,9 @@ async def test_get_draft_line_unavailable_on_scheduling_conflict(monkeypatch):
     end = datetime(2026, 5, 1, 12, 0, tzinfo=timezone.utc)
     stub = StubBookingDraftRepository(
         draft_by_id={
-            draft_id: {
-                "id": draft_id,
-                "user_id": user_id,
-                "date": start.date(),
-                "ministry_id": None,
-                "lines": [{"facility_id": room_id, "start_at": start, "end_at": end, "sequence": 0}],
-            }
+            draft_id: _stored_draft(
+                draft_id=draft_id, user_id=user_id, date_=start.date(), lines=[_stored_line(facility_id=room_id, start_at=start, end_at=end)]
+            )
         }
     )
     _user_ctx(monkeypatch, user_id=user_id)
@@ -292,13 +287,9 @@ async def test_get_draft_line_unavailable_on_blackout(monkeypatch):
     end = datetime(2026, 5, 1, 12, 0, tzinfo=timezone.utc)
     stub = StubBookingDraftRepository(
         draft_by_id={
-            draft_id: {
-                "id": draft_id,
-                "user_id": user_id,
-                "date": start.date(),
-                "ministry_id": None,
-                "lines": [{"facility_id": room_id, "start_at": start, "end_at": end, "sequence": 0}],
-            }
+            draft_id: _stored_draft(
+                draft_id=draft_id, user_id=user_id, date_=start.date(), lines=[_stored_line(facility_id=room_id, start_at=start, end_at=end)]
+            )
         }
     )
     _user_ctx(monkeypatch, user_id=user_id)
