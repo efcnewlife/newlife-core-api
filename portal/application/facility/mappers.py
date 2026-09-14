@@ -25,6 +25,7 @@ from portal.application.facility.commands import (
     PagesQueryCommand,
     PreviewQuoteCommand,
     PreviewQuoteRoomLineCommand,
+    UpdateBookingDraftCommand,
     UpdateDiscountRuleCommand,
     UpdateRentalRateCommand,
     UpdateRentalRateTemplateCommand,
@@ -115,6 +116,7 @@ from portal.serializers.apis.v1.facility import (
     MemberBookingDraftCreate,
     MemberBookingDraftDetail,
     MemberBookingDraftLine,
+    MemberBookingDraftUpdate,
     MemberDayAvailability,
     MemberPreviewQuoteLineInput,
     MemberPreviewQuoteRequest,
@@ -497,6 +499,15 @@ def member_booking_detail_to_api(result: BookingDetailResult) -> MemberBookingDe
 
 def member_booking_draft_create_to_command(model: MemberBookingDraftCreate) -> CreateBookingDraftCommand:
     return CreateBookingDraftCommand(
+        ministry_id=model.ministry_id,
+        lines=[
+            BookingDraftLineCommand(facility_id=line.facility_id, start_at=line.start_at, end_at=line.end_at, sequence=line.sequence) for line in model.lines
+        ],
+    )
+
+
+def member_booking_draft_update_to_command(model: MemberBookingDraftUpdate) -> UpdateBookingDraftCommand:
+    return UpdateBookingDraftCommand(
         ministry_id=model.ministry_id,
         lines=[
             BookingDraftLineCommand(facility_id=line.facility_id, start_at=line.start_at, end_at=line.end_at, sequence=line.sequence) for line in model.lines

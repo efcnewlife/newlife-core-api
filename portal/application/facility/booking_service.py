@@ -33,6 +33,7 @@ from portal.application.system.setting_service import SettingService
 from portal.domain.facility.constants import BOOKING_RANGE_MAX_DAYS, BookingErrorCode, BookingSlotStatus, BookingStatus, BookingType, FacilityErrorCode
 from portal.domain.org.constants import MinistryStatus
 from portal.exceptions.responses import BadRequestException, ConflictErrorException, ForbiddenException, NotFoundException
+from portal.infrastructure.persistence.repositories.facility.booking_draft_repository import BookingDraftRepository
 from portal.infrastructure.persistence.repositories.facility.booking_repository import BookingRepository
 from portal.infrastructure.persistence.repositories.facility.room_blackout_repository import RoomBlackoutRepository
 from portal.infrastructure.persistence.repositories.org.ministry_repository import MinistryRepository
@@ -51,12 +52,14 @@ class BookingService:
         ministry_repository: MinistryRepository,
         room_blackout_repository: RoomBlackoutRepository,
         setting_service: SettingService,
+        booking_draft_repository: BookingDraftRepository,
     ):
         self._repository = booking_repository
         self._pricing_service = pricing_service
         self._ministry_repository = ministry_repository
         self._blackout_repository = room_blackout_repository
         self._setting_service = setting_service
+        self._booking_draft_repository = booking_draft_repository
         self._req_ctx: Optional[RequestContext] = get_request_context()
         self._user_ctx: Optional[UserContext] = get_user_context()
 
@@ -300,6 +303,14 @@ class BookingService:
             )
         await self._repository.replace_booking_rooms(booking_id, room_rows)
         await self._repository.replace_booking_slots(booking_id, slot_rows)
+
+        if command.booking_draft_id is not None:
+            # Ownership check guards against one booker deleting another member's Draft by id; a mismatch
+            # or already-gone Draft is treated like any other abandoned Draft and left alone, not an error.
+            draft = await self._booking_draft_repository.get_detail(command.booking_draft_id)
+            if draft and draft.user_id == booker_id:
+                await self._booking_draft_repository.delete_draft(command.booking_draft_id)
+
         return CreateIdResult(id=booking_id)
 
     @distributed_trace()

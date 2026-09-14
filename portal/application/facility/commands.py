@@ -294,6 +294,7 @@ class CreateBookingCommand(BaseModel):
     rooms: list[BookingRoomLineCommand] = Field(default_factory=list)
     surcharge_codes: list[str] = Field(default_factory=list)
     remark: Optional[str] = Field(default=None)
+    booking_draft_id: Optional[UUID] = Field(default=None, description="Source Booking Draft; deleted on successful create")
 
 
 class RoomAvailabilityQueryCommand(BaseModel):
@@ -314,6 +315,13 @@ class BookingDraftLineCommand(BaseModel):
 
 class CreateBookingDraftCommand(BaseModel):
     """Create a Booking Draft from a proposed set of lines."""
+
+    ministry_id: Optional[UUID] = Field(default=None)
+    lines: list[BookingDraftLineCommand] = Field(default_factory=list)
+
+
+class UpdateBookingDraftCommand(BaseModel):
+    """Replace a Booking Draft's lines in place (last-write-wins; no merge)."""
 
     ministry_id: Optional[UUID] = Field(default=None)
     lines: list[BookingDraftLineCommand] = Field(default_factory=list)
@@ -345,6 +353,7 @@ __all__ = [
     "PreviewQuoteRoomLineCommand",
     "RoomAvailabilityQueryCommand",
     "UpdateBookingCommand",
+    "UpdateBookingDraftCommand",
     "UpdateDiscountRuleCommand",
     "UpdateMinistryCommand",
     "UpdateRentalRateCommand",

@@ -19,7 +19,7 @@ from portal.application.facility.commands import (
     PreviewQuoteRoomLineCommand,
 )
 from portal.application.facility.pricing_service import PricingService
-from portal.application.facility.results import BookingDetailResult, BookingRoomLineResult, PreviewQuoteRoomLineResult
+from portal.application.facility.results import BookingDetailResult, BookingDraftDetailResult, BookingRoomLineResult, PreviewQuoteRoomLineResult
 from portal.domain.facility.constants import BookingStatus, BookingType
 from portal.exceptions.responses import BadRequestException, ConflictErrorException, ForbiddenException, NotFoundException
 from tests.fixtures.facility.factories import (
@@ -32,6 +32,7 @@ from tests.fixtures.facility.factories import (
     new_uuid,
 )
 from tests.fixtures.facility.stubs import (
+    StubBookingDraftRepository,
     StubBookingRepository,
     StubMinistryRepository,
     StubPricingService,
@@ -60,6 +61,7 @@ def _booking_service(
     blackout_stub: StubRoomBlackoutRepository | None = None,
     ministry_stub: StubMinistryRepository | None = None,
     setting_stub: StubSettingService | None = None,
+    booking_draft_stub: StubBookingDraftRepository | None = None,
 ) -> BookingService:
     quote = make_preview_quote_result(quoted_amount=Decimal("150"), discount_percent=Decimal("10"))
     return BookingService(
@@ -68,6 +70,7 @@ def _booking_service(
         ministry_stub or StubMinistryRepository(),
         blackout_stub or StubRoomBlackoutRepository(),
         setting_stub or StubSettingService(),
+        booking_draft_stub or StubBookingDraftRepository(),
     )
 
 
@@ -222,6 +225,46 @@ async def test_create_booking_uses_user_context_when_booker_omitted(monkeypatch)
     service = _booking_service(stub)
     await service.create_booking(make_create_booking_command())
     assert stub.insert_calls[0]["user_id"] == operator_id
+
+
+@pytest.mark.asyncio
+async def test_create_booking_from_draft_deletes_the_draft(monkeypatch):
+    user_id = uuid4()
+    draft_id = uuid4()
+    _user_ctx(monkeypatch, user_id=user_id)
+    draft_stub = StubBookingDraftRepository(
+        draft_by_id={draft_id: BookingDraftDetailResult(id=draft_id, user_id=user_id, date=datetime(2026, 5, 1).date(), ministry_id=None, lines=[])}
+    )
+    service = _booking_service(StubBookingRepository(), booking_draft_stub=draft_stub)
+    result = await service.create_booking(make_create_booking_command(booking_draft_id=draft_id))
+    assert result.id is not None
+    assert draft_stub.delete_draft_calls == [draft_id]
+    assert draft_id not in draft_stub.draft_by_id
+
+
+@pytest.mark.asyncio
+async def test_create_booking_without_draft_id_does_not_touch_draft_repository(monkeypatch):
+    _user_ctx(monkeypatch)
+    draft_stub = StubBookingDraftRepository()
+    service = _booking_service(StubBookingRepository(), booking_draft_stub=draft_stub)
+    await service.create_booking(make_create_booking_command())
+    assert draft_stub.delete_draft_calls == []
+
+
+@pytest.mark.asyncio
+async def test_create_booking_does_not_delete_another_users_draft(monkeypatch):
+    booker_id = uuid4()
+    other_user_id = uuid4()
+    draft_id = uuid4()
+    _user_ctx(monkeypatch, user_id=booker_id)
+    draft_stub = StubBookingDraftRepository(
+        draft_by_id={draft_id: BookingDraftDetailResult(id=draft_id, user_id=other_user_id, date=datetime(2026, 5, 1).date(), ministry_id=None, lines=[])}
+    )
+    service = _booking_service(StubBookingRepository(), booking_draft_stub=draft_stub)
+    result = await service.create_booking(make_create_booking_command(booking_draft_id=draft_id))
+    assert result.id is not None
+    assert draft_stub.delete_draft_calls == []
+    assert draft_id in draft_stub.draft_by_id
 
 
 @pytest.mark.asyncio
@@ -603,7 +646,9 @@ async def test_preview_quote_for_member_same_room_different_subtotals(monkeypatc
     room_id = new_uuid()
     rental = StubRentalRepository(rates_by_facility={room_id: make_hourly_and_daily_rates(room_id, hourly_amount=Decimal("10"))})
     pricing = PricingService(rental, StubRoomRepository(existing_ids={room_id}))
-    service = BookingService(StubBookingRepository(), pricing, StubMinistryRepository(), StubRoomBlackoutRepository(), StubSettingService())
+    service = BookingService(
+        StubBookingRepository(), pricing, StubMinistryRepository(), StubRoomBlackoutRepository(), StubSettingService(), StubBookingDraftRepository()
+    )
     command = MemberPreviewQuoteCommand(
         lines=[
             MemberPreviewQuoteLineCommand(

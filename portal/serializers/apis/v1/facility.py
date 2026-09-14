@@ -67,6 +67,7 @@ class MemberBookingCreate(BaseModel):
     rooms: list[MemberBookingRoomInput] = Field(default_factory=list)
     surcharge_codes: list[str] = Field(default_factory=list)
     remark: Optional[str] = Field(default=None)
+    booking_draft_id: Optional[UUID] = Field(default=None, description="Source Booking Draft; deleted on successful create")
 
 
 class MemberBookingCancel(BaseModel):
@@ -168,6 +169,13 @@ class MemberBookingDraftLineInput(BaseModel):
 
 class MemberBookingDraftCreate(BaseModel):
     """Create Booking Draft request."""
+
+    ministry_id: Optional[UUID] = Field(default=None)
+    lines: list[MemberBookingDraftLineInput] = Field(default_factory=list)
+
+
+class MemberBookingDraftUpdate(BaseModel):
+    """Replace a Booking Draft's lines in place (PATCH; last-write-wins)."""
 
     ministry_id: Optional[UUID] = Field(default=None)
     lines: list[MemberBookingDraftLineInput] = Field(default_factory=list)

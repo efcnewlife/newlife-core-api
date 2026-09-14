@@ -538,6 +538,9 @@ class StubBookingDraftRepository:
         self.draft_by_id = draft_by_id or {}
         self.insert_draft_calls: list[dict] = []
         self.insert_lines_calls: list[list[dict]] = []
+        self.update_header_calls: list[dict] = []
+        self.replace_lines_calls: list[list[dict]] = []
+        self.delete_draft_calls: list[UUID] = []
 
     async def insert_draft(self, payload: dict) -> None:
         self.insert_draft_calls.append(payload)
@@ -553,6 +556,25 @@ class StubBookingDraftRepository:
                 draft.lines.append(
                     BookingDraftStoredLineResult(facility_id=row["facility_id"], start_at=row["start_at"], end_at=row["end_at"], sequence=row["sequence"])
                 )
+
+    async def update_header(self, booking_draft_id: UUID, values: dict) -> None:
+        self.update_header_calls.append(values)
+        draft = self.draft_by_id.get(booking_draft_id)
+        if draft is not None:
+            self.draft_by_id[booking_draft_id] = draft.model_copy(update=values)
+
+    async def replace_lines(self, booking_draft_id: UUID, line_rows: list[dict]) -> None:
+        self.replace_lines_calls.append(line_rows)
+        draft = self.draft_by_id.get(booking_draft_id)
+        if draft is not None:
+            draft.lines = [
+                BookingDraftStoredLineResult(facility_id=row["facility_id"], start_at=row["start_at"], end_at=row["end_at"], sequence=row["sequence"])
+                for row in line_rows
+            ]
+
+    async def delete_draft(self, booking_draft_id: UUID) -> None:
+        self.delete_draft_calls.append(booking_draft_id)
+        self.draft_by_id.pop(booking_draft_id, None)
 
     async def get_detail(self, booking_draft_id: UUID) -> Optional[BookingDraftDetailResult]:
         return self.draft_by_id.get(booking_draft_id)

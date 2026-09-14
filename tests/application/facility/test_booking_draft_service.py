@@ -9,7 +9,7 @@ from uuid import uuid4
 import pytest
 
 from portal.application.facility.booking_draft_service import BookingDraftService
-from portal.application.facility.commands import BookingDraftLineCommand, CreateBookingDraftCommand
+from portal.application.facility.commands import BookingDraftLineCommand, CreateBookingDraftCommand, UpdateBookingDraftCommand
 from portal.application.facility.results import BookingDraftDetailResult, BookingDraftStoredLineResult
 from portal.exceptions.responses import BadRequestException, ForbiddenException, NotFoundException
 from tests.fixtures.facility.factories import make_create_booking_draft_command, make_preview_quote_result, new_uuid
@@ -297,3 +297,187 @@ async def test_get_draft_line_unavailable_on_blackout(monkeypatch):
 
     result = await service.get_draft(draft_id)
     assert result.lines[0].is_available is False
+
+
+@pytest.mark.asyncio
+async def test_update_draft_requires_authenticated_user(monkeypatch):
+    monkeypatch.setattr("portal.application.facility.booking_draft_service.get_user_context", lambda: None)
+    service = _service()
+    with pytest.raises(ForbiddenException, match="Authenticated user required"):
+        await service.update_draft(uuid4(), UpdateBookingDraftCommand(lines=[]))
+
+
+@pytest.mark.asyncio
+async def test_update_draft_nonexistent_id_not_found(monkeypatch):
+    _user_ctx(monkeypatch)
+    service = _service()
+    with pytest.raises(NotFoundException) as exc_info:
+        await service.update_draft(uuid4(), UpdateBookingDraftCommand(lines=[]))
+    assert exc_info.value.error_code == "FACILITY_BOOKING_DRAFT_NOT_FOUND"
+
+
+@pytest.mark.asyncio
+async def test_update_draft_another_members_draft_returns_same_not_found_response(monkeypatch):
+    owner_id = uuid4()
+    other_user_id = uuid4()
+    draft_id = uuid4()
+    stub = StubBookingDraftRepository(draft_by_id={draft_id: _stored_draft(draft_id=draft_id, user_id=owner_id, date_=datetime(2026, 5, 1).date())})
+    _user_ctx(monkeypatch, user_id=other_user_id)
+    service = _service(draft_stub=stub)
+
+    with pytest.raises(NotFoundException) as own_exc:
+        await service.update_draft(uuid4(), UpdateBookingDraftCommand(lines=[]))
+    with pytest.raises(NotFoundException) as other_exc:
+        await service.update_draft(draft_id, UpdateBookingDraftCommand(lines=[]))
+
+    assert own_exc.value.error_code == other_exc.value.error_code == "FACILITY_BOOKING_DRAFT_NOT_FOUND"
+    assert own_exc.value.status_code == other_exc.value.status_code
+
+
+@pytest.mark.asyncio
+async def test_update_draft_rejects_zero_lines(monkeypatch):
+    user_id = uuid4()
+    draft_id = uuid4()
+    stub = StubBookingDraftRepository(draft_by_id={draft_id: _stored_draft(draft_id=draft_id, user_id=user_id, date_=datetime(2026, 5, 1).date())})
+    _user_ctx(monkeypatch, user_id=user_id)
+    service = _service(draft_stub=stub)
+    with pytest.raises(BadRequestException) as exc_info:
+        await service.update_draft(draft_id, UpdateBookingDraftCommand(lines=[]))
+    assert exc_info.value.error_code == "FACILITY_BOOKING_ROOMS_REQUIRED"
+
+
+@pytest.mark.asyncio
+async def test_update_draft_rejects_lines_over_configured_cap(monkeypatch):
+    user_id = uuid4()
+    draft_id = uuid4()
+    cap = 3
+    stub = StubBookingDraftRepository(draft_by_id={draft_id: _stored_draft(draft_id=draft_id, user_id=user_id, date_=datetime(2026, 5, 1).date())})
+    _user_ctx(monkeypatch, user_id=user_id)
+    room_ids = [new_uuid() for _ in range(cap + 1)]
+    start = datetime(2026, 5, 1, 10, 0, tzinfo=timezone.utc)
+    end = datetime(2026, 5, 1, 11, 0, tzinfo=timezone.utc)
+    command = UpdateBookingDraftCommand(
+        lines=[BookingDraftLineCommand(facility_id=room_id, start_at=start, end_at=end, sequence=idx) for idx, room_id in enumerate(room_ids)]
+    )
+    service = _service(draft_stub=stub, setting_stub=StubSettingService(max_booking_lines=cap))
+    with pytest.raises(BadRequestException) as exc_info:
+        await service.update_draft(draft_id, command)
+    assert exc_info.value.error_code == "FACILITY_BOOKING_MAX_ROOMS"
+
+
+@pytest.mark.asyncio
+async def test_update_draft_rejects_lines_spanning_more_than_one_day(monkeypatch):
+    user_id = uuid4()
+    draft_id = uuid4()
+    room_id = new_uuid()
+    stub = StubBookingDraftRepository(draft_by_id={draft_id: _stored_draft(draft_id=draft_id, user_id=user_id, date_=datetime(2026, 5, 1).date())})
+    _user_ctx(monkeypatch, user_id=user_id)
+    command = UpdateBookingDraftCommand(
+        lines=[
+            BookingDraftLineCommand(
+                facility_id=room_id,
+                start_at=datetime(2026, 5, 1, 10, 0, tzinfo=timezone.utc),
+                end_at=datetime(2026, 5, 1, 12, 0, tzinfo=timezone.utc),
+                sequence=0,
+            ),
+            BookingDraftLineCommand(
+                facility_id=room_id,
+                start_at=datetime(2026, 5, 2, 10, 0, tzinfo=timezone.utc),
+                end_at=datetime(2026, 5, 2, 12, 0, tzinfo=timezone.utc),
+                sequence=1,
+            ),
+        ]
+    )
+    service = _service(draft_stub=stub)
+    with pytest.raises(BadRequestException) as exc_info:
+        await service.update_draft(draft_id, command)
+    assert exc_info.value.error_code == "FACILITY_BOOKING_LINES_NOT_SAME_DAY"
+
+
+@pytest.mark.asyncio
+async def test_update_draft_rejects_cross_midnight_line(monkeypatch):
+    user_id = uuid4()
+    draft_id = uuid4()
+    room_id = new_uuid()
+    stub = StubBookingDraftRepository(draft_by_id={draft_id: _stored_draft(draft_id=draft_id, user_id=user_id, date_=datetime(2026, 5, 1).date())})
+    _user_ctx(monkeypatch, user_id=user_id)
+    command = UpdateBookingDraftCommand(
+        lines=[
+            BookingDraftLineCommand(
+                facility_id=room_id,
+                start_at=datetime(2026, 5, 1, 8, 0, tzinfo=timezone.utc),
+                end_at=datetime(2026, 5, 2, 8, 0, tzinfo=timezone.utc),
+                sequence=0,
+            )
+        ]
+    )
+    service = _service(draft_stub=stub)
+    with pytest.raises(BadRequestException) as exc_info:
+        await service.update_draft(draft_id, command)
+    assert exc_info.value.error_code == "FACILITY_BOOKING_LINE_CROSS_MIDNIGHT"
+
+
+@pytest.mark.asyncio
+async def test_update_draft_keeps_id_unchanged_and_replaces_lines(monkeypatch):
+    user_id = uuid4()
+    draft_id = uuid4()
+    old_room_id = new_uuid()
+    new_room_id = new_uuid()
+    old_start = datetime(2026, 5, 1, 9, 0, tzinfo=timezone.utc)
+    old_end = datetime(2026, 5, 1, 10, 0, tzinfo=timezone.utc)
+    stub = StubBookingDraftRepository(
+        draft_by_id={
+            draft_id: _stored_draft(
+                draft_id=draft_id, user_id=user_id, date_=old_start.date(), lines=[_stored_line(facility_id=old_room_id, start_at=old_start, end_at=old_end)]
+            )
+        }
+    )
+    _user_ctx(monkeypatch, user_id=user_id)
+    new_start = datetime(2026, 5, 1, 14, 0, tzinfo=timezone.utc)
+    new_end = datetime(2026, 5, 1, 16, 0, tzinfo=timezone.utc)
+    command = UpdateBookingDraftCommand(lines=[BookingDraftLineCommand(facility_id=new_room_id, start_at=new_start, end_at=new_end, sequence=0)])
+    service = _service(draft_stub=stub)
+
+    result = await service.update_draft(draft_id, command)
+
+    assert result.id == draft_id
+    assert len(result.lines) == 1
+    assert result.lines[0].facility_id == new_room_id
+    assert len(stub.replace_lines_calls[0]) == 1
+    assert stub.replace_lines_calls[0][0]["facility_id"] == new_room_id
+
+
+@pytest.mark.asyncio
+async def test_update_draft_two_sequential_patches_last_write_wins(monkeypatch):
+    """The second PATCH's content replaces the first entirely -- no error, no merge."""
+    user_id = uuid4()
+    draft_id = uuid4()
+    room_a = new_uuid()
+    room_b = new_uuid()
+    room_c = new_uuid()
+    start = datetime(2026, 5, 1, 9, 0, tzinfo=timezone.utc)
+    end = datetime(2026, 5, 1, 10, 0, tzinfo=timezone.utc)
+    stub = StubBookingDraftRepository(
+        draft_by_id={
+            draft_id: _stored_draft(
+                draft_id=draft_id, user_id=user_id, date_=start.date(), lines=[_stored_line(facility_id=room_a, start_at=start, end_at=end)]
+            )
+        }
+    )
+    _user_ctx(monkeypatch, user_id=user_id)
+    service = _service(draft_stub=stub)
+
+    first_command = UpdateBookingDraftCommand(
+        lines=[
+            BookingDraftLineCommand(facility_id=room_a, start_at=start, end_at=end, sequence=0),
+            BookingDraftLineCommand(facility_id=room_b, start_at=start, end_at=end, sequence=1),
+        ]
+    )
+    await service.update_draft(draft_id, first_command)
+
+    second_command = UpdateBookingDraftCommand(lines=[BookingDraftLineCommand(facility_id=room_c, start_at=start, end_at=end, sequence=0)])
+    second_result = await service.update_draft(draft_id, second_command)
+
+    assert len(second_result.lines) == 1
+    assert second_result.lines[0].facility_id == room_c
+    assert stub.draft_by_id[draft_id].lines == [BookingDraftStoredLineResult(facility_id=room_c, start_at=start, end_at=end, sequence=0)]

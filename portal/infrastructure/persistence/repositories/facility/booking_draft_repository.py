@@ -25,6 +25,18 @@ class BookingDraftRepository:
             return
         await self._session.insert(FacilityBookingDraftLine).values(apply_audit_fields_to_rows(line_rows)).execute()
 
+    async def update_header(self, booking_draft_id: UUID, values: dict) -> None:
+        await self._session.update(FacilityBookingDraft).values(**values).where(FacilityBookingDraft.id == booking_draft_id).execute()
+
+    async def replace_lines(self, booking_draft_id: UUID, line_rows: list[dict]) -> None:
+        await self._session.delete(FacilityBookingDraftLine).where(FacilityBookingDraftLine.booking_draft_id == booking_draft_id).execute()
+        if line_rows:
+            await self._session.insert(FacilityBookingDraftLine).values(apply_audit_fields_to_rows(line_rows)).execute()
+
+    async def delete_draft(self, booking_draft_id: UUID) -> None:
+        await self._session.delete(FacilityBookingDraftLine).where(FacilityBookingDraftLine.booking_draft_id == booking_draft_id).execute()
+        await self._session.delete(FacilityBookingDraft).where(FacilityBookingDraft.id == booking_draft_id).execute()
+
     async def get_detail(self, booking_draft_id: UUID) -> Optional[BookingDraftDetailResult]:
         row = await (
             self._session.select(FacilityBookingDraft.id, FacilityBookingDraft.user_id, FacilityBookingDraft.date, FacilityBookingDraft.ministry_id)

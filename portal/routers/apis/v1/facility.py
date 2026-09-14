@@ -18,6 +18,7 @@ from portal.application.facility.mappers import (
     create_id_result_to_api,
     member_booking_detail_to_api,
     member_booking_draft_create_to_command,
+    member_booking_draft_update_to_command,
     member_preview_quote_result_to_api,
     member_preview_quote_to_command,
     room_availability_list_to_api,
@@ -31,6 +32,7 @@ from portal.serializers.apis.v1.facility import (
     MemberBookingDetail,
     MemberBookingDraftCreate,
     MemberBookingDraftDetail,
+    MemberBookingDraftUpdate,
     MemberBookingList,
     MemberBookingListItem,
     MemberPreviewQuoteRequest,
@@ -102,6 +104,7 @@ async def create_booking(model: MemberBookingCreate, booking_service: BookingSer
             ],
             surcharge_codes=model.surcharge_codes,
             remark=model.remark,
+            booking_draft_id=model.booking_draft_id,
         )
     )
     return create_id_result_to_api(result)
@@ -124,4 +127,13 @@ async def create_booking_draft(model: MemberBookingDraftCreate, booking_draft_se
 @inject
 async def get_booking_draft(booking_draft_id: UUID, booking_draft_service: BookingDraftService = Depends(Provide[Container.booking_draft_service])):
     result = await booking_draft_service.get_draft(booking_draft_id)
+    return booking_draft_result_to_api(result)
+
+
+@router.patch(path="/booking-drafts/{booking_draft_id}", status_code=status.HTTP_200_OK, response_model=MemberBookingDraftDetail, response_model_by_alias=True)
+@inject
+async def update_booking_draft(
+    booking_draft_id: UUID, model: MemberBookingDraftUpdate, booking_draft_service: BookingDraftService = Depends(Provide[Container.booking_draft_service])
+):
+    result = await booking_draft_service.update_draft(booking_draft_id, member_booking_draft_update_to_command(model))
     return booking_draft_result_to_api(result)
