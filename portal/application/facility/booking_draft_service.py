@@ -2,15 +2,22 @@
 Booking Draft application service (ADR 0018).
 """
 
+from datetime import date as DateType
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 from uuid import UUID, uuid4
 
 from portal.application.facility.booking_line_validation import ResolvedBookingLine, validate_booking_lines
-from portal.application.facility.commands import CreateBookingDraftCommand, PreviewQuoteCommand, PreviewQuoteRoomLineCommand
+from portal.application.facility.commands import (
+    BookingDraftLineCommand,
+    CreateBookingDraftCommand,
+    PreviewQuoteCommand,
+    PreviewQuoteRoomLineCommand,
+    UpdateBookingDraftCommand,
+)
 from portal.application.facility.pricing_service import PricingService
-from portal.application.facility.results import BookingDraftLineResult, BookingDraftResult
+from portal.application.facility.results import BookingDraftDetailResult, BookingDraftLineResult, BookingDraftResult
 from portal.application.org.results import CreateIdResult
 from portal.application.system.setting_service import SettingService
 from portal.domain.facility.constants import BookingType, FacilityErrorCode
@@ -52,22 +59,36 @@ class BookingDraftService:
             raise ForbiddenException(detail="Authenticated user required")
         return user_id
 
-    @distributed_trace()
-    async def create_draft(self, command: CreateBookingDraftCommand) -> CreateIdResult:
-        user_id = self._authenticated_user_id()
-        if not command.lines:
+    async def _get_owned_draft_or_404(self, booking_draft_id: UUID, user_id: UUID) -> BookingDraftDetailResult:
+        row = await self._repository.get_detail(booking_draft_id)
+        if not row or row.user_id != user_id:
+            raise NotFoundException(
+                detail="Booking draft not found",
+                error_code=FacilityErrorCode.BOOKING_DRAFT_NOT_FOUND.value,
+                context={"booking_draft_id": str(booking_draft_id)},
+            )
+        return row
+
+    async def _resolve_and_validate_lines(self, lines: list[BookingDraftLineCommand]) -> tuple[list[ResolvedBookingLine], DateType]:
+        if not lines:
             raise BadRequestException(detail="At least one line is required", error_code=FacilityErrorCode.BOOKING_ROOMS_REQUIRED.value)
 
         max_lines = await self._setting_service.get_max_booking_lines()
-        if len(command.lines) > max_lines:
+        if len(lines) > max_lines:
             raise BadRequestException(detail=f"At most {max_lines} lines per booking", error_code=FacilityErrorCode.BOOKING_MAX_ROOMS.value)
 
         local_tz = await self._setting_service.get_facility_timezone()
         resolved_lines = [
-            ResolvedBookingLine(facility_id=line.facility_id, start_at=line.start_at, end_at=line.end_at, sequence=line.sequence) for line in command.lines
+            ResolvedBookingLine(facility_id=line.facility_id, start_at=line.start_at, end_at=line.end_at, sequence=line.sequence) for line in lines
         ]
         validate_booking_lines(resolved_lines, local_tz)
         draft_date = resolved_lines[0].start_at.astimezone(local_tz).date()
+        return resolved_lines, draft_date
+
+    @distributed_trace()
+    async def create_draft(self, command: CreateBookingDraftCommand) -> CreateIdResult:
+        user_id = self._authenticated_user_id()
+        resolved_lines, draft_date = await self._resolve_and_validate_lines(command.lines)
 
         draft_id = uuid4()
         await self._repository.insert_draft(dict(id=draft_id, user_id=user_id, date=draft_date, ministry_id=command.ministry_id))
@@ -79,15 +100,27 @@ class BookingDraftService:
         return CreateIdResult(id=draft_id)
 
     @distributed_trace()
+    async def update_draft(self, booking_draft_id: UUID, command: UpdateBookingDraftCommand) -> BookingDraftResult:
+        """Replace a Draft's lines in place; concurrent PATCHes are last-write-wins (no version/merge)."""
+        user_id = self._authenticated_user_id()
+        await self._get_owned_draft_or_404(booking_draft_id, user_id)
+
+        resolved_lines, draft_date = await self._resolve_and_validate_lines(command.lines)
+
+        await self._repository.update_header(booking_draft_id, dict(date=draft_date, ministry_id=command.ministry_id))
+        line_rows = [
+            dict(
+                id=uuid4(), booking_draft_id=booking_draft_id, facility_id=line.facility_id, start_at=line.start_at, end_at=line.end_at, sequence=line.sequence
+            )
+            for line in resolved_lines
+        ]
+        await self._repository.replace_lines(booking_draft_id, line_rows)
+        return await self.get_draft(booking_draft_id)
+
+    @distributed_trace()
     async def get_draft(self, booking_draft_id: UUID) -> BookingDraftResult:
         user_id = self._authenticated_user_id()
-        row = await self._repository.get_detail(booking_draft_id)
-        if not row or row.user_id != user_id:
-            raise NotFoundException(
-                detail="Booking draft not found",
-                error_code=FacilityErrorCode.BOOKING_DRAFT_NOT_FOUND.value,
-                context={"booking_draft_id": str(booking_draft_id)},
-            )
+        row = await self._get_owned_draft_or_404(booking_draft_id, user_id)
 
         local_tz = await self._setting_service.get_facility_timezone()
         line_results: list[BookingDraftLineResult] = []
