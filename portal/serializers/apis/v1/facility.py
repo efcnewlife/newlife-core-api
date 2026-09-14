@@ -45,6 +45,7 @@ class MemberRoomAvailabilityList(BaseModel):
 
     date: DateType = Field(...)
     items: list[MemberRoomAvailabilityItem] = Field(default_factory=list)
+    max_booking_lines: int = Field(..., serialization_alias="maxBookingLines")
 
 
 class MemberBookingRoomInput(BaseModel):

@@ -15,6 +15,7 @@ class FacilitySettingKey(str, Enum):
     """Facility settings read by application code."""
 
     TIMEZONE = "timezone"
+    MAX_BOOKING_LINES = "max_booking_lines"
 
 
 class SettingValueType(str, Enum):

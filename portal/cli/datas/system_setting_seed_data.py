@@ -13,5 +13,14 @@ seed_system_settings: list[dict] = [
         "is_built_in": True,
         "is_active": True,
         "remark": "Org-level IANA timezone for facility wall-clock rules",
-    }
+    },
+    {
+        "namespace": SettingNamespace.FACILITY.value,
+        "setting_key": FacilitySettingKey.MAX_BOOKING_LINES.value,
+        "value_type": SettingValueType.NUMBER.value,
+        "value": 10,
+        "is_built_in": True,
+        "is_active": True,
+        "remark": "Max Booking lines (rooms) allowed on one booking",
+    },
 ]

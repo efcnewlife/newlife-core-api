@@ -23,14 +23,14 @@ from tests.fixtures.facility.stubs import (
 from tests.fixtures.system.stubs import StubSettingService
 
 
-def _make_availability_service(rooms, templates, blackouts=None, file_service=None):
+def _make_availability_service(rooms, templates, blackouts=None, file_service=None, setting_service=None):
     return AvailabilityService(
         _StubRoomRepository(rooms),
         _StubSlotTemplateRepository(templates),
         StubBookingRepository(has_overlap=False),
         StubMinistryRepository(),
         StubRoomBlackoutRepository(for_room_day=blackouts or []),
-        StubSettingService(),
+        setting_service or StubSettingService(),
         file_service or StubFileService(),
     )
 
@@ -122,3 +122,10 @@ async def test_availability_includes_photo_urls_in_gallery_order():
     service = _make_availability_service(rooms, templates, file_service=StubFileService(files_by_resource={room_id: [first, second]}))
     result = await service.get_rooms_availability(RoomAvailabilityQueryCommand(target_date=date(2026, 7, 20)))
     assert result.items[0].photo_urls == ["https://cdn.example/a.jpg", "https://cdn.example/b.jpg"]
+
+
+@pytest.mark.asyncio
+async def test_availability_includes_live_max_booking_lines():
+    service = _make_availability_service([], [], setting_service=StubSettingService(max_booking_lines=10))
+    result = await service.get_rooms_availability(RoomAvailabilityQueryCommand(target_date=date(2026, 7, 20)))
+    assert result.max_booking_lines == 10

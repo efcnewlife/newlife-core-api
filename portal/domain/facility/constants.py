@@ -21,7 +21,10 @@ BOOKING_RANGE_MAX_DAYS = 62
 # Max images in one Room gallery.
 ROOM_GALLERY_MAX_FILES = 10
 
-# Hard product cap on Booking lines (not a Policy Setting).
+# Static upper bound for preview-quote request parsing only (Pydantic Field max_length,
+# which cannot read a live Setting). The enforced, admin-configurable cap for booking
+# create/update lives in the `facility.max_booking_lines` System Setting instead
+# (see SettingService.get_max_booking_lines(), ADR 0018).
 MAX_BOOKING_LINES = 3
 
 
