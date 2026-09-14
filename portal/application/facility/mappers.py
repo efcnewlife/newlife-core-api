@@ -472,7 +472,9 @@ def room_availability_item_to_api(item: RoomAvailabilityResult) -> MemberRoomAva
 
 
 def room_availability_list_to_api(result: RoomAvailabilityListResult) -> MemberRoomAvailabilityList:
-    return MemberRoomAvailabilityList(date=result.date, items=[room_availability_item_to_api(item) for item in result.items])
+    return MemberRoomAvailabilityList(
+        date=result.date, items=[room_availability_item_to_api(item) for item in result.items], max_booking_lines=result.max_booking_lines
+    )
 
 
 def member_booking_detail_to_api(result: BookingDetailResult) -> MemberBookingDetail:

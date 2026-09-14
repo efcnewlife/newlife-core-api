@@ -78,6 +78,7 @@ class AvailabilityService:
     async def get_rooms_availability(self, command: RoomAvailabilityQueryCommand) -> RoomAvailabilityListResult:
         await self._validate_ministry_gate(command.ministry_id)
         local_tz = await self._setting_service.get_facility_timezone()
+        max_booking_lines = await self._setting_service.get_max_booking_lines()
         day = command.target_date
         day_of_week = day.weekday()
         rooms = await self._room_repository.list_active(self._resolved_locale_id())
@@ -134,4 +135,4 @@ class AvailabilityService:
         for item in items:
             item.photo_urls = photo_urls_by_room.get(item.id, [])[:ROOM_GALLERY_MAX_FILES]
 
-        return RoomAvailabilityListResult(date=day, items=items)
+        return RoomAvailabilityListResult(date=day, items=items, max_booking_lines=max_booking_lines)

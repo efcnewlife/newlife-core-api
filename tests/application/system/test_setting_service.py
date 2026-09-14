@@ -201,6 +201,48 @@ async def test_get_facility_timezone_invalid_iana():
 
 
 @pytest.mark.asyncio
+async def test_get_max_booking_lines_default_seed_value():
+    row = _setting(setting_key=FacilitySettingKey.MAX_BOOKING_LINES.value, value_type=SettingValueType.NUMBER.value, value=10)
+    service = SettingService(StubSettingRepository([row]), StubSettingCache())
+    assert await service.get_max_booking_lines() == 10
+
+
+@pytest.mark.asyncio
+async def test_get_max_booking_lines_uses_cache():
+    cache = StubSettingCache(cached=5)
+    service = SettingService(StubSettingRepository([]), cache)
+    assert await service.get_max_booking_lines() == 5
+
+
+@pytest.mark.asyncio
+async def test_get_max_booking_lines_missing():
+    service = SettingService(StubSettingRepository([]), StubSettingCache())
+    with pytest.raises(NotFoundException, match="facility.max_booking_lines"):
+        await service.get_max_booking_lines()
+
+
+@pytest.mark.asyncio
+async def test_get_max_booking_lines_wrong_value_type():
+    row = _setting(setting_key=FacilitySettingKey.MAX_BOOKING_LINES.value, value_type=SettingValueType.STRING.value, value="10")
+    service = SettingService(StubSettingRepository([row]), StubSettingCache())
+    with pytest.raises(BadRequestException, match="value_type number"):
+        await service.get_max_booking_lines()
+
+
+@pytest.mark.asyncio
+async def test_update_max_booking_lines_invalidates_cache():
+    row = _setting(setting_key=FacilitySettingKey.MAX_BOOKING_LINES.value, value_type=SettingValueType.NUMBER.value, value=10)
+    repo = StubSettingRepository([row])
+    cache = StubSettingCache(cached=10)
+    service = SettingService(repo, cache)
+    result = await service.update_setting(row.id, UpdateSettingCommand(value=25))
+    assert result.value == 25
+    assert cache.invalidate_calls == [(row.namespace, row.setting_key)]
+    cache.cached = None
+    assert await service.get_max_booking_lines() == 25
+
+
+@pytest.mark.asyncio
 async def test_update_setting_rejects_wrong_value_type():
     row = _setting(value="America/Toronto")
     service = SettingService(StubSettingRepository([row]), StubSettingCache())

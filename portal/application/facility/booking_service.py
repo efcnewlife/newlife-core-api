@@ -30,15 +30,7 @@ from portal.application.facility.pricing_service import PricingService
 from portal.application.facility.results import BookingDetailResult, BookingListItemResult, BookingPageResult, BookingRangeResult, PreviewQuoteResult
 from portal.application.org.results import CreateIdResult
 from portal.application.system.setting_service import SettingService
-from portal.domain.facility.constants import (
-    BOOKING_RANGE_MAX_DAYS,
-    MAX_BOOKING_LINES,
-    BookingErrorCode,
-    BookingSlotStatus,
-    BookingStatus,
-    BookingType,
-    FacilityErrorCode,
-)
+from portal.domain.facility.constants import BOOKING_RANGE_MAX_DAYS, BookingErrorCode, BookingSlotStatus, BookingStatus, BookingType, FacilityErrorCode
 from portal.domain.org.constants import MinistryStatus
 from portal.exceptions.responses import BadRequestException, ConflictErrorException, ForbiddenException, NotFoundException
 from portal.infrastructure.persistence.repositories.facility.booking_repository import BookingRepository
@@ -79,10 +71,10 @@ class BookingService:
         hours = Decimal(str(delta.total_seconds())) / Decimal("3600")
         return hours.quantize(Decimal("0.01"))
 
-    @staticmethod
-    def _raise_if_too_many_booking_lines(rooms: list[BookingRoomLineCommand]) -> None:
-        if len(rooms) > MAX_BOOKING_LINES:
-            raise BadRequestException(detail=f"At most {MAX_BOOKING_LINES} rooms per booking", error_code=FacilityErrorCode.BOOKING_MAX_ROOMS.value)
+    async def _raise_if_too_many_booking_lines(self, rooms: list[BookingRoomLineCommand]) -> None:
+        max_lines = await self._setting_service.get_max_booking_lines()
+        if len(rooms) > max_lines:
+            raise BadRequestException(detail=f"At most {max_lines} rooms per booking", error_code=FacilityErrorCode.BOOKING_MAX_ROOMS.value)
 
     @distributed_trace()
     async def get_booking_pages(self, command: BookingPagesQueryCommand) -> BookingPageResult:
@@ -128,7 +120,7 @@ class BookingService:
         if not meta:
             raise NotFoundException(detail="Booking not found", error_code=FacilityErrorCode.BOOKING_NOT_FOUND.value, context={"booking_id": str(booking_id)})
 
-        self._raise_if_too_many_booking_lines(command.rooms)
+        await self._raise_if_too_many_booking_lines(command.rooms)
 
         local_tz = await self._setting_service.get_facility_timezone()
         resolved_lines = resolve_booking_lines(command.rooms, command.start_at, command.end_at)
@@ -225,7 +217,7 @@ class BookingService:
 
         await self._validate_ministry_booking_gate(command.ministry_id, booker_id=booker_id)
 
-        self._raise_if_too_many_booking_lines(command.rooms)
+        await self._raise_if_too_many_booking_lines(command.rooms)
 
         local_tz = await self._setting_service.get_facility_timezone()
         resolved_lines = resolve_booking_lines(command.rooms, command.start_at, command.end_at)

@@ -200,3 +200,20 @@ class SettingService:
         self._validate_iana_timezone(timezone_name)
         await self._cache.set_value(namespace, setting_key, timezone_name)
         return ZoneInfo(timezone_name)
+
+    @distributed_trace()
+    async def get_max_booking_lines(self) -> int:
+        namespace = SettingNamespace.FACILITY.value
+        setting_key = FacilitySettingKey.MAX_BOOKING_LINES.value
+        cached = await self._cache.get_value(namespace, setting_key)
+        if cached is not None:
+            return int(self._coerce_jsonb_value(cached))
+
+        row = await self._repository.get_by_namespace_key(namespace, setting_key)
+        if not row or not row.is_active:
+            raise NotFoundException(detail="facility.max_booking_lines setting is not configured")
+        if row.value_type != SettingValueType.NUMBER.value:
+            raise BadRequestException(detail="facility.max_booking_lines must have value_type number")
+        max_lines = int(self._coerce_jsonb_value(row.value))
+        await self._cache.set_value(namespace, setting_key, max_lines)
+        return max_lines

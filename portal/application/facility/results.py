@@ -431,3 +431,4 @@ class RoomAvailabilityListResult(BaseModel):
 
     date: DateType = Field(...)
     items: list[RoomAvailabilityResult] = Field(default_factory=list)
+    max_booking_lines: int = Field(...)

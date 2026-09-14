@@ -59,6 +59,7 @@ def _booking_service(
     pricing_stub: StubPricingService | None = None,
     blackout_stub: StubRoomBlackoutRepository | None = None,
     ministry_stub: StubMinistryRepository | None = None,
+    setting_stub: StubSettingService | None = None,
 ) -> BookingService:
     quote = make_preview_quote_result(quoted_amount=Decimal("150"), discount_percent=Decimal("10"))
     return BookingService(
@@ -66,7 +67,7 @@ def _booking_service(
         pricing_stub or StubPricingService(quote),
         ministry_stub or StubMinistryRepository(),
         blackout_stub or StubRoomBlackoutRepository(),
-        StubSettingService(),
+        setting_stub or StubSettingService(),
     )
 
 
@@ -347,6 +348,51 @@ async def test_create_booking_rejects_fourth_line(monkeypatch):
     with pytest.raises(BadRequestException) as exc_info:
         await service.create_booking(command)
     assert "At most 3" in str(exc_info.value.detail)
+    assert exc_info.value.error_code == "FACILITY_BOOKING_MAX_ROOMS"
+
+
+@pytest.mark.asyncio
+async def test_create_booking_accepts_lines_up_to_configured_cap(monkeypatch):
+    _user_ctx(monkeypatch)
+    cap = 5
+    room_ids = [new_uuid() for _ in range(cap)]
+    start_at = datetime(2026, 5, 1, 14, 0, tzinfo=timezone.utc)
+    end_at = datetime(2026, 5, 1, 16, 0, tzinfo=timezone.utc)
+    command = make_create_booking_command(start_at=start_at, end_at=end_at)
+    command.rooms = [BookingRoomLineCommand(facility_id=room_id, start_at=start_at, end_at=end_at, sequence=idx) for idx, room_id in enumerate(room_ids)]
+    quote = make_preview_quote_result(quoted_amount=Decimal("150"))
+    quote.room_lines = [
+        PreviewQuoteRoomLineResult(
+            facility_id=room_id,
+            billed_hours=Decimal("2.00"),
+            rental_rate_name="Hourly",
+            billing_unit="hourly",
+            unit_amount=Decimal("10"),
+            currency="CAD",
+            applicability=None,
+            is_default=True,
+            line_subtotal=Decimal("75"),
+        )
+        for room_id in room_ids
+    ]
+    stub = StubBookingRepository()
+    service = _booking_service(stub, pricing_stub=StubPricingService(quote), setting_stub=StubSettingService(max_booking_lines=cap))
+    result = await service.create_booking(command)
+    assert result.id is not None
+    assert len(stub.replace_rooms_calls[0]) == cap
+
+
+@pytest.mark.asyncio
+async def test_create_booking_rejects_lines_over_configured_cap(monkeypatch):
+    _user_ctx(monkeypatch)
+    cap = 5
+    room_ids = [new_uuid() for _ in range(cap + 1)]
+    command = make_create_booking_command()
+    command.rooms = [BookingRoomLineCommand(facility_id=room_id, sequence=idx) for idx, room_id in enumerate(room_ids)]
+    service = _booking_service(StubBookingRepository(), setting_stub=StubSettingService(max_booking_lines=cap))
+    with pytest.raises(BadRequestException) as exc_info:
+        await service.create_booking(command)
+    assert f"At most {cap}" in str(exc_info.value.detail)
     assert exc_info.value.error_code == "FACILITY_BOOKING_MAX_ROOMS"
 
 
