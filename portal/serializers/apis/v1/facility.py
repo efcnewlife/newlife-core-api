@@ -10,7 +10,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from portal.domain.facility.constants import MAX_BOOKING_LINES
+from portal.domain.facility.constants import PREVIEW_QUOTE_MAX_LINES
 from portal.serializers.mixins.model_mixins import UUIDBaseModel
 
 
@@ -128,7 +128,7 @@ class MemberPreviewQuoteRequest(BaseModel):
     ministry_id: Optional[UUID] = Field(default=None)
     currency: str = Field(default="CAD")
     surcharge_codes: list[str] = Field(default_factory=list)
-    lines: list[MemberPreviewQuoteLineInput] = Field(min_length=1, max_length=MAX_BOOKING_LINES)
+    lines: list[MemberPreviewQuoteLineInput] = Field(min_length=1, max_length=PREVIEW_QUOTE_MAX_LINES)
 
 
 class MemberPreviewQuoteRoomLineResult(BaseModel):

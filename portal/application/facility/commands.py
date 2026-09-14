@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 # Ministry commands live in org.
 from portal.application.org.commands import CreateMinistryCommand, MinistryMemberEntryCommand, ReplaceMinistryMembersCommand, UpdateMinistryCommand
 from portal.application.rbac.commands import BulkIdsCommand, DeleteCommand, PagesQueryCommand
-from portal.domain.facility.constants import MAX_BOOKING_LINES, BookingType, RentalRateBillingUnit
+from portal.domain.facility.constants import PREVIEW_QUOTE_MAX_LINES, BookingType, RentalRateBillingUnit
 
 
 class FacilityTranslationCommand(BaseModel):
@@ -213,7 +213,7 @@ class MemberPreviewQuoteCommand(BaseModel):
     ministry_id: Optional[UUID] = Field(default=None)
     currency: str = Field(default="CAD")
     surcharge_codes: list[str] = Field(default_factory=list)
-    lines: list[MemberPreviewQuoteLineCommand] = Field(min_length=1, max_length=MAX_BOOKING_LINES)
+    lines: list[MemberPreviewQuoteLineCommand] = Field(min_length=1, max_length=PREVIEW_QUOTE_MAX_LINES)
 
 
 class PreviewQuoteCommand(BaseModel):

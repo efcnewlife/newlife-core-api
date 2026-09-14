@@ -25,7 +25,7 @@ ROOM_GALLERY_MAX_FILES = 10
 # which cannot read a live Setting). The enforced, admin-configurable cap for booking
 # create/update lives in the `facility.max_booking_lines` System Setting instead
 # (see SettingService.get_max_booking_lines(), ADR 0018).
-MAX_BOOKING_LINES = 3
+PREVIEW_QUOTE_MAX_LINES = 3
 
 
 class BookingStatus(str, Enum):

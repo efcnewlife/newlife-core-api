@@ -71,8 +71,8 @@ class BookingService:
         hours = Decimal(str(delta.total_seconds())) / Decimal("3600")
         return hours.quantize(Decimal("0.01"))
 
-    @staticmethod
-    def _raise_if_too_many_booking_lines(rooms: list[BookingRoomLineCommand], max_lines: int) -> None:
+    async def _raise_if_too_many_booking_lines(self, rooms: list[BookingRoomLineCommand]) -> None:
+        max_lines = await self._setting_service.get_max_booking_lines()
         if len(rooms) > max_lines:
             raise BadRequestException(detail=f"At most {max_lines} rooms per booking", error_code=FacilityErrorCode.BOOKING_MAX_ROOMS.value)
 
@@ -120,8 +120,7 @@ class BookingService:
         if not meta:
             raise NotFoundException(detail="Booking not found", error_code=FacilityErrorCode.BOOKING_NOT_FOUND.value, context={"booking_id": str(booking_id)})
 
-        max_lines = await self._setting_service.get_max_booking_lines()
-        self._raise_if_too_many_booking_lines(command.rooms, max_lines)
+        await self._raise_if_too_many_booking_lines(command.rooms)
 
         local_tz = await self._setting_service.get_facility_timezone()
         resolved_lines = resolve_booking_lines(command.rooms, command.start_at, command.end_at)
@@ -218,8 +217,7 @@ class BookingService:
 
         await self._validate_ministry_booking_gate(command.ministry_id, booker_id=booker_id)
 
-        max_lines = await self._setting_service.get_max_booking_lines()
-        self._raise_if_too_many_booking_lines(command.rooms, max_lines)
+        await self._raise_if_too_many_booking_lines(command.rooms)
 
         local_tz = await self._setting_service.get_facility_timezone()
         resolved_lines = resolve_booking_lines(command.rooms, command.start_at, command.end_at)
