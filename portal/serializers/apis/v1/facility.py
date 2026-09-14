@@ -155,3 +155,43 @@ class MemberPreviewQuoteResponse(BaseModel):
     quoted_amount: Decimal = Field(..., serialization_alias="quotedAmount")
     currency: str = Field(...)
     room_lines: list[MemberPreviewQuoteRoomLineResult] = Field(default_factory=list, serialization_alias="roomLines")
+
+
+class MemberBookingDraftLineInput(BaseModel):
+    """Line for create Booking Draft."""
+
+    facility_id: UUID = Field(...)
+    start_at: datetime = Field(...)
+    end_at: datetime = Field(...)
+    sequence: int = Field(default=0)
+
+
+class MemberBookingDraftCreate(BaseModel):
+    """Create Booking Draft request."""
+
+    ministry_id: Optional[UUID] = Field(default=None)
+    lines: list[MemberBookingDraftLineInput] = Field(default_factory=list)
+
+
+class MemberBookingDraftLine(BaseModel):
+    """Booking Draft line with live availability."""
+
+    facility_id: UUID = Field(..., serialization_alias="facilityId")
+    start_at: datetime = Field(..., serialization_alias="startAt")
+    end_at: datetime = Field(..., serialization_alias="endAt")
+    sequence: int = Field(default=0)
+    is_available: bool = Field(..., serialization_alias="isAvailable")
+
+
+class MemberBookingDraftDetail(UUIDBaseModel):
+    """Booking Draft detail: lines plus freshly computed price and availability."""
+
+    date: DateType = Field(...)
+    ministry_id: Optional[UUID] = Field(default=None, serialization_alias="ministryId")
+    lines: list[MemberBookingDraftLine] = Field(default_factory=list)
+    subtotal_amount: Decimal = Field(..., serialization_alias="subtotalAmount")
+    discount_percent: Decimal = Field(..., serialization_alias="discountPercent")
+    discount_amount: Decimal = Field(..., serialization_alias="discountAmount")
+    surcharge_amount: Decimal = Field(..., serialization_alias="surchargeAmount")
+    quoted_amount: Decimal = Field(..., serialization_alias="quotedAmount")
+    currency: str = Field(...)

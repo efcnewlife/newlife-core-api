@@ -8,7 +8,9 @@ from uuid import UUID
 
 from portal.application.content.mappers import file_grid_item_to_api
 from portal.application.facility.commands import (
+    BookingDraftLineCommand,
     BulkIdsCommand,
+    CreateBookingDraftCommand,
     CreateDiscountRuleCommand,
     CreateRentalRateCommand,
     CreateRentalRateTemplateCommand,
@@ -33,6 +35,7 @@ from portal.application.facility.commands import (
 )
 from portal.application.facility.results import (
     BookingDetailResult,
+    BookingDraftResult,
     CreateIdResult,
     DayAvailabilityResult,
     DiscountRuleListResult,
@@ -109,6 +112,9 @@ from portal.serializers.admin.v1.facility.translation import AdminFacilityTransl
 from portal.serializers.apis.v1.facility import (
     MemberBookingDetail,
     MemberBookingDetailRoom,
+    MemberBookingDraftCreate,
+    MemberBookingDraftDetail,
+    MemberBookingDraftLine,
     MemberDayAvailability,
     MemberPreviewQuoteLineInput,
     MemberPreviewQuoteRequest,
@@ -486,6 +492,35 @@ def member_booking_detail_to_api(result: BookingDetailResult) -> MemberBookingDe
         quoted_amount=result.quoted_amount,
         currency=result.currency,
         rooms=[MemberBookingDetailRoom(facility_id=line.facility_id, facility_name=line.facility_name) for line in result.rooms],
+    )
+
+
+def member_booking_draft_create_to_command(model: MemberBookingDraftCreate) -> CreateBookingDraftCommand:
+    return CreateBookingDraftCommand(
+        ministry_id=model.ministry_id,
+        lines=[
+            BookingDraftLineCommand(facility_id=line.facility_id, start_at=line.start_at, end_at=line.end_at, sequence=line.sequence) for line in model.lines
+        ],
+    )
+
+
+def booking_draft_result_to_api(result: BookingDraftResult) -> MemberBookingDraftDetail:
+    return MemberBookingDraftDetail(
+        id=result.id,
+        date=result.date,
+        ministry_id=result.ministry_id,
+        lines=[
+            MemberBookingDraftLine(
+                facility_id=line.facility_id, start_at=line.start_at, end_at=line.end_at, sequence=line.sequence, is_available=line.is_available
+            )
+            for line in result.lines
+        ],
+        subtotal_amount=result.subtotal_amount,
+        discount_percent=result.discount_percent,
+        discount_amount=result.discount_amount,
+        surcharge_amount=result.surcharge_amount,
+        quoted_amount=result.quoted_amount,
+        currency=result.currency,
     )
 
 

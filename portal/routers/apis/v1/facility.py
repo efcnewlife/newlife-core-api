@@ -10,11 +10,14 @@ from dependency_injector.wiring import Provide, inject
 from fastapi import Depends, Query, status
 
 from portal.application.facility.availability_service import AvailabilityService
+from portal.application.facility.booking_draft_service import BookingDraftService
 from portal.application.facility.booking_service import BookingService
 from portal.application.facility.commands import BookingRoomLineCommand, CancelBookingCommand, CreateBookingCommand, RoomAvailabilityQueryCommand
 from portal.application.facility.mappers import (
+    booking_draft_result_to_api,
     create_id_result_to_api,
     member_booking_detail_to_api,
+    member_booking_draft_create_to_command,
     member_preview_quote_result_to_api,
     member_preview_quote_to_command,
     room_availability_list_to_api,
@@ -26,6 +29,8 @@ from portal.serializers.apis.v1.facility import (
     MemberBookingCancel,
     MemberBookingCreate,
     MemberBookingDetail,
+    MemberBookingDraftCreate,
+    MemberBookingDraftDetail,
     MemberBookingList,
     MemberBookingListItem,
     MemberPreviewQuoteRequest,
@@ -106,3 +111,17 @@ async def create_booking(model: MemberBookingCreate, booking_service: BookingSer
 @inject
 async def cancel_my_booking(booking_id: UUID, model: MemberBookingCancel, booking_service: BookingService = Depends(Provide[Container.booking_service])):
     await booking_service.cancel_my_booking(booking_id, CancelBookingCommand(scope=model.scope, cancel_reason=model.cancel_reason))
+
+
+@router.post(path="/booking-drafts", status_code=status.HTTP_201_CREATED, response_model=UUIDBaseModel)
+@inject
+async def create_booking_draft(model: MemberBookingDraftCreate, booking_draft_service: BookingDraftService = Depends(Provide[Container.booking_draft_service])):
+    result = await booking_draft_service.create_draft(member_booking_draft_create_to_command(model))
+    return create_id_result_to_api(result)
+
+
+@router.get(path="/booking-drafts/{booking_draft_id}", status_code=status.HTTP_200_OK, response_model=MemberBookingDraftDetail, response_model_by_alias=True)
+@inject
+async def get_booking_draft(booking_draft_id: UUID, booking_draft_service: BookingDraftService = Depends(Provide[Container.booking_draft_service])):
+    result = await booking_draft_service.get_draft(booking_draft_id)
+    return booking_draft_result_to_api(result)

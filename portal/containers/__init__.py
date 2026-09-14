@@ -59,6 +59,7 @@ class RootContainer(containers.DeclarativeContainer):
     rental_catalog_service = admin.facility.rental_catalog_service
     pricing_service = admin.facility.pricing_service
     booking_service = admin.facility.booking_service
+    booking_draft_service = admin.facility.booking_draft_service
     availability_service = admin.facility.availability_service
     override_log_service = admin.facility.override_log_service
 

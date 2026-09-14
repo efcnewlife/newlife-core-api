@@ -8,8 +8,10 @@ from uuid import UUID, uuid4
 
 from portal.application.content.results import FileBaseResult, FileGridItemResult
 from portal.application.facility.commands import (
+    BookingDraftLineCommand,
     BookingRoomLineCommand,
     CreateBookingCommand,
+    CreateBookingDraftCommand,
     CreateDiscountRuleCommand,
     CreateMinistryCommand,
     CreateRentalRateCommand,
@@ -315,6 +317,15 @@ def make_create_booking_command(
     return CreateBookingCommand(
         start_at=start, end_at=end, user_id=user_id, ministry_id=ministry_id, rooms=[BookingRoomLineCommand(facility_id=room_id, sequence=0)]
     )
+
+
+def make_create_booking_draft_command(
+    facility_id: UUID | None = None, start_at: datetime | None = None, end_at: datetime | None = None, ministry_id: UUID | None = None
+) -> CreateBookingDraftCommand:
+    room_id = facility_id or new_uuid()
+    start = start_at or datetime(2026, 5, 1, 10, 0, tzinfo=timezone.utc)
+    end = end_at or datetime(2026, 5, 1, 14, 0, tzinfo=timezone.utc)
+    return CreateBookingDraftCommand(ministry_id=ministry_id, lines=[BookingDraftLineCommand(facility_id=room_id, start_at=start, end_at=end, sequence=0)])
 
 
 def make_create_discount_command(code: str = "mission_aligned") -> CreateDiscountRuleCommand:
