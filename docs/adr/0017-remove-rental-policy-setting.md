@@ -15,7 +15,7 @@ ADR 0015 still described the 1–3 Booking line cap as coming from `MAX_ROOMS_PE
 - Delete the **Rental Policy Setting** concept end-to-end (model, keys, admin API, seed, tests, and any admin UI that only exists for it). Schema drop is a human-owned Alembic migration.
 - **Preview quote / booking quote**: `quoted_amount = sum(line subtotals) − discount + surcharges`. No minimum-fee floor. Primary facility is not used to look up a fee floor.
 - **Discount / Surcharge**: unchanged (mission-aligned preferred over recurring; surcharges only when requested via `surcharge_codes`).
-- **Booking line cap**: still **1–3** Booking lines as a hard product rule (serializers / constants), not a Policy Setting row. This supersedes ADR 0015’s wording that the cap is read from `MAX_ROOMS_PER_BOOKING` policy.
+- **Booking line cap**: still **1–3** Booking lines as a hard product rule (serializers / constants), not a Policy Setting row. This supersedes ADR 0015's wording that the cap is read from `MAX_ROOMS_PER_BOOKING` policy. (ADR 0018 later supersedes this bullet: the cap becomes a `system_setting` row, not a hardcoded constant — the objection here was specifically to the deleted per-room `FacilityRentalPolicySetting` shape, not to configurability in general.)
 
 ## Considered options
 
@@ -34,3 +34,4 @@ ADR 0015 still described the 1–3 Booking line cap as coming from `MAX_ROOMS_PE
 
 - ADR 0015 (line cap remains; policy-backed source superseded)
 - ADR 0016 (member preview-quote shape unchanged by this decision)
+- ADR 0018 (line cap value later superseded: becomes a `system_setting`, not hardcoded)

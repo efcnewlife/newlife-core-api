@@ -19,8 +19,12 @@ The booking's main room id used for list filters (`facility_id` / list `facility
 _Avoid_: room (ambiguous when multiple), main room (synonym drift), treating Primary facility as the only room shown on Booking Grid, assuming one `booking_room` row per room
 
 **Booking line**:
-One room interval on a booking: `facility_id`, `start_at`, `end_at`, and `sequence`. A booking has 1-3 lines. The same room may appear on more than one line with different intervals on the same local calendar day. Distinct from Primary facility and from the booking header envelope.
-_Avoid_: room (when meaning a line), cart item without times, assuming one row per room in `booking_room`
+One room interval on a booking: `facility_id`, `start_at`, `end_at`, and `sequence`. A booking may hold up to the Booking line cap lines. The same room may appear on more than one line with different intervals on the same local calendar day. Distinct from Primary facility and from the booking header envelope.
+_Avoid_: room (when meaning a line), cart item without times, assuming one row per room in `booking_room`, assuming the cap is a fixed 3
+
+**Booking line cap**:
+The maximum number of Booking lines one booking may hold, read from the `facility.max_booking_lines` System Setting (NUMBER, default 10, global — not per-room). Enforced on both Booking Draft and booking create; the member Timetable reads the live value from the availability response so it never drifts from what the server enforces. Supersedes ADR 0017's hardcoded 1-3 rule.
+_Avoid_: a per-room override, a value baked into frontend code, treating 3 as still correct
 
 **Booking header interval**:
 `facility.booking.start_at` / `end_at` on the master row. For multi-line member bookings, these are the **envelope** (earliest line start, latest line end). ADR 0007 range query and member list rows use this interval. Per-line occupancy and pricing use each Booking line.
@@ -57,6 +61,14 @@ _Avoid_: Rate as a priced catalog row of its own, global NULL-facility Rate rows
 **Preview quote**:
 Server-computed rental totals for a proposed set of Booking lines (each with its own interval): per-line amounts from the selected Rental Rate Template, then booking-level ministry discount and surcharges. The quoted amount is line subtotals minus discount plus surcharges. There is no minimum-fee floor and no Rental Policy Setting in the pricing model. Distinct from creating a booking.
 _Avoid_: client-side HST or totals, a single shared interval for all lines on member preview, treating Preview quote as a created booking, minimum fee / policy floor as part of the quote
+
+**Booking Draft**:
+A standalone, non-locking snapshot of a member's proposed Booking lines (date, ministry, lines), created when the member clicks Review Booking on the Timetable and addressed by an opaque id. It never reserves the room — availability and price are recomputed live on every read, never cached on the Draft. Only its creator may view or edit it; edits PATCH the same Draft in place. It is deleted in the same request that creates the real Booking from it; an abandoned Draft is not otherwise cleaned up in this slice. Distinct from a `facility.booking` row and from `BookingStatus.DRAFT`, which is unused today.
+_Avoid_: a `facility.booking` row with status DRAFT, a slot hold or lock, a link shareable with non-creators, caching its quote or availability
+
+**System Setting**:
+A generic, admin-editable key-value row (`namespace` + `setting_key` + typed `value`) for church-wide configuration, e.g. `facility.timezone` and the Booking line cap. Global only — no per-room or per-tenant scoping. Reads are cached and invalidated on admin edit.
+_Avoid_: a per-room override table (that pattern was removed with Rental Policy Setting, ADR 0017), a feature-specific settings table
 
 **Content File**:
 A stored media object in the content library (metadata plus blob). Rooms bind to Content Files; they do not own uploads as a separate room-file type.
