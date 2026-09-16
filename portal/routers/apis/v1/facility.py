@@ -22,6 +22,7 @@ from portal.application.facility.mappers import (
     member_booking_draft_update_to_command,
     member_preview_quote_result_to_api,
     member_preview_quote_to_command,
+    recurring_booking_preview_to_member_api,
     recurring_booking_series_to_member_api,
     room_availability_list_to_api,
 )
@@ -40,8 +41,10 @@ from portal.serializers.apis.v1.facility import (
     MemberBookingListItem,
     MemberPreviewQuoteRequest,
     MemberPreviewQuoteResponse,
+    MemberRecurringBookingPreview,
     MemberRecurringBookingSeriesCreate,
     MemberRecurringBookingSeriesDetail,
+    MemberRecurringBookingSeriesProposal,
     MemberRoomAvailabilityList,
 )
 from portal.serializers.mixins.model_mixins import UUIDBaseModel
@@ -93,6 +96,15 @@ async def get_my_bookings(booking_service: BookingService = Depends(Provide[Cont
 async def get_my_booking(booking_id: UUID, booking_service: BookingService = Depends(Provide[Container.booking_service])):
     result = await booking_service.get_my_booking_by_id(booking_id)
     return member_booking_detail_to_api(result)
+
+
+@router.post(path="/booking-series/preview", status_code=status.HTTP_200_OK, response_model=MemberRecurringBookingPreview, response_model_by_alias=True)
+@inject
+async def preview_booking_series(
+    model: MemberRecurringBookingSeriesProposal, recurring_booking_service: RecurringBookingService = Depends(Provide[Container.recurring_booking_service])
+):
+    result = await recurring_booking_service.preview_conflicts(create_recurring_booking_series_to_command(model))
+    return recurring_booking_preview_to_member_api(result)
 
 
 @router.post(path="/booking-series", status_code=status.HTTP_201_CREATED, response_model=MemberRecurringBookingSeriesDetail, response_model_by_alias=True)

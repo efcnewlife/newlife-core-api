@@ -503,3 +503,17 @@ class RecurringBookingSeriesResult(UUIDBaseModel):
     occurrence_count: int = Field(...)
     is_priority: bool = Field(default=False)
     occurrences: list[RecurringBookingOccurrenceResult] = Field(default_factory=list)
+
+
+class RecurringBookingConflictResult(BaseModel):
+    """One unavailable occurrence in a Recurring Booking conflict preview."""
+
+    occurrence_date: DateType = Field(...)
+    kind: str = Field(...)
+    facility_ids: list[UUID] = Field(default_factory=list)
+
+
+class RecurringBookingPreviewResult(BaseModel):
+    """Server-backed Recurring Booking conflict preview; does not persist a Series."""
+
+    conflicts: list[RecurringBookingConflictResult] = Field(default_factory=list)

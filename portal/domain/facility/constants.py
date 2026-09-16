@@ -143,6 +143,15 @@ class FacilityErrorCode(str, Enum):
     RECURRING_WEEKLY_QUOTA = "FACILITY_RECURRING_WEEKLY_QUOTA"
     RECURRING_NOT_ELIGIBLE = "FACILITY_RECURRING_NOT_ELIGIBLE"
     RECURRING_INVALID_TIME_RANGE = "FACILITY_RECURRING_INVALID_TIME_RANGE"
+    RECURRING_INVALID_EXCLUSION = "FACILITY_RECURRING_INVALID_EXCLUSION"
+
+
+class RecurringConflictKind(str, Enum):
+    """Conflict kinds returned by Recurring Booking preview."""
+
+    OCCUPANCY = "occupancy"
+    BLACKOUT = "blackout"
+    WEEKLY_QUOTA = "weekly_quota"
 
 
 CHURCH_EMAIL_DOMAIN = "efcnewlife.org"

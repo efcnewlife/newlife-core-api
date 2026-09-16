@@ -90,9 +90,13 @@ _Avoid_: editing the Series when only one occurrence changes, deleting an occurr
 The target of a member or Operator cancellation: one occurrence, that occurrence and every future occurrence, or the entire Series. Member and admin views both present occurrences under their Series. Occurrence modification is deferred from this slice.
 _Avoid_: an unexplained raw RRULE edit, a Series-only management screen, applying a one-occurrence cancellation to all occurrences
 
+**Recurring Booking conflict preview**:
+A server-backed review of a proposed Recurring Booking Series that lists every unavailable occurrence and distinguishes occupancy, Blackout, and Weekly Rental Booking quota conflicts. It does not create a Series or reserve slots. Occupancy and Blackout conflicts name the affected rooms; quota conflicts are week-level.
+_Avoid_: treating preview as a reservation, collapsing occupancy and Blackout into one error, returning only the first conflict
+
 **Recurring Booking conflict resolution**:
-The choice presented when creating a Rental Recurring Booking Series conflicts with existing occupancy or a Blackout: omit all conflicting occurrences and create the rest, or revise the requested rooms and time window. A Church Activity Booking may replace conflicting future Rental occurrences, but never another Church Activity Booking.
-_Avoid_: partial creation without user approval, silently overwriting an existing Church Activity Booking, treating a Blackout as overwritable occupancy
+The choice presented when creating a Rental Recurring Booking Series conflicts with existing occupancy or a Blackout: omit all conflicting occurrences and create the rest, or revise the requested rooms and time window. A Church Activity Booking may replace conflicting future Rental occurrences, but never another Church Activity Booking. Omissions must be dates the current preview reported as conflicts; the server rejects arbitrary exclusions and revalidates the remaining dates in the create transaction.
+_Avoid_: partial creation without user approval, silently overwriting an existing Church Activity Booking, treating a Blackout as overwritable occupancy, excluding a free date to shrink a Series
 
 **Pending-payment hold expiry**:
 The global duration for which an unpaid Pending-payment Booking reserves its room intervals before the system cancels it and releases its future occurrences. It is configured by `facility.pending_payment_hold_hours`, defaulting to 72 hours. A FastAPI lifecycle sweep runs at startup and every 15 minutes under a PostgreSQL advisory lock; availability queries treat an elapsed expiry as released even before the sweep records cancellation.

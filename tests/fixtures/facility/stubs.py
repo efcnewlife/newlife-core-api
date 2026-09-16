@@ -253,6 +253,7 @@ class StubBookingRepository:
         exists: bool = True,
         booking_meta: dict | None = None,
         has_overlap: bool = False,
+        overlapping_slots: set[tuple[UUID, datetime]] | None = None,
         detail: BookingDetailResult | None = None,
         range_items: list[BookingListItemResult] | None = None,
         deleted_ids: set[UUID] | None = None,
@@ -261,6 +262,7 @@ class StubBookingRepository:
         self.exists = exists
         self.booking_meta = booking_meta or {"booking_type": "one_time", "currency": "CAD"}
         self.has_overlap = has_overlap
+        self.overlapping_slots = overlapping_slots or set()
         self.detail = detail
         self.range_items = range_items or []
         self.deleted_ids = deleted_ids or set()
@@ -286,7 +288,9 @@ class StubBookingRepository:
         return self.booking_meta
 
     async def has_confirmed_slot_overlap(self, facility_id: UUID, start_at: datetime, end_at: datetime, exclude_booking_id: UUID | None = None) -> bool:
-        return self.has_overlap
+        if self.has_overlap:
+            return True
+        return (facility_id, start_at) in self.overlapping_slots
 
     async def insert_booking(self, payload: dict) -> None:
         self.insert_calls.append(payload)
@@ -387,12 +391,14 @@ class StubRoomBlackoutRepository:
         blackout_by_id: dict | None = None,
         update_affected: int = 1,
         has_overlap: bool = False,
+        overlapping_blackouts: set[tuple[UUID, datetime]] | None = None,
         for_room_day: list | None = None,
     ):
         self.candidates = candidates or []
         self.blackout_by_id = blackout_by_id or {}
         self.update_affected = update_affected
         self.has_overlap = has_overlap
+        self.overlapping_blackouts = overlapping_blackouts or set()
         self.for_room_day = for_room_day or []
         self.insert_calls: list[dict] = []
         self.list_candidates_calls = 0
@@ -428,7 +434,9 @@ class StubRoomBlackoutRepository:
         return list(self.for_room_day)
 
     async def has_blackout_overlap(self, facility_id, start_at, end_at, tz) -> bool:
-        return self.has_overlap
+        if self.has_overlap:
+            return True
+        return (facility_id, start_at) in self.overlapping_blackouts
 
     async def get_by_id(self, blackout_id):
         return self.blackout_by_id.get(blackout_id)

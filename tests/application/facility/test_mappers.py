@@ -2,7 +2,7 @@
 Facility mapper tests (serializer <-> command/result).
 """
 
-from datetime import datetime, time, timezone
+from datetime import date, datetime, time, timezone
 from decimal import Decimal
 from uuid import uuid4
 
@@ -15,6 +15,7 @@ from portal.application.facility.mappers import (
     bulk_action_to_command,
     cancel_booking_to_command,
     create_discount_rule_to_command,
+    create_recurring_booking_series_to_command,
     create_rental_rate_to_command,
     create_room_slot_template_to_command,
     create_room_to_command,
@@ -28,6 +29,7 @@ from portal.application.facility.mappers import (
     pages_query_to_command,
     preview_quote_result_to_api,
     preview_quote_to_command,
+    recurring_booking_preview_to_member_api,
     room_availability_item_to_api,
     room_detail_to_api,
     update_booking_to_command,
@@ -41,13 +43,15 @@ from portal.application.facility.results import (
     DiscountRuleResult,
     PreviewQuoteResult,
     PreviewQuoteRoomLineResult,
+    RecurringBookingConflictResult,
+    RecurringBookingPreviewResult,
     RoomAvailabilityResult,
     RoomDetailResult,
     TranslationItemResult,
 )
 from portal.application.org.mappers import create_ministry_to_command, ministry_detail_to_api, replace_ministry_members_to_command
 from portal.application.org.results import MinistryDetailResult
-from portal.domain.facility.constants import BookingType, RentalRateBillingUnit
+from portal.domain.facility.constants import BookingType, RecurringConflictKind, RentalRateBillingUnit
 from portal.domain.org.constants import MinistryMemberRole
 from portal.infrastructure.persistence.repositories.facility.booking_repository import BookingRepository
 from portal.serializers.admin.v1.facility.booking import AdminBookingCancel, AdminBookingQuery, AdminBookingUpdate
@@ -59,7 +63,13 @@ from portal.serializers.admin.v1.facility.room_slot_template import AdminRoomSlo
 from portal.serializers.admin.v1.facility.translation import AdminFacilityTranslationInput
 from portal.serializers.admin.v1.ministry import AdminMinistryCreate, AdminMinistryMemberInput, AdminMinistryReplaceMembers
 from portal.serializers.admin.v1.org.translation import AdminOrgTranslationInput
-from portal.serializers.apis.v1.facility import MemberPreviewQuoteLineInput, MemberPreviewQuoteRequest
+from portal.serializers.apis.v1.facility import (
+    MemberPreviewQuoteLineInput,
+    MemberPreviewQuoteRequest,
+    MemberRecurringBookingSeriesCreate,
+    MemberRecurringBookingSeriesProposal,
+    MemberRecurringBookingSeriesRoomInput,
+)
 from portal.serializers.mixins import DeleteBaseModel, GenericQueryBaseModel
 
 
@@ -430,3 +440,40 @@ def test_member_booking_detail_to_api_includes_quoted_amount():
     assert dumped["quotedAmount"] == Decimal("85")
     assert dumped["currency"] == "CAD"
     assert dumped["rooms"][0]["facilityId"] == room_id
+
+
+def test_create_recurring_booking_series_to_command_maps_excluded_dates():
+    model = MemberRecurringBookingSeriesCreate(
+        first_occurrence_date=date(2026, 1, 6),
+        last_occurrence_date=date(2026, 2, 10),
+        local_start_time=time(10, 0),
+        local_end_time=time(12, 0),
+        rooms=[MemberRecurringBookingSeriesRoomInput(facility_id=uuid4(), sequence=0)],
+        excluded_dates=[date(2026, 1, 13)],
+    )
+    command = create_recurring_booking_series_to_command(model)
+    assert command.excluded_dates == [date(2026, 1, 13)]
+
+
+def test_create_recurring_booking_series_to_command_preview_proposal_has_no_exclusions():
+    model = MemberRecurringBookingSeriesProposal(
+        first_occurrence_date=date(2026, 1, 6),
+        last_occurrence_date=date(2026, 2, 10),
+        local_start_time=time(10, 0),
+        local_end_time=time(12, 0),
+        rooms=[MemberRecurringBookingSeriesRoomInput(facility_id=uuid4(), sequence=0)],
+    )
+    command = create_recurring_booking_series_to_command(model)
+    assert command.excluded_dates == []
+
+
+def test_recurring_booking_preview_to_member_api_uses_camel_case():
+    room_id = uuid4()
+    result = RecurringBookingPreviewResult(
+        conflicts=[RecurringBookingConflictResult(occurrence_date=date(2026, 1, 13), kind=RecurringConflictKind.OCCUPANCY.value, facility_ids=[room_id])]
+    )
+    api = recurring_booking_preview_to_member_api(result)
+    dumped = api.model_dump(by_alias=True)
+    assert dumped["conflicts"][0]["occurrenceDate"] == date(2026, 1, 13)
+    assert dumped["conflicts"][0]["kind"] == "occupancy"
+    assert dumped["conflicts"][0]["facilityIds"] == [room_id]

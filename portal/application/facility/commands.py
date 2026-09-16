@@ -310,6 +310,7 @@ class CreateRecurringBookingSeriesCommand(BaseModel):
     rooms: list[BookingRoomLineCommand] = Field(default_factory=list)
     surcharge_codes: list[str] = Field(default_factory=list)
     remark: Optional[str] = Field(default=None)
+    excluded_dates: list[date] = Field(default_factory=list)
 
 
 class RoomAvailabilityQueryCommand(BaseModel):
