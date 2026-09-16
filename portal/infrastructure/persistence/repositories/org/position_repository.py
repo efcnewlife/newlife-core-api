@@ -200,6 +200,12 @@ class PositionRepository:
         incumbent = await self._current_incumbent(position_id)
         return incumbent[0] if incumbent else None
 
+    async def get_current_incumbent_user_id_by_code(self, position_code: str) -> Optional[UUID]:
+        position_id = await self._session.select(OrgPosition.id).where(OrgPosition.code == position_code).where(OrgPosition.is_deleted == False).fetchval()
+        if not position_id:
+            return None
+        return await self.get_current_incumbent_user_id(position_id)
+
     async def _current_incumbent(self, position_id: UUID) -> Optional[tuple[UUID, Optional[str]]]:
         display_name = sa.func.coalesce(AuthUserProfile.preferred_name, AuthUser.email)
         row = await (

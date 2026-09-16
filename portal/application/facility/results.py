@@ -505,15 +505,60 @@ class RecurringBookingSeriesResult(UUIDBaseModel):
     occurrences: list[RecurringBookingOccurrenceResult] = Field(default_factory=list)
 
 
+class RecurringOccupyingBookingResult(BaseModel):
+    """Occupying Booking that collides with one proposed occurrence."""
+
+    booking_id: UUID = Field(...)
+    user_id: UUID = Field(...)
+    ministry_id: Optional[UUID] = Field(default=None)
+    facility_ids: list[UUID] = Field(default_factory=list)
+    start_at: datetime = Field(...)
+    end_at: datetime = Field(...)
+
+
 class RecurringBookingConflictResult(BaseModel):
     """One unavailable occurrence in a Recurring Booking conflict preview."""
 
     occurrence_date: DateType = Field(...)
     kind: str = Field(...)
     facility_ids: list[UUID] = Field(default_factory=list)
+    is_overridable: bool = Field(default=False)
+    occupying_bookings: list[RecurringOccupyingBookingResult] = Field(default_factory=list)
+    ministry_id: Optional[UUID] = Field(default=None)
+    ministry_steward_display_name: Optional[str] = Field(default=None)
+    ministry_steward_email: Optional[str] = Field(default=None)
 
 
 class RecurringBookingPreviewResult(BaseModel):
     """Server-backed Recurring Booking conflict preview; does not persist a Series."""
 
     conflicts: list[RecurringBookingConflictResult] = Field(default_factory=list)
+
+
+class RecurringOverrideNotificationItem(BaseModel):
+    """One displaced Rental Booking in a Priority Ministry override."""
+
+    booking_id: UUID = Field(...)
+    booker_id: UUID = Field(...)
+    occurrence_date: DateType = Field(...)
+    facility_ids: list[UUID] = Field(default_factory=list)
+    church_activity_booking_id: UUID = Field(...)
+
+
+class RecurringOverrideNotification(BaseModel):
+    """Payload for bilingual Priority Ministry override mail."""
+
+    series_id: UUID = Field(...)
+    ministry_id: UUID = Field(...)
+    church_activity_name: str = Field(...)
+    church_activity_name_zh: str = Field(default="")
+    actor_id: UUID = Field(...)
+    items: list[RecurringOverrideNotificationItem] = Field(default_factory=list)
+
+    @property
+    def affected_booker_ids(self) -> list[UUID]:
+        seen: list[UUID] = []
+        for item in self.items:
+            if item.booker_id not in seen:
+                seen.append(item.booker_id)
+        return seen

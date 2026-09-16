@@ -53,6 +53,9 @@ class PositionOffice(str, Enum):
     STAFF = "staff"
 
 
+FACILITY_DEACON_POSITION_CODE = "DEACON_FACILITY"
+
+
 class OrgErrorCode(str, Enum):
     """Machine-readable org admin error codes for clients."""
 

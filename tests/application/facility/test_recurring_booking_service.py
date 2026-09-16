@@ -11,17 +11,20 @@ import pytest
 
 from portal.application.facility.commands import BookingRoomLineCommand, CreateRecurringBookingSeriesCommand
 from portal.application.facility.recurring_booking_service import RecurringBookingService
-from portal.application.facility.results import RecurringBookingPreviewResult, RecurringBookingSeriesResult
+from portal.application.facility.results import RecurringBookingPreviewResult, RecurringBookingSeriesResult, RecurringOccupyingBookingResult
+from portal.application.org.results import MinistryMemberResult
 from portal.domain.facility.constants import BookingErrorCode, BookingSlotStatus, BookingStatus, BookingType, FacilityErrorCode, RecurringConflictKind
 from portal.domain.facility.recurring import localize_wall_time
-from portal.domain.org.constants import MinistryStatus
+from portal.domain.org.constants import MinistryMemberRole, MinistryStatus
 from portal.exceptions.responses import BadRequestException, ConflictErrorException, ForbiddenException
 from tests.fixtures.facility.factories import make_ministry_detail, make_preview_quote_result, new_uuid
 from tests.fixtures.facility.stubs import (
     StubBookingRepository,
     StubMinistryRepository,
+    StubOverrideLogRepository,
     StubPricingService,
     StubRecurringBookingRepository,
+    StubRecurringOverrideNotifier,
     StubRoomBlackoutRepository,
     StubUserReadService,
 )
@@ -73,6 +76,8 @@ def _service(
     blackout_stub=None,
     setting_stub=None,
     user_read_stub=None,
+    override_log_stub=None,
+    override_notifier=None,
     now_utc=None,
 ):
     user_id = user_id or uuid4()
@@ -80,6 +85,8 @@ def _service(
     quote = make_preview_quote_result(quoted_amount=Decimal("100"))
     series_stub = series_stub or StubRecurringBookingRepository()
     booking_stub = booking_stub or StubBookingRepository()
+    override_log_stub = override_log_stub or StubOverrideLogRepository()
+    override_notifier = override_notifier or StubRecurringOverrideNotifier()
     service = RecurringBookingService(
         series_repository=series_stub,
         booking_repository=booking_stub,
@@ -88,6 +95,8 @@ def _service(
         room_blackout_repository=blackout_stub or StubRoomBlackoutRepository(),
         setting_service=setting_stub or StubSettingService(max_booking_lines=10),
         user_read_service=user_read_stub or StubUserReadService(email=email),
+        override_log_repository=override_log_stub,
+        override_notifier=override_notifier,
         now_utc=now_utc or (lambda: OPEN_WINDOW_NOW),
     )
     return service, series_stub, booking_stub, user_id
@@ -485,3 +494,214 @@ async def test_create_series_can_exclude_weekly_quota_conflict(monkeypatch):
     result = await service.create_series(_command(last_occurrence_date=SIX_WEEK_LAST_TUESDAY, excluded_dates=[date(2026, 1, 6)]))
     assert result.occurrence_count == 5
     assert date(2026, 1, 6) not in [item.start_at.date() for item in result.occurrences]
+
+
+def _priority_ministry(*, user_id, ministry_id=None, members=None):
+    ministry_id = ministry_id or new_uuid()
+    ministry = make_ministry_detail(ministry_id)
+    ministry.status = MinistryStatus.ACTIVE.value
+    ministry.has_priority_booking = True
+    ministry.name = "Choir"
+    return ministry_id, StubMinistryRepository(
+        ministry_by_id={ministry_id: ministry}, booking_member_user_ids={user_id}, members_by_ministry={ministry_id: members or []}
+    )
+
+
+def _occupying_rental(*, facility_id, occurrence_date, booking_id=None, user_id=None, start_at=None):
+    start_at = start_at or _occurrence_start_utc(occurrence_date)
+    return RecurringOccupyingBookingResult(
+        booking_id=booking_id or new_uuid(),
+        user_id=user_id or uuid4(),
+        ministry_id=None,
+        facility_ids=[facility_id],
+        start_at=start_at,
+        end_at=start_at + timedelta(hours=2),
+    )
+
+
+@pytest.mark.asyncio
+async def test_preview_ministry_conflict_includes_primary_steward_contact(monkeypatch):
+    user_id = uuid4()
+    room_id = new_uuid()
+    other_ministry_id = new_uuid()
+    ministry_id, ministry_stub = _priority_ministry(user_id=user_id)
+    occupying_start = _occurrence_start_utc(date(2026, 1, 13))
+    booking_stub = StubBookingRepository(
+        occupying_bookings=[
+            RecurringOccupyingBookingResult(
+                booking_id=new_uuid(),
+                user_id=uuid4(),
+                ministry_id=other_ministry_id,
+                facility_ids=[room_id],
+                start_at=occupying_start,
+                end_at=occupying_start + timedelta(hours=2),
+            )
+        ]
+    )
+    ministry_stub.members_by_ministry[other_ministry_id] = [
+        MinistryMemberResult(user_id=uuid4(), member_role=MinistryMemberRole.PRIMARY.value, display_name="Pat Steward", email="pat.steward@efcnewlife.org")
+    ]
+    other_ministry = make_ministry_detail(other_ministry_id)
+    other_ministry.status = MinistryStatus.ACTIVE.value
+    ministry_stub.ministry_by_id[other_ministry_id] = other_ministry
+    service, *_ = _service(monkeypatch, user_id=user_id, booking_stub=booking_stub, ministry_stub=ministry_stub)
+
+    result = await service.preview_conflicts(_command(facility_id=room_id, ministry_id=ministry_id, last_occurrence_date=SIX_WEEK_LAST_TUESDAY))
+
+    assert [(item.occurrence_date, item.kind, item.facility_ids) for item in result.conflicts] == [
+        (date(2026, 1, 13), RecurringConflictKind.MINISTRY.value, [room_id])
+    ]
+    conflict = result.conflicts[0]
+    assert conflict.is_overridable is False
+    assert conflict.ministry_id == other_ministry_id
+    assert conflict.ministry_steward_display_name == "Pat Steward"
+    assert conflict.ministry_steward_email == "pat.steward@efcnewlife.org"
+
+
+@pytest.mark.asyncio
+async def test_priority_preview_marks_future_rental_occupancy_overridable(monkeypatch):
+    user_id = uuid4()
+    room_id = new_uuid()
+    ministry_id, ministry_stub = _priority_ministry(user_id=user_id)
+    rental = _occupying_rental(facility_id=room_id, occurrence_date=date(2026, 1, 13))
+    booking_stub = StubBookingRepository(occupying_bookings=[rental])
+    service, *_ = _service(monkeypatch, user_id=user_id, booking_stub=booking_stub, ministry_stub=ministry_stub)
+
+    result = await service.preview_conflicts(_command(facility_id=room_id, ministry_id=ministry_id, last_occurrence_date=SIX_WEEK_LAST_TUESDAY))
+
+    assert result.conflicts[0].kind == RecurringConflictKind.OCCUPANCY.value
+    assert result.conflicts[0].is_overridable is True
+    assert result.conflicts[0].occurrence_date == date(2026, 1, 13)
+
+
+@pytest.mark.asyncio
+async def test_priority_create_overrides_future_rental_and_writes_audit(monkeypatch):
+    user_id = uuid4()
+    room_id = new_uuid()
+    rental_booker_id = uuid4()
+    rental_booking_id = new_uuid()
+    ministry_id, ministry_stub = _priority_ministry(user_id=user_id)
+    rental = _occupying_rental(facility_id=room_id, occurrence_date=date(2026, 1, 13), booking_id=rental_booking_id, user_id=rental_booker_id)
+    booking_stub = StubBookingRepository(occupying_bookings=[rental])
+    override_log_stub = StubOverrideLogRepository()
+    notifier = StubRecurringOverrideNotifier()
+    service, series_stub, *_rest = _service(
+        monkeypatch, user_id=user_id, booking_stub=booking_stub, ministry_stub=ministry_stub, override_log_stub=override_log_stub, override_notifier=notifier
+    )
+
+    result = await service.create_series(_command(facility_id=room_id, ministry_id=ministry_id, last_occurrence_date=SIX_WEEK_LAST_TUESDAY))
+
+    assert result.occurrence_count == 6
+    assert result.is_priority is True
+    assert booking_stub.override_calls == [dict(booking_id=rental_booking_id, overridden_by_id=user_id, reason="Priority Ministry override")]
+    assert len(override_log_stub.insert_calls) == 1
+    log_row = override_log_stub.insert_calls[0][0]
+    assert log_row["overridden_booking_id"] == rental_booking_id
+    assert log_row["overridden_by_id"] == user_id
+    assert log_row["facility_id"] == room_id
+    assert log_row["outcome"] == "override_applied"
+    new_occurrence_ids = {item.id for item in result.occurrences}
+    assert log_row["facility_booking_id"] in new_occurrence_ids
+    assert len(notifier.calls) == 1
+    assert notifier.calls[0].affected_booker_ids == [rental_booker_id]
+    assert notifier.calls[0].church_activity_name == "Choir"
+
+
+@pytest.mark.asyncio
+async def test_priority_create_rejects_blackout_instead_of_overriding(monkeypatch):
+    user_id = uuid4()
+    room_id = new_uuid()
+    ministry_id, ministry_stub = _priority_ministry(user_id=user_id)
+    closed = _occurrence_start_utc(date(2026, 1, 20))
+    blackout_stub = StubRoomBlackoutRepository(overlapping_blackouts={(room_id, closed)})
+    service, *_ = _service(monkeypatch, user_id=user_id, ministry_stub=ministry_stub, blackout_stub=blackout_stub)
+    with pytest.raises(BadRequestException) as exc_info:
+        await service.create_series(_command(facility_id=room_id, ministry_id=ministry_id))
+    assert exc_info.value.error_code == BookingErrorCode.ROOM_BLACKOUT.value
+
+
+@pytest.mark.asyncio
+async def test_priority_create_rejects_ministry_occupancy_with_steward_context(monkeypatch):
+    user_id = uuid4()
+    room_id = new_uuid()
+    other_ministry_id = new_uuid()
+    ministry_id, ministry_stub = _priority_ministry(user_id=user_id)
+    occupying_start = _occurrence_start_utc(date(2026, 1, 13))
+    booking_stub = StubBookingRepository(
+        occupying_bookings=[
+            RecurringOccupyingBookingResult(
+                booking_id=new_uuid(),
+                user_id=uuid4(),
+                ministry_id=other_ministry_id,
+                facility_ids=[room_id],
+                start_at=occupying_start,
+                end_at=occupying_start + timedelta(hours=2),
+            )
+        ]
+    )
+    ministry_stub.members_by_ministry[other_ministry_id] = [
+        MinistryMemberResult(user_id=uuid4(), member_role=MinistryMemberRole.PRIMARY.value, display_name="Pat Steward", email="pat.steward@efcnewlife.org")
+    ]
+    service, *_ = _service(monkeypatch, user_id=user_id, booking_stub=booking_stub, ministry_stub=ministry_stub)
+    with pytest.raises(ConflictErrorException) as exc_info:
+        await service.create_series(_command(facility_id=room_id, ministry_id=ministry_id, last_occurrence_date=SIX_WEEK_LAST_TUESDAY))
+    assert exc_info.value.error_code == FacilityErrorCode.RECURRING_MINISTRY_CONFLICT.value
+    assert exc_info.value.context["ministry_steward_display_name"] == "Pat Steward"
+    assert exc_info.value.context["ministry_steward_email"] == "pat.steward@efcnewlife.org"
+
+
+@pytest.mark.asyncio
+async def test_non_priority_ministry_cannot_override_rental_occupancy(monkeypatch):
+    user_id = uuid4()
+    room_id = new_uuid()
+    ministry_id = new_uuid()
+    ministry = make_ministry_detail(ministry_id)
+    ministry.status = MinistryStatus.ACTIVE.value
+    ministry.has_priority_booking = False
+    ministry_stub = StubMinistryRepository(ministry_by_id={ministry_id: ministry}, booking_member_user_ids={user_id})
+    rental = _occupying_rental(facility_id=room_id, occurrence_date=date(2026, 1, 13))
+    booking_stub = StubBookingRepository(occupying_bookings=[rental])
+    service, *_ = _service(monkeypatch, user_id=user_id, booking_stub=booking_stub, ministry_stub=ministry_stub)
+    with pytest.raises(ConflictErrorException) as exc_info:
+        await service.create_series(_command(facility_id=room_id, ministry_id=ministry_id, last_occurrence_date=SIX_WEEK_LAST_TUESDAY))
+    assert exc_info.value.error_code == BookingErrorCode.SCHEDULING_CONFLICT.value
+    assert booking_stub.override_calls == []
+
+
+@pytest.mark.asyncio
+async def test_priority_create_does_not_override_past_rental_occupancy(monkeypatch):
+    user_id = uuid4()
+    room_id = new_uuid()
+    ministry_id, ministry_stub = _priority_ministry(user_id=user_id)
+    first_tuesday_start = _occurrence_start_utc(FIRST_TUESDAY)
+    booking_stub = StubBookingRepository(
+        occupying_bookings=[
+            RecurringOccupyingBookingResult(
+                booking_id=new_uuid(),
+                user_id=uuid4(),
+                ministry_id=None,
+                facility_ids=[room_id],
+                start_at=datetime(2025, 11, 1, 15, 0, tzinfo=timezone.utc),
+                end_at=first_tuesday_start + timedelta(hours=2),
+            )
+        ]
+    )
+    service, *_ = _service(monkeypatch, user_id=user_id, booking_stub=booking_stub, ministry_stub=ministry_stub)
+    with pytest.raises(ConflictErrorException) as exc_info:
+        await service.create_series(_command(facility_id=room_id, ministry_id=ministry_id))
+    assert exc_info.value.error_code == BookingErrorCode.SCHEDULING_CONFLICT.value
+    assert booking_stub.override_calls == []
+
+
+@pytest.mark.asyncio
+async def test_priority_override_mail_failure_does_not_block_create(monkeypatch):
+    user_id = uuid4()
+    room_id = new_uuid()
+    ministry_id, ministry_stub = _priority_ministry(user_id=user_id)
+    rental = _occupying_rental(facility_id=room_id, occurrence_date=date(2026, 1, 13))
+    booking_stub = StubBookingRepository(occupying_bookings=[rental])
+    notifier = StubRecurringOverrideNotifier(raise_error=RuntimeError("graph down"))
+    service, *_ = _service(monkeypatch, user_id=user_id, booking_stub=booking_stub, ministry_stub=ministry_stub, override_notifier=notifier)
+    result = await service.create_series(_command(facility_id=room_id, ministry_id=ministry_id, last_occurrence_date=SIX_WEEK_LAST_TUESDAY))
+    assert result.occurrence_count == 6
+    assert len(notifier.calls) == 1

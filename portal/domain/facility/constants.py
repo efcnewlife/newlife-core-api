@@ -27,6 +27,9 @@ ROOM_GALLERY_MAX_FILES = 10
 # (see SettingService.get_max_booking_lines(), ADR 0018).
 PREVIEW_QUOTE_MAX_LINES = 3
 
+# AuthResource.code is String(32); keep this token at or under that limit.
+BOOKING_PAYMENT_RESOURCE_CODE = "facility:booking_payment"
+
 
 class BookingStatus(str, Enum):
     """Booking lifecycle status."""
@@ -144,6 +147,7 @@ class FacilityErrorCode(str, Enum):
     RECURRING_NOT_ELIGIBLE = "FACILITY_RECURRING_NOT_ELIGIBLE"
     RECURRING_INVALID_TIME_RANGE = "FACILITY_RECURRING_INVALID_TIME_RANGE"
     RECURRING_INVALID_EXCLUSION = "FACILITY_RECURRING_INVALID_EXCLUSION"
+    RECURRING_MINISTRY_CONFLICT = "FACILITY_RECURRING_MINISTRY_CONFLICT"
 
 
 class RecurringConflictKind(str, Enum):
@@ -152,6 +156,7 @@ class RecurringConflictKind(str, Enum):
     OCCUPANCY = "occupancy"
     BLACKOUT = "blackout"
     WEEKLY_QUOTA = "weekly_quota"
+    MINISTRY = "ministry"
 
 
 CHURCH_EMAIL_DOMAIN = "efcnewlife.org"

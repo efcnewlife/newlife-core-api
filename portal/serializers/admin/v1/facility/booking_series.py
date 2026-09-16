@@ -75,6 +75,10 @@ class AdminRecurringBookingConflict(BaseModel):
     occurrence_date: date = Field(..., serialization_alias="occurrenceDate")
     kind: str = Field(...)
     facility_ids: list[UUID] = Field(default_factory=list, serialization_alias="facilityIds")
+    is_overridable: bool = Field(default=False, serialization_alias="isOverridable")
+    ministry_id: Optional[UUID] = Field(default=None, serialization_alias="ministryId")
+    ministry_steward_display_name: Optional[str] = Field(default=None, serialization_alias="ministryStewardDisplayName")
+    ministry_steward_email: Optional[str] = Field(default=None, serialization_alias="ministryStewardEmail")
 
 
 class AdminRecurringBookingPreview(BaseModel):

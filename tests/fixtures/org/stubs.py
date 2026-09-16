@@ -254,11 +254,15 @@ class StubMinistryRepository:
 class StubPositionRepository:
     """In-memory position incumbent stub."""
 
-    def __init__(self, incumbents: dict[UUID, UUID] | None = None):
+    def __init__(self, incumbents: dict[UUID, UUID] | None = None, incumbents_by_code: dict[str, UUID] | None = None):
         self.incumbents = incumbents or {}
+        self.incumbents_by_code = incumbents_by_code or {}
 
     async def get_current_incumbent_user_id(self, position_id: UUID) -> UUID | None:
         return self.incumbents.get(position_id)
+
+    async def get_current_incumbent_user_id_by_code(self, position_code: str) -> UUID | None:
+        return self.incumbents_by_code.get(position_code)
 
 
 class StubUserRepository:

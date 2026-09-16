@@ -477,3 +477,27 @@ def test_recurring_booking_preview_to_member_api_uses_camel_case():
     assert dumped["conflicts"][0]["occurrenceDate"] == date(2026, 1, 13)
     assert dumped["conflicts"][0]["kind"] == "occupancy"
     assert dumped["conflicts"][0]["facilityIds"] == [room_id]
+    assert dumped["conflicts"][0]["isOverridable"] is False
+    assert dumped["conflicts"][0]["ministryStewardDisplayName"] is None
+
+
+def test_recurring_booking_preview_includes_ministry_steward_contact():
+    room_id = uuid4()
+    ministry_id = uuid4()
+    result = RecurringBookingPreviewResult(
+        conflicts=[
+            RecurringBookingConflictResult(
+                occurrence_date=date(2026, 1, 13),
+                kind=RecurringConflictKind.MINISTRY.value,
+                facility_ids=[room_id],
+                ministry_id=ministry_id,
+                ministry_steward_display_name="Primary Steward",
+                ministry_steward_email="steward@efcnewlife.org",
+            )
+        ]
+    )
+    dumped = recurring_booking_preview_to_member_api(result).model_dump(by_alias=True)
+    assert dumped["conflicts"][0]["kind"] == "ministry"
+    assert dumped["conflicts"][0]["ministryId"] == ministry_id
+    assert dumped["conflicts"][0]["ministryStewardDisplayName"] == "Primary Steward"
+    assert dumped["conflicts"][0]["ministryStewardEmail"] == "steward@efcnewlife.org"
