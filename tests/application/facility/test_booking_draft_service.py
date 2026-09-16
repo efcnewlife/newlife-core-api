@@ -518,6 +518,25 @@ async def test_delete_all_my_drafts_never_removes_another_members_draft(monkeypa
 
 
 @pytest.mark.asyncio
+async def test_delete_all_my_drafts_leaves_confirmed_bookings_untouched(monkeypatch):
+    """Bulk-delete only ever touches Booking Draft rows -- a real Booking is a separate table (ADR 0018)."""
+    user_id = uuid4()
+    draft_id = uuid4()
+    stub = StubBookingDraftRepository(draft_by_id={draft_id: _stored_draft(draft_id=draft_id, user_id=user_id, date_=datetime(2026, 5, 1).date())})
+    booking_stub = StubBookingRepository()
+    _user_ctx(monkeypatch, user_id=user_id)
+    service = _service(draft_stub=stub, booking_stub=booking_stub)
+
+    await service.delete_all_my_drafts()
+
+    assert booking_stub.cancel_calls == []
+    assert booking_stub.insert_calls == []
+    assert booking_stub.update_header_calls == []
+    assert booking_stub.replace_rooms_calls == []
+    assert booking_stub.replace_slots_calls == []
+
+
+@pytest.mark.asyncio
 async def test_update_draft_two_sequential_patches_last_write_wins(monkeypatch):
     """The second PATCH's content replaces the first entirely -- no error, no merge."""
     user_id = uuid4()
