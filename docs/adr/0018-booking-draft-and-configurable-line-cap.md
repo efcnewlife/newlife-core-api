@@ -20,7 +20,7 @@ Separately, ADR 0017 hardcoded the 1-3 Booking line cap as "a hard product rule 
 - Non-locking: creating or holding a Draft never marks a room Unavailable to other members. Price and availability are computed live from the stored lines on every `GET`/`PATCH` response — never cached on the Draft row.
 - Auth-scoped to its creator only. A request for another user's Draft id, or one that no longer exists, returns the same not-found response as any other unauthorized/unknown resource.
 - `POST /booking-drafts` is called from the Timetable's Review Booking action with the current cart; `PATCH /booking-drafts/{id}` updates it in place for Edit/Remove on Booking Details (last-write-wins; no optimistic-lock version field).
-- Deleted in the same request that successfully creates the real `Booking` from it (`POST /bookings`, unchanged). An abandoned Draft that's never confirmed is not otherwise cleaned up in this slice — no expiry job.
+- Deleted in the same request that successfully creates the real `Booking` from it (`POST /bookings`, unchanged). An abandoned Draft that's never confirmed is not otherwise cleaned up in this slice — no expiry job. Separately, a member entering Start Booking deletes **all** of that member's Booking Drafts as an explicit, user-triggered action (fires on every entry, not just a detected "restart" — idempotent when there's nothing to delete). This is not the deferred expiry job: it's a one-off bulk-delete tied to a real navigation event, not a schedule.
 - Both `POST` and `PATCH` re-validate the existing cart domain rules server-side (line count against the Booking line cap, same calendar day, no cross-midnight, at least 1 line) rather than trusting the client.
 
 ### Booking line cap
