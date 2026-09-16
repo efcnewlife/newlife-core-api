@@ -123,6 +123,12 @@ async def create_booking_draft(model: MemberBookingDraftCreate, booking_draft_se
     return create_id_result_to_api(result)
 
 
+@router.delete(path="/booking-drafts", status_code=status.HTTP_204_NO_CONTENT)
+@inject
+async def delete_my_booking_drafts(booking_draft_service: BookingDraftService = Depends(Provide[Container.booking_draft_service])):
+    await booking_draft_service.delete_all_my_drafts()
+
+
 @router.get(path="/booking-drafts/{booking_draft_id}", status_code=status.HTTP_200_OK, response_model=MemberBookingDraftDetail, response_model_by_alias=True)
 @inject
 async def get_booking_draft(booking_draft_id: UUID, booking_draft_service: BookingDraftService = Depends(Provide[Container.booking_draft_service])):

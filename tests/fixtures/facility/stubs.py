@@ -541,6 +541,7 @@ class StubBookingDraftRepository:
         self.update_header_calls: list[dict] = []
         self.replace_lines_calls: list[list[dict]] = []
         self.delete_draft_calls: list[UUID] = []
+        self.delete_all_for_user_calls: list[UUID] = []
 
     async def insert_draft(self, payload: dict) -> None:
         self.insert_draft_calls.append(payload)
@@ -575,6 +576,10 @@ class StubBookingDraftRepository:
     async def delete_draft(self, booking_draft_id: UUID) -> None:
         self.delete_draft_calls.append(booking_draft_id)
         self.draft_by_id.pop(booking_draft_id, None)
+
+    async def delete_all_for_user(self, user_id: UUID) -> None:
+        self.delete_all_for_user_calls.append(user_id)
+        self.draft_by_id = {draft_id: draft for draft_id, draft in self.draft_by_id.items() if draft.user_id != user_id}
 
     async def get_detail(self, booking_draft_id: UUID) -> Optional[BookingDraftDetailResult]:
         return self.draft_by_id.get(booking_draft_id)
