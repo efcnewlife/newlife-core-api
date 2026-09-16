@@ -337,6 +337,19 @@ class BookingRepository:
     async def insert_booking(self, payload: dict) -> None:
         await self._session.insert(FacilityBooking).values(payload).execute()
 
+    async def list_rental_occurrence_starts(self, user_id: UUID, range_start: datetime, range_end: datetime) -> list[datetime]:
+        rows = await (
+            self._session.select(FacilityBooking.start_at)
+            .where(FacilityBooking.user_id == user_id)
+            .where(FacilityBooking.ministry_id.is_(None))
+            .where(FacilityBooking.is_deleted == False)
+            .where(FacilityBooking.status.in_([BookingStatus.CONFIRMED.value, BookingStatus.PENDING_PAYMENT.value]))
+            .where(FacilityBooking.start_at >= range_start)
+            .where(FacilityBooking.start_at < range_end)
+            .fetchvals()
+        )
+        return rows or []
+
     async def list_user_bookings(self, user_id: UUID, locale_id: Optional[UUID]) -> list[BookingListItemResult]:
         # Reuse pages query with large page for member "mine" list
         from portal.application.facility.commands import BookingPagesQueryCommand

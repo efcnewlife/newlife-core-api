@@ -10,6 +10,7 @@ from sqlalchemy.orm import relationship
 from portal.domain.facility.constants import BookingSlotStatus, BookingStatus
 from portal.libs.database.orm import ModelBase
 from portal.models.auth.user import AuthUser
+from portal.models.facility.booking_series import FacilityBookingSeries
 from portal.models.facility.rental import FacilityRentalSurcharge
 from portal.models.facility.room import FacilityRoom
 from portal.models.mixins import AuditCreatedMixin, AuditMixin, DeletedMixin, RemarkMixin
@@ -23,9 +24,16 @@ class FacilityBooking(ModelBase, AuditMixin, RemarkMixin, DeletedMixin):
         sa.Index("ix_booking_facility_id_start_at", "facility_id", "start_at"),
         sa.Index("ix_booking_user_id_status", "user_id", "status"),
         sa.Index("ix_booking_status_start_at", "status", "start_at"),
+        sa.Index("ix_booking_series_id", "series_id"),
     )
 
     user_id = Column(UUID, sa.ForeignKey(AuthUser.id, ondelete="NO ACTION"), nullable=False, index=True, comment="Booker user ID")
+    series_id = Column(
+        UUID,
+        sa.ForeignKey(FacilityBookingSeries.id, ondelete="SET NULL"),
+        nullable=True,
+        comment="Recurring Booking Series parent when this row is a Booking Occurrence",
+    )
     facility_id = Column(
         UUID,
         sa.ForeignKey(FacilityRoom.id, ondelete="NO ACTION"),
@@ -54,6 +62,7 @@ class FacilityBooking(ModelBase, AuditMixin, RemarkMixin, DeletedMixin):
     cancel_reason = Column(sa.String(500), comment="Cancellation reason")
 
     user = relationship("AuthUser", foreign_keys=[user_id], passive_deletes=True)
+    series = relationship("FacilityBookingSeries", back_populates="bookings", passive_deletes=True)
     room = relationship("FacilityRoom", foreign_keys=[facility_id], passive_deletes=True)
     ministry = relationship("OrgMinistry", passive_deletes=True)
     booking_rooms = relationship("FacilityBookingRoom", back_populates="booking", passive_deletes=True)

@@ -10,8 +10,8 @@ import ujson
 
 from portal.application.rbac.commands import BulkIdsCommand, DeleteCommand
 from portal.application.system.commands import CreateSettingCommand, UpdateSettingCommand
-from portal.application.system.results import CreateIdResult, SettingListResult, SettingResult
-from portal.domain.system.constants import FacilitySettingKey, SettingNamespace, SettingValueType, SystemErrorCode
+from portal.application.system.results import CreateIdResult, RecurringBookingAvailabilityWindowResult, SettingListResult, SettingResult
+from portal.domain.system.constants import FacilitySettingKey, RecurringAvailabilityUnit, SettingNamespace, SettingValueType, SystemErrorCode
 from portal.domain.system.entities import Setting
 from portal.exceptions.responses import BadRequestException, ConflictErrorException, NotFoundException
 from portal.infrastructure.cache.setting_cache import SettingCache
@@ -97,8 +97,8 @@ class SettingService:
             raise BadRequestException(detail="namespace and setting_key are required")
         self._assert_value_type_enum(command.value_type)
         self._validate_value_type(command.value_type, command.value)
-        if namespace == SettingNamespace.FACILITY.value and setting_key == FacilitySettingKey.TIMEZONE.value:
-            self._validate_iana_timezone(command.value)
+        if namespace == SettingNamespace.FACILITY.value:
+            self._validate_facility_setting_value(setting_key, command.value)
 
         existing = await self._repository.get_by_namespace_key(namespace, setting_key, include_deleted=True)
         if existing:
@@ -129,8 +129,8 @@ class SettingService:
         if not row:
             raise NotFoundException(detail="Setting not found", error_code=SystemErrorCode.SETTING_NOT_FOUND.value)
         self._validate_value_type(row.value_type, command.value)
-        if row.namespace == SettingNamespace.FACILITY.value and row.setting_key == FacilitySettingKey.TIMEZONE.value:
-            self._validate_iana_timezone(command.value)
+        if row.namespace == SettingNamespace.FACILITY.value:
+            self._validate_facility_setting_value(row.setting_key, command.value)
         updated = await self._repository.update_value(setting_id=setting_id, value=command.value, remark=command.remark)
         if updated < 1:
             raise NotFoundException(detail="Setting not found", error_code=SystemErrorCode.SETTING_NOT_FOUND.value)
@@ -181,39 +181,70 @@ class SettingService:
         except ZoneInfoNotFoundError as error:
             raise BadRequestException(detail=f"Invalid IANA timezone: {value}") from error
 
-    @distributed_trace()
-    async def get_facility_timezone(self) -> ZoneInfo:
+    @staticmethod
+    def _parse_positive_int(value: Any, *, field_name: str) -> int:
+        if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+            raise BadRequestException(detail=f"{field_name} must be a positive integer")
+        return value
+
+    @classmethod
+    def _parse_recurring_booking_availability_window(cls, value: Any) -> RecurringBookingAvailabilityWindowResult:
+        if not isinstance(value, dict):
+            raise BadRequestException(detail="facility.recurring_booking_availability_window must be an object")
+        amount = cls._parse_positive_int(value.get("amount"), field_name="amount")
+        unit = value.get("unit")
+        allowed = {item.value for item in RecurringAvailabilityUnit}
+        if unit not in allowed:
+            raise BadRequestException(detail="unit must be days, weeks, or months")
+        return RecurringBookingAvailabilityWindowResult(amount=amount, unit=unit)
+
+    @classmethod
+    def _validate_facility_setting_value(cls, setting_key: str, value: Any) -> None:
+        if setting_key == FacilitySettingKey.TIMEZONE.value:
+            cls._validate_iana_timezone(value)
+            return
+        if setting_key == FacilitySettingKey.RECURRING_BOOKING_AVAILABILITY_WINDOW.value:
+            cls._parse_recurring_booking_availability_window(value)
+            return
+        if setting_key in {FacilitySettingKey.MIN_RECURRING_BOOKING_WEEKS.value, FacilitySettingKey.PENDING_PAYMENT_HOLD_HOURS.value}:
+            cls._parse_positive_int(value, field_name=setting_key)
+
+    async def _read_facility_setting(self, setting_key: str, expected_type: str) -> Any:
         namespace = SettingNamespace.FACILITY.value
-        setting_key = FacilitySettingKey.TIMEZONE.value
         cached = await self._cache.get_value(namespace, setting_key)
         if cached is not None:
-            timezone_name = self._coerce_jsonb_value(cached)
-            self._validate_iana_timezone(timezone_name)
-            return ZoneInfo(timezone_name)
+            return self._coerce_jsonb_value(cached)
 
         row = await self._repository.get_by_namespace_key(namespace, setting_key)
         if not row or not row.is_active:
-            raise NotFoundException(detail="facility.timezone setting is not configured")
-        if row.value_type != SettingValueType.STRING.value:
-            raise BadRequestException(detail="facility.timezone must have value_type string")
-        timezone_name = self._coerce_jsonb_value(row.value)
+            raise NotFoundException(detail=f"facility.{setting_key} setting is not configured")
+        if row.value_type != expected_type:
+            raise BadRequestException(detail=f"facility.{setting_key} must have value_type {expected_type}")
+        value = self._coerce_jsonb_value(row.value)
+        await self._cache.set_value(namespace, setting_key, value)
+        return value
+
+    @distributed_trace()
+    async def get_facility_timezone(self) -> ZoneInfo:
+        timezone_name = await self._read_facility_setting(FacilitySettingKey.TIMEZONE.value, SettingValueType.STRING.value)
         self._validate_iana_timezone(timezone_name)
-        await self._cache.set_value(namespace, setting_key, timezone_name)
         return ZoneInfo(timezone_name)
 
     @distributed_trace()
     async def get_max_booking_lines(self) -> int:
-        namespace = SettingNamespace.FACILITY.value
-        setting_key = FacilitySettingKey.MAX_BOOKING_LINES.value
-        cached = await self._cache.get_value(namespace, setting_key)
-        if cached is not None:
-            return int(self._coerce_jsonb_value(cached))
+        return int(await self._read_facility_setting(FacilitySettingKey.MAX_BOOKING_LINES.value, SettingValueType.NUMBER.value))
 
-        row = await self._repository.get_by_namespace_key(namespace, setting_key)
-        if not row or not row.is_active:
-            raise NotFoundException(detail="facility.max_booking_lines setting is not configured")
-        if row.value_type != SettingValueType.NUMBER.value:
-            raise BadRequestException(detail="facility.max_booking_lines must have value_type number")
-        max_lines = int(self._coerce_jsonb_value(row.value))
-        await self._cache.set_value(namespace, setting_key, max_lines)
-        return max_lines
+    @distributed_trace()
+    async def get_recurring_booking_availability_window(self) -> RecurringBookingAvailabilityWindowResult:
+        value = await self._read_facility_setting(FacilitySettingKey.RECURRING_BOOKING_AVAILABILITY_WINDOW.value, SettingValueType.OBJECT.value)
+        return self._parse_recurring_booking_availability_window(value)
+
+    @distributed_trace()
+    async def get_min_recurring_booking_weeks(self) -> int:
+        value = await self._read_facility_setting(FacilitySettingKey.MIN_RECURRING_BOOKING_WEEKS.value, SettingValueType.NUMBER.value)
+        return self._parse_positive_int(value, field_name=FacilitySettingKey.MIN_RECURRING_BOOKING_WEEKS.value)
+
+    @distributed_trace()
+    async def get_pending_payment_hold_hours(self) -> int:
+        value = await self._read_facility_setting(FacilitySettingKey.PENDING_PAYMENT_HOLD_HOURS.value, SettingValueType.NUMBER.value)
+        return self._parse_positive_int(value, field_name=FacilitySettingKey.PENDING_PAYMENT_HOLD_HOURS.value)

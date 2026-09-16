@@ -27,6 +27,7 @@ from .facility import (
     FacilityBookingDraftLine,
     FacilityBookingOverrideLog,
     FacilityBookingRoom,
+    FacilityBookingSeries,
     FacilityBookingSlot,
     FacilityBookingSurcharge,
     FacilityRentalDiscountRule,
@@ -96,6 +97,7 @@ __all__ = [
     "FacilityBookingSlot",
     "FacilityBookingSurcharge",
     "FacilityBookingOverrideLog",
+    "FacilityBookingSeries",
     "FacilityBookingDraft",
     "FacilityBookingDraftLine",
     # member

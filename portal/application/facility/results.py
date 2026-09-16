@@ -474,3 +474,32 @@ class BookingDraftResult(UUIDBaseModel):
     surcharge_amount: Decimal = Field(...)
     quoted_amount: Decimal = Field(...)
     currency: str = Field(...)
+
+
+class RecurringBookingOccurrenceResult(UUIDBaseModel):
+    """One materialized Booking Occurrence in a Recurring Booking Series."""
+
+    start_at: datetime = Field(...)
+    end_at: datetime = Field(...)
+    status: str = Field(...)
+    quoted_amount: Decimal = Field(...)
+    currency: str = Field(...)
+    facility_ids: list[UUID] = Field(default_factory=list)
+
+
+class RecurringBookingSeriesResult(UUIDBaseModel):
+    """Created Recurring Booking Series with materialized occurrences."""
+
+    user_id: UUID = Field(...)
+    ministry_id: Optional[UUID] = Field(default=None)
+    first_occurrence_date: DateType = Field(...)
+    last_occurrence_date: DateType = Field(...)
+    local_start_time: time = Field(...)
+    local_end_time: time = Field(...)
+    status: str = Field(...)
+    payment_hold_expires_at: datetime = Field(...)
+    quoted_amount: Decimal = Field(...)
+    currency: str = Field(...)
+    occurrence_count: int = Field(...)
+    is_priority: bool = Field(default=False)
+    occurrences: list[RecurringBookingOccurrenceResult] = Field(default_factory=list)

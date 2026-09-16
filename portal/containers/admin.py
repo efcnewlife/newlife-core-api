@@ -118,4 +118,6 @@ class AdminContainer(containers.DeclarativeContainer):
 
     org = providers.Container(OrgContainer, core=core)
     content = providers.Container(ContentContainer, core=core, rbac_audit_service=rbac_audit_service)
-    facility = providers.Container(FacilityContainer, core=core, setting_service=setting_service, file_service=content.file_service)
+    facility = providers.Container(
+        FacilityContainer, core=core, setting_service=setting_service, file_service=content.file_service, user_read_service=user_read_service
+    )

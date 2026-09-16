@@ -28,3 +28,10 @@ class SettingListResult(BaseModel):
     """List of settings."""
 
     items: list[SettingResult] = Field(default_factory=list)
+
+
+class RecurringBookingAvailabilityWindowResult(BaseModel):
+    """Parsed facility.recurring_booking_availability_window value."""
+
+    amount: int = Field(...)
+    unit: str = Field(...)

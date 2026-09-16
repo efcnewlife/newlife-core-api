@@ -5,6 +5,7 @@ Facility admin API router aggregate.
 from portal.routers.auth_router import AuthRouter
 
 from .booking import router as booking_router
+from .booking_series import router as booking_series_router
 from .override_log import router as override_log_router
 from .rental_catalog import router as rental_catalog_router
 from .rental_rate import router as rental_rate_router
@@ -21,4 +22,5 @@ router.include_router(rental_rate_template_router, prefix="/rental-rate-template
 router.include_router(rental_rate_router, prefix="/rental-rates", tags=["Facility Rental Rate"])
 router.include_router(rental_catalog_router, tags=["Facility Rental Catalog"])
 router.include_router(booking_router, prefix="/bookings", tags=["Facility Booking"])
+router.include_router(booking_series_router, prefix="/booking-series", tags=["Facility Booking Series"])
 router.include_router(override_log_router, prefix="/booking-override-logs", tags=["Facility Override Log"])

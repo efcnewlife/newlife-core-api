@@ -3,7 +3,7 @@ Member facility API serializers.
 """
 
 from datetime import date as DateType
-from datetime import datetime
+from datetime import datetime, time
 from decimal import Decimal
 from typing import Optional
 from uuid import UUID
@@ -203,3 +203,53 @@ class MemberBookingDraftDetail(UUIDBaseModel):
     surcharge_amount: Decimal = Field(..., serialization_alias="surchargeAmount")
     quoted_amount: Decimal = Field(..., serialization_alias="quotedAmount")
     currency: str = Field(...)
+
+
+class MemberRecurringBookingSeriesRoomInput(BaseModel):
+    """Room on a Recurring Booking Series; all rooms share the Series time window."""
+
+    facility_id: UUID = Field(...)
+    sequence: int = Field(default=0)
+
+
+class MemberRecurringBookingSeriesCreate(BaseModel):
+    """Create a weekly Recurring Booking Series."""
+
+    ministry_id: Optional[UUID] = Field(default=None)
+    first_occurrence_date: DateType = Field(...)
+    last_occurrence_date: DateType = Field(...)
+    local_start_time: time = Field(...)
+    local_end_time: time = Field(...)
+    is_mission_aligned: bool = Field(default=False)
+    rooms: list[MemberRecurringBookingSeriesRoomInput] = Field(default_factory=list)
+    surcharge_codes: list[str] = Field(default_factory=list)
+    remark: Optional[str] = Field(default=None)
+
+
+class MemberRecurringBookingOccurrence(UUIDBaseModel):
+    """Materialized Booking Occurrence on a Recurring Booking Series."""
+
+    start_at: datetime = Field(..., serialization_alias="startAt")
+    end_at: datetime = Field(..., serialization_alias="endAt")
+    status: str = Field(...)
+    quoted_amount: Decimal = Field(..., serialization_alias="quotedAmount")
+    currency: str = Field(...)
+    facility_ids: list[UUID] = Field(default_factory=list, serialization_alias="facilityIds")
+
+
+class MemberRecurringBookingSeriesDetail(UUIDBaseModel):
+    """Created Recurring Booking Series with occurrences."""
+
+    user_id: UUID = Field(..., serialization_alias="userId")
+    ministry_id: Optional[UUID] = Field(default=None, serialization_alias="ministryId")
+    first_occurrence_date: DateType = Field(..., serialization_alias="firstOccurrenceDate")
+    last_occurrence_date: DateType = Field(..., serialization_alias="lastOccurrenceDate")
+    local_start_time: time = Field(..., serialization_alias="localStartTime")
+    local_end_time: time = Field(..., serialization_alias="localEndTime")
+    status: str = Field(...)
+    payment_hold_expires_at: datetime = Field(..., serialization_alias="paymentHoldExpiresAt")
+    quoted_amount: Decimal = Field(..., serialization_alias="quotedAmount")
+    currency: str = Field(...)
+    occurrence_count: int = Field(..., serialization_alias="occurrenceCount")
+    is_priority: bool = Field(default=False, serialization_alias="isPriority")
+    occurrences: list[MemberRecurringBookingOccurrence] = Field(default_factory=list)
