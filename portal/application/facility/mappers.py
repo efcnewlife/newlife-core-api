@@ -688,6 +688,7 @@ def create_recurring_booking_series_to_command(model) -> "CreateRecurringBooking
         rooms=[BookingRoomLineCommand(facility_id=room.facility_id, sequence=room.sequence) for room in model.rooms],
         surcharge_codes=model.surcharge_codes,
         remark=model.remark,
+        excluded_dates=list(getattr(model, "excluded_dates", []) or []),
     )
 
 
@@ -701,3 +702,15 @@ def recurring_booking_series_to_member_api(result) -> "MemberRecurringBookingSer
     from portal.serializers.apis.v1.facility import MemberRecurringBookingSeriesDetail
 
     return MemberRecurringBookingSeriesDetail.model_validate(result.model_dump())
+
+
+def recurring_booking_preview_to_admin_api(result) -> "AdminRecurringBookingPreview":
+    from portal.serializers.admin.v1.facility.booking_series import AdminRecurringBookingPreview
+
+    return AdminRecurringBookingPreview.model_validate(result.model_dump())
+
+
+def recurring_booking_preview_to_member_api(result) -> "MemberRecurringBookingPreview":
+    from portal.serializers.apis.v1.facility import MemberRecurringBookingPreview
+
+    return MemberRecurringBookingPreview.model_validate(result.model_dump())

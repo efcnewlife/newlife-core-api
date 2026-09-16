@@ -2,9 +2,9 @@
 Recurring Booking Series application service.
 """
 
-from datetime import datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
-from typing import Callable, Optional
+from typing import Callable, NamedTuple, Optional
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
@@ -12,9 +12,22 @@ from portal.application.auth.user_read_service import UserReadService
 from portal.application.facility.booking_line_validation import ResolvedBookingLine, primary_facility_id, validate_booking_lines
 from portal.application.facility.commands import CreateRecurringBookingSeriesCommand, PreviewQuoteCommand, PreviewQuoteRoomLineCommand
 from portal.application.facility.pricing_service import PricingService
-from portal.application.facility.results import RecurringBookingOccurrenceResult, RecurringBookingSeriesResult
+from portal.application.facility.results import (
+    RecurringBookingConflictResult,
+    RecurringBookingOccurrenceResult,
+    RecurringBookingPreviewResult,
+    RecurringBookingSeriesResult,
+)
 from portal.application.system.setting_service import SettingService
-from portal.domain.facility.constants import CHURCH_EMAIL_DOMAIN, BookingErrorCode, BookingSlotStatus, BookingStatus, BookingType, FacilityErrorCode
+from portal.domain.facility.constants import (
+    CHURCH_EMAIL_DOMAIN,
+    BookingErrorCode,
+    BookingSlotStatus,
+    BookingStatus,
+    BookingType,
+    FacilityErrorCode,
+    RecurringConflictKind,
+)
 from portal.domain.facility.recurring import (
     is_church_email,
     is_within_availability_window,
@@ -34,8 +47,22 @@ from portal.libs.contexts.user_context import UserContext, get_user_context
 from portal.libs.tracing.distributed_trace import distributed_trace
 
 
+class _PreparedOccurrence(NamedTuple):
+    occurrence_date: date
+    start_at: datetime
+    end_at: datetime
+
+
+class _PreparedSeries(NamedTuple):
+    booker_id: UUID
+    local_tz: ZoneInfo
+    now_utc: datetime
+    occurrences: list[_PreparedOccurrence]
+    is_priority: bool
+
+
 class RecurringBookingService:
-    """Create Recurring Booking Series and materialize weekly Booking Occurrences."""
+    """Preview Recurring Booking conflicts and create weekly Series."""
 
     def __init__(
         self,
@@ -65,82 +92,20 @@ class RecurringBookingService:
         return hours.quantize(Decimal("0.01"))
 
     @distributed_trace()
+    async def preview_conflicts(self, command: CreateRecurringBookingSeriesCommand) -> RecurringBookingPreviewResult:
+        prepared = await self._prepare_series(command)
+        conflicts = await self._collect_conflicts(command, prepared)
+        return RecurringBookingPreviewResult(conflicts=conflicts)
+
+    @distributed_trace()
     async def create_series(self, command: CreateRecurringBookingSeriesCommand) -> RecurringBookingSeriesResult:
-        operator_id = self._user_ctx.user_id if self._user_ctx else None
-        if not operator_id:
-            raise ForbiddenException(detail="Authenticated user required")
-        booker_id = command.user_id or operator_id
-
-        await self._raise_if_ineligible_booker(booker_id)
-        if not command.rooms:
-            raise BadRequestException(detail="At least one room is required", error_code=FacilityErrorCode.BOOKING_ROOMS_REQUIRED.value)
-        if command.local_end_time <= command.local_start_time:
-            raise BadRequestException(detail="local_end_time must be after local_start_time", error_code=FacilityErrorCode.RECURRING_INVALID_TIME_RANGE.value)
-
-        max_lines = await self._setting_service.get_max_booking_lines()
-        if len(command.rooms) > max_lines:
-            raise BadRequestException(detail=f"At most {max_lines} rooms per booking", error_code=FacilityErrorCode.BOOKING_MAX_ROOMS.value)
-
-        if command.last_occurrence_date < command.first_occurrence_date:
-            raise BadRequestException(
-                detail="last_occurrence_date must be on or after first_occurrence_date", error_code=FacilityErrorCode.RECURRING_INVALID_TIME_RANGE.value
-            )
-        if command.first_occurrence_date.weekday() != command.last_occurrence_date.weekday():
-            raise BadRequestException(
-                detail="first and last occurrence dates must fall on the same weekday", error_code=FacilityErrorCode.RECURRING_WEEKDAY_MISMATCH.value
-            )
-
-        first_period = use_period_for_date(command.first_occurrence_date)
-        last_period = use_period_for_date(command.last_occurrence_date)
-        if first_period != last_period:
-            raise BadRequestException(
-                detail="Recurring Booking Series must stay within one Recurring Booking period", error_code=FacilityErrorCode.RECURRING_USE_PERIOD.value
-            )
-
-        local_tz = await self._setting_service.get_facility_timezone()
-        now_utc = self._now_utc()
-        now_local = now_utc.astimezone(local_tz)
-        window = await self._setting_service.get_recurring_booking_availability_window()
-        opening = opening_date_for_period(first_period, command.first_occurrence_date.year)
-        if not is_within_availability_window(now_local, opening, window.amount, window.unit):
-            raise BadRequestException(
-                detail="Recurring Booking period is outside the availability window", error_code=FacilityErrorCode.RECURRING_AVAILABILITY_WINDOW.value
-            )
-
-        occurrence_dates = weekly_occurrence_dates(command.first_occurrence_date, command.last_occurrence_date)
-        min_weeks = await self._setting_service.get_min_recurring_booking_weeks()
-        if len(occurrence_dates) < min_weeks:
-            raise BadRequestException(
-                detail=f"Recurring Booking Series requires at least {min_weeks} weekly occurrences",
-                error_code=FacilityErrorCode.RECURRING_MIN_OCCURRENCES.value,
-            )
-
-        intervals: list[tuple[datetime, datetime]] = []
-        for occurrence_date in occurrence_dates:
-            try:
-                start_at = localize_wall_time(occurrence_date, command.local_start_time, local_tz).astimezone(timezone.utc)
-                end_at = localize_wall_time(occurrence_date, command.local_end_time, local_tz).astimezone(timezone.utc)
-            except ValueError as error:
-                raise BadRequestException(
-                    detail="Recurring Booking local time does not exist on a DST transition", error_code=FacilityErrorCode.RECURRING_DST_NONEXISTENT.value
-                ) from error
-            intervals.append((start_at, end_at))
-
-        first_start, first_end = intervals[0]
-        validate_booking_lines(
-            [ResolvedBookingLine(facility_id=room.facility_id, start_at=first_start, end_at=first_end, sequence=room.sequence) for room in command.rooms],
-            local_tz,
-        )
-
-        is_priority = False
-        if command.ministry_id is not None:
-            is_priority = await self._validate_ministry_series(command.ministry_id, booker_id)
-        else:
-            await self._raise_if_weekly_quota_conflict(booker_id, [start_at for start_at, _end_at in intervals], local_tz)
-
-        for start_at, end_at in intervals:
-            for room in command.rooms:
-                await self._raise_if_room_unavailable(room.facility_id, start_at, end_at, local_tz)
+        prepared = await self._prepare_series(command)
+        remaining = await self._unexcluded_occurrences(command, prepared)
+        booker_id = prepared.booker_id
+        now_utc = prepared.now_utc
+        is_priority = prepared.is_priority
+        occurrence_dates = [item.occurrence_date for item in remaining]
+        intervals = [(item.start_at, item.end_at) for item in remaining]
 
         occurrence_quotes = []
         series_quoted = Decimal("0")
@@ -293,6 +258,164 @@ class RecurringBookingService:
             occurrences=occurrences,
         )
 
+    async def _prepare_series(self, command: CreateRecurringBookingSeriesCommand) -> _PreparedSeries:
+        operator_id = self._user_ctx.user_id if self._user_ctx else None
+        if not operator_id:
+            raise ForbiddenException(detail="Authenticated user required")
+        booker_id = command.user_id or operator_id
+
+        await self._raise_if_ineligible_booker(booker_id)
+        if not command.rooms:
+            raise BadRequestException(detail="At least one room is required", error_code=FacilityErrorCode.BOOKING_ROOMS_REQUIRED.value)
+        if command.local_end_time <= command.local_start_time:
+            raise BadRequestException(detail="local_end_time must be after local_start_time", error_code=FacilityErrorCode.RECURRING_INVALID_TIME_RANGE.value)
+
+        max_lines = await self._setting_service.get_max_booking_lines()
+        if len(command.rooms) > max_lines:
+            raise BadRequestException(detail=f"At most {max_lines} rooms per booking", error_code=FacilityErrorCode.BOOKING_MAX_ROOMS.value)
+
+        if command.last_occurrence_date < command.first_occurrence_date:
+            raise BadRequestException(
+                detail="last_occurrence_date must be on or after first_occurrence_date", error_code=FacilityErrorCode.RECURRING_INVALID_TIME_RANGE.value
+            )
+        if command.first_occurrence_date.weekday() != command.last_occurrence_date.weekday():
+            raise BadRequestException(
+                detail="first and last occurrence dates must fall on the same weekday", error_code=FacilityErrorCode.RECURRING_WEEKDAY_MISMATCH.value
+            )
+
+        first_period = use_period_for_date(command.first_occurrence_date)
+        last_period = use_period_for_date(command.last_occurrence_date)
+        if first_period != last_period:
+            raise BadRequestException(
+                detail="Recurring Booking Series must stay within one Recurring Booking period", error_code=FacilityErrorCode.RECURRING_USE_PERIOD.value
+            )
+
+        local_tz = await self._setting_service.get_facility_timezone()
+        now_utc = self._now_utc()
+        now_local = now_utc.astimezone(local_tz)
+        window = await self._setting_service.get_recurring_booking_availability_window()
+        opening = opening_date_for_period(first_period, command.first_occurrence_date.year)
+        if not is_within_availability_window(now_local, opening, window.amount, window.unit):
+            raise BadRequestException(
+                detail="Recurring Booking period is outside the availability window", error_code=FacilityErrorCode.RECURRING_AVAILABILITY_WINDOW.value
+            )
+
+        occurrence_dates = weekly_occurrence_dates(command.first_occurrence_date, command.last_occurrence_date)
+        min_weeks = await self._setting_service.get_min_recurring_booking_weeks()
+        if len(occurrence_dates) < min_weeks:
+            raise BadRequestException(
+                detail=f"Recurring Booking Series requires at least {min_weeks} weekly occurrences",
+                error_code=FacilityErrorCode.RECURRING_MIN_OCCURRENCES.value,
+            )
+
+        occurrences: list[_PreparedOccurrence] = []
+        for occurrence_date in occurrence_dates:
+            try:
+                start_at = localize_wall_time(occurrence_date, command.local_start_time, local_tz).astimezone(timezone.utc)
+                end_at = localize_wall_time(occurrence_date, command.local_end_time, local_tz).astimezone(timezone.utc)
+            except ValueError as error:
+                raise BadRequestException(
+                    detail="Recurring Booking local time does not exist on a DST transition", error_code=FacilityErrorCode.RECURRING_DST_NONEXISTENT.value
+                ) from error
+            occurrences.append(_PreparedOccurrence(occurrence_date=occurrence_date, start_at=start_at, end_at=end_at))
+
+        first = occurrences[0]
+        validate_booking_lines(
+            [ResolvedBookingLine(facility_id=room.facility_id, start_at=first.start_at, end_at=first.end_at, sequence=room.sequence) for room in command.rooms],
+            local_tz,
+        )
+
+        is_priority = False
+        if command.ministry_id is not None:
+            is_priority = await self._validate_ministry_series(command.ministry_id, booker_id)
+        return _PreparedSeries(booker_id=booker_id, local_tz=local_tz, now_utc=now_utc, occurrences=occurrences, is_priority=is_priority)
+
+    async def _unexcluded_occurrences(self, command: CreateRecurringBookingSeriesCommand, prepared: _PreparedSeries) -> list[_PreparedOccurrence]:
+        conflicts = await self._collect_conflicts(command, prepared)
+        generated_dates = {item.occurrence_date for item in prepared.occurrences}
+        conflict_dates = {item.occurrence_date for item in conflicts}
+        excluded_dates = set(command.excluded_dates)
+        if excluded_dates - generated_dates or excluded_dates - conflict_dates:
+            raise BadRequestException(
+                detail="excluded_dates must be occurrence dates that currently conflict", error_code=FacilityErrorCode.RECURRING_INVALID_EXCLUSION.value
+            )
+        remaining = [item for item in prepared.occurrences if item.occurrence_date not in excluded_dates]
+        min_weeks = await self._setting_service.get_min_recurring_booking_weeks()
+        if len(remaining) < min_weeks:
+            raise BadRequestException(
+                detail=f"Recurring Booking Series requires at least {min_weeks} weekly occurrences",
+                error_code=FacilityErrorCode.RECURRING_MIN_OCCURRENCES.value,
+            )
+        remaining_conflicts = [item for item in conflicts if item.occurrence_date not in excluded_dates]
+        if remaining_conflicts:
+            self._raise_remaining_conflict(remaining_conflicts[0])
+        return remaining
+
+    @staticmethod
+    def _raise_remaining_conflict(conflict: RecurringBookingConflictResult) -> None:
+        facility_id = conflict.facility_ids[0] if conflict.facility_ids else None
+        if conflict.kind == RecurringConflictKind.OCCUPANCY.value:
+            raise ConflictErrorException(
+                detail=f"Room {facility_id} has a scheduling conflict",
+                error_code=BookingErrorCode.SCHEDULING_CONFLICT.value,
+                context={"facility_id": str(facility_id)} if facility_id else None,
+            )
+        if conflict.kind == RecurringConflictKind.BLACKOUT.value:
+            raise BadRequestException(
+                detail=f"Room {facility_id} is closed for the selected time",
+                error_code=BookingErrorCode.ROOM_BLACKOUT.value,
+                context={"facility_id": str(facility_id)} if facility_id else None,
+            )
+        raise BadRequestException(
+            detail="Booker already has a Rental Booking in that facility-local week", error_code=FacilityErrorCode.RECURRING_WEEKLY_QUOTA.value
+        )
+
+    async def _collect_conflicts(self, command: CreateRecurringBookingSeriesCommand, prepared: _PreparedSeries) -> list[RecurringBookingConflictResult]:
+        conflicts: list[RecurringBookingConflictResult] = []
+        if command.ministry_id is None:
+            quota_dates = await self._weekly_quota_conflict_dates(prepared.booker_id, prepared.occurrences, prepared.local_tz)
+            for occurrence_date in quota_dates:
+                conflicts.append(
+                    RecurringBookingConflictResult(occurrence_date=occurrence_date, kind=RecurringConflictKind.WEEKLY_QUOTA.value, facility_ids=[])
+                )
+        for occurrence in prepared.occurrences:
+            occupancy_ids: list[UUID] = []
+            blackout_ids: list[UUID] = []
+            for room in command.rooms:
+                if await self._booking_repository.has_confirmed_slot_overlap(
+                    facility_id=room.facility_id, start_at=occurrence.start_at, end_at=occurrence.end_at
+                ):
+                    occupancy_ids.append(room.facility_id)
+                if await self._blackout_repository.has_blackout_overlap(
+                    facility_id=room.facility_id, start_at=occurrence.start_at, end_at=occurrence.end_at, tz=prepared.local_tz
+                ):
+                    blackout_ids.append(room.facility_id)
+            if occupancy_ids:
+                conflicts.append(
+                    RecurringBookingConflictResult(
+                        occurrence_date=occurrence.occurrence_date, kind=RecurringConflictKind.OCCUPANCY.value, facility_ids=occupancy_ids
+                    )
+                )
+            if blackout_ids:
+                conflicts.append(
+                    RecurringBookingConflictResult(
+                        occurrence_date=occurrence.occurrence_date, kind=RecurringConflictKind.BLACKOUT.value, facility_ids=blackout_ids
+                    )
+                )
+        kind_order = {RecurringConflictKind.OCCUPANCY.value: 0, RecurringConflictKind.BLACKOUT.value: 1, RecurringConflictKind.WEEKLY_QUOTA.value: 2}
+        conflicts.sort(key=lambda item: (item.occurrence_date, kind_order[item.kind]))
+        return conflicts
+
+    async def _weekly_quota_conflict_dates(self, booker_id: UUID, occurrences: list[_PreparedOccurrence], local_tz: ZoneInfo) -> list[date]:
+        local_dates = [item.start_at.astimezone(local_tz).date() for item in occurrences]
+        first_week = sunday_week_start(min(local_dates))
+        last_week = sunday_week_start(max(local_dates))
+        range_start = datetime.combine(first_week, time.min, tzinfo=local_tz).astimezone(timezone.utc)
+        range_end = datetime.combine(last_week + timedelta(days=7), time.min, tzinfo=local_tz).astimezone(timezone.utc)
+        existing = await self._booking_repository.list_rental_occurrence_starts(booker_id, range_start, range_end)
+        occupied_weeks = {sunday_week_start(start_at.astimezone(local_tz).date()) for start_at in existing}
+        return [item.occurrence_date for item in occurrences if sunday_week_start(item.start_at.astimezone(local_tz).date()) in occupied_weeks]
+
     async def _raise_if_ineligible_booker(self, booker_id: UUID) -> None:
         email = None
         if self._user_ctx and self._user_ctx.user_id == booker_id:
@@ -315,33 +438,3 @@ class RecurringBookingService:
         if not await self._ministry_repository.is_user_booking_member(ministry_id, booker_id):
             raise ForbiddenException(detail="User is not a ministry owner")
         return bool(ministry.has_priority_booking) if ministry else False
-
-    async def _raise_if_weekly_quota_conflict(self, booker_id: UUID, occurrence_starts: list[datetime], local_tz: ZoneInfo) -> None:
-        local_dates = [start_at.astimezone(local_tz).date() for start_at in occurrence_starts]
-        first_week = sunday_week_start(min(local_dates))
-        last_week = sunday_week_start(max(local_dates))
-        range_start = datetime.combine(first_week, time.min, tzinfo=local_tz).astimezone(timezone.utc)
-        range_end = datetime.combine(last_week + timedelta(days=7), time.min, tzinfo=local_tz).astimezone(timezone.utc)
-        existing = await self._booking_repository.list_rental_occurrence_starts(booker_id, range_start, range_end)
-        occupied_weeks = {sunday_week_start(start_at.astimezone(local_tz).date()) for start_at in existing}
-        for start_at in occurrence_starts:
-            week_start = sunday_week_start(start_at.astimezone(local_tz).date())
-            if week_start in occupied_weeks:
-                raise BadRequestException(
-                    detail="Booker already has a Rental Booking in that facility-local week", error_code=FacilityErrorCode.RECURRING_WEEKLY_QUOTA.value
-                )
-            occupied_weeks.add(week_start)
-
-    async def _raise_if_room_unavailable(self, facility_id: UUID, start_at: datetime, end_at: datetime, local_tz: ZoneInfo) -> None:
-        if await self._booking_repository.has_confirmed_slot_overlap(facility_id=facility_id, start_at=start_at, end_at=end_at):
-            raise ConflictErrorException(
-                detail=f"Room {facility_id} has a scheduling conflict",
-                error_code=BookingErrorCode.SCHEDULING_CONFLICT.value,
-                context={"facility_id": str(facility_id)},
-            )
-        if await self._blackout_repository.has_blackout_overlap(facility_id=facility_id, start_at=start_at, end_at=end_at, tz=local_tz):
-            raise BadRequestException(
-                detail=f"Room {facility_id} is closed for the selected time",
-                error_code=BookingErrorCode.ROOM_BLACKOUT.value,
-                context={"facility_id": str(facility_id)},
-            )

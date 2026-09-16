@@ -11,8 +11,9 @@ import pytest
 
 from portal.application.facility.commands import BookingRoomLineCommand, CreateRecurringBookingSeriesCommand
 from portal.application.facility.recurring_booking_service import RecurringBookingService
-from portal.application.facility.results import RecurringBookingSeriesResult
-from portal.domain.facility.constants import BookingErrorCode, BookingSlotStatus, BookingStatus, BookingType, FacilityErrorCode
+from portal.application.facility.results import RecurringBookingPreviewResult, RecurringBookingSeriesResult
+from portal.domain.facility.constants import BookingErrorCode, BookingSlotStatus, BookingStatus, BookingType, FacilityErrorCode, RecurringConflictKind
+from portal.domain.facility.recurring import localize_wall_time
 from portal.domain.org.constants import MinistryStatus
 from portal.exceptions.responses import BadRequestException, ConflictErrorException, ForbiddenException
 from tests.fixtures.facility.factories import make_ministry_detail, make_preview_quote_result, new_uuid
@@ -30,6 +31,11 @@ TORONTO = ZoneInfo("America/Toronto")
 OPEN_WINDOW_NOW = datetime(2025, 12, 8, 17, 0, tzinfo=timezone.utc)
 FIRST_TUESDAY = date(2026, 1, 6)
 LAST_TUESDAY = date(2026, 1, 27)
+SIX_WEEK_LAST_TUESDAY = date(2026, 2, 10)
+
+
+def _occurrence_start_utc(occurrence_date: date, local_start: time = time(10, 0)) -> datetime:
+    return localize_wall_time(occurrence_date, local_start, TORONTO).astimezone(timezone.utc)
 
 
 def _user_ctx(monkeypatch, *, user_id, email="booker@efcnewlife.org"):
@@ -312,3 +318,170 @@ async def test_create_series_rejects_first_blackout(monkeypatch):
     with pytest.raises(BadRequestException) as exc_info:
         await service.create_series(_command())
     assert exc_info.value.error_code == BookingErrorCode.ROOM_BLACKOUT.value
+
+
+@pytest.mark.asyncio
+async def test_preview_lists_occupancy_conflicts_per_occurrence(monkeypatch):
+    room_id = new_uuid()
+    occupied = _occurrence_start_utc(date(2026, 1, 13))
+    booking_stub = StubBookingRepository(overlapping_slots={(room_id, occupied)})
+    service, *_ = _service(monkeypatch, booking_stub=booking_stub)
+    result = await service.preview_conflicts(_command(facility_id=room_id, last_occurrence_date=SIX_WEEK_LAST_TUESDAY))
+
+    assert isinstance(result, RecurringBookingPreviewResult)
+    assert [(item.occurrence_date, item.kind, item.facility_ids) for item in result.conflicts] == [
+        (date(2026, 1, 13), RecurringConflictKind.OCCUPANCY.value, [room_id])
+    ]
+
+
+@pytest.mark.asyncio
+async def test_preview_lists_blackout_conflicts_per_occurrence(monkeypatch):
+    room_id = new_uuid()
+    closed = _occurrence_start_utc(date(2026, 1, 20))
+    blackout_stub = StubRoomBlackoutRepository(overlapping_blackouts={(room_id, closed)})
+    service, *_ = _service(monkeypatch, blackout_stub=blackout_stub)
+    result = await service.preview_conflicts(_command(facility_id=room_id, last_occurrence_date=SIX_WEEK_LAST_TUESDAY))
+
+    assert [(item.occurrence_date, item.kind, item.facility_ids) for item in result.conflicts] == [
+        (date(2026, 1, 20), RecurringConflictKind.BLACKOUT.value, [room_id])
+    ]
+
+
+@pytest.mark.asyncio
+async def test_preview_lists_weekly_quota_conflicts_per_occurrence(monkeypatch):
+    existing = datetime(2026, 1, 8, 15, 0, tzinfo=timezone.utc)
+    booking_stub = StubBookingRepository(rental_starts=[existing])
+    service, *_ = _service(monkeypatch, booking_stub=booking_stub)
+    result = await service.preview_conflicts(_command(last_occurrence_date=SIX_WEEK_LAST_TUESDAY))
+
+    assert [(item.occurrence_date, item.kind, item.facility_ids) for item in result.conflicts] == [
+        (date(2026, 1, 6), RecurringConflictKind.WEEKLY_QUOTA.value, [])
+    ]
+
+
+@pytest.mark.asyncio
+async def test_preview_omits_weekly_quota_for_ministry_series(monkeypatch):
+    ministry_id = new_uuid()
+    user_id = uuid4()
+    ministry = make_ministry_detail(ministry_id)
+    ministry.status = MinistryStatus.ACTIVE.value
+    ministry.has_priority_booking = False
+    ministry_stub = StubMinistryRepository(ministry_by_id={ministry_id: ministry}, booking_member_user_ids={user_id})
+    existing = datetime(2026, 1, 8, 15, 0, tzinfo=timezone.utc)
+    booking_stub = StubBookingRepository(rental_starts=[existing])
+    service, *_ = _service(monkeypatch, user_id=user_id, booking_stub=booking_stub, ministry_stub=ministry_stub)
+    result = await service.preview_conflicts(_command(ministry_id=ministry_id, last_occurrence_date=SIX_WEEK_LAST_TUESDAY))
+    assert result.conflicts == []
+
+
+@pytest.mark.asyncio
+async def test_create_series_excludes_previewed_dates_and_recalculates_total(monkeypatch):
+    room_id = new_uuid()
+    occupied = _occurrence_start_utc(date(2026, 1, 13))
+    closed = _occurrence_start_utc(date(2026, 1, 20))
+    booking_stub = StubBookingRepository(overlapping_slots={(room_id, occupied)})
+    blackout_stub = StubRoomBlackoutRepository(overlapping_blackouts={(room_id, closed)})
+    service, series_stub, *_rest = _service(monkeypatch, booking_stub=booking_stub, blackout_stub=blackout_stub)
+    result = await service.create_series(
+        _command(facility_id=room_id, last_occurrence_date=SIX_WEEK_LAST_TUESDAY, excluded_dates=[date(2026, 1, 13), date(2026, 1, 20)])
+    )
+
+    assert result.occurrence_count == 4
+    assert result.quoted_amount == Decimal("400")
+    assert [item.start_at.date() for item in result.occurrences] == [date(2026, 1, 6), date(2026, 1, 27), date(2026, 2, 3), date(2026, 2, 10)]
+    assert series_stub.insert_series_calls[0]["quoted_amount"] == Decimal("400")
+    assert len(booking_stub.insert_calls) == 4
+
+
+@pytest.mark.asyncio
+async def test_create_series_rejects_arbitrary_exclusion_of_a_free_date(monkeypatch):
+    service, *_ = _service(monkeypatch)
+    with pytest.raises(BadRequestException) as exc_info:
+        await service.create_series(_command(excluded_dates=[date(2026, 1, 13)]))
+    assert exc_info.value.error_code == FacilityErrorCode.RECURRING_INVALID_EXCLUSION.value
+
+
+@pytest.mark.asyncio
+async def test_create_series_rejects_exclusion_outside_generated_dates(monkeypatch):
+    service, *_ = _service(monkeypatch)
+    with pytest.raises(BadRequestException) as exc_info:
+        await service.create_series(_command(excluded_dates=[date(2026, 1, 7)]))
+    assert exc_info.value.error_code == FacilityErrorCode.RECURRING_INVALID_EXCLUSION.value
+
+
+@pytest.mark.asyncio
+async def test_create_series_rejects_exclusions_that_drop_below_minimum_weeks(monkeypatch):
+    room_id = new_uuid()
+    occupied = _occurrence_start_utc(date(2026, 1, 13))
+    booking_stub = StubBookingRepository(overlapping_slots={(room_id, occupied)})
+    service, *_ = _service(monkeypatch, booking_stub=booking_stub)
+    with pytest.raises(BadRequestException) as exc_info:
+        await service.create_series(_command(facility_id=room_id, excluded_dates=[date(2026, 1, 13)]))
+    assert exc_info.value.error_code == FacilityErrorCode.RECURRING_MIN_OCCURRENCES.value
+
+
+@pytest.mark.asyncio
+async def test_create_series_rejects_stale_preview_when_remaining_date_conflicts(monkeypatch):
+    room_id = new_uuid()
+    preview_occupied = _occurrence_start_utc(date(2026, 1, 13))
+    stale_occupied = _occurrence_start_utc(date(2026, 1, 27))
+    booking_stub = StubBookingRepository(overlapping_slots={(room_id, preview_occupied), (room_id, stale_occupied)})
+    service, *_ = _service(monkeypatch, booking_stub=booking_stub)
+    with pytest.raises(ConflictErrorException) as exc_info:
+        await service.create_series(_command(facility_id=room_id, last_occurrence_date=SIX_WEEK_LAST_TUESDAY, excluded_dates=[date(2026, 1, 13)]))
+    assert exc_info.value.error_code == BookingErrorCode.SCHEDULING_CONFLICT.value
+
+
+@pytest.mark.asyncio
+async def test_create_series_rejects_stale_preview_when_remaining_date_is_blackout(monkeypatch):
+    room_id = new_uuid()
+    occupied = _occurrence_start_utc(date(2026, 1, 13))
+    closed = _occurrence_start_utc(date(2026, 1, 27))
+    booking_stub = StubBookingRepository(overlapping_slots={(room_id, occupied)})
+    blackout_stub = StubRoomBlackoutRepository(overlapping_blackouts={(room_id, closed)})
+    service, *_ = _service(monkeypatch, booking_stub=booking_stub, blackout_stub=blackout_stub)
+    with pytest.raises(BadRequestException) as exc_info:
+        await service.create_series(_command(facility_id=room_id, last_occurrence_date=SIX_WEEK_LAST_TUESDAY, excluded_dates=[date(2026, 1, 13)]))
+    assert exc_info.value.error_code == BookingErrorCode.ROOM_BLACKOUT.value
+
+
+@pytest.mark.asyncio
+async def test_create_series_succeeds_after_revising_conflicting_room(monkeypatch):
+    occupied_room = new_uuid()
+    free_room = new_uuid()
+    occupied = _occurrence_start_utc(date(2026, 1, 13))
+    booking_stub = StubBookingRepository(overlapping_slots={(occupied_room, occupied)})
+    service, *_ = _service(monkeypatch, booking_stub=booking_stub)
+    result = await service.create_series(_command(facility_id=free_room))
+    assert result.occurrence_count == 4
+    assert result.occurrences[0].facility_ids == [free_room]
+
+
+@pytest.mark.asyncio
+async def test_create_non_priority_ministry_series_can_exclude_occupancy(monkeypatch):
+    ministry_id = new_uuid()
+    user_id = uuid4()
+    room_id = new_uuid()
+    ministry = make_ministry_detail(ministry_id)
+    ministry.status = MinistryStatus.ACTIVE.value
+    ministry.has_priority_booking = False
+    ministry_stub = StubMinistryRepository(ministry_by_id={ministry_id: ministry}, booking_member_user_ids={user_id})
+    occupied = _occurrence_start_utc(date(2026, 1, 13))
+    booking_stub = StubBookingRepository(overlapping_slots={(room_id, occupied)})
+    service, *_ = _service(monkeypatch, user_id=user_id, booking_stub=booking_stub, ministry_stub=ministry_stub)
+    result = await service.create_series(
+        _command(facility_id=room_id, ministry_id=ministry_id, last_occurrence_date=SIX_WEEK_LAST_TUESDAY, excluded_dates=[date(2026, 1, 13)])
+    )
+    assert result.occurrence_count == 5
+    assert result.ministry_id == ministry_id
+    assert date(2026, 1, 13) not in [item.start_at.date() for item in result.occurrences]
+
+
+@pytest.mark.asyncio
+async def test_create_series_can_exclude_weekly_quota_conflict(monkeypatch):
+    existing = datetime(2026, 1, 8, 15, 0, tzinfo=timezone.utc)
+    booking_stub = StubBookingRepository(rental_starts=[existing])
+    service, *_ = _service(monkeypatch, booking_stub=booking_stub)
+    result = await service.create_series(_command(last_occurrence_date=SIX_WEEK_LAST_TUESDAY, excluded_dates=[date(2026, 1, 6)]))
+    assert result.occurrence_count == 5
+    assert date(2026, 1, 6) not in [item.start_at.date() for item in result.occurrences]

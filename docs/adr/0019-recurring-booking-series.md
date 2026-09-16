@@ -66,11 +66,11 @@ Agents must not add or edit `alembic/versions/**`. A human migration must create
 ## Consequences
 
 - Calendar/Grid continue to query Booking rows; materialized occurrences appear without a Series-specific range endpoint in this slice.
-- Conflict preview, exclusions, Priority Ministry override, payment confirmation, expiry sweep, and cancellation scopes must not be bolted onto create without their tickets.
+- Conflict preview and explicit exclusions are specified in ADR 0020. Priority Ministry override, payment confirmation, expiry sweep, and cancellation scopes must not be bolted onto create without their tickets.
 - Until the human migration runs, local/dev databases will not persist Series rows even though the application code is present.
 
 ## Related
 
-- core-api#139 (spec), #148 (this slice)
+- core-api#139 (spec), #148 (this slice), #149 / ADR 0020 (conflict preview)
 - ADR 0015 (member create remains one-time; Recurring is now this ADR)
 - ADR 0018 (System Setting reader pattern)

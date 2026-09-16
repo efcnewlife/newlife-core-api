@@ -212,8 +212,8 @@ class MemberRecurringBookingSeriesRoomInput(BaseModel):
     sequence: int = Field(default=0)
 
 
-class MemberRecurringBookingSeriesCreate(BaseModel):
-    """Create a weekly Recurring Booking Series."""
+class MemberRecurringBookingSeriesProposal(BaseModel):
+    """Proposed Recurring Booking Series for conflict preview."""
 
     ministry_id: Optional[UUID] = Field(default=None)
     first_occurrence_date: DateType = Field(...)
@@ -224,6 +224,12 @@ class MemberRecurringBookingSeriesCreate(BaseModel):
     rooms: list[MemberRecurringBookingSeriesRoomInput] = Field(default_factory=list)
     surcharge_codes: list[str] = Field(default_factory=list)
     remark: Optional[str] = Field(default=None)
+
+
+class MemberRecurringBookingSeriesCreate(MemberRecurringBookingSeriesProposal):
+    """Create a weekly Recurring Booking Series."""
+
+    excluded_dates: list[DateType] = Field(default_factory=list)
 
 
 class MemberRecurringBookingOccurrence(UUIDBaseModel):
@@ -253,3 +259,17 @@ class MemberRecurringBookingSeriesDetail(UUIDBaseModel):
     occurrence_count: int = Field(..., serialization_alias="occurrenceCount")
     is_priority: bool = Field(default=False, serialization_alias="isPriority")
     occurrences: list[MemberRecurringBookingOccurrence] = Field(default_factory=list)
+
+
+class MemberRecurringBookingConflict(BaseModel):
+    """One unavailable occurrence in a Recurring Booking conflict preview."""
+
+    occurrence_date: DateType = Field(..., serialization_alias="occurrenceDate")
+    kind: str = Field(...)
+    facility_ids: list[UUID] = Field(default_factory=list, serialization_alias="facilityIds")
+
+
+class MemberRecurringBookingPreview(BaseModel):
+    """Recurring Booking conflict preview; does not persist a Series."""
+
+    conflicts: list[MemberRecurringBookingConflict] = Field(default_factory=list)
