@@ -5,6 +5,8 @@ Facility booking draft repository.
 from typing import Optional
 from uuid import UUID
 
+import sqlalchemy as sa
+
 from portal.application.facility.results import BookingDraftDetailResult, BookingDraftStoredLineResult
 from portal.libs.database import Session
 from portal.models import FacilityBookingDraft, FacilityBookingDraftLine
@@ -36,6 +38,11 @@ class BookingDraftRepository:
     async def delete_draft(self, booking_draft_id: UUID) -> None:
         await self._session.delete(FacilityBookingDraftLine).where(FacilityBookingDraftLine.booking_draft_id == booking_draft_id).execute()
         await self._session.delete(FacilityBookingDraft).where(FacilityBookingDraft.id == booking_draft_id).execute()
+
+    async def delete_all_for_user(self, user_id: UUID) -> None:
+        owned_draft_ids = sa.select(FacilityBookingDraft.id).where(FacilityBookingDraft.user_id == user_id)
+        await self._session.delete(FacilityBookingDraftLine).where(FacilityBookingDraftLine.booking_draft_id.in_(owned_draft_ids)).execute()
+        await self._session.delete(FacilityBookingDraft).where(FacilityBookingDraft.user_id == user_id).execute()
 
     async def get_detail(self, booking_draft_id: UUID) -> Optional[BookingDraftDetailResult]:
         row = await (

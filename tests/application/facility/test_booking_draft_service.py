@@ -448,6 +448,76 @@ async def test_update_draft_keeps_id_unchanged_and_replaces_lines(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_delete_all_my_drafts_requires_authenticated_user(monkeypatch):
+    monkeypatch.setattr("portal.application.facility.booking_draft_service.get_user_context", lambda: None)
+    service = _service()
+    with pytest.raises(ForbiddenException, match="Authenticated user required"):
+        await service.delete_all_my_drafts()
+
+
+@pytest.mark.asyncio
+async def test_delete_all_my_drafts_removes_the_members_single_draft(monkeypatch):
+    user_id = uuid4()
+    draft_id = uuid4()
+    stub = StubBookingDraftRepository(draft_by_id={draft_id: _stored_draft(draft_id=draft_id, user_id=user_id, date_=datetime(2026, 5, 1).date())})
+    _user_ctx(monkeypatch, user_id=user_id)
+    service = _service(draft_stub=stub)
+
+    await service.delete_all_my_drafts()
+
+    assert stub.delete_all_for_user_calls == [user_id]
+    assert draft_id not in stub.draft_by_id
+
+
+@pytest.mark.asyncio
+async def test_delete_all_my_drafts_removes_several_drafts(monkeypatch):
+    user_id = uuid4()
+    draft_ids = [uuid4(), uuid4(), uuid4()]
+    stub = StubBookingDraftRepository(
+        draft_by_id={draft_id: _stored_draft(draft_id=draft_id, user_id=user_id, date_=datetime(2026, 5, 1).date()) for draft_id in draft_ids}
+    )
+    _user_ctx(monkeypatch, user_id=user_id)
+    service = _service(draft_stub=stub)
+
+    await service.delete_all_my_drafts()
+
+    assert stub.draft_by_id == {}
+
+
+@pytest.mark.asyncio
+async def test_delete_all_my_drafts_is_a_noop_when_member_has_none(monkeypatch):
+    user_id = uuid4()
+    stub = StubBookingDraftRepository()
+    _user_ctx(monkeypatch, user_id=user_id)
+    service = _service(draft_stub=stub)
+
+    await service.delete_all_my_drafts()
+
+    assert stub.delete_all_for_user_calls == [user_id]
+
+
+@pytest.mark.asyncio
+async def test_delete_all_my_drafts_never_removes_another_members_draft(monkeypatch):
+    owner_id = uuid4()
+    other_user_id = uuid4()
+    owner_draft_id = uuid4()
+    other_draft_id = uuid4()
+    stub = StubBookingDraftRepository(
+        draft_by_id={
+            owner_draft_id: _stored_draft(draft_id=owner_draft_id, user_id=owner_id, date_=datetime(2026, 5, 1).date()),
+            other_draft_id: _stored_draft(draft_id=other_draft_id, user_id=other_user_id, date_=datetime(2026, 5, 1).date()),
+        }
+    )
+    _user_ctx(monkeypatch, user_id=owner_id)
+    service = _service(draft_stub=stub)
+
+    await service.delete_all_my_drafts()
+
+    assert owner_draft_id not in stub.draft_by_id
+    assert other_draft_id in stub.draft_by_id
+
+
+@pytest.mark.asyncio
 async def test_update_draft_two_sequential_patches_last_write_wins(monkeypatch):
     """The second PATCH's content replaces the first entirely -- no error, no merge."""
     user_id = uuid4()

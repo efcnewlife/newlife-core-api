@@ -154,3 +154,9 @@ class BookingDraftService:
             quoted_amount=quote.quoted_amount,
             currency=quote.currency,
         )
+
+    @distributed_trace()
+    async def delete_all_my_drafts(self) -> None:
+        """Delete every Booking Draft owned by the authenticated member; a no-op if they have none."""
+        user_id = self._authenticated_user_id()
+        await self._repository.delete_all_for_user(user_id)
