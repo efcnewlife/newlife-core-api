@@ -256,6 +256,7 @@ class StubBookingRepository:
         detail: BookingDetailResult | None = None,
         range_items: list[BookingListItemResult] | None = None,
         deleted_ids: set[UUID] | None = None,
+        rental_starts: list[datetime] | None = None,
     ):
         self.exists = exists
         self.booking_meta = booking_meta or {"booking_type": "one_time", "currency": "CAD"}
@@ -263,6 +264,7 @@ class StubBookingRepository:
         self.detail = detail
         self.range_items = range_items or []
         self.deleted_ids = deleted_ids or set()
+        self.rental_starts = rental_starts or []
         self.cancel_calls: list[dict] = []
         self.insert_calls: list[dict] = []
         self.update_header_calls: list[dict] = []
@@ -288,6 +290,9 @@ class StubBookingRepository:
 
     async def insert_booking(self, payload: dict) -> None:
         self.insert_calls.append(payload)
+
+    async def list_rental_occurrence_starts(self, user_id: UUID, range_start: datetime, range_end: datetime) -> list[datetime]:
+        return [start_at for start_at in self.rental_starts if range_start <= start_at < range_end]
 
     async def cancel_booking(self, booking_id: UUID, cancelled_by_id: UUID | None, cancel_reason: str | None, cancel_slots: bool) -> None:
         self.cancel_calls.append(dict(booking_id=booking_id, cancelled_by_id=cancelled_by_id, cancel_reason=cancel_reason, cancel_slots=cancel_slots))
@@ -520,6 +525,28 @@ class StubMinistryRepository:
         return MinistryRepository.is_unique_violation(exc)
 
 
+class StubRecurringBookingRepository:
+    """In-memory Recurring Booking Series persistence stub."""
+
+    def __init__(self):
+        self.insert_series_calls: list[dict] = []
+
+    async def insert_series(self, payload: dict) -> None:
+        self.insert_series_calls.append(payload)
+
+
+class StubUserReadService:
+    """Minimal user lookup stub for church-domain eligibility."""
+
+    def __init__(self, email: str = "booker@efcnewlife.org"):
+        self.email = email
+
+    async def get_user_sensitive_by_id(self, user_id: UUID):
+        from portal.application.auth.results import UserSensitive
+
+        return UserSensitive(id=user_id, email=self.email)
+
+
 class StubOverrideLogRepository:
     """In-memory override log stub."""
 
@@ -594,4 +621,12 @@ class StubPricingService:
 
     async def preview_quote(self, command):
         self.preview_calls.append(command)
-        return self.quote_result
+        if len(command.room_lines) <= len(self.quote_result.room_lines):
+            return self.quote_result
+        template = self.quote_result.room_lines[0]
+        room_lines = [
+            template.model_copy(update={"facility_id": line.facility_id, "billed_hours": line.billed_hours, "line_subtotal": template.line_subtotal})
+            for line in command.room_lines
+        ]
+        quoted_amount = self.quote_result.quoted_amount * len(command.room_lines)
+        return self.quote_result.model_copy(update={"room_lines": room_lines, "quoted_amount": quoted_amount, "subtotal_amount": quoted_amount})

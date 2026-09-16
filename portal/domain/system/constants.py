@@ -16,6 +16,17 @@ class FacilitySettingKey(str, Enum):
 
     TIMEZONE = "timezone"
     MAX_BOOKING_LINES = "max_booking_lines"
+    RECURRING_BOOKING_AVAILABILITY_WINDOW = "recurring_booking_availability_window"
+    MIN_RECURRING_BOOKING_WEEKS = "min_recurring_booking_weeks"
+    PENDING_PAYMENT_HOLD_HOURS = "pending_payment_hold_hours"
+
+
+class RecurringAvailabilityUnit(str, Enum):
+    """Duration unit for the Recurring Booking availability window."""
+
+    DAYS = "days"
+    WEEKS = "weeks"
+    MONTHS = "months"
 
 
 class SettingValueType(str, Enum):

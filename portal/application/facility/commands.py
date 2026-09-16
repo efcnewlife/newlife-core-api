@@ -297,6 +297,21 @@ class CreateBookingCommand(BaseModel):
     booking_draft_id: Optional[UUID] = Field(default=None, description="Source Booking Draft; deleted on successful create")
 
 
+class CreateRecurringBookingSeriesCommand(BaseModel):
+    """Create a weekly Recurring Booking Series."""
+
+    user_id: Optional[UUID] = Field(default=None, description="Booker; omit to use UserContext")
+    ministry_id: Optional[UUID] = Field(default=None)
+    first_occurrence_date: date = Field(...)
+    last_occurrence_date: date = Field(...)
+    local_start_time: time = Field(...)
+    local_end_time: time = Field(...)
+    is_mission_aligned: bool = Field(default=False)
+    rooms: list[BookingRoomLineCommand] = Field(default_factory=list)
+    surcharge_codes: list[str] = Field(default_factory=list)
+    remark: Optional[str] = Field(default=None)
+
+
 class RoomAvailabilityQueryCommand(BaseModel):
     """Query room availability for a date."""
 
@@ -337,6 +352,7 @@ __all__ = [
     "CancelBookingCommand",
     "CreateBookingCommand",
     "CreateBookingDraftCommand",
+    "CreateRecurringBookingSeriesCommand",
     "CreateDiscountRuleCommand",
     "CreateMinistryCommand",
     "CreateRentalRateCommand",

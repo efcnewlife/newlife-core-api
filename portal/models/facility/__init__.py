@@ -4,6 +4,7 @@ Top-level package for facility models.
 
 from .booking import FacilityBooking, FacilityBookingOverrideLog, FacilityBookingRoom, FacilityBookingSlot, FacilityBookingSurcharge
 from .booking_draft import FacilityBookingDraft, FacilityBookingDraftLine
+from .booking_series import FacilityBookingSeries
 from .rental import FacilityRentalDiscountRule, FacilityRentalRate, FacilityRentalRateTemplate, FacilityRentalSurcharge
 from .room import FacilityRoom, FacilityRoomTranslation
 from .room_blackout import FacilityRoomBlackout
@@ -23,6 +24,7 @@ __all__ = [
     "FacilityBookingSlot",
     "FacilityBookingSurcharge",
     "FacilityBookingOverrideLog",
+    "FacilityBookingSeries",
     "FacilityBookingDraft",
     "FacilityBookingDraftLine",
 ]

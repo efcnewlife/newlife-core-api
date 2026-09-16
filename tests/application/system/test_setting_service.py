@@ -243,6 +243,92 @@ async def test_update_max_booking_lines_invalidates_cache():
 
 
 @pytest.mark.asyncio
+async def test_get_recurring_booking_availability_window_seed_value():
+    row = _setting(
+        setting_key=FacilitySettingKey.RECURRING_BOOKING_AVAILABILITY_WINDOW.value,
+        value_type=SettingValueType.OBJECT.value,
+        value={"amount": 4, "unit": "weeks"},
+    )
+    service = SettingService(StubSettingRepository([row]), StubSettingCache())
+    window = await service.get_recurring_booking_availability_window()
+    assert window.amount == 4
+    assert window.unit == "weeks"
+
+
+@pytest.mark.asyncio
+async def test_get_recurring_booking_availability_window_uses_cache():
+    cache = StubSettingCache(cached={"amount": 1, "unit": "months"})
+    service = SettingService(StubSettingRepository([]), cache)
+    window = await service.get_recurring_booking_availability_window()
+    assert window.amount == 1
+    assert window.unit == "months"
+
+
+@pytest.mark.asyncio
+async def test_update_recurring_booking_availability_window_rejects_invalid_unit():
+    row = _setting(
+        setting_key=FacilitySettingKey.RECURRING_BOOKING_AVAILABILITY_WINDOW.value,
+        value_type=SettingValueType.OBJECT.value,
+        value={"amount": 4, "unit": "weeks"},
+    )
+    service = SettingService(StubSettingRepository([row]), StubSettingCache())
+    with pytest.raises(BadRequestException, match="days, weeks, or months"):
+        await service.update_setting(row.id, UpdateSettingCommand(value={"amount": 4, "unit": "hours"}))
+
+
+@pytest.mark.asyncio
+async def test_update_recurring_booking_availability_window_rejects_non_positive_amount():
+    row = _setting(
+        setting_key=FacilitySettingKey.RECURRING_BOOKING_AVAILABILITY_WINDOW.value,
+        value_type=SettingValueType.OBJECT.value,
+        value={"amount": 4, "unit": "weeks"},
+    )
+    service = SettingService(StubSettingRepository([row]), StubSettingCache())
+    with pytest.raises(BadRequestException, match="positive integer"):
+        await service.update_setting(row.id, UpdateSettingCommand(value={"amount": 0, "unit": "weeks"}))
+
+
+@pytest.mark.asyncio
+async def test_update_recurring_booking_availability_window_invalidates_cache():
+    row = _setting(
+        setting_key=FacilitySettingKey.RECURRING_BOOKING_AVAILABILITY_WINDOW.value,
+        value_type=SettingValueType.OBJECT.value,
+        value={"amount": 4, "unit": "weeks"},
+    )
+    repo = StubSettingRepository([row])
+    cache = StubSettingCache(cached={"amount": 4, "unit": "weeks"})
+    service = SettingService(repo, cache)
+    result = await service.update_setting(row.id, UpdateSettingCommand(value={"amount": 1, "unit": "months"}))
+    assert result.value == {"amount": 1, "unit": "months"}
+    assert cache.invalidate_calls == [(row.namespace, row.setting_key)]
+    window = await service.get_recurring_booking_availability_window()
+    assert window.amount == 1
+    assert window.unit == "months"
+
+
+@pytest.mark.asyncio
+async def test_get_min_recurring_booking_weeks_default_seed_value():
+    row = _setting(setting_key=FacilitySettingKey.MIN_RECURRING_BOOKING_WEEKS.value, value_type=SettingValueType.NUMBER.value, value=4)
+    service = SettingService(StubSettingRepository([row]), StubSettingCache())
+    assert await service.get_min_recurring_booking_weeks() == 4
+
+
+@pytest.mark.asyncio
+async def test_get_pending_payment_hold_hours_default_seed_value():
+    row = _setting(setting_key=FacilitySettingKey.PENDING_PAYMENT_HOLD_HOURS.value, value_type=SettingValueType.NUMBER.value, value=72)
+    service = SettingService(StubSettingRepository([row]), StubSettingCache())
+    assert await service.get_pending_payment_hold_hours() == 72
+
+
+@pytest.mark.asyncio
+async def test_update_min_recurring_booking_weeks_rejects_non_positive():
+    row = _setting(setting_key=FacilitySettingKey.MIN_RECURRING_BOOKING_WEEKS.value, value_type=SettingValueType.NUMBER.value, value=4)
+    service = SettingService(StubSettingRepository([row]), StubSettingCache())
+    with pytest.raises(BadRequestException, match="positive integer"):
+        await service.update_setting(row.id, UpdateSettingCommand(value=0))
+
+
+@pytest.mark.asyncio
 async def test_update_setting_rejects_wrong_value_type():
     row = _setting(value="America/Toronto")
     service = SettingService(StubSettingRepository([row]), StubSettingCache())

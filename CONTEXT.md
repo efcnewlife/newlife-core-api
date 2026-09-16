@@ -6,6 +6,14 @@ Portal backend for church admin operations: auth/RBAC, facility booking, org/min
 
 ### Facility booking
 
+**Recurring Booking Series**:
+A scheduling rule and the materialized set of independently managed Booking occurrences it creates. It is distinct from each occurrence, which remains an individual Booking with its own lines and occupancy slots. It is not itself room occupancy.
+_Avoid_: Repeated Booking, one infinite Booking row, an RRULE-only Booking, recurring Booking as a synonym for one occurrence, treating a Series as an occupancy record
+
+**Booking Occurrence**:
+One independently managed Booking created by a Recurring Booking Series. It follows the normal Booking lifecycle and may be adjusted or cancelled without changing other Occurrences unless an explicit series-level action says otherwise.
+_Avoid_: instance when the Booking aggregate is meant, assuming every Booking belongs to a Series, treating one occurrence cancellation as a Series cancellation
+
 **Booker**:
 The user who owns the booking (`user_id`). Ministry membership and booker-facing rules apply to this person, not to whoever submitted the create request.
 _Avoid_: owner (ambiguous), customer, member (role-specific), on-behalf user
@@ -26,6 +34,86 @@ _Avoid_: room (when meaning a line), cart item without times, assuming one row p
 The maximum number of Booking lines one booking may hold, read from the `facility.max_booking_lines` System Setting (NUMBER, default 10, global — not per-room). Enforced on both Booking Draft and booking create; the member Timetable reads the live value from the availability response so it never drifts from what the server enforces. Supersedes ADR 0017's hardcoded 1-3 rule.
 _Avoid_: a per-room override, a value baked into frontend code, treating 3 as still correct
 
+**Recurring Booking time window**:
+The one local start and end time shared by every Booking line in every occurrence of a Recurring Booking Series. After it is selected, no different time window may be added to that Series.
+_Avoid_: per-room time windows, a series with mixed intervals, treating a Booking header envelope as the Series time window
+
+**Recurring Booking local time**:
+The facility-local wall-clock time used for every Recurring Booking occurrence. A Series with a nonexistent local time on a DST transition is rejected; an ambiguous time uses the earlier offset.
+_Avoid_: a UTC recurrence that drifts on DST, silently shifting a nonexistent time, choosing a later ambiguous offset
+
+**Church Activity Booking**:
+A Ministry-associated Booking for a church activity, distinct from an individual member's Rental Booking. Only one made for a Priority Ministry takes precedence over Rental Bookings when their future room intervals conflict.
+_Avoid_: Ministry rental, assuming every Church Activity Booking has priority, personal Booking with priority
+
+**Priority Ministry**:
+An Active Ministry whose `has_priority_booking` is true and whose current primary or secondary steward may create a Church Activity Booking that replaces conflicting future Rental occurrences. Removing priority does not rewrite existing Series or override audit, but blocks future overrides.
+_Avoid_: every Active Ministry, a Ministry with a priority member, a Ministry that may replace another Church Activity Booking, retroactively changing existing overrides
+
+**Non-priority Ministry Series**:
+A Recurring Booking Series made for an Active Ministry by its current steward when that Ministry is not a Priority Ministry. It may be created but does not replace conflicting Rental occurrences and follows the Rental conflict-resolution flow.
+_Avoid_: blocking all non-priority Ministry Series, treating it as a Priority Ministry Series, silently overriding a Rental occurrence
+
+**Facility Booking eligible account**:
+An authenticated account whose email uses the church domain. This is the current eligibility gate for Rental Booking; no additional membership profile is maintained.
+_Avoid_: a separate membership-status check, treating every external authenticated account as eligible
+
+**Recurring Booking period**:
+One fixed half-calendar-year window for recurring use: January through June or July through December. A Recurring Booking Series and all its occurrences stay within one such period.
+_Avoid_: rolling six months, a Series that crosses the June-July boundary, a perpetual schedule
+
+**Recurring Booking opening date**:
+The facility-local calendar date one month before a Recurring Booking period begins, when that period becomes bookable: December 1 for January through June, and June 1 for July through December.
+_Avoid_: a rolling booking horizon, opening on the first occurrence date, a UTC-based cutoff
+
+**Recurring Booking availability window**:
+The facility-local duration after a Recurring Booking opening date during which the corresponding Recurring Booking period accepts new Series. The built-in `facility.recurring_booking_availability_window` System Setting is an object with a positive `amount` and a `days`, `weeks`, or `months` unit; months are calendar-relative.
+_Avoid_: confusing availability with a Series use period, a months-only numeric setting, treating four weeks as one calendar month
+
+**Recurring Booking minimum duration**:
+The Booker selects first and last occurrences within one Recurring Booking period, and `facility.min_recurring_booking_weeks` requires at least four unexcluded weekly occurrences.
+_Avoid_: a fixed mandatory six-month Series, a per-room minimum-duration policy, counting excluded occurrences toward the minimum
+
+**Pending-payment Booking**:
+A Booking that reserves its requested room intervals in first-come order but is not Confirmed until full payment is verified. It is distinct from a non-locking Booking Draft.
+_Avoid_: Booking Draft, a Confirmed Booking before payment, a non-blocking payment request
+
+**Weekly Rental Booking quota**:
+The rule that a Booker may have no more than one Rental Booking occurrence from Sunday 00:00 through Saturday 23:59:59 in a facility-local calendar week, across one-time and recurring Rental Bookings. Pending-payment Bookings count toward this quota. Priority and Non-priority Ministry Series do not.
+_Avoid_: one Booking per room per week, counting a multi-room occurrence more than once, applying the quota to Church Activity Bookings
+
+**Booking occurrence exception**:
+An individual occurrence that is cancelled or changed without changing the rest of its Recurring Booking Series. An omitted conflicting occurrence is a cancellation exception.
+_Avoid_: editing the Series when only one occurrence changes, deleting an occurrence with no retained history
+
+**Occurrence cancellation scope**:
+The target of a member or Operator cancellation: one occurrence, that occurrence and every future occurrence, or the entire Series. Member and admin views both present occurrences under their Series. Occurrence modification is deferred from this slice.
+_Avoid_: an unexplained raw RRULE edit, a Series-only management screen, applying a one-occurrence cancellation to all occurrences
+
+**Recurring Booking conflict resolution**:
+The choice presented when creating a Rental Recurring Booking Series conflicts with existing occupancy or a Blackout: omit all conflicting occurrences and create the rest, or revise the requested rooms and time window. A Church Activity Booking may replace conflicting future Rental occurrences, but never another Church Activity Booking.
+_Avoid_: partial creation without user approval, silently overwriting an existing Church Activity Booking, treating a Blackout as overwritable occupancy
+
+**Pending-payment hold expiry**:
+The global duration for which an unpaid Pending-payment Booking reserves its room intervals before the system cancels it and releases its future occurrences. It is configured by `facility.pending_payment_hold_hours`, defaulting to 72 hours. A FastAPI lifecycle sweep runs at startup and every 15 minutes under a PostgreSQL advisory lock; availability queries treat an elapsed expiry as released even before the sweep records cancellation.
+_Avoid_: an indefinite payment hold, a non-blocking payment request, an in-process timer with no cross-worker lock, a per-room payment deadline
+
+**Payment-hold expiry email**:
+An email to the Booker when a Pending-payment Series expires, listing released occurrences and the former Series payment total and linking to start a new Booking. Failure to deliver it does not prevent expiry.
+_Avoid_: retaining the hold until email succeeds, an unexplained disappearance from My Bookings, reusing an override email
+
+**Booking payment confirmation permission**:
+The separate Facility permission that authorizes an Operator to mark a Pending-payment Booking as paid and Confirmed. It is displayed as Booking Payment Confirmation under Facility in the Role Permission matrix and is not a side-menu item.
+_Avoid_: general Booking modify permission, an undiscoverable permission code, a new Role Management screen
+
+**Series payment total**:
+The server-computed total for all unexcluded occurrences in a Recurring Booking Series within its Recurring Booking period, recalculated in the creation transaction and due in full before that Series is Confirmed.
+_Avoid_: one payment per occurrence, a client-computed total, confirming a partly paid Series
+
+**Booking override email**:
+An English-first, Traditional-Chinese-second email notifying an affected Rental Booker, active Booking Payment Confirmation Operators, and the current incumbent of the `DEACON_FACILITY` position that a Church Activity Booking has overridden specified future Rental occurrences. It identifies the affected dates and rooms and directs recipients to the authorized booking detail for the audit context. Recipients are resolved when sending and deduplicated.
+_Avoid_: a generic cancellation email with no override reason, a seed email as the Facility Deacon, exposing Ministry steward private contact information to unapproved recipients, rolling back a successful override because email delivery fails
+
 **Booking header interval**:
 `facility.booking.start_at` / `end_at` on the master row. For multi-line member bookings, these are the **envelope** (earliest line start, latest line end). ADR 0007 range query and member list rows use this interval. Per-line occupancy and pricing use each Booking line.
 _Avoid_: treating header times as the only interval when lines differ, using header alone for Grid bars when lines differ
@@ -43,8 +131,8 @@ A booking create or update rejected because a requested room interval overlaps a
 _Avoid_: generic "conflict", treating Blackout as the same failure, parsing the English detail string as the contract
 
 **Blackout**:
-A room-closed interval that makes the room unbookable. Overlap with a Blackout is a distinct rejection from a Scheduling Conflict; the client must show a different prompt.
-_Avoid_: scheduling conflict, "closed" without naming the Blackout rule
+A room-closed interval that makes the room unbookable, including for Church Activity Bookings. Creating a Blackout that overlaps a future occurrence cancels that occurrence after operator confirmation. Refund handling for that cancellation is deferred. Overlap with a Blackout is a distinct rejection from a Scheduling Conflict; the client must show a different prompt.
+_Avoid_: scheduling conflict, "closed" without naming the Blackout rule, leaving an active Booking inside a Blackout
 
 **Room gallery**:
 An optional ordered set of at most ten image Content Files bound to one Room. Each file appears at most once in that gallery. The same Content File may appear in many Rooms' galleries. Order is Operator-controlled (including drag reorder on the Room form). Saving the Room replaces the whole gallery. Soft-deleting a Room keeps its File associations so restore brings the gallery back. Admin Room list does not include gallery files; Room detail (and create response) does, with signed URLs for preview. Member availability includes those same signed photo URLs when files exist, or an empty list when none.

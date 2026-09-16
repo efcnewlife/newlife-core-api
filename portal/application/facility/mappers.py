@@ -672,3 +672,32 @@ def override_log_page_to_api(result) -> "AdminOverrideLogPages":
     from portal.serializers.admin.v1.facility.override_log import AdminOverrideLogPages
 
     return AdminOverrideLogPages(page=result.page, page_size=result.page_size, total=result.total, items=[item for item in result.items])
+
+
+def create_recurring_booking_series_to_command(model) -> "CreateRecurringBookingSeriesCommand":
+    from portal.application.facility.commands import BookingRoomLineCommand, CreateRecurringBookingSeriesCommand
+
+    return CreateRecurringBookingSeriesCommand(
+        user_id=getattr(model, "user_id", None),
+        ministry_id=model.ministry_id,
+        first_occurrence_date=model.first_occurrence_date,
+        last_occurrence_date=model.last_occurrence_date,
+        local_start_time=model.local_start_time,
+        local_end_time=model.local_end_time,
+        is_mission_aligned=model.is_mission_aligned,
+        rooms=[BookingRoomLineCommand(facility_id=room.facility_id, sequence=room.sequence) for room in model.rooms],
+        surcharge_codes=model.surcharge_codes,
+        remark=model.remark,
+    )
+
+
+def recurring_booking_series_to_admin_api(result) -> "AdminRecurringBookingSeriesDetail":
+    from portal.serializers.admin.v1.facility.booking_series import AdminRecurringBookingSeriesDetail
+
+    return AdminRecurringBookingSeriesDetail.model_validate(result.model_dump())
+
+
+def recurring_booking_series_to_member_api(result) -> "MemberRecurringBookingSeriesDetail":
+    from portal.serializers.apis.v1.facility import MemberRecurringBookingSeriesDetail
+
+    return MemberRecurringBookingSeriesDetail.model_validate(result.model_dump())
