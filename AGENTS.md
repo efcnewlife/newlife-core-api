@@ -421,16 +421,16 @@ Use **Permission** or **Verb** as the reference implementation.
 
 ## 13. Do NOT (Agent Guardrails)
 
-| Action                                           | Reason                                        |
-| ------------------------------------------------ | --------------------------------------------- |
-| Add/modify/delete `alembic/versions/**`          | Project policy — migrations are human-managed |
-| Import `portal.models` in application services   | Clean Architecture boundary                   |
-| Import `portal.serializers` outside `mappers.py` | Boundary violation                            |
-| Map repositories to `Admin*Serializer`           | Use application `results`                     |
-| Use non-ASCII in comments                        | Project standard                              |
-| Run `git commit/push/merge` unless user asks     | Automation policy                             |
+| Action                                           | Reason                                                                  |
+| ------------------------------------------------ | ----------------------------------------------------------------------- |
+| Add/modify/delete `alembic/versions/**`          | Project policy — migrations are human-managed                           |
+| Import `portal.models` in application services   | Clean Architecture boundary                                             |
+| Import `portal.serializers` outside `mappers.py` | Boundary violation                                                      |
+| Map repositories to `Admin*Serializer`           | Use application `results`                                               |
+| Use non-ASCII in comments                        | Project standard                                                        |
+| Run `git commit/push/merge` unless user asks     | Automation policy                                                       |
 | Check/format with black, isort, flake8           | Use Ruff instead (`uv run ruff format`, then `uv run ruff check --fix`) |
-| Broaden `ruff check` lint select beyond `I`      | Formatter contract is format + import sort only |
+| Broaden `ruff check` lint select beyond `I`      | Formatter contract is format + import sort only                         |
 
 ---
 
