@@ -63,6 +63,7 @@ class AdminBookingListItem(UUIDBaseModel):
     facility_ids: list[UUID] = Field(default_factory=list, serialization_alias="facilityIds")
     facility_names: list[str] = Field(default_factory=list, serialization_alias="facilityNames")
     booking_type: str = Field(..., serialization_alias="bookingType")
+    series_id: Optional[UUID] = Field(default=None, serialization_alias="seriesId")
     start_at: datetime = Field(..., serialization_alias="startAt")
     end_at: datetime = Field(..., serialization_alias="endAt")
     status: str = Field(...)
