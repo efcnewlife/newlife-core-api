@@ -55,11 +55,6 @@ class StubMinistryTypeRepository:
     async def get_translated_name_by_id(self, ministry_type_id: UUID, locale_id: UUID) -> str | None:
         return self.names_by_locale.get(ministry_type_id, {}).get(locale_id)
 
-    async def get_id_by_code(self, code: str) -> UUID | None:
-        if code == MINISTRY_TYPE_INTERNAL:
-            return self.default_type_id
-        return None
-
     async def list_active(self, locale_id):
         return [MinistryTypeResult(id=self.default_type_id, code=MINISTRY_TYPE_INTERNAL, name="Internal")]
 
