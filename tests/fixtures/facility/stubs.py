@@ -607,7 +607,7 @@ class StubRecurringBookingRepository:
     async def insert_series(self, payload: dict) -> None:
         self.insert_series_calls.append(payload)
 
-    async def get_by_id(self, series_id: UUID):
+    async def get_by_id(self, series_id: UUID, locale_id=None):
         return self.series_by_id.get(series_id)
 
     async def update_series(self, series_id: UUID, values: dict) -> None:

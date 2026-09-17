@@ -4,6 +4,7 @@ Facility mapper tests (serializer <-> command/result).
 
 from datetime import date, datetime, time, timezone
 from decimal import Decimal
+from inspect import getsource
 from uuid import uuid4
 
 import pytest
@@ -36,6 +37,7 @@ from portal.application.facility.mappers import (
     preview_quote_result_to_api,
     preview_quote_to_command,
     recurring_booking_preview_to_member_api,
+    recurring_booking_series_to_admin_api,
     recurring_booking_series_to_member_api,
     room_availability_item_to_api,
     room_detail_to_api,
@@ -68,6 +70,7 @@ from portal.application.org.results import MinistryDetailResult
 from portal.domain.facility.constants import BookingType, RecurringConflictKind, RentalRateBillingUnit
 from portal.domain.org.constants import MinistryMemberRole
 from portal.infrastructure.persistence.repositories.facility.booking_repository import BookingRepository
+from portal.infrastructure.persistence.repositories.facility.recurring_booking_repository import RecurringBookingRepository
 from portal.routers.apis.v1.facility import _booking_list_item_to_api
 from portal.serializers.admin.v1.facility.booking import AdminBookingCancel, AdminBookingQuery, AdminBookingUpdate
 from portal.serializers.admin.v1.facility.override_log import AdminOverrideLogQuery
@@ -739,3 +742,128 @@ def test_admin_booking_detail_one_time_series_id_is_null():
     dumped = booking_detail_to_api(result).model_dump(by_alias=True)
     assert dumped["seriesId"] is None
     assert dumped["bookingType"] == "one_time"
+
+
+def test_admin_booking_pages_and_range_expose_ministry_for_church_activity():
+    ministry_id = uuid4()
+    item = BookingListItemResult(
+        id=uuid4(),
+        user_id=uuid4(),
+        booking_type="recurring",
+        ministry_id=ministry_id,
+        ministry_name="Youth Fellowship",
+        start_at=datetime(2026, 9, 24, 13, 0, tzinfo=timezone.utc),
+        end_at=datetime(2026, 9, 24, 14, 30, tzinfo=timezone.utc),
+        status="confirmed",
+    )
+    pages = booking_page_to_api(BookingPageResult(page=0, page_size=20, total=1, items=[item])).model_dump(by_alias=True)
+    ranged = booking_range_to_api(BookingRangeResult(items=[item])).model_dump(by_alias=True)
+    assert pages["items"][0]["ministryId"] == ministry_id
+    assert pages["items"][0]["ministryName"] == "Youth Fellowship"
+    assert ranged["items"][0]["ministryId"] == ministry_id
+    assert ranged["items"][0]["ministryName"] == "Youth Fellowship"
+
+
+def test_admin_booking_pages_and_range_personal_rental_ministry_is_null():
+    item = BookingListItemResult(
+        id=uuid4(),
+        user_id=uuid4(),
+        booking_type="one_time",
+        start_at=datetime(2026, 9, 18, 15, 0, tzinfo=timezone.utc),
+        end_at=datetime(2026, 9, 18, 16, 30, tzinfo=timezone.utc),
+        status="confirmed",
+    )
+    pages = booking_page_to_api(BookingPageResult(page=0, page_size=20, total=1, items=[item])).model_dump(by_alias=True)
+    ranged = booking_range_to_api(BookingRangeResult(items=[item])).model_dump(by_alias=True)
+    assert pages["items"][0]["ministryId"] is None
+    assert pages["items"][0]["ministryName"] is None
+    assert ranged["items"][0]["ministryId"] is None
+    assert ranged["items"][0]["ministryName"] is None
+
+
+def test_admin_booking_pages_and_range_ministry_name_null_when_no_translation():
+    ministry_id = uuid4()
+    item = BookingListItemResult(
+        id=uuid4(),
+        user_id=uuid4(),
+        booking_type="one_time",
+        ministry_id=ministry_id,
+        start_at=datetime(2026, 9, 18, 15, 0, tzinfo=timezone.utc),
+        end_at=datetime(2026, 9, 18, 16, 30, tzinfo=timezone.utc),
+        status="confirmed",
+    )
+    pages = booking_page_to_api(BookingPageResult(page=0, page_size=20, total=1, items=[item])).model_dump(by_alias=True)
+    ranged = booking_range_to_api(BookingRangeResult(items=[item])).model_dump(by_alias=True)
+    assert pages["items"][0]["ministryId"] == ministry_id
+    assert pages["items"][0]["ministryName"] is None
+    assert ranged["items"][0]["ministryId"] == ministry_id
+    assert ranged["items"][0]["ministryName"] is None
+
+
+def test_admin_booking_detail_exposes_ministry_for_church_activity():
+    ministry_id = uuid4()
+    result = BookingDetailResult(
+        id=uuid4(),
+        user_id=uuid4(),
+        booking_type="recurring",
+        ministry_id=ministry_id,
+        ministry_name="Youth Fellowship",
+        start_at=datetime(2026, 9, 24, 13, 0, tzinfo=timezone.utc),
+        end_at=datetime(2026, 9, 24, 14, 30, tzinfo=timezone.utc),
+        status="confirmed",
+    )
+    dumped = booking_detail_to_api(result).model_dump(by_alias=True)
+    assert dumped["ministryId"] == ministry_id
+    assert dumped["ministryName"] == "Youth Fellowship"
+
+
+def test_admin_booking_detail_personal_rental_ministry_is_null():
+    result = BookingDetailResult(
+        id=uuid4(),
+        user_id=uuid4(),
+        booking_type="one_time",
+        start_at=datetime(2026, 9, 18, 15, 0, tzinfo=timezone.utc),
+        end_at=datetime(2026, 9, 18, 16, 30, tzinfo=timezone.utc),
+        status="confirmed",
+    )
+    dumped = booking_detail_to_api(result).model_dump(by_alias=True)
+    assert dumped["ministryId"] is None
+    assert dumped["ministryName"] is None
+
+
+def test_admin_recurring_booking_series_detail_exposes_ministry_name():
+    ministry_id = uuid4()
+    result = RecurringBookingSeriesResult(
+        id=uuid4(),
+        user_id=uuid4(),
+        ministry_id=ministry_id,
+        ministry_name="Youth Fellowship",
+        first_occurrence_date=date(2026, 1, 13),
+        last_occurrence_date=date(2026, 2, 3),
+        local_start_time=time(10, 0),
+        local_end_time=time(12, 0),
+        status="confirmed",
+        quoted_amount=Decimal("400"),
+        currency="CAD",
+        occurrence_count=0,
+    )
+    dumped = recurring_booking_series_to_admin_api(result).model_dump(by_alias=True)
+    assert dumped["ministryId"] == ministry_id
+    assert dumped["ministryName"] == "Youth Fellowship"
+
+
+def test_booking_list_query_selects_ministry_id_and_name():
+    source = getsource(BookingRepository._list_query)
+    assert "FacilityBooking.ministry_id" in source
+    assert "_ministry_name_subquery" in source
+
+
+def test_booking_detail_query_selects_ministry_name():
+    source = getsource(BookingRepository.get_detail)
+    assert "_ministry_name_subquery" in source
+
+
+def test_series_get_by_id_selects_ministry_name():
+    source = getsource(RecurringBookingRepository.get_by_id)
+    assert "_ministry_name_subquery" in source
+    assert "ministry_name" in source

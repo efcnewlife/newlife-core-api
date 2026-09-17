@@ -64,6 +64,8 @@ class AdminBookingListItem(UUIDBaseModel):
     facility_names: list[str] = Field(default_factory=list, serialization_alias="facilityNames")
     booking_type: str = Field(..., serialization_alias="bookingType")
     series_id: Optional[UUID] = Field(default=None, serialization_alias="seriesId")
+    ministry_id: Optional[UUID] = Field(default=None, serialization_alias="ministryId")
+    ministry_name: Optional[str] = Field(default=None, serialization_alias="ministryName")
     start_at: datetime = Field(..., serialization_alias="startAt")
     end_at: datetime = Field(..., serialization_alias="endAt")
     status: str = Field(...)
@@ -95,7 +97,6 @@ class AdminBookingRange(BaseModel):
 class AdminBookingDetail(AdminBookingListItem):
     """Booking detail."""
 
-    ministry_id: Optional[UUID] = Field(default=None, serialization_alias="ministryId")
     recurrence_rule: Optional[str] = Field(
         default=None, serialization_alias="recurrenceRule", description="iCal RRULE string (RFC 5545); series anchor is start_at"
     )

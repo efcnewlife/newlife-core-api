@@ -64,6 +64,7 @@ class AdminRecurringBookingSeriesDetail(UUIDBaseModel):
 
     user_id: UUID = Field(..., serialization_alias="userId")
     ministry_id: Optional[UUID] = Field(default=None, serialization_alias="ministryId")
+    ministry_name: Optional[str] = Field(default=None, serialization_alias="ministryName")
     first_occurrence_date: date = Field(..., serialization_alias="firstOccurrenceDate")
     last_occurrence_date: date = Field(..., serialization_alias="lastOccurrenceDate")
     local_start_time: time = Field(..., serialization_alias="localStartTime")
