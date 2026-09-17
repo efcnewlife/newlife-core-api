@@ -1,5 +1,5 @@
 """
-Facility booking override audit log repository (read-only).
+Facility booking override audit log repository.
 """
 
 from typing import Optional
@@ -11,6 +11,7 @@ from portal.application.facility.commands import OverrideLogPagesQueryCommand
 from portal.application.facility.results import OverrideLogResult
 from portal.libs.database import Session
 from portal.models import AuthUser, AuthUserProfile, FacilityBookingOverrideLog, FacilityRoom
+from portal.models.mixins.context import get_current_id, get_current_username
 
 
 class OverrideLogRepository:
@@ -18,6 +19,14 @@ class OverrideLogRepository:
 
     def __init__(self, session: Session):
         self._session = session
+
+    async def insert_logs(self, rows: list[dict]) -> None:
+        if not rows:
+            return
+        user_id = get_current_id()
+        username = get_current_username()
+        payloads = [{**row, "created_by_id": row.get("created_by_id") or user_id, "created_by": row.get("created_by") or username} for row in rows]
+        await self._session.insert(FacilityBookingOverrideLog).values(payloads).execute()
 
     async def fetch_pages(self, model: OverrideLogPagesQueryCommand, locale_id: Optional[UUID]) -> tuple[list[OverrideLogResult], int]:
         room_name = FacilityRoom.code

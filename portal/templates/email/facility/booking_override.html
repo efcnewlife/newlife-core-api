@@ -1,0 +1,39 @@
+{% extends "email/base.html" %}
+
+{% block title %}Church Activity Booking override{% endblock %}
+
+{% block content %}
+{% set language_label = "English" %}
+{% include "email/partials/language_section_marker.html" %}
+
+<p style="margin: 0 0 16px; font-size: 16px;">Hello,</p>
+<p style="margin: 0 0 16px; font-size: 16px; line-height: 1.5;">
+  A Church Activity Booking for <strong>{{ church_activity_name }}</strong> has overridden the following future Personal Rental occurrence(s).
+</p>
+<ul style="margin: 0 0 16px; padding-left: 20px; font-size: 16px; line-height: 1.5;">
+  {% for line in occurrence_lines_en %}
+  <li>{{ line }}</li>
+  {% endfor %}
+</ul>
+<p style="margin: 0 0 16px;">
+  <a href="{{ my_bookings_url }}" style="display: inline-block; background-color: #1865d8; color: #ffffff; text-decoration: none; padding: 10px 18px; border-radius: 6px; font-weight: bold;">View My Bookings</a>
+</p>
+
+{% include "email/partials/bilingual_divider.html" %}
+
+{% set language_label = "中文" %}
+{% include "email/partials/language_section_marker.html" %}
+
+<p style="margin: 0 0 16px; font-size: 16px;">您好，</p>
+<p style="margin: 0 0 16px; font-size: 16px; line-height: 1.5;">
+  教會活動預訂「<strong>{{ church_activity_name_zh }}</strong>」已覆寫以下未來個人租用場次。
+</p>
+<ul style="margin: 0 0 16px; padding-left: 20px; font-size: 16px; line-height: 1.5;">
+  {% for line in occurrence_lines_zh %}
+  <li>{{ line }}</li>
+  {% endfor %}
+</ul>
+<p style="margin: 0;">
+  <a href="{{ my_bookings_url }}" style="display: inline-block; background-color: #1865d8; color: #ffffff; text-decoration: none; padding: 10px 18px; border-radius: 6px; font-weight: bold;">查看我的預訂</a>
+</p>
+{% endblock %}

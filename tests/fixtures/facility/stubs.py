@@ -2,10 +2,10 @@
 Stub repositories for facility application unit tests.
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any, Optional
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from asyncpg import UniqueViolationError
 
@@ -20,6 +20,7 @@ from portal.application.facility.results import (
     DiscountRuleResult,
     MinistryDetailResult,
     OverrideLogResult,
+    RecurringOccupyingBookingResult,
     RentalRateResult,
     RoomDetailResult,
     RoomSlotTemplateResult,
@@ -258,16 +259,19 @@ class StubBookingRepository:
         range_items: list[BookingListItemResult] | None = None,
         deleted_ids: set[UUID] | None = None,
         rental_starts: list[datetime] | None = None,
+        occupying_bookings: list[RecurringOccupyingBookingResult] | None = None,
     ):
         self.exists = exists
         self.booking_meta = booking_meta or {"booking_type": "one_time", "currency": "CAD"}
         self.has_overlap = has_overlap
         self.overlapping_slots = overlapping_slots or set()
+        self.occupying_bookings = occupying_bookings or []
         self.detail = detail
         self.range_items = range_items or []
         self.deleted_ids = deleted_ids or set()
         self.rental_starts = rental_starts or []
         self.cancel_calls: list[dict] = []
+        self.override_calls: list[dict] = []
         self.insert_calls: list[dict] = []
         self.update_header_calls: list[dict] = []
         self.replace_rooms_calls: list = []
@@ -288,9 +292,25 @@ class StubBookingRepository:
         return self.booking_meta
 
     async def has_confirmed_slot_overlap(self, facility_id: UUID, start_at: datetime, end_at: datetime, exclude_booking_id: UUID | None = None) -> bool:
-        if self.has_overlap:
-            return True
-        return (facility_id, start_at) in self.overlapping_slots
+        occupying = await self.list_occupying_slots(facility_id, start_at, end_at)
+        return any(item.booking_id != exclude_booking_id for item in occupying)
+
+    async def list_occupying_slots(self, facility_id: UUID, start_at: datetime, end_at: datetime) -> list[RecurringOccupyingBookingResult]:
+        matches = [item for item in self.occupying_bookings if facility_id in item.facility_ids and item.start_at < end_at and item.end_at > start_at]
+        if matches:
+            return matches
+        if self.has_overlap or (facility_id, start_at) in self.overlapping_slots:
+            return [
+                RecurringOccupyingBookingResult(
+                    booking_id=uuid4(),
+                    user_id=uuid4(),
+                    ministry_id=None,
+                    facility_ids=[facility_id],
+                    start_at=start_at,
+                    end_at=end_at or start_at + timedelta(hours=2),
+                )
+            ]
+        return []
 
     async def insert_booking(self, payload: dict) -> None:
         self.insert_calls.append(payload)
@@ -300,6 +320,9 @@ class StubBookingRepository:
 
     async def cancel_booking(self, booking_id: UUID, cancelled_by_id: UUID | None, cancel_reason: str | None, cancel_slots: bool) -> None:
         self.cancel_calls.append(dict(booking_id=booking_id, cancelled_by_id=cancelled_by_id, cancel_reason=cancel_reason, cancel_slots=cancel_slots))
+
+    async def override_booking(self, booking_id: UUID, overridden_by_id: UUID | None, reason: str | None) -> None:
+        self.override_calls.append(dict(booking_id=booking_id, overridden_by_id=overridden_by_id, reason=reason))
 
     async def update_booking_header(self, booking_id: UUID, values: dict) -> None:
         self.update_header_calls.append(values)
@@ -472,17 +495,22 @@ class StubMinistryRepository:
         insert_raises_unique: bool = False,
         update_affected: int = 1,
         booking_member_user_ids: set[UUID] | None = None,
+        members_by_ministry: dict[UUID, list] | None = None,
     ):
         self.ministry_by_id = ministry_by_id or {}
         self.insert_raises_unique = insert_raises_unique
         self.update_affected = update_affected
         self.booking_member_user_ids = booking_member_user_ids
+        self.members_by_ministry = members_by_ministry or {}
         self.insert_calls: list[dict] = []
         self.replace_members_calls: list[dict] = []
         self.membership_check_calls: list[dict] = []
 
-    async def get_by_id(self, ministry_id: UUID) -> MinistryDetailResult | None:
+    async def get_by_id(self, ministry_id: UUID, locale_id=None, all_locales: bool = False) -> MinistryDetailResult | None:
         return self.ministry_by_id.get(ministry_id)
+
+    async def list_members(self, ministry_id: UUID):
+        return self.members_by_ministry.get(ministry_id, [])
 
     async def insert_ministry(self, payload: dict) -> None:
         self.insert_calls.append(payload)
@@ -543,6 +571,19 @@ class StubRecurringBookingRepository:
         self.insert_series_calls.append(payload)
 
 
+class StubRecurringOverrideNotifier:
+    """Records Priority Ministry override notifications."""
+
+    def __init__(self, raise_error: Exception | None = None):
+        self.calls: list = []
+        self.raise_error = raise_error
+
+    async def notify_priority_override(self, notification) -> None:
+        self.calls.append(notification)
+        if self.raise_error:
+            raise self.raise_error
+
+
 class StubUserReadService:
     """Minimal user lookup stub for church-domain eligibility."""
 
@@ -561,9 +602,13 @@ class StubOverrideLogRepository:
     def __init__(self, items: list[OverrideLogResult] | None = None, total: int = 0):
         self.items = items or []
         self.total = total
+        self.insert_calls: list[list[dict]] = []
 
     async def fetch_pages(self, command: OverrideLogPagesQueryCommand, locale_id):
         return self.items, self.total
+
+    async def insert_logs(self, rows: list[dict]) -> None:
+        self.insert_calls.append(rows)
 
 
 class StubBookingDraftRepository:

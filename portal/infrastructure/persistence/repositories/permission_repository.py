@@ -295,6 +295,35 @@ class PermissionRepository:
         )
         return permissions or []
 
+    async def list_active_emails_for_resource_code(self, resource_code: str) -> list[str]:
+        rows = await (
+            self._session.select(AuthUser.email)
+            .select_from(AuthUser)
+            .join(AuthUser.roles)
+            .join(AuthRolePermission, AuthRolePermission.role_id == AuthRole.id)
+            .join(AuthPermission, AuthPermission.id == AuthRolePermission.permission_id)
+            .join(AuthResource, AuthPermission.resource_id == AuthResource.id)
+            .where(AuthResource.code == resource_code)
+            .where(AuthUser.is_deleted == False)
+            .where(AuthUser.is_active == True)
+            .where(AuthUser.verified == True)
+            .where(AuthUser.email.isnot(None))
+            .where(AuthRole.is_deleted == False)
+            .where(AuthRole.is_active == True)
+            .where(AuthPermission.is_deleted == False)
+            .where(AuthPermission.is_active == True)
+            .where(AuthResource.is_deleted == False)
+            .where(sa.or_(AuthRolePermission.expire_date.is_(None), AuthRolePermission.expire_date > sa.func.now()))
+            .distinct()
+            .fetch()
+        )
+        emails: list[str] = []
+        for row in rows or []:
+            email = (row["email"] or "").strip()
+            if email:
+                emails.append(email)
+        return emails
+
     async def list_all_permissions(self) -> list[PermissionRecord]:
         """
         All active permissions (superuser).

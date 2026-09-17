@@ -29,6 +29,7 @@ class Resource(Enum):
     FACILITY_RENTAL_RATE = "facility:rental_rate"
     FACILITY_RENTAL_RATE_TEMPLATE = "facility:rental_rate_template"
     FACILITY_BOOKING = "facility:booking"
+    FACILITY_BOOKING_PAYMENT = "facility:booking_payment"
     FACILITY_BOOKING_OVERRIDE_LOG = "facility:booking_override_log"
     MINISTRY_MINISTRY = "ministry:ministry"
     MINISTRY_MEMBER = "ministry:member"
@@ -81,6 +82,7 @@ class Permission:
     FACILITY_RENTAL_RATE = PermissionCode(Resource.FACILITY_RENTAL_RATE)
     FACILITY_RENTAL_RATE_TEMPLATE = PermissionCode(Resource.FACILITY_RENTAL_RATE_TEMPLATE)
     FACILITY_BOOKING = PermissionCode(Resource.FACILITY_BOOKING)
+    FACILITY_BOOKING_PAYMENT = PermissionCode(Resource.FACILITY_BOOKING_PAYMENT)
     FACILITY_BOOKING_OVERRIDE_LOG = PermissionCode(Resource.FACILITY_BOOKING_OVERRIDE_LOG)
     MINISTRY_MINISTRY = PermissionCode(Resource.MINISTRY_MINISTRY)
     MINISTRY_MEMBER = PermissionCode(Resource.MINISTRY_MEMBER)

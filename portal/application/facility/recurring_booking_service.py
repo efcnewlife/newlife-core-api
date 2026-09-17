@@ -4,7 +4,7 @@ Recurring Booking Series application service.
 
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
-from typing import Callable, NamedTuple, Optional
+from typing import Callable, NamedTuple, Optional, Protocol
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
@@ -12,11 +12,15 @@ from portal.application.auth.user_read_service import UserReadService
 from portal.application.facility.booking_line_validation import ResolvedBookingLine, primary_facility_id, validate_booking_lines
 from portal.application.facility.commands import CreateRecurringBookingSeriesCommand, PreviewQuoteCommand, PreviewQuoteRoomLineCommand
 from portal.application.facility.pricing_service import PricingService
+from portal.application.facility.recurring_override_mail_content import resolve_bilingual_activity_names
 from portal.application.facility.results import (
     RecurringBookingConflictResult,
     RecurringBookingOccurrenceResult,
     RecurringBookingPreviewResult,
     RecurringBookingSeriesResult,
+    RecurringOccupyingBookingResult,
+    RecurringOverrideNotification,
+    RecurringOverrideNotificationItem,
 )
 from portal.application.system.setting_service import SettingService
 from portal.domain.facility.constants import (
@@ -26,6 +30,7 @@ from portal.domain.facility.constants import (
     BookingStatus,
     BookingType,
     FacilityErrorCode,
+    OverrideOutcome,
     RecurringConflictKind,
 )
 from portal.domain.facility.recurring import (
@@ -37,13 +42,15 @@ from portal.domain.facility.recurring import (
     use_period_for_date,
     weekly_occurrence_dates,
 )
-from portal.domain.org.constants import MinistryStatus
+from portal.domain.org.constants import MinistryMemberRole, MinistryStatus
 from portal.exceptions.responses import BadRequestException, ConflictErrorException, ForbiddenException
 from portal.infrastructure.persistence.repositories.facility.booking_repository import BookingRepository
+from portal.infrastructure.persistence.repositories.facility.override_log_repository import OverrideLogRepository
 from portal.infrastructure.persistence.repositories.facility.recurring_booking_repository import RecurringBookingRepository
 from portal.infrastructure.persistence.repositories.facility.room_blackout_repository import RoomBlackoutRepository
 from portal.infrastructure.persistence.repositories.org.ministry_repository import MinistryRepository
 from portal.libs.contexts.user_context import UserContext, get_user_context
+from portal.libs.logger import logger
 from portal.libs.tracing.distributed_trace import distributed_trace
 
 
@@ -55,10 +62,26 @@ class _PreparedOccurrence(NamedTuple):
 
 class _PreparedSeries(NamedTuple):
     booker_id: UUID
+    operator_id: UUID
     local_tz: ZoneInfo
     now_utc: datetime
     occurrences: list[_PreparedOccurrence]
     is_priority: bool
+    ministry_name: Optional[str]
+    ministry_name_zh: Optional[str]
+
+
+class RecurringOverrideNotifierPort(Protocol):
+    """Send Priority Ministry override notifications after Series create."""
+
+    async def notify_priority_override(self, notification: RecurringOverrideNotification) -> None: ...
+
+
+class NullRecurringOverrideNotifier:
+    """No-op notifier used when mail is not wired."""
+
+    async def notify_priority_override(self, notification: RecurringOverrideNotification) -> None:
+        return None
 
 
 class RecurringBookingService:
@@ -73,6 +96,8 @@ class RecurringBookingService:
         room_blackout_repository: RoomBlackoutRepository,
         setting_service: SettingService,
         user_read_service: UserReadService,
+        override_log_repository: OverrideLogRepository,
+        override_notifier: Optional[RecurringOverrideNotifierPort] = None,
         now_utc: Optional[Callable[[], datetime]] = None,
     ):
         self._series_repository = series_repository
@@ -82,6 +107,8 @@ class RecurringBookingService:
         self._blackout_repository = room_blackout_repository
         self._setting_service = setting_service
         self._user_read_service = user_read_service
+        self._override_log_repository = override_log_repository
+        self._override_notifier = override_notifier or NullRecurringOverrideNotifier()
         self._now_utc = now_utc or (lambda: datetime.now(timezone.utc))
         self._user_ctx: Optional[UserContext] = get_user_context()
 
@@ -100,7 +127,7 @@ class RecurringBookingService:
     @distributed_trace()
     async def create_series(self, command: CreateRecurringBookingSeriesCommand) -> RecurringBookingSeriesResult:
         prepared = await self._prepare_series(command)
-        remaining = await self._unexcluded_occurrences(command, prepared)
+        remaining, overridable_conflicts = await self._unexcluded_occurrences(command, prepared)
         booker_id = prepared.booker_id
         now_utc = prepared.now_utc
         is_priority = prepared.is_priority
@@ -241,6 +268,10 @@ class RecurringBookingService:
                 )
             )
 
+        await self._apply_priority_overrides(
+            command=command, prepared=prepared, series_id=series_id, occurrences=occurrences, remaining=remaining, overridable_conflicts=overridable_conflicts
+        )
+
         return RecurringBookingSeriesResult(
             id=series_id,
             user_id=booker_id,
@@ -326,11 +357,24 @@ class RecurringBookingService:
         )
 
         is_priority = False
+        ministry_name = None
+        ministry_name_zh = None
         if command.ministry_id is not None:
-            is_priority = await self._validate_ministry_series(command.ministry_id, booker_id)
-        return _PreparedSeries(booker_id=booker_id, local_tz=local_tz, now_utc=now_utc, occurrences=occurrences, is_priority=is_priority)
+            is_priority, ministry_name, ministry_name_zh = await self._validate_ministry_series(command.ministry_id, booker_id)
+        return _PreparedSeries(
+            booker_id=booker_id,
+            operator_id=operator_id,
+            local_tz=local_tz,
+            now_utc=now_utc,
+            occurrences=occurrences,
+            is_priority=is_priority,
+            ministry_name=ministry_name,
+            ministry_name_zh=ministry_name_zh,
+        )
 
-    async def _unexcluded_occurrences(self, command: CreateRecurringBookingSeriesCommand, prepared: _PreparedSeries) -> list[_PreparedOccurrence]:
+    async def _unexcluded_occurrences(
+        self, command: CreateRecurringBookingSeriesCommand, prepared: _PreparedSeries
+    ) -> tuple[list[_PreparedOccurrence], list[RecurringBookingConflictResult]]:
         conflicts = await self._collect_conflicts(command, prepared)
         generated_dates = {item.occurrence_date for item in prepared.occurrences}
         conflict_dates = {item.occurrence_date for item in conflicts}
@@ -347,13 +391,26 @@ class RecurringBookingService:
                 error_code=FacilityErrorCode.RECURRING_MIN_OCCURRENCES.value,
             )
         remaining_conflicts = [item for item in conflicts if item.occurrence_date not in excluded_dates]
-        if remaining_conflicts:
-            self._raise_remaining_conflict(remaining_conflicts[0])
-        return remaining
+        blocking = [item for item in remaining_conflicts if not item.is_overridable]
+        if blocking:
+            self._raise_remaining_conflict(blocking[0])
+        overridable = [item for item in remaining_conflicts if item.is_overridable]
+        return remaining, overridable
 
     @staticmethod
     def _raise_remaining_conflict(conflict: RecurringBookingConflictResult) -> None:
         facility_id = conflict.facility_ids[0] if conflict.facility_ids else None
+        if conflict.kind == RecurringConflictKind.MINISTRY.value:
+            raise ConflictErrorException(
+                detail="Room is occupied by another Ministry Series",
+                error_code=FacilityErrorCode.RECURRING_MINISTRY_CONFLICT.value,
+                context={
+                    "facility_id": str(facility_id) if facility_id else None,
+                    "ministry_id": str(conflict.ministry_id) if conflict.ministry_id else None,
+                    "ministry_steward_display_name": conflict.ministry_steward_display_name,
+                    "ministry_steward_email": conflict.ministry_steward_email,
+                },
+            )
         if conflict.kind == RecurringConflictKind.OCCUPANCY.value:
             raise ConflictErrorException(
                 detail=f"Room {facility_id} has a scheduling conflict",
@@ -379,32 +436,94 @@ class RecurringBookingService:
                     RecurringBookingConflictResult(occurrence_date=occurrence_date, kind=RecurringConflictKind.WEEKLY_QUOTA.value, facility_ids=[])
                 )
         for occurrence in prepared.occurrences:
-            occupancy_ids: list[UUID] = []
+            occupying = await self._occupying_bookings_for_occurrence(command, occurrence)
+            rental_overridable: list[RecurringOccupyingBookingResult] = []
+            rental_blocked: list[RecurringOccupyingBookingResult] = []
+            ministry_items: list[RecurringOccupyingBookingResult] = []
+            for item in occupying:
+                if item.ministry_id:
+                    ministry_items.append(item)
+                elif prepared.is_priority and item.start_at > prepared.now_utc:
+                    rental_overridable.append(item)
+                else:
+                    rental_blocked.append(item)
+            if rental_overridable:
+                conflicts.append(
+                    RecurringBookingConflictResult(
+                        occurrence_date=occurrence.occurrence_date,
+                        kind=RecurringConflictKind.OCCUPANCY.value,
+                        facility_ids=self._unique_facility_ids(rental_overridable),
+                        is_overridable=True,
+                        occupying_bookings=rental_overridable,
+                    )
+                )
+            if rental_blocked:
+                conflicts.append(
+                    RecurringBookingConflictResult(
+                        occurrence_date=occurrence.occurrence_date,
+                        kind=RecurringConflictKind.OCCUPANCY.value,
+                        facility_ids=self._unique_facility_ids(rental_blocked),
+                        occupying_bookings=rental_blocked,
+                    )
+                )
+            if ministry_items:
+                first = ministry_items[0]
+                steward_name, steward_email = await self._primary_steward_contact(first.ministry_id)
+                conflicts.append(
+                    RecurringBookingConflictResult(
+                        occurrence_date=occurrence.occurrence_date,
+                        kind=RecurringConflictKind.MINISTRY.value,
+                        facility_ids=self._unique_facility_ids(ministry_items),
+                        occupying_bookings=ministry_items,
+                        ministry_id=first.ministry_id,
+                        ministry_steward_display_name=steward_name,
+                        ministry_steward_email=steward_email,
+                    )
+                )
             blackout_ids: list[UUID] = []
             for room in command.rooms:
-                if await self._booking_repository.has_confirmed_slot_overlap(
-                    facility_id=room.facility_id, start_at=occurrence.start_at, end_at=occurrence.end_at
-                ):
-                    occupancy_ids.append(room.facility_id)
                 if await self._blackout_repository.has_blackout_overlap(
                     facility_id=room.facility_id, start_at=occurrence.start_at, end_at=occurrence.end_at, tz=prepared.local_tz
                 ):
                     blackout_ids.append(room.facility_id)
-            if occupancy_ids:
-                conflicts.append(
-                    RecurringBookingConflictResult(
-                        occurrence_date=occurrence.occurrence_date, kind=RecurringConflictKind.OCCUPANCY.value, facility_ids=occupancy_ids
-                    )
-                )
             if blackout_ids:
                 conflicts.append(
                     RecurringBookingConflictResult(
                         occurrence_date=occurrence.occurrence_date, kind=RecurringConflictKind.BLACKOUT.value, facility_ids=blackout_ids
                     )
                 )
-        kind_order = {RecurringConflictKind.OCCUPANCY.value: 0, RecurringConflictKind.BLACKOUT.value: 1, RecurringConflictKind.WEEKLY_QUOTA.value: 2}
-        conflicts.sort(key=lambda item: (item.occurrence_date, kind_order[item.kind]))
+        kind_order = {
+            RecurringConflictKind.OCCUPANCY.value: 0,
+            RecurringConflictKind.MINISTRY.value: 1,
+            RecurringConflictKind.BLACKOUT.value: 2,
+            RecurringConflictKind.WEEKLY_QUOTA.value: 3,
+        }
+        conflicts.sort(key=lambda item: (item.occurrence_date, kind_order[item.kind], 0 if item.is_overridable else 1))
         return conflicts
+
+    async def _occupying_bookings_for_occurrence(
+        self, command: CreateRecurringBookingSeriesCommand, occurrence: _PreparedOccurrence
+    ) -> list[RecurringOccupyingBookingResult]:
+        merged: dict[UUID, RecurringOccupyingBookingResult] = {}
+        for room in command.rooms:
+            rows = await self._booking_repository.list_occupying_slots(facility_id=room.facility_id, start_at=occurrence.start_at, end_at=occurrence.end_at)
+            for item in rows:
+                facility_ids = list(dict.fromkeys([*item.facility_ids, room.facility_id]))
+                existing = merged.get(item.booking_id)
+                if existing:
+                    merged[item.booking_id] = existing.model_copy(update={"facility_ids": list(dict.fromkeys([*existing.facility_ids, *facility_ids]))})
+                else:
+                    merged[item.booking_id] = item.model_copy(update={"facility_ids": facility_ids})
+        return list(merged.values())
+
+    @staticmethod
+    def _unique_facility_ids(items: list[RecurringOccupyingBookingResult]) -> list[UUID]:
+        facility_ids: list[UUID] = []
+        for item in items:
+            for facility_id in item.facility_ids:
+                if facility_id not in facility_ids:
+                    facility_ids.append(facility_id)
+        return facility_ids
 
     async def _weekly_quota_conflict_dates(self, booker_id: UUID, occurrences: list[_PreparedOccurrence], local_tz: ZoneInfo) -> list[date]:
         local_dates = [item.start_at.astimezone(local_tz).date() for item in occurrences]
@@ -426,8 +545,8 @@ class RecurringBookingService:
         if not is_church_email(email, CHURCH_EMAIL_DOMAIN):
             raise ForbiddenException(detail="Facility Booking requires a church-domain account", error_code=FacilityErrorCode.RECURRING_NOT_ELIGIBLE.value)
 
-    async def _validate_ministry_series(self, ministry_id: UUID, booker_id: UUID) -> bool:
-        ministry = await self._ministry_repository.get_by_id(ministry_id)
+    async def _validate_ministry_series(self, ministry_id: UUID, booker_id: UUID) -> tuple[bool, Optional[str]]:
+        ministry = await self._ministry_repository.get_by_id(ministry_id, all_locales=True)
         status = ministry.status if ministry else await self._ministry_repository.get_status(ministry_id)
         if status != MinistryStatus.ACTIVE.value:
             raise BadRequestException(
@@ -437,4 +556,76 @@ class RecurringBookingService:
             )
         if not await self._ministry_repository.is_user_booking_member(ministry_id, booker_id):
             raise ForbiddenException(detail="User is not a ministry owner")
-        return bool(ministry.has_priority_booking) if ministry else False
+        is_priority = bool(ministry.has_priority_booking) if ministry else False
+        name_en, name_zh = resolve_bilingual_activity_names(ministry.translations if ministry else [], ministry.name if ministry else None)
+        return is_priority, name_en, name_zh
+
+    async def _primary_steward_contact(self, ministry_id: Optional[UUID]) -> tuple[Optional[str], Optional[str]]:
+        if ministry_id is None:
+            return None, None
+        members = await self._ministry_repository.list_members(ministry_id)
+        primary = next((member for member in members if member.member_role == MinistryMemberRole.PRIMARY.value), None)
+        if primary is None:
+            return None, None
+        display_name = primary.display_name or primary.email
+        return display_name, primary.email
+
+    async def _apply_priority_overrides(
+        self,
+        *,
+        command: CreateRecurringBookingSeriesCommand,
+        prepared: _PreparedSeries,
+        series_id: UUID,
+        occurrences: list[RecurringBookingOccurrenceResult],
+        remaining: list[_PreparedOccurrence],
+        overridable_conflicts: list[RecurringBookingConflictResult],
+    ) -> None:
+        if not overridable_conflicts:
+            return
+        occurrence_id_by_date = {item.occurrence_date: occurrence.id for item, occurrence in zip(remaining, occurrences, strict=True)}
+        log_rows: list[dict] = []
+        notification_items: list[RecurringOverrideNotificationItem] = []
+        overridden_ids: set[UUID] = set()
+        for conflict in overridable_conflicts:
+            church_activity_booking_id = occurrence_id_by_date[conflict.occurrence_date]
+            for occupying in conflict.occupying_bookings:
+                if occupying.booking_id not in overridden_ids:
+                    await self._booking_repository.override_booking(occupying.booking_id, prepared.operator_id, "Priority Ministry override")
+                    overridden_ids.add(occupying.booking_id)
+                for facility_id in occupying.facility_ids:
+                    log_rows.append(
+                        dict(
+                            id=uuid4(),
+                            facility_booking_id=church_activity_booking_id,
+                            overridden_booking_id=occupying.booking_id,
+                            overridden_by_id=prepared.operator_id,
+                            facility_id=facility_id,
+                            outcome=OverrideOutcome.OVERRIDE_APPLIED.value,
+                            reason="Priority Ministry override",
+                        )
+                    )
+                notification_items.append(
+                    RecurringOverrideNotificationItem(
+                        booking_id=occupying.booking_id,
+                        booker_id=occupying.user_id,
+                        occurrence_date=conflict.occurrence_date,
+                        facility_ids=occupying.facility_ids,
+                        church_activity_booking_id=church_activity_booking_id,
+                    )
+                )
+        if log_rows:
+            await self._override_log_repository.insert_logs(log_rows)
+        if not notification_items or command.ministry_id is None:
+            return
+        notification = RecurringOverrideNotification(
+            series_id=series_id,
+            ministry_id=command.ministry_id,
+            church_activity_name=prepared.ministry_name or "Church Activity",
+            church_activity_name_zh=prepared.ministry_name_zh or prepared.ministry_name or "Church Activity",
+            actor_id=prepared.operator_id,
+            items=notification_items,
+        )
+        try:
+            await self._override_notifier.notify_priority_override(notification)
+        except Exception:
+            logger.exception("Priority Ministry override email failed for series %s", series_id)

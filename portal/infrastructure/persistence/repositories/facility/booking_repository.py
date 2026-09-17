@@ -11,7 +11,13 @@ from uuid import UUID
 import sqlalchemy as sa
 
 from portal.application.facility.commands import BookingPagesQueryCommand, BookingRangeQueryCommand, UpdateBookingCommand
-from portal.application.facility.results import BookingDetailResult, BookingListItemResult, BookingRoomLineResult, BookingSlotResult
+from portal.application.facility.results import (
+    BookingDetailResult,
+    BookingListItemResult,
+    BookingRoomLineResult,
+    BookingSlotResult,
+    RecurringOccupyingBookingResult,
+)
 from portal.domain.facility.constants import BookingSlotStatus, BookingStatus
 from portal.libs.database import Session
 from portal.models import (
@@ -302,6 +308,55 @@ class BookingRepository:
             query = query.where(FacilityBookingSlot.facility_booking_id != exclude_booking_id)
         count = await query.fetchval()
         return bool(count and count > 0)
+
+    async def list_occupying_slots(self, facility_id: UUID, start_at: datetime, end_at: datetime) -> list[RecurringOccupyingBookingResult]:
+        rows = await (
+            self._session.select(
+                FacilityBooking.id,
+                FacilityBooking.user_id,
+                FacilityBooking.ministry_id,
+                FacilityBookingSlot.facility_id,
+                FacilityBooking.start_at,
+                FacilityBooking.end_at,
+            )
+            .select_from(FacilityBookingSlot)
+            .join(FacilityBooking, FacilityBooking.id == FacilityBookingSlot.facility_booking_id)
+            .where(FacilityBookingSlot.facility_id == facility_id)
+            .where(FacilityBookingSlot.status == BookingSlotStatus.CONFIRMED.value)
+            .where(FacilityBookingSlot.start_at < end_at)
+            .where(FacilityBookingSlot.end_at > start_at)
+            .where(FacilityBooking.is_deleted == False)
+            .where(FacilityBooking.status.in_([BookingStatus.CONFIRMED.value, BookingStatus.PENDING_PAYMENT.value]))
+            .fetch()
+        )
+        occupying: list[RecurringOccupyingBookingResult] = []
+        for row in rows or []:
+            occupying.append(
+                RecurringOccupyingBookingResult(
+                    booking_id=row["id"],
+                    user_id=row["user_id"],
+                    ministry_id=row["ministry_id"],
+                    facility_ids=[row["facility_id"]],
+                    start_at=row["start_at"],
+                    end_at=row["end_at"],
+                )
+            )
+        return occupying
+
+    async def override_booking(self, booking_id: UUID, overridden_by_id: Optional[UUID], reason: Optional[str]) -> None:
+        now = datetime.now(timezone.utc)
+        await (
+            self._session.update(FacilityBooking)
+            .values(status=BookingStatus.OVERRIDDEN.value, cancelled_at=now, cancelled_by_id=overridden_by_id, cancel_reason=reason)
+            .where(FacilityBooking.id == booking_id)
+            .execute()
+        )
+        await (
+            self._session.update(FacilityBookingSlot)
+            .values(status=BookingSlotStatus.CANCELLED.value)
+            .where(FacilityBookingSlot.facility_booking_id == booking_id)
+            .execute()
+        )
 
     async def cancel_booking(self, booking_id: UUID, cancelled_by_id: Optional[UUID], cancel_reason: Optional[str], cancel_slots: bool) -> None:
         now = datetime.now(timezone.utc)

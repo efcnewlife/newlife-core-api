@@ -323,6 +323,22 @@ resources = [
         "pid": FACILITY_PARENT_ID,
     },
     {
+        "code": "facility:booking_payment",
+        "name": "Booking Payment Confirmation",
+        "key": "FACILITY_BOOKING_PAYMENT",
+        "icon": "MdPayments",
+        "path": "/facility/booking-payment",
+        "type": ResourceType.GENERAL.value,
+        "sequence": 13.5,
+        "is_visible": False,
+        "translations": _with_locale_values({"zh-TW": "預訂付款確認", "zh-CN": "预订付款确认", "en": "Booking Payment Confirmation"}),
+        "description": "Confirm Pending-payment Bookings as paid",
+        "description_translations": _with_locale_descriptions(
+            {"zh-TW": "將待付款預訂確認為已付款", "zh-CN": "将待付款预订确认为已付款", "en": "Confirm Pending-payment Bookings as paid"}
+        ),
+        "pid": FACILITY_PARENT_ID,
+    },
+    {
         "code": "facility:booking_override_log",
         "name": "Override Logs",
         "key": "FACILITY_BOOKING_OVERRIDE_LOG",
