@@ -14,6 +14,7 @@ from portal.application.facility.commands import CreateRecurringBookingSeriesCom
 from portal.application.facility.pricing_service import PricingService
 from portal.application.facility.recurring_override_mail_content import resolve_bilingual_activity_names
 from portal.application.facility.results import (
+    PendingPaymentExpirySweepResult,
     RecurringBookingConflictResult,
     RecurringBookingOccurrenceResult,
     RecurringBookingPreviewResult,
@@ -21,10 +22,12 @@ from portal.application.facility.results import (
     RecurringOccupyingBookingResult,
     RecurringOverrideNotification,
     RecurringOverrideNotificationItem,
+    RecurringPaymentHoldExpiryNotification,
 )
 from portal.application.system.setting_service import SettingService
 from portal.domain.facility.constants import (
     CHURCH_EMAIL_DOMAIN,
+    PENDING_PAYMENT_HOLD_EXPIRED_REASON,
     BookingErrorCode,
     BookingSlotStatus,
     BookingStatus,
@@ -35,6 +38,7 @@ from portal.domain.facility.constants import (
 )
 from portal.domain.facility.recurring import (
     is_church_email,
+    is_pending_payment_hold_active,
     is_within_availability_window,
     localize_wall_time,
     opening_date_for_period,
@@ -43,7 +47,7 @@ from portal.domain.facility.recurring import (
     weekly_occurrence_dates,
 )
 from portal.domain.org.constants import MinistryMemberRole, MinistryStatus
-from portal.exceptions.responses import BadRequestException, ConflictErrorException, ForbiddenException
+from portal.exceptions.responses import BadRequestException, ConflictErrorException, ForbiddenException, NotFoundException
 from portal.infrastructure.persistence.repositories.facility.booking_repository import BookingRepository
 from portal.infrastructure.persistence.repositories.facility.override_log_repository import OverrideLogRepository
 from portal.infrastructure.persistence.repositories.facility.recurring_booking_repository import RecurringBookingRepository
@@ -77,10 +81,23 @@ class RecurringOverrideNotifierPort(Protocol):
     async def notify_priority_override(self, notification: RecurringOverrideNotification) -> None: ...
 
 
+class RecurringExpiryNotifierPort(Protocol):
+    """Send Pending-payment hold expiry mail to the Booker."""
+
+    async def notify_payment_hold_expired(self, notification: RecurringPaymentHoldExpiryNotification) -> None: ...
+
+
 class NullRecurringOverrideNotifier:
     """No-op notifier used when mail is not wired."""
 
     async def notify_priority_override(self, notification: RecurringOverrideNotification) -> None:
+        return None
+
+
+class NullRecurringExpiryNotifier:
+    """No-op expiry notifier used when mail is not wired."""
+
+    async def notify_payment_hold_expired(self, notification: RecurringPaymentHoldExpiryNotification) -> None:
         return None
 
 
@@ -98,6 +115,7 @@ class RecurringBookingService:
         user_read_service: UserReadService,
         override_log_repository: OverrideLogRepository,
         override_notifier: Optional[RecurringOverrideNotifierPort] = None,
+        expiry_notifier: Optional[RecurringExpiryNotifierPort] = None,
         now_utc: Optional[Callable[[], datetime]] = None,
     ):
         self._series_repository = series_repository
@@ -109,6 +127,7 @@ class RecurringBookingService:
         self._user_read_service = user_read_service
         self._override_log_repository = override_log_repository
         self._override_notifier = override_notifier or NullRecurringOverrideNotifier()
+        self._expiry_notifier = expiry_notifier or NullRecurringExpiryNotifier()
         self._now_utc = now_utc or (lambda: datetime.now(timezone.utc))
         self._user_ctx: Optional[UserContext] = get_user_context()
 
@@ -288,6 +307,65 @@ class RecurringBookingService:
             is_priority=is_priority,
             occurrences=occurrences,
         )
+
+    @distributed_trace()
+    async def confirm_payment(self, series_id: UUID) -> RecurringBookingSeriesResult:
+        operator_id = self._user_ctx.user_id if self._user_ctx else None
+        if not operator_id:
+            raise ForbiddenException(detail="Authenticated user required")
+        series = await self._series_repository.get_by_id(series_id)
+        if series is None:
+            raise NotFoundException(detail="Recurring Booking Series not found", error_code=FacilityErrorCode.BOOKING_SERIES_NOT_FOUND.value)
+        occurrences = await self._booking_repository.list_series_occurrences(series_id)
+        if series.status == BookingStatus.CONFIRMED.value:
+            return series.model_copy(update={"occurrences": occurrences, "occurrence_count": len(occurrences), "confirmed_by_id": series.confirmed_by_id})
+        if series.status != BookingStatus.PENDING_PAYMENT.value or not is_pending_payment_hold_active(series.payment_hold_expires_at, self._now_utc()):
+            raise BadRequestException(
+                detail="Recurring Booking Series is not Pending-payment", error_code=FacilityErrorCode.BOOKING_SERIES_NOT_PENDING_PAYMENT.value
+            )
+        operator_name = self._user_ctx.username or self._user_ctx.email or "system"
+        await self._series_repository.update_series(
+            series_id, dict(status=BookingStatus.CONFIRMED.value, payment_hold_expires_at=None, updated_by_id=operator_id, updated_by=operator_name)
+        )
+        await self._booking_repository.confirm_pending_series_bookings(series_id, operator_id)
+        confirmed_occurrences = await self._booking_repository.list_series_occurrences(series_id)
+        return series.model_copy(
+            update={
+                "status": BookingStatus.CONFIRMED.value,
+                "payment_hold_expires_at": None,
+                "confirmed_by_id": operator_id,
+                "occurrences": confirmed_occurrences,
+                "occurrence_count": len(confirmed_occurrences),
+            }
+        )
+
+    @distributed_trace()
+    async def expire_pending_holds(self) -> PendingPaymentExpirySweepResult:
+        acquired = await self._series_repository.try_acquire_sweep_lock()
+        if not acquired:
+            return PendingPaymentExpirySweepResult(skipped=True)
+        expired_series_ids: list[UUID] = []
+        now_utc = self._now_utc()
+        expired_series = await self._series_repository.list_expired_pending_series(now_utc)
+        for series in expired_series:
+            occurrences = await self._booking_repository.list_series_occurrences(series.id)
+            pending_occurrences = [item for item in occurrences if item.status == BookingStatus.PENDING_PAYMENT.value]
+            await self._series_repository.update_series(series.id, dict(status=BookingStatus.CANCELLED.value))
+            for occurrence in pending_occurrences:
+                await self._booking_repository.cancel_booking(occurrence.id, None, PENDING_PAYMENT_HOLD_EXPIRED_REASON, True)
+            expired_series_ids.append(series.id)
+            notification = RecurringPaymentHoldExpiryNotification(
+                series_id=series.id, booker_id=series.user_id, quoted_amount=series.quoted_amount, currency=series.currency, occurrences=pending_occurrences
+            )
+            try:
+                await self._expiry_notifier.notify_payment_hold_expired(notification)
+            except Exception:
+                logger.exception("Pending-payment hold expiry email failed for series %s", series.id)
+        return PendingPaymentExpirySweepResult(skipped=False, expired_series_ids=expired_series_ids)
+
+    @distributed_trace()
+    async def release_pending_payment_sweep_lock(self) -> None:
+        await self._series_repository.release_sweep_lock()
 
     async def _prepare_series(self, command: CreateRecurringBookingSeriesCommand) -> _PreparedSeries:
         operator_id = self._user_ctx.user_id if self._user_ctx else None

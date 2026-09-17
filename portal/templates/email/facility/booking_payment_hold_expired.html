@@ -1,0 +1,45 @@
+{% extends "email/base.html" %}
+
+{% block title %}Pending-payment Booking expired{% endblock %}
+
+{% block content %}
+{% set language_label = "English" %}
+{% include "email/partials/language_section_marker.html" %}
+
+<p style="margin: 0 0 16px; font-size: 16px;">Hello,</p>
+<p style="margin: 0 0 16px; font-size: 16px; line-height: 1.5;">
+  Your Pending-payment Recurring Booking Series expired before payment was confirmed. The following occurrence(s) have been released.
+</p>
+<ul style="margin: 0 0 16px; padding-left: 20px; font-size: 16px; line-height: 1.5;">
+  {% for line in occurrence_lines_en %}
+  <li>{{ line }}</li>
+  {% endfor %}
+</ul>
+<p style="margin: 0 0 16px; font-size: 16px; line-height: 1.5;">
+  Former Series payment total: <strong>{{ payment_total }}</strong>
+</p>
+<p style="margin: 0 0 16px;">
+  <a href="{{ start_booking_url }}" style="display: inline-block; background-color: #1865d8; color: #ffffff; text-decoration: none; padding: 10px 18px; border-radius: 6px; font-weight: bold;">Start a new Booking</a>
+</p>
+
+{% include "email/partials/bilingual_divider.html" %}
+
+{% set language_label = "中文" %}
+{% include "email/partials/language_section_marker.html" %}
+
+<p style="margin: 0 0 16px; font-size: 16px;">您好，</p>
+<p style="margin: 0 0 16px; font-size: 16px; line-height: 1.5;">
+  您的待付款週期預訂已在付款確認前逾期，以下場次已釋出。
+</p>
+<ul style="margin: 0 0 16px; padding-left: 20px; font-size: 16px; line-height: 1.5;">
+  {% for line in occurrence_lines_zh %}
+  <li>{{ line }}</li>
+  {% endfor %}
+</ul>
+<p style="margin: 0 0 16px; font-size: 16px; line-height: 1.5;">
+  原系列付款總額：<strong>{{ payment_total }}</strong>
+</p>
+<p style="margin: 0;">
+  <a href="{{ start_booking_url }}" style="display: inline-block; background-color: #1865d8; color: #ffffff; text-decoration: none; padding: 10px 18px; border-radius: 6px; font-weight: bold;">開始新的預訂</a>
+</p>
+{% endblock %}

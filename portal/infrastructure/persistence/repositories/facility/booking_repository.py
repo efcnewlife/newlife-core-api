@@ -16,6 +16,7 @@ from portal.application.facility.results import (
     BookingListItemResult,
     BookingRoomLineResult,
     BookingSlotResult,
+    RecurringBookingOccurrenceResult,
     RecurringOccupyingBookingResult,
 )
 from portal.domain.facility.constants import BookingSlotStatus, BookingStatus
@@ -26,6 +27,7 @@ from portal.models import (
     AuthUserThirdParty,
     FacilityBooking,
     FacilityBookingRoom,
+    FacilityBookingSeries,
     FacilityBookingSlot,
     FacilityRoom,
     FacilityRoomTranslation,
@@ -299,8 +301,12 @@ class BookingRepository:
         query = (
             self._session.select(sa.func.count())
             .select_from(FacilityBookingSlot)
+            .join(FacilityBooking, FacilityBooking.id == FacilityBookingSlot.facility_booking_id)
+            .outerjoin(FacilityBookingSeries, FacilityBookingSeries.id == FacilityBooking.series_id)
             .where(FacilityBookingSlot.facility_id == facility_id)
             .where(FacilityBookingSlot.status == BookingSlotStatus.CONFIRMED.value)
+            .where(FacilityBooking.is_deleted == False)
+            .where(self._active_occupancy_clause())
             .where(FacilityBookingSlot.start_at < end_at)
             .where(FacilityBookingSlot.end_at > start_at)
         )
@@ -321,12 +327,13 @@ class BookingRepository:
             )
             .select_from(FacilityBookingSlot)
             .join(FacilityBooking, FacilityBooking.id == FacilityBookingSlot.facility_booking_id)
+            .outerjoin(FacilityBookingSeries, FacilityBookingSeries.id == FacilityBooking.series_id)
             .where(FacilityBookingSlot.facility_id == facility_id)
             .where(FacilityBookingSlot.status == BookingSlotStatus.CONFIRMED.value)
             .where(FacilityBookingSlot.start_at < end_at)
             .where(FacilityBookingSlot.end_at > start_at)
             .where(FacilityBooking.is_deleted == False)
-            .where(FacilityBooking.status.in_([BookingStatus.CONFIRMED.value, BookingStatus.PENDING_PAYMENT.value]))
+            .where(self._active_occupancy_clause())
             .fetch()
         )
         occupying: list[RecurringOccupyingBookingResult] = []
@@ -395,15 +402,70 @@ class BookingRepository:
     async def list_rental_occurrence_starts(self, user_id: UUID, range_start: datetime, range_end: datetime) -> list[datetime]:
         rows = await (
             self._session.select(FacilityBooking.start_at)
+            .select_from(FacilityBooking)
+            .outerjoin(FacilityBookingSeries, FacilityBookingSeries.id == FacilityBooking.series_id)
             .where(FacilityBooking.user_id == user_id)
             .where(FacilityBooking.ministry_id.is_(None))
             .where(FacilityBooking.is_deleted == False)
-            .where(FacilityBooking.status.in_([BookingStatus.CONFIRMED.value, BookingStatus.PENDING_PAYMENT.value]))
+            .where(self._active_occupancy_clause())
             .where(FacilityBooking.start_at >= range_start)
             .where(FacilityBooking.start_at < range_end)
             .fetchvals()
         )
         return rows or []
+
+    async def list_series_occurrences(self, series_id: UUID) -> list[RecurringBookingOccurrenceResult]:
+        rows = await (
+            self._session.select(
+                FacilityBooking.id,
+                FacilityBooking.start_at,
+                FacilityBooking.end_at,
+                FacilityBooking.status,
+                FacilityBooking.quoted_amount,
+                FacilityBooking.currency,
+            )
+            .where(FacilityBooking.series_id == series_id)
+            .where(FacilityBooking.is_deleted == False)
+            .order_by(FacilityBooking.start_at.asc())
+            .fetch()
+        )
+        rows = list(rows or [])
+        ids_by_booking_id, _names = await self._fetch_facility_lines_by_booking_ids([row["id"] for row in rows], None)
+        return [
+            RecurringBookingOccurrenceResult(
+                id=row["id"],
+                start_at=row["start_at"],
+                end_at=row["end_at"],
+                status=row["status"],
+                quoted_amount=row["quoted_amount"],
+                currency=row["currency"],
+                facility_ids=ids_by_booking_id.get(row["id"], []),
+            )
+            for row in rows
+        ]
+
+    async def confirm_pending_series_bookings(self, series_id: UUID, operator_id: Optional[UUID]) -> None:
+        values: dict[str, Any] = {"status": BookingStatus.CONFIRMED.value}
+        if operator_id:
+            values["updated_by_id"] = operator_id
+        await (
+            self._session.update(FacilityBooking)
+            .values(**values)
+            .where(FacilityBooking.series_id == series_id)
+            .where(FacilityBooking.status == BookingStatus.PENDING_PAYMENT.value)
+            .where(FacilityBooking.is_deleted == False)
+            .execute()
+        )
+
+    @staticmethod
+    def _active_occupancy_clause():
+        return sa.or_(
+            FacilityBooking.status == BookingStatus.CONFIRMED.value,
+            sa.and_(
+                FacilityBooking.status == BookingStatus.PENDING_PAYMENT.value,
+                sa.or_(FacilityBookingSeries.payment_hold_expires_at.is_(None), FacilityBookingSeries.payment_hold_expires_at > sa.func.now()),
+            ),
+        )
 
     async def list_user_bookings(self, user_id: UUID, locale_id: Optional[UUID]) -> list[BookingListItemResult]:
         # Reuse pages query with large page for member "mine" list

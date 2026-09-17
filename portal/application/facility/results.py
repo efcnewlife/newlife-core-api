@@ -497,11 +497,12 @@ class RecurringBookingSeriesResult(UUIDBaseModel):
     local_start_time: time = Field(...)
     local_end_time: time = Field(...)
     status: str = Field(...)
-    payment_hold_expires_at: datetime = Field(...)
+    payment_hold_expires_at: Optional[datetime] = Field(default=None)
     quoted_amount: Decimal = Field(...)
     currency: str = Field(...)
     occurrence_count: int = Field(...)
     is_priority: bool = Field(default=False)
+    confirmed_by_id: Optional[UUID] = Field(default=None)
     occurrences: list[RecurringBookingOccurrenceResult] = Field(default_factory=list)
 
 
@@ -562,3 +563,20 @@ class RecurringOverrideNotification(BaseModel):
             if item.booker_id not in seen:
                 seen.append(item.booker_id)
         return seen
+
+
+class RecurringPaymentHoldExpiryNotification(BaseModel):
+    """Payload for bilingual Pending-payment hold expiry mail to the Booker."""
+
+    series_id: UUID = Field(...)
+    booker_id: UUID = Field(...)
+    quoted_amount: Decimal = Field(...)
+    currency: str = Field(...)
+    occurrences: list[RecurringBookingOccurrenceResult] = Field(default_factory=list)
+
+
+class PendingPaymentExpirySweepResult(BaseModel):
+    """Outcome of one Pending-payment hold expiry sweep."""
+
+    skipped: bool = Field(default=False)
+    expired_series_ids: list[UUID] = Field(default_factory=list)

@@ -277,6 +277,8 @@ class StubBookingRepository:
         self.replace_rooms_calls: list = []
         self.replace_slots_calls: list = []
         self.fetch_range_calls: list[BookingRangeQueryCommand] = []
+        self.series_occurrences: dict[UUID, list[Any]] = {}
+        self.confirm_series_calls: list[dict] = []
 
     async def exists_by_id(self, booking_id: UUID) -> bool:
         return self.exists
@@ -320,9 +322,22 @@ class StubBookingRepository:
 
     async def cancel_booking(self, booking_id: UUID, cancelled_by_id: UUID | None, cancel_reason: str | None, cancel_slots: bool) -> None:
         self.cancel_calls.append(dict(booking_id=booking_id, cancelled_by_id=cancelled_by_id, cancel_reason=cancel_reason, cancel_slots=cancel_slots))
+        for occurrences in self.series_occurrences.values():
+            for occurrence in occurrences:
+                if occurrence.id == booking_id:
+                    occurrence.status = BookingStatus.CANCELLED.value
 
     async def override_booking(self, booking_id: UUID, overridden_by_id: UUID | None, reason: str | None) -> None:
         self.override_calls.append(dict(booking_id=booking_id, overridden_by_id=overridden_by_id, reason=reason))
+
+    async def list_series_occurrences(self, series_id: UUID):
+        return list(self.series_occurrences.get(series_id, []))
+
+    async def confirm_pending_series_bookings(self, series_id: UUID, operator_id: UUID | None) -> None:
+        self.confirm_series_calls.append(dict(series_id=series_id, operator_id=operator_id))
+        for occurrence in self.series_occurrences.get(series_id, []):
+            if getattr(occurrence, "status", None) == BookingStatus.PENDING_PAYMENT.value:
+                occurrence.status = BookingStatus.CONFIRMED.value
 
     async def update_booking_header(self, booking_id: UUID, values: dict) -> None:
         self.update_header_calls.append(values)
@@ -564,11 +579,42 @@ class StubMinistryRepository:
 class StubRecurringBookingRepository:
     """In-memory Recurring Booking Series persistence stub."""
 
-    def __init__(self):
+    def __init__(self, series_by_id: dict | None = None, lock_acquired: bool = True):
         self.insert_series_calls: list[dict] = []
+        self.update_series_calls: list[dict] = []
+        self.series_by_id = series_by_id or {}
+        self.lock_acquired = lock_acquired
+        self.lock_acquire_calls = 0
+        self.lock_release_calls = 0
 
     async def insert_series(self, payload: dict) -> None:
         self.insert_series_calls.append(payload)
+
+    async def get_by_id(self, series_id: UUID):
+        return self.series_by_id.get(series_id)
+
+    async def update_series(self, series_id: UUID, values: dict) -> None:
+        self.update_series_calls.append({"id": series_id, **values})
+        existing = self.series_by_id.get(series_id)
+        if existing is not None:
+            self.series_by_id[series_id] = existing.model_copy(update=values)
+
+    async def list_expired_pending_series(self, now: datetime) -> list:
+        expired = []
+        for series in self.series_by_id.values():
+            if series.status != BookingStatus.PENDING_PAYMENT.value:
+                continue
+            if series.payment_hold_expires_at is None or series.payment_hold_expires_at > now:
+                continue
+            expired.append(series)
+        return expired
+
+    async def try_acquire_sweep_lock(self) -> bool:
+        self.lock_acquire_calls += 1
+        return self.lock_acquired
+
+    async def release_sweep_lock(self) -> None:
+        self.lock_release_calls += 1
 
 
 class StubRecurringOverrideNotifier:
@@ -579,6 +625,19 @@ class StubRecurringOverrideNotifier:
         self.raise_error = raise_error
 
     async def notify_priority_override(self, notification) -> None:
+        self.calls.append(notification)
+        if self.raise_error:
+            raise self.raise_error
+
+
+class StubRecurringExpiryNotifier:
+    """Records Pending-payment hold expiry notifications."""
+
+    def __init__(self, raise_error: Exception | None = None):
+        self.calls: list = []
+        self.raise_error = raise_error
+
+    async def notify_payment_hold_expired(self, notification) -> None:
         self.calls.append(notification)
         if self.raise_error:
             raise self.raise_error

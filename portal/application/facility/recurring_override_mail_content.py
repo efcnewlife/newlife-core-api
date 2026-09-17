@@ -14,6 +14,8 @@ ZH_CN_LOCALE_ID = UUID("019dd0c8-7c12-727f-878f-16807adf39e8")
 
 OVERRIDE_SUBJECT = "Church Activity Booking override / 教會活動預訂覆寫"
 TEMPLATE_BOOKING_OVERRIDE = "email/facility/booking_override.html"
+EXPIRY_SUBJECT = "Pending-payment Booking expired / 待付款預訂已逾期"
+TEMPLATE_BOOKING_PAYMENT_HOLD_EXPIRED = "email/facility/booking_payment_hold_expired.html"
 
 
 def resolve_bilingual_activity_names(translations: list[TranslationItemResult], fallback_name: str | None) -> tuple[str, str]:

@@ -6,7 +6,7 @@ from calendar import monthrange
 from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from portal.domain.facility.constants import RecurringUsePeriod
+from portal.domain.facility.constants import BookingStatus, RecurringUsePeriod
 from portal.domain.system.constants import RecurringAvailabilityUnit
 
 
@@ -78,3 +78,19 @@ def is_church_email(email: str | None, domain: str) -> bool:
     if not email or "@" not in email:
         return False
     return email.rsplit("@", 1)[-1].lower() == domain.lower()
+
+
+def is_pending_payment_hold_active(payment_hold_expires_at: datetime | None, now: datetime) -> bool:
+    """True when a Pending-payment hold still reserves occupancy at query time."""
+    if payment_hold_expires_at is None:
+        return True
+    return payment_hold_expires_at > now
+
+
+def is_logically_occupying(*, booking_status: str, payment_hold_expires_at: datetime | None, now: datetime) -> bool:
+    """True when a Booking still occupies a room, including an unexpired Pending-payment hold."""
+    if booking_status == BookingStatus.CONFIRMED.value:
+        return True
+    if booking_status != BookingStatus.PENDING_PAYMENT.value:
+        return False
+    return is_pending_payment_hold_active(payment_hold_expires_at, now)
