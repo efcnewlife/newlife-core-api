@@ -100,6 +100,17 @@ async def test_create_mock_user_honors_is_active_false():
 
 
 @pytest.mark.asyncio
+async def test_create_mock_user_commit_false_lets_caller_batch_the_transaction():
+    session = StubSession()
+    service = MockUserSeedService(session)
+
+    await service.run(email="steward.aaaa@test.local", first_name="Steward", last_name="Mock", commit=False)
+
+    assert session.committed is False
+    assert len(session.inserted_auth_users) == 1
+
+
+@pytest.mark.asyncio
 async def test_create_mock_user_rejects_non_testing_suffix():
     session = StubSession()
     service = MockUserSeedService(session)

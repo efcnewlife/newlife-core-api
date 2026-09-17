@@ -38,12 +38,13 @@ class MockUserSeedService:
     def __init__(self, session: Session):
         self._session = session
 
-    async def run(self, email: str, first_name: str, last_name: str, *, is_active: bool = True) -> Optional[Any]:
+    async def run(self, email: str, first_name: str, last_name: str, *, is_active: bool = True, commit: bool = True) -> Optional[Any]:
         """
         Create a member testing account when one does not already exist for the email.
 
         `is_active=False` still creates a verified account so Mock login can exercise
-        its inactive-account rejection path (ADR 0025).
+        its inactive-account rejection path (ADR 0025). `commit=False` lets a caller
+        (e.g. seed-mock-users) batch several persona inserts into one transaction.
         """
         normalized_email = (email or "").strip().lower()
 
@@ -94,7 +95,8 @@ class MockUserSeedService:
             .execute()
         )
 
-        await self._session.commit()
+        if commit:
+            await self._session.commit()
 
         click.echo(f"Mock testing account created: {normalized_email}")
         return await self._session.select(AuthUser).where(AuthUser.id == user_id).fetchrow()

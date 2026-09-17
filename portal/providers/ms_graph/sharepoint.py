@@ -7,16 +7,12 @@ archive writer must use its own least-privilege Entra registration
 general-purpose Graph app used for mail/user sync (ADR 0025).
 """
 
-from azure.identity.aio import ClientSecretCredential
-from kiota_abstractions.request_adapter import RequestAdapter
 from msgraph_beta import GraphServiceClient
 from msgraph_beta.generated.models.o_data_errors.o_data_error import ODataError
-from msgraph_beta.graph_request_adapter import GraphRequestAdapter
 
 from portal.config import settings
-from portal.providers.ms_graph.authentication_provider import CustomAzureIdentityAuthenticationProvider
+from portal.providers.ms_graph.graph_client_factory import build_app_only_graph_client
 
-GRAPH_SCOPE = ["https://graph.microsoft.com/.default"]
 GRAPH_BASE_URL = "https://graph.microsoft.com/beta/"
 HTTP_NOT_FOUND = 404
 
@@ -30,25 +26,15 @@ class MSGraphSharePoint:
         )
 
     @property
-    def _credential(self) -> ClientSecretCredential:
+    def client(self) -> GraphServiceClient:
         if not self.is_configured():
             raise RuntimeError("SharePoint archive writer is not configured")
-        return ClientSecretCredential(
+        return build_app_only_graph_client(
             tenant_id=str(settings.SHAREPOINT_TENANT_ID),
             client_id=str(settings.SHAREPOINT_APP_CLIENT_ID),
             client_secret=str(settings.SHAREPOINT_APP_CLIENT_SECRET),
+            base_url=GRAPH_BASE_URL,
         )
-
-    @property
-    def _request_adapter(self) -> RequestAdapter:
-        auth_provider = CustomAzureIdentityAuthenticationProvider(credentials=self._credential, scopes=GRAPH_SCOPE)
-        adapter = GraphRequestAdapter(auth_provider=auth_provider)
-        adapter.base_url = GRAPH_BASE_URL
-        return adapter
-
-    @property
-    def client(self) -> GraphServiceClient:
-        return GraphServiceClient(request_adapter=self._request_adapter)
 
     async def item_exists(self, *, drive_id: str, item_path: str) -> bool:
         """Return True when a drive item already exists at `root:/{item_path}:`."""

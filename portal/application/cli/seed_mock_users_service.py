@@ -166,7 +166,7 @@ class SeedMockUsersService:
         user_ids_by_persona: dict[str, UUID] = {}
         for persona in personas:
             user_row = await MockUserSeedService(self._session).run(
-                email=persona.email, first_name=persona.first_name, last_name=persona.last_name, is_active=persona.is_active
+                email=persona.email, first_name=persona.first_name, last_name=persona.last_name, is_active=persona.is_active, commit=False
             )
             user_ids_by_persona[persona.persona] = user_row["id"]
 

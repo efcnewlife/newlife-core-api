@@ -5,16 +5,13 @@ MSGraphClientBase — app-only Microsoft Graph beta client.
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Type
 
-from azure.identity.aio import ClientSecretCredential
 from kiota_abstractions.request_option import RequestOption
 from msgraph_beta import GraphServiceClient
 from msgraph_beta.generated.models.o_data_errors.o_data_error import ODataError
-from msgraph_beta.graph_request_adapter import GraphRequestAdapter
 
 from portal.config import settings
-from portal.providers.ms_graph.authentication_provider import CustomAzureIdentityAuthenticationProvider
+from portal.providers.ms_graph.graph_client_factory import build_app_only_graph_client
 
-GRAPH_SCOPE = ["https://graph.microsoft.com/.default"]
 GRAPH_BASE_URL = "https://graph.microsoft.com/beta"
 
 
@@ -45,24 +42,12 @@ class MSGraphClientBase:
         return f"{GRAPH_BASE_URL}/"
 
     @property
-    def _credential(self) -> ClientSecretCredential:
+    def client(self) -> GraphServiceClient:
         if not self.is_configured():
             raise RuntimeError("Microsoft Graph is not configured")
-        return ClientSecretCredential(tenant_id=str(self._tenant_id), client_id=str(self._client_id), client_secret=str(self._client_secret))
-
-    @property
-    def _auth_provider(self) -> CustomAzureIdentityAuthenticationProvider:
-        return CustomAzureIdentityAuthenticationProvider(credentials=self._credential, scopes=GRAPH_SCOPE)
-
-    @property
-    def _request_adapter(self) -> GraphRequestAdapter:
-        adapter = GraphRequestAdapter(auth_provider=self._auth_provider)
-        adapter.base_url = self.base_url
-        return adapter
-
-    @property
-    def client(self) -> GraphServiceClient:
-        return GraphServiceClient(request_adapter=self._request_adapter)
+        return build_app_only_graph_client(
+            tenant_id=str(self._tenant_id), client_id=str(self._client_id), client_secret=str(self._client_secret), base_url=self.base_url
+        )
 
     @property
     def default_error(self) -> Dict[str, Type[ODataError]]:

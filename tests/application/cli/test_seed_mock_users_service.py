@@ -136,8 +136,9 @@ async def test_seed_mock_users_reports_clear_error_when_ministry_type_is_not_nul
     with pytest.raises(RuntimeError, match="66fd53b703c7"):
         await _service(tmp_path, session=session).run()
 
-    # Mock users are committed one at a time by MockUserSeedService; only the
-    # Ministry write (and everything after it) is aborted by the schema error.
+    # The whole seed (4 personas + Ministry) is one transaction; the schema error
+    # aborts it before the single commit, so nothing is left half-durable.
+    assert session.committed is False
     assert "OrgMinistryTranslation" not in session.inserted
     assert "OrgMinistryMember" not in session.inserted
 

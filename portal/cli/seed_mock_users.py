@@ -27,6 +27,7 @@ async def seed_mock_users() -> None:
         )
         await service.run()
     except MockSeedCatalogPrerequisiteError as error:
+        await session.rollback()
         click.echo(click.style(f"seed-mock-users failed: {error}", fg="red"))
         raise SystemExit(1) from error
     except MockSeedArchiveCollisionError as error:
@@ -43,6 +44,10 @@ async def seed_mock_users() -> None:
         logger.exception(error)
         raise SystemExit(1) from error
     except Exception as error:
+        # Reached before the single seed commit (e.g. the Ministry Type NOT-NULL schema
+        # error); rolling back here discards the whole batch, including the personas
+        # already inserted earlier in this same uncommitted transaction.
+        await session.rollback()
         click.echo(click.style(f"seed-mock-users failed: {error}", fg="red"))
         logger.exception(error)
         raise SystemExit(1) from error
