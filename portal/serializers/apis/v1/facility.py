@@ -286,3 +286,10 @@ class MemberRecurringBookingPreview(BaseModel):
     """Recurring Booking conflict preview; does not persist a Series."""
 
     conflicts: list[MemberRecurringBookingConflict] = Field(default_factory=list)
+
+
+class MemberRecurringBookingWindowStatus(BaseModel):
+    """Whether Recurring Booking currently accepts new Series."""
+
+    is_open: bool = Field(..., serialization_alias="isOpen")
+    next_opening_date: Optional[DateType] = Field(default=None, serialization_alias="nextOpeningDate")

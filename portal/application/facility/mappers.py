@@ -722,6 +722,12 @@ def recurring_booking_preview_to_member_api(result) -> "MemberRecurringBookingPr
     return MemberRecurringBookingPreview.model_validate(result.model_dump())
 
 
+def recurring_booking_window_status_to_api(result) -> "MemberRecurringBookingWindowStatus":
+    from portal.serializers.apis.v1.facility import MemberRecurringBookingWindowStatus
+
+    return MemberRecurringBookingWindowStatus.model_validate(result.model_dump())
+
+
 def pending_payment_series_list_to_admin_api(result) -> "AdminPendingPaymentSeriesList":
     from portal.serializers.admin.v1.facility.booking_series import AdminPendingPaymentSeriesList
 

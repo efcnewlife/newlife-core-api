@@ -27,6 +27,7 @@ from portal.application.facility.results import (
     RecurringBookingOccurrenceResult,
     RecurringBookingPreviewResult,
     RecurringBookingSeriesResult,
+    RecurringBookingWindowStatusResult,
     RecurringOccupyingBookingResult,
     RecurringOverrideNotification,
     RecurringOverrideNotificationItem,
@@ -47,10 +48,13 @@ from portal.domain.facility.constants import (
     RecurringConflictKind,
 )
 from portal.domain.facility.recurring import (
+    is_any_recurring_period_open,
     is_church_email,
+    is_first_occurrence_in_availability_window,
     is_pending_payment_hold_active,
     is_within_availability_window,
     localize_wall_time,
+    next_recurring_opening_date,
     opening_date_for_period,
     sunday_week_start,
     use_period_for_date,
@@ -163,6 +167,17 @@ class RecurringBookingService:
         prepared = await self._prepare_series(command)
         conflicts = await self._collect_conflicts(command, prepared)
         return RecurringBookingPreviewResult(conflicts=conflicts)
+
+    @distributed_trace()
+    async def get_window_status(self, first_occurrence_date: Optional[date] = None) -> RecurringBookingWindowStatusResult:
+        local_tz = await self._setting_service.get_facility_timezone()
+        now_local = self._now_utc().astimezone(local_tz)
+        window = await self._setting_service.get_recurring_booking_availability_window()
+        if first_occurrence_date is not None:
+            is_open = is_first_occurrence_in_availability_window(now_local, first_occurrence_date, window.amount, window.unit)
+        else:
+            is_open = is_any_recurring_period_open(now_local, window.amount, window.unit)
+        return RecurringBookingWindowStatusResult(is_open=is_open, next_opening_date=None if is_open else next_recurring_opening_date(now_local))
 
     @distributed_trace()
     async def create_series(self, command: CreateRecurringBookingSeriesCommand) -> RecurringBookingSeriesResult:

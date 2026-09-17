@@ -131,6 +131,28 @@ async def test_create_personal_series_is_pending_payment_with_hold_and_total(mon
 
 
 @pytest.mark.asyncio
+async def test_get_window_status_is_open_during_december_window(monkeypatch):
+    service, *_ = _service(monkeypatch)
+    result = await service.get_window_status()
+    assert result.is_open is True
+    assert result.next_opening_date is None
+    jan_jun = await service.get_window_status(date(2026, 1, 6))
+    assert jan_jun.is_open is True
+    jul_dec = await service.get_window_status(date(2026, 7, 7))
+    assert jul_dec.is_open is False
+    assert jul_dec.next_opening_date == date(2026, 6, 1)
+
+
+@pytest.mark.asyncio
+async def test_get_window_status_is_closed_in_september(monkeypatch):
+    closed_now = datetime(2026, 9, 17, 16, 0, tzinfo=timezone.utc)
+    service, *_ = _service(monkeypatch, now_utc=lambda: closed_now)
+    result = await service.get_window_status()
+    assert result.is_open is False
+    assert result.next_opening_date == date(2026, 12, 1)
+
+
+@pytest.mark.asyncio
 async def test_create_series_rejects_period_that_crosses_june_july(monkeypatch):
     service, *_ = _service(monkeypatch)
     with pytest.raises(BadRequestException) as exc_info:
