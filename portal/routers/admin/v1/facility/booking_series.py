@@ -9,6 +9,7 @@ from fastapi import Depends, status
 
 from portal.application.facility.mappers import (
     create_recurring_booking_series_to_command,
+    pending_payment_series_list_to_admin_api,
     recurring_booking_preview_to_admin_api,
     recurring_booking_series_to_admin_api,
 )
@@ -17,6 +18,7 @@ from portal.container import Container
 from portal.libs.consts.permission import Permission
 from portal.routers.auth_router import AuthRouter
 from portal.serializers.admin.v1.facility.booking_series import (
+    AdminPendingPaymentSeriesList,
     AdminRecurringBookingPreview,
     AdminRecurringBookingSeriesCreate,
     AdminRecurringBookingSeriesDetail,
@@ -24,6 +26,19 @@ from portal.serializers.admin.v1.facility.booking_series import (
 )
 
 router: AuthRouter = AuthRouter(is_admin=True)
+
+
+@router.get(
+    path="/pending-payment",
+    status_code=status.HTTP_200_OK,
+    response_model=AdminPendingPaymentSeriesList,
+    response_model_by_alias=True,
+    permissions=[Permission.FACILITY_BOOKING_PAYMENT.read],
+)
+@inject
+async def list_pending_payment_booking_series(recurring_booking_service: RecurringBookingService = Depends(Provide[Container.recurring_booking_service])):
+    result = await recurring_booking_service.list_pending_payment_series()
+    return pending_payment_series_list_to_admin_api(result)
 
 
 @router.post(

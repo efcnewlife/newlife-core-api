@@ -27,6 +27,7 @@ from portal.application.facility.mappers import (
     member_preview_quote_to_command,
     override_log_pages_query_to_command,
     pages_query_to_command,
+    pending_payment_series_list_to_admin_api,
     preview_quote_result_to_api,
     preview_quote_to_command,
     recurring_booking_preview_to_member_api,
@@ -41,6 +42,8 @@ from portal.application.facility.results import (
     BookingRoomLineResult,
     DayAvailabilityResult,
     DiscountRuleResult,
+    PendingPaymentSeriesListItemResult,
+    PendingPaymentSeriesListResult,
     PreviewQuoteResult,
     PreviewQuoteRoomLineResult,
     RecurringBookingConflictResult,
@@ -501,3 +504,40 @@ def test_recurring_booking_preview_includes_ministry_steward_contact():
     assert dumped["conflicts"][0]["ministryId"] == ministry_id
     assert dumped["conflicts"][0]["ministryStewardDisplayName"] == "Primary Steward"
     assert dumped["conflicts"][0]["ministryStewardEmail"] == "steward@efcnewlife.org"
+
+
+def test_pending_payment_series_list_to_admin_api_uses_camel_case():
+    series_id = uuid4()
+    user_id = uuid4()
+    ministry_id = uuid4()
+    expires_at = datetime(2026, 1, 13, 17, 0, tzinfo=timezone.utc)
+    result = PendingPaymentSeriesListResult(
+        items=[
+            PendingPaymentSeriesListItemResult(
+                id=series_id,
+                user_id=user_id,
+                user_email="booker@efcnewlife.org",
+                user_display_name="Jane Booker",
+                ministry_id=ministry_id,
+                ministry_name="Youth Fellowship",
+                quoted_amount=Decimal("240"),
+                currency="CAD",
+                occurrence_count=4,
+                payment_hold_expires_at=expires_at,
+                is_priority=True,
+            )
+        ]
+    )
+    dumped = pending_payment_series_list_to_admin_api(result).model_dump(by_alias=True)
+    item = dumped["items"][0]
+    assert item["id"] == str(series_id)
+    assert item["userId"] == user_id
+    assert item["userEmail"] == "booker@efcnewlife.org"
+    assert item["userDisplayName"] == "Jane Booker"
+    assert item["ministryId"] == ministry_id
+    assert item["ministryName"] == "Youth Fellowship"
+    assert item["quotedAmount"] == Decimal("240")
+    assert item["currency"] == "CAD"
+    assert item["occurrenceCount"] == 4
+    assert item["paymentHoldExpiresAt"] == expires_at
+    assert item["isPriority"] is True

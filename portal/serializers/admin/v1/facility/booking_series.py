@@ -86,3 +86,24 @@ class AdminRecurringBookingPreview(BaseModel):
     """Recurring Booking conflict preview; does not persist a Series."""
 
     conflicts: list[AdminRecurringBookingConflict] = Field(default_factory=list)
+
+
+class AdminPendingPaymentSeriesItem(UUIDBaseModel):
+    """Pending-payment Recurring Booking Series row for payment confirmation."""
+
+    user_id: UUID = Field(..., serialization_alias="userId")
+    user_email: Optional[str] = Field(default=None, serialization_alias="userEmail")
+    user_display_name: Optional[str] = Field(default=None, serialization_alias="userDisplayName")
+    ministry_id: Optional[UUID] = Field(default=None, serialization_alias="ministryId")
+    ministry_name: Optional[str] = Field(default=None, serialization_alias="ministryName")
+    quoted_amount: Decimal = Field(..., serialization_alias="quotedAmount")
+    currency: str = Field(...)
+    occurrence_count: int = Field(..., serialization_alias="occurrenceCount")
+    payment_hold_expires_at: Optional[datetime] = Field(default=None, serialization_alias="paymentHoldExpiresAt")
+    is_priority: bool = Field(default=False, serialization_alias="isPriority")
+
+
+class AdminPendingPaymentSeriesList(BaseModel):
+    """Actionable Pending-payment Recurring Booking Series."""
+
+    items: list[AdminPendingPaymentSeriesItem] = Field(default_factory=list)
