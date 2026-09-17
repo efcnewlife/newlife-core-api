@@ -137,6 +137,24 @@ class RoomBlackoutListResult(BaseModel):
     items: list[RoomBlackoutResult] = Field(default_factory=list)
 
 
+class BlackoutImpactOccurrenceResult(UUIDBaseModel):
+    """One future Recurring Booking Occurrence overlapping a proposed Blackout."""
+
+    series_id: UUID = Field(...)
+    start_at: datetime = Field(...)
+    end_at: datetime = Field(...)
+    status: str = Field(...)
+    facility_ids: list[UUID] = Field(default_factory=list)
+    ministry_id: Optional[UUID] = Field(default=None)
+
+
+class BlackoutImpactResult(BaseModel):
+    """Blackout impact preview; does not persist a Blackout or cancel occurrences."""
+
+    confirmation_required: bool = Field(...)
+    items: list[BlackoutImpactOccurrenceResult] = Field(default_factory=list)
+
+
 class RentalRateTemplateResult(UUIDBaseModel):
     """Rental rate template row."""
 
@@ -322,6 +340,7 @@ class BookingListItemResult(UUIDBaseModel):
     facility_ids: list[UUID] = Field(default_factory=list)
     facility_names: list[str] = Field(default_factory=list)
     booking_type: str = Field(...)
+    series_id: Optional[UUID] = Field(default=None)
     start_at: datetime = Field(...)
     end_at: datetime = Field(...)
     status: str = Field(...)

@@ -176,6 +176,31 @@ class RoomBlackoutRepository:
                 return True
         return False
 
+    def interval_overlaps_blackout(self, item: RoomBlackoutResult, facility_id: UUID, start_at: datetime, end_at: datetime, tz: ZoneInfo) -> bool:
+        """Return True when [start_at, end_at) overlaps one proposed or persisted Blackout."""
+        if not item.is_active:
+            return False
+        if not self.scopes_overlap(item.facility_id, facility_id):
+            return False
+        local_start = start_at.astimezone(tz)
+        local_end = end_at.astimezone(tz)
+        if local_start.date() != local_end.date():
+            days = {local_start.date(), local_end.date()}
+        else:
+            days = {local_start.date()}
+        for day in days:
+            if not self.applies_on_date(item, day):
+                continue
+            if day == local_start.date() and day == local_end.date():
+                slot_start, slot_end = local_start.time(), local_end.time()
+            elif day == local_start.date():
+                slot_start, slot_end = local_start.time(), time(23, 59, 59)
+            else:
+                slot_start, slot_end = time(0, 0), local_end.time()
+            if self.time_ranges_overlap(slot_start, slot_end, item.start_time, item.end_time):
+                return True
+        return False
+
     async def has_blackout_overlap(self, facility_id: UUID, start_at: datetime, end_at: datetime, tz: ZoneInfo) -> bool:
         """Return True when [start_at, end_at) overlaps an active blackout in the given local zone."""
         local_start = start_at.astimezone(tz)

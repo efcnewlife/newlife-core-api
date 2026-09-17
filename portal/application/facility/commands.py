@@ -91,6 +91,7 @@ class CreateRoomBlackoutCommand(BaseModel):
     is_active: bool = Field(default=True)
     effective_from: Optional[date] = Field(default=None)
     effective_to: Optional[date] = Field(default=None)
+    confirm_occurrence_ids: Optional[list[UUID]] = Field(default=None)
 
 
 class UpdateRoomBlackoutCommand(BaseModel):

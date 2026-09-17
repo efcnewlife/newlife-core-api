@@ -281,6 +281,7 @@ class StubBookingRepository:
         self.fetch_range_calls: list[BookingRangeQueryCommand] = []
         self.series_occurrences: dict[UUID, list[Any]] = {}
         self.confirm_series_calls: list[dict] = []
+        self.live_future_series_occurrences: list[Any] = []
 
     async def exists_by_id(self, booking_id: UUID) -> bool:
         return self.exists
@@ -331,6 +332,9 @@ class StubBookingRepository:
 
     async def override_booking(self, booking_id: UUID, overridden_by_id: UUID | None, reason: str | None) -> None:
         self.override_calls.append(dict(booking_id=booking_id, overridden_by_id=overridden_by_id, reason=reason))
+
+    async def list_live_future_series_occurrences(self, now: datetime):
+        return [item for item in self.live_future_series_occurrences if item.start_at > now]
 
     async def list_series_occurrences(self, series_id: UUID):
         return list(self.series_occurrences.get(series_id, []))
@@ -460,6 +464,17 @@ class StubRoomBlackoutRepository:
         from portal.infrastructure.persistence.repositories.facility.room_blackout_repository import RoomBlackoutRepository
 
         return RoomBlackoutRepository.scopes_overlap(left_facility_id, right_facility_id)
+
+    @staticmethod
+    def applies_on_date(item, target_date):
+        from portal.infrastructure.persistence.repositories.facility.room_blackout_repository import RoomBlackoutRepository
+
+        return RoomBlackoutRepository.applies_on_date(item, target_date)
+
+    def interval_overlaps_blackout(self, item, facility_id, start_at, end_at, tz) -> bool:
+        from portal.infrastructure.persistence.repositories.facility.room_blackout_repository import RoomBlackoutRepository
+
+        return RoomBlackoutRepository.interval_overlaps_blackout(self, item, facility_id, start_at, end_at, tz)
 
     def slot_overlaps_blackouts(self, blackouts, slot_start_local, slot_end_local) -> bool:
         from portal.infrastructure.persistence.repositories.facility.room_blackout_repository import RoomBlackoutRepository

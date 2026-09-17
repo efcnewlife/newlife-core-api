@@ -112,6 +112,26 @@ class AdminRoomBlackoutWrite(BaseModel):
 class AdminRoomBlackoutCreate(AdminRoomBlackoutWrite):
     """Create blackout."""
 
+    confirm_occurrence_ids: Optional[list[UUID]] = Field(default=None, description="Occurrence ids from the current Blackout impact preview")
+
 
 class AdminRoomBlackoutUpdate(AdminRoomBlackoutWrite):
     """Update blackout."""
+
+
+class AdminBlackoutImpactOccurrence(UUIDBaseModel):
+    """One future Recurring Booking Occurrence overlapping a proposed Blackout."""
+
+    series_id: UUID = Field(..., serialization_alias="seriesId", description="Recurring Booking Series ID")
+    start_at: datetime = Field(..., serialization_alias="startAt", description="Occurrence start")
+    end_at: datetime = Field(..., serialization_alias="endAt", description="Occurrence end")
+    status: str = Field(..., description="Occurrence status")
+    facility_ids: list[UUID] = Field(default_factory=list, serialization_alias="facilityIds", description="Occupied room IDs")
+    ministry_id: Optional[UUID] = Field(default=None, serialization_alias="ministryId", description="Ministry ID; null for Personal Rental")
+
+
+class AdminBlackoutImpact(BaseModel):
+    """Blackout impact preview; does not persist a Blackout or cancel occurrences."""
+
+    confirmation_required: bool = Field(..., serialization_alias="confirmationRequired", description="True when any live future occurrence overlaps")
+    items: list[AdminBlackoutImpactOccurrence] = Field(default_factory=list, description="Affected occurrences")

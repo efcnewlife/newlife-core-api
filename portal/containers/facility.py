@@ -55,7 +55,6 @@ class FacilityContainer(containers.DeclarativeContainer):
     room_slot_template_service = providers.Factory(
         RoomSlotTemplateService, room_slot_template_repository=room_slot_template_repository, room_repository=room_repository
     )
-    room_blackout_service = providers.Factory(RoomBlackoutService, room_blackout_repository=room_blackout_repository, room_repository=room_repository)
     rental_rate_template_service = providers.Factory(RentalRateTemplateService, rental_repository=rental_repository)
     rental_rate_service = providers.Factory(RentalRateService, rental_repository=rental_repository, room_repository=room_repository)
     rental_catalog_service = providers.Factory(RentalCatalogService, rental_repository=rental_repository)
@@ -111,6 +110,12 @@ class FacilityContainer(containers.DeclarativeContainer):
         override_log_repository=override_log_repository,
         override_notifier=recurring_override_mail_service,
         expiry_notifier=recurring_expiry_mail_service,
+    )
+    room_blackout_service = providers.Factory(
+        RoomBlackoutService,
+        room_blackout_repository=room_blackout_repository,
+        room_repository=room_repository,
+        recurring_booking_service=recurring_booking_service,
     )
     availability_service = providers.Factory(
         AvailabilityService,
