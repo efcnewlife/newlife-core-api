@@ -297,6 +297,14 @@ class CreateBookingCommand(BaseModel):
     booking_draft_id: Optional[UUID] = Field(default=None, description="Source Booking Draft; deleted on successful create")
 
 
+class CancelRecurringBookingSeriesCommand(BaseModel):
+    """Cancel Recurring Booking Series occurrences by scope."""
+
+    scope: str = Field(...)
+    occurrence_id: Optional[UUID] = Field(default=None)
+    cancel_reason: Optional[str] = Field(default=None)
+
+
 class CreateRecurringBookingSeriesCommand(BaseModel):
     """Create a weekly Recurring Booking Series."""
 
@@ -351,6 +359,7 @@ __all__ = [
     "BookingRoomLineCommand",
     "BulkIdsCommand",
     "CancelBookingCommand",
+    "CancelRecurringBookingSeriesCommand",
     "CreateBookingCommand",
     "CreateBookingDraftCommand",
     "CreateRecurringBookingSeriesCommand",

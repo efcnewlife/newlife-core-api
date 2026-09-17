@@ -40,6 +40,14 @@ class AdminRecurringBookingSeriesCreate(AdminRecurringBookingSeriesProposal):
     excluded_dates: list[date] = Field(default_factory=list)
 
 
+class AdminRecurringBookingSeriesCancel(BaseModel):
+    """Cancel Recurring Booking Series occurrences by scope."""
+
+    scope: str = Field(...)
+    occurrence_id: Optional[UUID] = Field(default=None)
+    cancel_reason: Optional[str] = Field(default=None)
+
+
 class AdminRecurringBookingOccurrence(UUIDBaseModel):
     """Materialized Booking Occurrence on a Recurring Booking Series."""
 

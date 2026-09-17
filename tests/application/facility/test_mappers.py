@@ -14,6 +14,7 @@ from portal.application.facility.mappers import (
     booking_pages_query_to_command,
     bulk_action_to_command,
     cancel_booking_to_command,
+    cancel_recurring_booking_series_to_command,
     create_discount_rule_to_command,
     create_recurring_booking_series_to_command,
     create_rental_rate_to_command,
@@ -31,6 +32,7 @@ from portal.application.facility.mappers import (
     preview_quote_result_to_api,
     preview_quote_to_command,
     recurring_booking_preview_to_member_api,
+    recurring_booking_series_to_member_api,
     room_availability_item_to_api,
     room_detail_to_api,
     update_booking_to_command,
@@ -47,7 +49,9 @@ from portal.application.facility.results import (
     PreviewQuoteResult,
     PreviewQuoteRoomLineResult,
     RecurringBookingConflictResult,
+    RecurringBookingOccurrenceResult,
     RecurringBookingPreviewResult,
+    RecurringBookingSeriesResult,
     RoomAvailabilityResult,
     RoomDetailResult,
     TranslationItemResult,
@@ -69,6 +73,7 @@ from portal.serializers.admin.v1.org.translation import AdminOrgTranslationInput
 from portal.serializers.apis.v1.facility import (
     MemberPreviewQuoteLineInput,
     MemberPreviewQuoteRequest,
+    MemberRecurringBookingSeriesCancel,
     MemberRecurringBookingSeriesCreate,
     MemberRecurringBookingSeriesProposal,
     MemberRecurringBookingSeriesRoomInput,
@@ -541,3 +546,48 @@ def test_pending_payment_series_list_to_admin_api_uses_camel_case():
     assert item["occurrenceCount"] == 4
     assert item["paymentHoldExpiresAt"] == expires_at
     assert item["isPriority"] is True
+
+
+def test_cancel_recurring_booking_series_to_command():
+    occurrence_id = uuid4()
+    command = cancel_recurring_booking_series_to_command(
+        MemberRecurringBookingSeriesCancel(scope="this_and_future", occurrence_id=occurrence_id, cancel_reason="moving")
+    )
+    assert command.scope == "this_and_future"
+    assert command.occurrence_id == occurrence_id
+    assert command.cancel_reason == "moving"
+
+
+def test_recurring_booking_series_to_member_api_exposes_occurrence_and_payment_state():
+    expires_at = datetime(2026, 3, 12, 17, 0, tzinfo=timezone.utc)
+    occurrence_id = uuid4()
+    result = RecurringBookingSeriesResult(
+        id=uuid4(),
+        user_id=uuid4(),
+        first_occurrence_date=date(2026, 1, 13),
+        last_occurrence_date=date(2026, 2, 3),
+        local_start_time=time(10, 0),
+        local_end_time=time(12, 0),
+        status="pending_payment",
+        payment_hold_expires_at=expires_at,
+        quoted_amount=Decimal("400"),
+        currency="CAD",
+        occurrence_count=1,
+        occurrences=[
+            RecurringBookingOccurrenceResult(
+                id=occurrence_id,
+                start_at=datetime(2026, 1, 13, 15, 0, tzinfo=timezone.utc),
+                end_at=datetime(2026, 1, 13, 17, 0, tzinfo=timezone.utc),
+                status="cancelled",
+                quoted_amount=Decimal("100"),
+                currency="CAD",
+                facility_ids=[],
+            )
+        ],
+    )
+    dumped = recurring_booking_series_to_member_api(result).model_dump(by_alias=True)
+    assert dumped["status"] == "pending_payment"
+    assert dumped["paymentHoldExpiresAt"] == expires_at
+    assert dumped["quotedAmount"] == Decimal("400")
+    assert dumped["occurrences"][0]["id"] == str(occurrence_id)
+    assert dumped["occurrences"][0]["status"] == "cancelled"

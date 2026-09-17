@@ -720,3 +720,9 @@ def pending_payment_series_list_to_admin_api(result) -> "AdminPendingPaymentSeri
     from portal.serializers.admin.v1.facility.booking_series import AdminPendingPaymentSeriesList
 
     return AdminPendingPaymentSeriesList.model_validate(result.model_dump())
+
+
+def cancel_recurring_booking_series_to_command(model) -> "CancelRecurringBookingSeriesCommand":
+    from portal.application.facility.commands import CancelRecurringBookingSeriesCommand
+
+    return CancelRecurringBookingSeriesCommand(scope=model.scope, occurrence_id=model.occurrence_id, cancel_reason=model.cancel_reason)
