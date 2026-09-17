@@ -11,8 +11,10 @@ from pydantic import ValidationError
 
 from portal.application.facility.mappers import (
     blackout_impact_to_api,
+    booking_detail_to_api,
     booking_page_to_api,
     booking_pages_query_to_command,
+    booking_range_to_api,
     bulk_action_to_command,
     cancel_booking_to_command,
     cancel_recurring_booking_series_to_command,
@@ -45,6 +47,7 @@ from portal.application.facility.results import (
     BookingDetailResult,
     BookingListItemResult,
     BookingPageResult,
+    BookingRangeResult,
     BookingRoomLineResult,
     DayAvailabilityResult,
     DiscountRuleResult,
@@ -668,5 +671,71 @@ def test_member_booking_list_item_one_time_series_id_is_null():
         status="confirmed",
     )
     dumped = _booking_list_item_to_api(result).model_dump(by_alias=True)
+    assert dumped["seriesId"] is None
+    assert dumped["bookingType"] == "one_time"
+
+
+def test_admin_booking_pages_and_range_expose_series_id_for_occurrence():
+    series_id = uuid4()
+    item = BookingListItemResult(
+        id=uuid4(),
+        user_id=uuid4(),
+        booking_type="recurring",
+        series_id=series_id,
+        start_at=datetime(2026, 9, 24, 13, 0, tzinfo=timezone.utc),
+        end_at=datetime(2026, 9, 24, 14, 30, tzinfo=timezone.utc),
+        status="confirmed",
+    )
+    pages = booking_page_to_api(BookingPageResult(page=0, page_size=20, total=1, items=[item])).model_dump(by_alias=True)
+    ranged = booking_range_to_api(BookingRangeResult(items=[item])).model_dump(by_alias=True)
+    assert pages["items"][0]["seriesId"] == series_id
+    assert pages["items"][0]["bookingType"] == "recurring"
+    assert ranged["items"][0]["seriesId"] == series_id
+    assert ranged["items"][0]["bookingType"] == "recurring"
+
+
+def test_admin_booking_pages_and_range_one_time_series_id_is_null():
+    item = BookingListItemResult(
+        id=uuid4(),
+        user_id=uuid4(),
+        booking_type="one_time",
+        start_at=datetime(2026, 9, 18, 15, 0, tzinfo=timezone.utc),
+        end_at=datetime(2026, 9, 18, 16, 30, tzinfo=timezone.utc),
+        status="confirmed",
+    )
+    pages = booking_page_to_api(BookingPageResult(page=0, page_size=20, total=1, items=[item])).model_dump(by_alias=True)
+    ranged = booking_range_to_api(BookingRangeResult(items=[item])).model_dump(by_alias=True)
+    assert pages["items"][0]["seriesId"] is None
+    assert pages["items"][0]["bookingType"] == "one_time"
+    assert ranged["items"][0]["seriesId"] is None
+    assert ranged["items"][0]["bookingType"] == "one_time"
+
+
+def test_admin_booking_detail_exposes_series_id_for_occurrence():
+    series_id = uuid4()
+    result = BookingDetailResult(
+        id=uuid4(),
+        user_id=uuid4(),
+        booking_type="recurring",
+        series_id=series_id,
+        start_at=datetime(2026, 9, 24, 13, 0, tzinfo=timezone.utc),
+        end_at=datetime(2026, 9, 24, 14, 30, tzinfo=timezone.utc),
+        status="confirmed",
+    )
+    dumped = booking_detail_to_api(result).model_dump(by_alias=True)
+    assert dumped["seriesId"] == series_id
+    assert dumped["bookingType"] == "recurring"
+
+
+def test_admin_booking_detail_one_time_series_id_is_null():
+    result = BookingDetailResult(
+        id=uuid4(),
+        user_id=uuid4(),
+        booking_type="one_time",
+        start_at=datetime(2026, 9, 18, 15, 0, tzinfo=timezone.utc),
+        end_at=datetime(2026, 9, 18, 16, 30, tzinfo=timezone.utc),
+        status="confirmed",
+    )
+    dumped = booking_detail_to_api(result).model_dump(by_alias=True)
     assert dumped["seriesId"] is None
     assert dumped["bookingType"] == "one_time"

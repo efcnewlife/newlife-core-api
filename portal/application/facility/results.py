@@ -358,6 +358,7 @@ class BookingDetailResult(UUIDBaseModel):
     facility_id: Optional[UUID] = Field(default=None)
     ministry_id: Optional[UUID] = Field(default=None)
     booking_type: str = Field(...)
+    series_id: Optional[UUID] = Field(default=None)
     start_at: datetime = Field(...)
     end_at: datetime = Field(...)
     recurrence_rule: Optional[str] = Field(default=None, description="iCal RRULE string (RFC 5545); series anchor is start_at")

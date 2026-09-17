@@ -212,6 +212,7 @@ class BookingRepository:
                 FacilityBooking.facility_id,
                 FacilityBooking.ministry_id,
                 FacilityBooking.booking_type,
+                FacilityBooking.series_id,
                 FacilityBooking.start_at,
                 FacilityBooking.end_at,
                 FacilityBooking.recurrence_rule,
