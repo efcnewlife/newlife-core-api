@@ -19,6 +19,8 @@ from portal.application.facility.commands import (
 from portal.application.facility.pricing_service import PricingService
 from portal.application.facility.recurring_override_mail_content import resolve_bilingual_activity_names
 from portal.application.facility.results import (
+    BlackoutImpactOccurrenceResult,
+    BlackoutImpactResult,
     PendingPaymentExpirySweepResult,
     PendingPaymentSeriesListResult,
     RecurringBookingConflictResult,
@@ -29,6 +31,7 @@ from portal.application.facility.results import (
     RecurringOverrideNotification,
     RecurringOverrideNotificationItem,
     RecurringPaymentHoldExpiryNotification,
+    RoomBlackoutResult,
 )
 from portal.application.system.setting_service import SettingService
 from portal.domain.facility.constants import (
@@ -383,6 +386,39 @@ class RecurringBookingService:
     async def cancel_my_series(self, series_id: UUID, command: CancelRecurringBookingSeriesCommand) -> RecurringBookingSeriesResult:
         series = await self.get_my_series(series_id)
         return await self._apply_cancellation(series, command)
+
+    @distributed_trace()
+    async def preview_blackout_impact(self, blackout: RoomBlackoutResult) -> BlackoutImpactResult:
+        if not blackout.is_active:
+            return BlackoutImpactResult(confirmation_required=False, items=[])
+        now = self._now_utc()
+        local_tz = await self._setting_service.get_facility_timezone()
+        candidates = await self._booking_repository.list_live_future_series_occurrences(now)
+        items: list[BlackoutImpactOccurrenceResult] = []
+        for occurrence in candidates:
+            if any(
+                self._blackout_repository.interval_overlaps_blackout(blackout, facility_id, occurrence.start_at, occurrence.end_at, local_tz)
+                for facility_id in occurrence.facility_ids
+            ):
+                items.append(occurrence)
+        return BlackoutImpactResult(confirmation_required=bool(items), items=items)
+
+    @distributed_trace()
+    async def apply_blackout_impact(self, items: list[BlackoutImpactOccurrenceResult], reason: str) -> BlackoutImpactResult:
+        operator_id = self._require_operator_id()
+        series_ids = {item.series_id for item in items}
+        for occurrence in items:
+            await self._booking_repository.cancel_booking(occurrence.id, operator_id, reason, True)
+        now = self._now_utc()
+        for series_id in series_ids:
+            series = await self._series_with_occurrences(series_id)
+            remaining_live = [item for item in series.occurrences if self._is_cancellable(item, now)]
+            if not remaining_live and series.status != BookingStatus.CANCELLED.value:
+                await self._series_repository.update_series(
+                    series.id,
+                    dict(status=BookingStatus.CANCELLED.value, payment_hold_expires_at=None, updated_by_id=operator_id, updated_by=self._operator_name()),
+                )
+        return BlackoutImpactResult(confirmation_required=False, items=items)
 
     @distributed_trace()
     async def expire_pending_holds(self) -> PendingPaymentExpirySweepResult:

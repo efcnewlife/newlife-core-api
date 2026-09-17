@@ -2,22 +2,37 @@
 RoomBlackoutService unit tests.
 """
 
-from datetime import date, time
+from datetime import date, datetime, time, timezone
 from uuid import uuid4
 
 import pytest
 
 from portal.application.facility.commands import CreateRoomBlackoutCommand
-from portal.application.facility.results import RoomBlackoutResult
+from portal.application.facility.results import BlackoutImpactOccurrenceResult, BlackoutImpactResult, RoomBlackoutResult
 from portal.application.facility.room_blackout_service import RoomBlackoutService
-from portal.domain.facility.constants import RoomBlackoutKind
+from portal.domain.facility.constants import FacilityErrorCode, RoomBlackoutKind
 from portal.exceptions.responses import BadRequestException, NotFoundException
 from tests.fixtures.facility.factories import new_uuid
 from tests.fixtures.facility.stubs import StubRoomBlackoutRepository, StubRoomRepository
 
 
-def _service(blackout_stub, room_ids=None):
-    return RoomBlackoutService(blackout_stub, StubRoomRepository(existing_ids=room_ids or set()))
+class StubBlackoutImpactService:
+    def __init__(self, impact: BlackoutImpactResult | None = None):
+        self.impact = impact or BlackoutImpactResult(confirmation_required=False, items=[])
+        self.preview_calls: list = []
+        self.apply_calls: list = []
+
+    async def preview_blackout_impact(self, blackout):
+        self.preview_calls.append(blackout)
+        return self.impact
+
+    async def apply_blackout_impact(self, items, reason: str):
+        self.apply_calls.append((items, reason))
+        return BlackoutImpactResult(confirmation_required=False, items=items)
+
+
+def _service(blackout_stub, room_ids=None, impact_service=None):
+    return RoomBlackoutService(blackout_stub, StubRoomRepository(existing_ids=room_ids or set()), impact_service or StubBlackoutImpactService())
 
 
 def _one_off_command(facility_id=None, **overrides):
@@ -114,3 +129,62 @@ async def test_create_room_not_found():
     service = _service(StubRoomBlackoutRepository(), set())
     with pytest.raises(NotFoundException, match="Room"):
         await service.create_blackout(_one_off_command(facility_id=facility_id))
+
+
+def _impact_item() -> BlackoutImpactOccurrenceResult:
+    start_at = datetime(2026, 7, 21, 13, 0, tzinfo=timezone.utc)
+    return BlackoutImpactOccurrenceResult(
+        series_id=uuid4(), start_at=start_at, end_at=datetime(2026, 7, 21, 15, 0, tzinfo=timezone.utc), status="confirmed", facility_ids=[uuid4()]
+    )
+
+
+@pytest.mark.asyncio
+async def test_preview_blackout_impact_does_not_persist():
+    stub = StubRoomBlackoutRepository()
+    impact_service = StubBlackoutImpactService()
+    service = _service(stub, impact_service=impact_service)
+    result = await service.preview_blackout_impact(_one_off_command())
+    assert result.confirmation_required is False
+    assert stub.insert_calls == []
+    assert impact_service.apply_calls == []
+    assert len(impact_service.preview_calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_create_requires_confirmation_when_impact_is_non_empty():
+    item = _impact_item()
+    impact_service = StubBlackoutImpactService(BlackoutImpactResult(confirmation_required=True, items=[item]))
+    stub = StubRoomBlackoutRepository()
+    service = _service(stub, impact_service=impact_service)
+    with pytest.raises(BadRequestException) as exc:
+        await service.create_blackout(_one_off_command())
+    assert exc.value.error_code == FacilityErrorCode.BLACKOUT_IMPACT_CONFIRMATION_REQUIRED.value
+    assert stub.insert_calls == []
+    assert impact_service.apply_calls == []
+
+
+@pytest.mark.asyncio
+async def test_create_rejects_mismatched_confirmation_ids():
+    item = _impact_item()
+    impact_service = StubBlackoutImpactService(BlackoutImpactResult(confirmation_required=True, items=[item]))
+    stub = StubRoomBlackoutRepository()
+    service = _service(stub, impact_service=impact_service)
+    with pytest.raises(BadRequestException) as exc:
+        await service.create_blackout(_one_off_command(confirm_occurrence_ids=[uuid4()]))
+    assert exc.value.error_code == FacilityErrorCode.BLACKOUT_IMPACT_MISMATCH.value
+    assert stub.insert_calls == []
+    assert impact_service.apply_calls == []
+
+
+@pytest.mark.asyncio
+async def test_create_cancels_confirmed_impact_after_insert():
+    rental = _impact_item()
+    ministry = _impact_item()
+    ministry.ministry_id = uuid4()
+    impact_service = StubBlackoutImpactService(BlackoutImpactResult(confirmation_required=True, items=[rental, ministry]))
+    stub = StubRoomBlackoutRepository()
+    service = _service(stub, impact_service=impact_service)
+    result = await service.create_blackout(_one_off_command(confirm_occurrence_ids=[rental.id, ministry.id]))
+    assert result.id
+    assert stub.insert_calls
+    assert impact_service.apply_calls == [([rental, ministry], "HVAC work")]

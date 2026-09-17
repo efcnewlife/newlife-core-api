@@ -9,6 +9,7 @@ from dependency_injector.wiring import Provide, inject
 from fastapi import Depends, Query, status
 
 from portal.application.facility.mappers import (
+    blackout_impact_to_api,
     create_id_result_to_api,
     create_room_blackout_to_command,
     delete_model_to_command,
@@ -25,6 +26,7 @@ from portal.exceptions.responses import NotFoundException
 from portal.libs.consts.permission import Permission
 from portal.routers.auth_router import AuthRouter
 from portal.serializers.admin.v1.facility.room_blackout import (
+    AdminBlackoutImpact,
     AdminRoomBlackoutCreate,
     AdminRoomBlackoutItem,
     AdminRoomBlackoutList,
@@ -56,6 +58,15 @@ async def get_room_blackout_list(
 ):
     result = await room_blackout_service.get_blackout_list(facility_id=facility_id)
     return room_blackout_list_to_api(result)
+
+
+@router.post(path="/impact", status_code=status.HTTP_200_OK, response_model=AdminBlackoutImpact, permissions=[Permission.FACILITY_ROOM_BLACKOUT.create])
+@inject
+async def preview_room_blackout_impact(
+    model: AdminRoomBlackoutCreate, room_blackout_service: RoomBlackoutService = Depends(Provide[Container.room_blackout_service])
+):
+    result = await room_blackout_service.preview_blackout_impact(command=create_room_blackout_to_command(model))
+    return blackout_impact_to_api(result)
 
 
 @router.post(path="", status_code=status.HTTP_201_CREATED, response_model=UUIDBaseModel, permissions=[Permission.FACILITY_ROOM_BLACKOUT.create])

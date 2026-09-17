@@ -7,7 +7,8 @@ from typing import Optional
 from uuid import UUID
 
 from portal.application.facility.commands import CreateRoomBlackoutCommand, DeleteCommand, PagesQueryCommand, UpdateRoomBlackoutCommand
-from portal.application.facility.results import CreateIdResult, RoomBlackoutListResult, RoomBlackoutPageResult, RoomBlackoutResult
+from portal.application.facility.recurring_booking_service import RecurringBookingService
+from portal.application.facility.results import BlackoutImpactResult, CreateIdResult, RoomBlackoutListResult, RoomBlackoutPageResult, RoomBlackoutResult
 from portal.domain.facility.constants import FacilityErrorCode, RoomBlackoutKind
 from portal.domain.facility.days_of_week_mask import days_to_mask
 from portal.exceptions.responses import BadRequestException, NotFoundException
@@ -19,9 +20,10 @@ from portal.libs.tracing.distributed_trace import distributed_trace
 class RoomBlackoutService:
     """Admin room blackout use cases."""
 
-    def __init__(self, room_blackout_repository: RoomBlackoutRepository, room_repository: RoomRepository):
+    def __init__(self, room_blackout_repository: RoomBlackoutRepository, room_repository: RoomRepository, recurring_booking_service: RecurringBookingService):
         self._repository = room_blackout_repository
         self._room_repository = room_repository
+        self._recurring_booking_service = recurring_booking_service
 
     def _normalize_kind(self, kind: str) -> str:
         value = (kind or "").strip().lower()
@@ -116,6 +118,38 @@ class RoomBlackoutService:
             payload["id"] = blackout_id
         return payload
 
+    def _proposed_blackout(
+        self, command: CreateRoomBlackoutCommand | UpdateRoomBlackoutCommand, kind: str, days_of_week_mask: Optional[int]
+    ) -> RoomBlackoutResult:
+        return RoomBlackoutResult(
+            facility_id=command.facility_id,
+            name=command.name.strip(),
+            reason=command.reason.strip(),
+            kind=kind,
+            blackout_date=command.blackout_date if kind == RoomBlackoutKind.ONE_OFF.value else None,
+            days_of_week_mask=days_of_week_mask if kind == RoomBlackoutKind.RECURRING.value else None,
+            start_time=command.start_time,
+            end_time=command.end_time,
+            is_active=command.is_active,
+            effective_from=command.effective_from if kind == RoomBlackoutKind.RECURRING.value else None,
+            effective_to=command.effective_to if kind == RoomBlackoutKind.RECURRING.value else None,
+        )
+
+    @staticmethod
+    def _raise_if_impact_unconfirmed(impact: BlackoutImpactResult, confirm_occurrence_ids: Optional[list[UUID]]) -> None:
+        if not impact.items:
+            return
+        confirmed = set(confirm_occurrence_ids or [])
+        expected = {item.id for item in impact.items}
+        if not confirmed:
+            raise BadRequestException(
+                detail="Blackout impact confirmation is required", error_code=FacilityErrorCode.BLACKOUT_IMPACT_CONFIRMATION_REQUIRED.value
+            )
+        if confirmed != expected:
+            raise BadRequestException(
+                detail="Confirmed occurrence ids must match the current Blackout impact", error_code=FacilityErrorCode.BLACKOUT_IMPACT_MISMATCH.value
+            )
+
     @distributed_trace()
     async def get_blackout_pages(self, command: PagesQueryCommand, facility_id: Optional[UUID] = None) -> RoomBlackoutPageResult:
         items, count = await self._repository.fetch_pages(command, facility_id)
@@ -131,12 +165,24 @@ class RoomBlackoutService:
         return await self._repository.get_by_id(blackout_id)
 
     @distributed_trace()
+    async def preview_blackout_impact(self, command: CreateRoomBlackoutCommand) -> BlackoutImpactResult:
+        await self._assert_room_exists(command.facility_id)
+        kind, days_of_week_mask = self._validate_command(command)
+        proposed = self._proposed_blackout(command, kind, days_of_week_mask)
+        return await self._recurring_booking_service.preview_blackout_impact(proposed)
+
+    @distributed_trace()
     async def create_blackout(self, command: CreateRoomBlackoutCommand) -> CreateIdResult:
         await self._assert_room_exists(command.facility_id)
         kind, days_of_week_mask = self._validate_command(command)
         await self._assert_no_overlap(command, kind, days_of_week_mask)
+        proposed = self._proposed_blackout(command, kind, days_of_week_mask)
+        impact = await self._recurring_booking_service.preview_blackout_impact(proposed)
+        self._raise_if_impact_unconfirmed(impact, command.confirm_occurrence_ids)
         blackout_id = uuid.uuid4()
         await self._repository.insert_blackout(self._to_payload(command, kind, days_of_week_mask, blackout_id=blackout_id))
+        if impact.items:
+            await self._recurring_booking_service.apply_blackout_impact(impact.items, command.reason.strip())
         return CreateIdResult(id=blackout_id)
 
     @distributed_trace()

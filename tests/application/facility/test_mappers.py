@@ -10,6 +10,7 @@ import pytest
 from pydantic import ValidationError
 
 from portal.application.facility.mappers import (
+    blackout_impact_to_api,
     booking_page_to_api,
     booking_pages_query_to_command,
     bulk_action_to_command,
@@ -18,6 +19,7 @@ from portal.application.facility.mappers import (
     create_discount_rule_to_command,
     create_recurring_booking_series_to_command,
     create_rental_rate_to_command,
+    create_room_blackout_to_command,
     create_room_slot_template_to_command,
     create_room_to_command,
     create_surcharge_to_command,
@@ -38,6 +40,8 @@ from portal.application.facility.mappers import (
     update_booking_to_command,
 )
 from portal.application.facility.results import (
+    BlackoutImpactOccurrenceResult,
+    BlackoutImpactResult,
     BookingDetailResult,
     BookingListItemResult,
     BookingPageResult,
@@ -66,6 +70,7 @@ from portal.serializers.admin.v1.facility.override_log import AdminOverrideLogQu
 from portal.serializers.admin.v1.facility.rental_catalog import AdminDiscountRuleCreate, AdminSurchargeCreate
 from portal.serializers.admin.v1.facility.rental_rate import AdminPreviewQuoteRequest, AdminPreviewQuoteRoomLine, AdminRentalRateCreate
 from portal.serializers.admin.v1.facility.room import AdminRoomBulkAction, AdminRoomCreate
+from portal.serializers.admin.v1.facility.room_blackout import AdminRoomBlackoutCreate
 from portal.serializers.admin.v1.facility.room_slot_template import AdminRoomSlotTemplateCreate
 from portal.serializers.admin.v1.facility.translation import AdminFacilityTranslationInput
 from portal.serializers.admin.v1.ministry import AdminMinistryCreate, AdminMinistryMemberInput, AdminMinistryReplaceMembers
@@ -591,3 +596,46 @@ def test_recurring_booking_series_to_member_api_exposes_occurrence_and_payment_s
     assert dumped["quotedAmount"] == Decimal("400")
     assert dumped["occurrences"][0]["id"] == str(occurrence_id)
     assert dumped["occurrences"][0]["status"] == "cancelled"
+
+
+def test_create_room_blackout_to_command_keeps_confirm_occurrence_ids():
+    occurrence_id = uuid4()
+    command = create_room_blackout_to_command(
+        AdminRoomBlackoutCreate(
+            name="Maintenance",
+            reason="HVAC work",
+            kind="one_off",
+            blackout_date=date(2026, 7, 21),
+            start_time=time(9, 0),
+            end_time=time(12, 0),
+            confirm_occurrence_ids=[occurrence_id],
+        )
+    )
+    assert command.confirm_occurrence_ids == [occurrence_id]
+
+
+def test_blackout_impact_to_api_exposes_series_and_ministry():
+    occurrence_id = uuid4()
+    series_id = uuid4()
+    ministry_id = uuid4()
+    start_at = datetime(2026, 7, 21, 13, 0, tzinfo=timezone.utc)
+    result = BlackoutImpactResult(
+        confirmation_required=True,
+        items=[
+            BlackoutImpactOccurrenceResult(
+                id=occurrence_id,
+                series_id=series_id,
+                start_at=start_at,
+                end_at=datetime(2026, 7, 21, 15, 0, tzinfo=timezone.utc),
+                status="confirmed",
+                facility_ids=[uuid4()],
+                ministry_id=ministry_id,
+            )
+        ],
+    )
+    dumped = blackout_impact_to_api(result).model_dump(by_alias=True)
+    assert dumped["confirmationRequired"] is True
+    assert dumped["items"][0]["id"] == str(occurrence_id)
+    assert dumped["items"][0]["seriesId"] == series_id
+    assert dumped["items"][0]["ministryId"] == ministry_id
+    assert dumped["items"][0]["status"] == "confirmed"

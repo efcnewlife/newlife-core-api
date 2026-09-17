@@ -12,6 +12,7 @@ import sqlalchemy as sa
 
 from portal.application.facility.commands import BookingPagesQueryCommand, BookingRangeQueryCommand, UpdateBookingCommand
 from portal.application.facility.results import (
+    BlackoutImpactOccurrenceResult,
     BookingDetailResult,
     BookingListItemResult,
     BookingRoomLineResult,
@@ -413,6 +414,46 @@ class BookingRepository:
             .fetchvals()
         )
         return rows or []
+
+    async def list_live_future_series_occurrences(self, now: datetime) -> list[BlackoutImpactOccurrenceResult]:
+        rows = await (
+            self._session.select(
+                FacilityBooking.id,
+                FacilityBooking.series_id,
+                FacilityBooking.ministry_id,
+                FacilityBooking.start_at,
+                FacilityBooking.end_at,
+                FacilityBooking.status,
+                FacilityBookingSlot.facility_id,
+            )
+            .select_from(FacilityBookingSlot)
+            .join(FacilityBooking, FacilityBooking.id == FacilityBookingSlot.facility_booking_id)
+            .outerjoin(FacilityBookingSeries, FacilityBookingSeries.id == FacilityBooking.series_id)
+            .where(FacilityBooking.series_id.is_not(None))
+            .where(FacilityBooking.is_deleted == False)
+            .where(FacilityBooking.start_at > now)
+            .where(FacilityBookingSlot.status == BookingSlotStatus.CONFIRMED.value)
+            .where(self._active_occupancy_clause())
+            .order_by(FacilityBooking.start_at.asc(), FacilityBooking.id.asc())
+            .fetch()
+        )
+        items_by_id: dict[UUID, BlackoutImpactOccurrenceResult] = {}
+        for row in rows or []:
+            occurrence_id = row["id"]
+            existing = items_by_id.get(occurrence_id)
+            facility_ids = list(existing.facility_ids) if existing else []
+            if row["facility_id"] not in facility_ids:
+                facility_ids.append(row["facility_id"])
+            items_by_id[occurrence_id] = BlackoutImpactOccurrenceResult(
+                id=occurrence_id,
+                series_id=row["series_id"],
+                start_at=row["start_at"],
+                end_at=row["end_at"],
+                status=row["status"],
+                facility_ids=facility_ids,
+                ministry_id=row["ministry_id"],
+            )
+        return list(items_by_id.values())
 
     async def list_series_occurrences(self, series_id: UUID) -> list[RecurringBookingOccurrenceResult]:
         rows = await (

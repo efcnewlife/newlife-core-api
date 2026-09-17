@@ -138,6 +138,10 @@ _Avoid_: generic "conflict", treating Blackout as the same failure, parsing the 
 A room-closed interval that makes the room unbookable, including for Church Activity Bookings. Creating a Blackout that overlaps a future occurrence cancels that occurrence after operator confirmation. Refund handling for that cancellation is deferred. Overlap with a Blackout is a distinct rejection from a Scheduling Conflict; the client must show a different prompt.
 _Avoid_: scheduling conflict, "closed" without naming the Blackout rule, leaving an active Booking inside a Blackout
 
+**Blackout impact preview**:
+A server-backed review of a proposed Blackout that lists live future Recurring Booking Occurrences whose room intervals overlap it. It does not persist a Blackout or cancel occupancy. Confirmation requires the operator to resubmit the exact occurrence ids from this preview; the server then cancels only those occurrences and records `cancelled_by_id` / `cancel_reason`.
+_Avoid_: persisting first then previewing, confirming a subset of the impact set, treating a Blackout as overridable occupancy, writing a Priority override log for this cancellation, cancelling one-time Bookings in this slice
+
 **Room gallery**:
 An optional ordered set of at most ten image Content Files bound to one Room. Each file appears at most once in that gallery. The same Content File may appear in many Rooms' galleries. Order is Operator-controlled (including drag reorder on the Room form). Saving the Room replaces the whole gallery. Soft-deleting a Room keeps its File associations so restore brings the gallery back. Admin Room list does not include gallery files; Room detail (and create response) does, with signed URLs for preview. Member availability includes those same signed photo URLs when files exist, or an empty list when none.
 _Avoid_: cover, required gallery, room image URL field, treating the first file as a separate Cover entity in v1 admin, unbounded gallery, clearing associations on Room soft-delete, non-image Content Files, duplicate files in one gallery, list-page thumbnails as the v1 contract, a separate files GET for v1 admin preview

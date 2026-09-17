@@ -35,6 +35,7 @@ from portal.application.facility.commands import (
     UpdateSurchargeCommand,
 )
 from portal.application.facility.results import (
+    BlackoutImpactResult,
     BookingDetailResult,
     BookingDraftResult,
     CreateIdResult,
@@ -96,6 +97,7 @@ from portal.serializers.admin.v1.facility.rental_rate_template import (
 )
 from portal.serializers.admin.v1.facility.room import AdminRoomBulkAction, AdminRoomCreate, AdminRoomDetail, AdminRoomList, AdminRoomPages, AdminRoomUpdate
 from portal.serializers.admin.v1.facility.room_blackout import (
+    AdminBlackoutImpact,
     AdminRoomBlackoutCreate,
     AdminRoomBlackoutItem,
     AdminRoomBlackoutList,
@@ -274,6 +276,10 @@ def room_blackout_page_to_api(result: RoomBlackoutPageResult) -> AdminRoomBlacko
 
 def room_blackout_list_to_api(result: RoomBlackoutListResult) -> AdminRoomBlackoutList:
     return AdminRoomBlackoutList(items=[room_blackout_to_api(item) for item in result.items])
+
+
+def blackout_impact_to_api(result: BlackoutImpactResult) -> AdminBlackoutImpact:
+    return AdminBlackoutImpact.model_validate(result.model_dump())
 
 
 def room_blackout_pages_query_to_command(model) -> tuple[PagesQueryCommand, UUID | None]:
