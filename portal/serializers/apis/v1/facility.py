@@ -232,6 +232,14 @@ class MemberRecurringBookingSeriesCreate(MemberRecurringBookingSeriesProposal):
     excluded_dates: list[DateType] = Field(default_factory=list)
 
 
+class MemberRecurringBookingSeriesCancel(BaseModel):
+    """Cancel Recurring Booking Series occurrences by scope."""
+
+    scope: str = Field(...)
+    occurrence_id: Optional[UUID] = Field(default=None)
+    cancel_reason: Optional[str] = Field(default=None)
+
+
 class MemberRecurringBookingOccurrence(UUIDBaseModel):
     """Materialized Booking Occurrence on a Recurring Booking Series."""
 

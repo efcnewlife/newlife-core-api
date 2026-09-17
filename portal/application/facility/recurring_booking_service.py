@@ -10,7 +10,12 @@ from zoneinfo import ZoneInfo
 
 from portal.application.auth.user_read_service import UserReadService
 from portal.application.facility.booking_line_validation import ResolvedBookingLine, primary_facility_id, validate_booking_lines
-from portal.application.facility.commands import CreateRecurringBookingSeriesCommand, PreviewQuoteCommand, PreviewQuoteRoomLineCommand
+from portal.application.facility.commands import (
+    CancelRecurringBookingSeriesCommand,
+    CreateRecurringBookingSeriesCommand,
+    PreviewQuoteCommand,
+    PreviewQuoteRoomLineCommand,
+)
 from portal.application.facility.pricing_service import PricingService
 from portal.application.facility.recurring_override_mail_content import resolve_bilingual_activity_names
 from portal.application.facility.results import (
@@ -34,6 +39,7 @@ from portal.domain.facility.constants import (
     BookingType,
     FacilityErrorCode,
     OverrideOutcome,
+    RecurringCancellationScope,
     RecurringConflictKind,
 )
 from portal.domain.facility.recurring import (
@@ -101,8 +107,12 @@ class NullRecurringExpiryNotifier:
         return None
 
 
+_LIVE_OCCURRENCE_STATUSES = {BookingStatus.PENDING_PAYMENT.value, BookingStatus.CONFIRMED.value}
+_CANCELLATION_SCOPES = {scope.value for scope in RecurringCancellationScope}
+
+
 class RecurringBookingService:
-    """Preview Recurring Booking conflicts and create weekly Series."""
+    """Preview, create, read, and cancel Recurring Booking Series."""
 
     def __init__(
         self,
@@ -340,6 +350,28 @@ class RecurringBookingService:
         )
 
     @distributed_trace()
+    async def get_series(self, series_id: UUID) -> RecurringBookingSeriesResult:
+        self._require_operator_id()
+        return await self._series_with_occurrences(series_id)
+
+    @distributed_trace()
+    async def get_my_series(self, series_id: UUID) -> RecurringBookingSeriesResult:
+        series = await self.get_series(series_id)
+        self._raise_if_not_owner(series)
+        return series
+
+    @distributed_trace()
+    async def cancel_series(self, series_id: UUID, command: CancelRecurringBookingSeriesCommand) -> RecurringBookingSeriesResult:
+        self._require_operator_id()
+        series = await self._series_with_occurrences(series_id)
+        return await self._apply_cancellation(series, command)
+
+    @distributed_trace()
+    async def cancel_my_series(self, series_id: UUID, command: CancelRecurringBookingSeriesCommand) -> RecurringBookingSeriesResult:
+        series = await self.get_my_series(series_id)
+        return await self._apply_cancellation(series, command)
+
+    @distributed_trace()
     async def expire_pending_holds(self) -> PendingPaymentExpirySweepResult:
         acquired = await self._series_repository.try_acquire_sweep_lock()
         if not acquired:
@@ -366,6 +398,78 @@ class RecurringBookingService:
     @distributed_trace()
     async def release_pending_payment_sweep_lock(self) -> None:
         await self._series_repository.release_sweep_lock()
+
+    def _require_operator_id(self) -> UUID:
+        operator_id = self._user_ctx.user_id if self._user_ctx else None
+        if not operator_id:
+            raise ForbiddenException(detail="Authenticated user required")
+        return operator_id
+
+    def _operator_name(self) -> str:
+        if not self._user_ctx:
+            return "system"
+        return self._user_ctx.username or self._user_ctx.email or "system"
+
+    def _raise_if_not_owner(self, series: RecurringBookingSeriesResult) -> None:
+        operator_id = self._require_operator_id()
+        if series.user_id != operator_id:
+            raise ForbiddenException(detail="Cannot access another user's Recurring Booking Series")
+
+    async def _series_with_occurrences(self, series_id: UUID) -> RecurringBookingSeriesResult:
+        series = await self._series_repository.get_by_id(series_id)
+        if series is None:
+            raise NotFoundException(detail="Recurring Booking Series not found", error_code=FacilityErrorCode.BOOKING_SERIES_NOT_FOUND.value)
+        occurrences = await self._booking_repository.list_series_occurrences(series_id)
+        return series.model_copy(update={"occurrences": occurrences, "occurrence_count": len(occurrences)})
+
+    @staticmethod
+    def _is_cancellable(occurrence: RecurringBookingOccurrenceResult, now: datetime) -> bool:
+        return occurrence.status in _LIVE_OCCURRENCE_STATUSES and occurrence.start_at > now
+
+    def _require_occurrence(self, occurrences: list[RecurringBookingOccurrenceResult], occurrence_id: Optional[UUID]) -> RecurringBookingOccurrenceResult:
+        if occurrence_id is None:
+            raise BadRequestException(
+                detail="occurrence_id is required for this cancellation scope", error_code=FacilityErrorCode.RECURRING_OCCURRENCE_REQUIRED.value
+            )
+        match = next((item for item in occurrences if item.id == occurrence_id), None)
+        if match is None:
+            raise NotFoundException(detail="Booking Occurrence not found", error_code=FacilityErrorCode.RECURRING_OCCURRENCE_NOT_FOUND.value)
+        return match
+
+    def _cancellation_targets(
+        self, occurrences: list[RecurringBookingOccurrenceResult], command: CancelRecurringBookingSeriesCommand, now: datetime
+    ) -> list[RecurringBookingOccurrenceResult]:
+        if command.scope == RecurringCancellationScope.OCCURRENCE.value:
+            occurrence = self._require_occurrence(occurrences, command.occurrence_id)
+            if occurrence.start_at <= now:
+                raise BadRequestException(
+                    detail="Historical Booking Occurrences cannot be cancelled", error_code=FacilityErrorCode.RECURRING_HISTORICAL_OCCURRENCE.value
+                )
+            return [occurrence] if self._is_cancellable(occurrence, now) else []
+        if command.scope == RecurringCancellationScope.THIS_AND_FUTURE.value:
+            pivot = self._require_occurrence(occurrences, command.occurrence_id)
+            return [item for item in occurrences if item.start_at >= pivot.start_at and self._is_cancellable(item, now)]
+        return [item for item in occurrences if self._is_cancellable(item, now)]
+
+    async def _apply_cancellation(self, series: RecurringBookingSeriesResult, command: CancelRecurringBookingSeriesCommand) -> RecurringBookingSeriesResult:
+        if command.scope not in _CANCELLATION_SCOPES:
+            raise BadRequestException(
+                detail="Cancellation scope must be occurrence, this_and_future, or entire_series",
+                error_code=FacilityErrorCode.RECURRING_INVALID_CANCELLATION_SCOPE.value,
+            )
+        now = self._now_utc()
+        targets = self._cancellation_targets(series.occurrences, command, now)
+        operator_id = self._require_operator_id()
+        for occurrence in targets:
+            await self._booking_repository.cancel_booking(occurrence.id, operator_id, command.cancel_reason, True)
+        refreshed = await self._booking_repository.list_series_occurrences(series.id)
+        remaining_live = [item for item in refreshed if self._is_cancellable(item, now)]
+        cancel_series = command.scope == RecurringCancellationScope.ENTIRE_SERIES.value or not remaining_live
+        if cancel_series and series.status != BookingStatus.CANCELLED.value:
+            await self._series_repository.update_series(
+                series.id, dict(status=BookingStatus.CANCELLED.value, payment_hold_expires_at=None, updated_by_id=operator_id, updated_by=self._operator_name())
+            )
+        return await self._series_with_occurrences(series.id)
 
     async def _prepare_series(self, command: CreateRecurringBookingSeriesCommand) -> _PreparedSeries:
         operator_id = self._user_ctx.user_id if self._user_ctx else None
