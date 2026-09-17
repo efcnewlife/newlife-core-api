@@ -480,8 +480,8 @@ uv run python -m portal.cli.main init-all
 # Optional: demo ministries, slot templates/blackouts, and bookings (not part of init-all)
 uv run python -m portal.cli.main seed-local-demo
 
-# Optional: Facility Booking mock-login testing account (dev/staging QA)
-uv run python -m portal.cli.main create-mock-user
+# Optional: random Facility Booking Mock users + a steward Ministry (dev/staging QA)
+uv run python -m portal.cli.main seed-mock-users
 ```
 
 `init-all` runs this fail-fast order and stops on the first error, so later steps (including superuser) do not run:
@@ -504,7 +504,7 @@ It does **not** seed Ministry Types, Mock users, Ministries, Bookings, or other 
 | `init-rbac`             | Seed verbs, resources, permissions, and the `admin` role from `portal/cli/datas/rbac_seed_data.py`. Safe to re-run (upserts).                |
 | `seed-system-settings`  | Insert missing system settings; never overwrite existing values.                                                                             |
 | `create-superuser`      | Create an `AuthUser` with `is_admin` / `is_superuser` via interactive prompts.                                                               |
-| `create-mock-user`      | Create a member testing account for Facility Booking mock login (email must end with `TESTING_ACCOUNT_EMAIL_SUFFIX`, default `@test.local`). |
+| `seed-mock-users`       | **Mock QA data lifecycle.** Create 4 fresh random `@test.local` Mock users (personal/steward/owner/inactive) and a steward Ministry, then archive an account/Ministry CSV pair locally and to SharePoint. See [ADR 0025](docs/adr/0025-mock-qa-data-lifecycle.md), including its SharePoint archive-writer provisioning section. |
 | `seed-positions`        | Upsert org positions and translations from `portal/cli/datas/position_seed_data.py`.                                                         |
 | `seed-ministry-types`   | Upsert ministry type catalog (`outreach`, `internal`, `worship`) and translations. Not part of `init-all`.                                   |
 | `seed-target-audiences` | Upsert target audience catalog (`children`, `youths`, `adults`, `family`, `all_ages`) and translations.                                      |
@@ -518,6 +518,7 @@ Notes:
 - Prefer `init-all` for a new environment. Individual catalog commands remain for targeted re-runs.
 - Run `init-locales` before `init-rbac` when invoking those commands separately; RBAC translations depend on locale rows.
 - `seed-positions`, `seed-ministry-types`, `seed-target-audiences`, `seed-facility-rental`, `seed-local-demo`, and `reset-rbac` are blocked when `ENV` is not `dev` unless `--force` is passed. `init-all` uses the existing upsert paths and does not apply those confirmation/`--force` gates.
+- `seed-mock-users` uses a stricter guard: it runs in `dev` freely, requires `--force` in `stg`, and is **never** allowed when `ENV=prod` even with `--force`.
 - Suggested empty-DB flow: `init-all` → optional `seed-ministry-types` → optional `seed-local-demo`.
 - `seed-local-demo` fails fast when rooms, locales, ministry types, audiences, or owning positions are missing. It creates demo stewards and personal Booker accounts if needed and never deletes those users on re-run (only demo-prefixed ministries / slots / blackouts / booking remarks are replaced).
 - Seed logic lives in `portal/application/cli/*_seed_service.py`; `portal/cli/` provides thin Click entrypoints only.

@@ -130,6 +130,20 @@ class Configuration(BaseSettings):
     MOCK_LOGIN_SECRET: Optional[str] = os.getenv(key="MOCK_LOGIN_SECRET", default=None)
     TESTING_ACCOUNT_EMAIL_SUFFIX: str = os.getenv(key="TESTING_ACCOUNT_EMAIL_SUFFIX", default="@test.local")
 
+    # [Mock QA data lifecycle — seed-mock-users account/Ministry CSV archive (ADR 0025)]
+    # Non-repository local retention path for the latest CSV pair per environment.
+    MOCK_SEED_OUTPUT_DIR: str = os.getenv(key="MOCK_SEED_OUTPUT_DIR", default=str(Path.home() / ".newlife-core-api" / "mock-seed"))
+    # Dedicated app-only Entra registration, isolated from AZURE_APP_CLIENT_ID: Sites.Selected
+    # plus an explicit write grant on the single SharePoint site below. Never Sites.ReadWrite.All.
+    SHAREPOINT_TENANT_ID: Optional[str] = os.getenv(key="SHAREPOINT_TENANT_ID", default=None)
+    SHAREPOINT_APP_CLIENT_ID: Optional[str] = os.getenv(key="SHAREPOINT_APP_CLIENT_ID", default=None)
+    SHAREPOINT_APP_CLIENT_SECRET: Optional[str] = os.getenv(key="SHAREPOINT_APP_CLIENT_SECRET", default=None)
+    SHAREPOINT_SITE_ID: Optional[str] = os.getenv(key="SHAREPOINT_SITE_ID", default=None)
+    SHAREPOINT_DRIVE_ID: Optional[str] = os.getenv(key="SHAREPOINT_DRIVE_ID", default=None)
+    # Path within the drive to the "Test Account" archive root; dev/stg child folders below it.
+    SHAREPOINT_TEST_ACCOUNT_FOLDER_DEV: str = os.getenv(key="SHAREPOINT_TEST_ACCOUNT_FOLDER_DEV", default="Test Account/dev")
+    SHAREPOINT_TEST_ACCOUNT_FOLDER_STG: str = os.getenv(key="SHAREPOINT_TEST_ACCOUNT_FOLDER_STG", default="Test Account/stg")
+
     # [Token Blacklist]
     TOKEN_BLACKLIST_REDIS_DB: int = int(os.getenv(key="TOKEN_BLACKLIST_REDIS_DB", default="1"))
     TOKEN_BLACKLIST_CLEANUP_INTERVAL: int = int(os.getenv(key="TOKEN_BLACKLIST_CLEANUP_INTERVAL", default="3600"))

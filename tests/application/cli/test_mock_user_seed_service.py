@@ -88,6 +88,18 @@ async def test_create_mock_user_inserts_member_account():
 
 
 @pytest.mark.asyncio
+async def test_create_mock_user_honors_is_active_false():
+    session = StubSession()
+    service = MockUserSeedService(session)
+
+    await service.run(email="inactive.aaaa@test.local", first_name="Inactive", last_name="Mock", is_active=False)
+
+    user_row = session.inserted_auth_users[0]
+    assert user_row["verified"] is True
+    assert user_row["is_active"] is False
+
+
+@pytest.mark.asyncio
 async def test_create_mock_user_rejects_non_testing_suffix():
     session = StubSession()
     service = MockUserSeedService(session)

@@ -5,6 +5,7 @@ MS Graph DI container.
 from dependency_injector import containers, providers
 
 from portal.providers.ms_graph.mail import MSGraphMail
+from portal.providers.ms_graph.sharepoint import MSGraphSharePoint
 from portal.providers.ms_graph.users import MSGraphUsers
 
 
@@ -13,3 +14,4 @@ class MSGraphContainer(containers.DeclarativeContainer):
 
     users = providers.Factory(MSGraphUsers)
     mail = providers.Factory(MSGraphMail)
+    sharepoint = providers.Factory(MSGraphSharePoint)
