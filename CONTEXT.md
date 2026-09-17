@@ -82,6 +82,10 @@ _Avoid_: a rolling booking horizon, opening on the first occurrence date, a UTC-
 The facility-local duration after a Recurring Booking opening date during which the corresponding Recurring Booking period accepts new Series. The built-in `facility.recurring_booking_availability_window` System Setting is an object with a positive `amount` and a `days`, `weeks`, or `months` unit; months are calendar-relative. Members can read whether a Series may be started now (optionally for a First occurrence date) via `GET /api/v1/facility/booking-series/availability-window`.
 _Avoid_: confusing availability with a Series use period, a months-only numeric setting, treating four weeks as one calendar month
 
+**Recurring Booking test-window override**:
+An environment-scoped test control that makes the Recurring Booking availability window open without changing that window's configured business policy. It applies uniformly to every Booker in that test environment and is not an account privilege.
+_Avoid_: Repeated booking bypass, test-user exception, changing the availability-window setting for a test run
+
 **Recurring Booking minimum duration**:
 The Booker selects first and last occurrences within one Recurring Booking period, and `facility.min_recurring_booking_weeks` requires at least four unexcluded weekly occurrences.
 _Avoid_: a fixed mandatory six-month Series, a per-room minimum-duration policy, counting excluded occurrences toward the minimum
