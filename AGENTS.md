@@ -58,7 +58,10 @@ uv run pytest tests/application/rbac/test_permission_service.py -v
 ./scripts/check-branch-name.test.sh
 ./scripts/format-staged.test.sh
 
-# Demo pack (after catalog seeds; optional create-superuser first)
+# Catalog bootstrap (locales, RBAC, settings, positions, audiences, rooms/rates, Legal Documents, then interactive superuser)
+uv run python -m portal.cli.main init-all
+
+# Demo pack (after catalog bootstrap; optional)
 uv run python -m portal.cli.main seed-local-demo
 
 # Facility Booking mock-login testing account (dev/staging QA; email suffix @test.local)
@@ -418,16 +421,16 @@ Use **Permission** or **Verb** as the reference implementation.
 
 ## 13. Do NOT (Agent Guardrails)
 
-| Action                                           | Reason                                        |
-| ------------------------------------------------ | --------------------------------------------- |
-| Add/modify/delete `alembic/versions/**`          | Project policy — migrations are human-managed |
-| Import `portal.models` in application services   | Clean Architecture boundary                   |
-| Import `portal.serializers` outside `mappers.py` | Boundary violation                            |
-| Map repositories to `Admin*Serializer`           | Use application `results`                     |
-| Use non-ASCII in comments                        | Project standard                              |
-| Run `git commit/push/merge` unless user asks     | Automation policy                             |
+| Action                                           | Reason                                                                  |
+| ------------------------------------------------ | ----------------------------------------------------------------------- |
+| Add/modify/delete `alembic/versions/**`          | Project policy — migrations are human-managed                           |
+| Import `portal.models` in application services   | Clean Architecture boundary                                             |
+| Import `portal.serializers` outside `mappers.py` | Boundary violation                                                      |
+| Map repositories to `Admin*Serializer`           | Use application `results`                                               |
+| Use non-ASCII in comments                        | Project standard                                                        |
+| Run `git commit/push/merge` unless user asks     | Automation policy                                                       |
 | Check/format with black, isort, flake8           | Use Ruff instead (`uv run ruff format`, then `uv run ruff check --fix`) |
-| Broaden `ruff check` lint select beyond `I`      | Formatter contract is format + import sort only |
+| Broaden `ruff check` lint select beyond `I`      | Formatter contract is format + import sort only                         |
 
 ---
 

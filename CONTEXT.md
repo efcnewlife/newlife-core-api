@@ -6,6 +6,18 @@ Portal backend for church admin operations: auth/RBAC, facility booking, org/min
 
 ### Facility booking
 
+**Mock user**:
+A randomly generated QA member identity used to exercise Facility Booking with real Mock login authorization and business relationships. A Mock user is neither a production member nor a privilege bypass.
+_Avoid_: demo user, production account, superuser, fake frontend session
+
+**Testing account**:
+The `@test.local` account credential of a Mock user that is eligible for Mock login when it is verified and active. It is the login qualification, not the user's business persona.
+_Avoid_: Mock user as a synonym for the credential, production login, admin account
+
+**Catalog bootstrap**:
+The `init-all` command's catalog and configuration foundation for a new environment: locales, RBAC, system settings, positions, target audiences, facility rooms/rates, and Legal Documents, finishing with interactive superuser creation. It does not seed Ministry Types, Mock users, Ministries, Bookings, or other business/demo data. Re-running upserts existing catalog rows and never resets or deletes them.
+_Avoid_: treating seed-local-demo as bootstrap, requiring Ministry Type for a new environment, resetting catalog rows on re-run
+
 **Recurring Booking Series**:
 A scheduling rule and the materialized set of independently managed Booking occurrences it creates. It is distinct from each occurrence, which remains an individual Booking with its own lines and occupancy slots. It is not itself room occupancy.
 _Avoid_: Repeated Booking, one infinite Booking row, an RRULE-only Booking, recurring Booking as a synonym for one occurrence, treating a Series as an occupancy record

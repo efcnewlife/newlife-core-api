@@ -56,8 +56,8 @@ def seed_local_demo_process(*, force: bool = False) -> None:
                 "slot templates/blackouts (seed:), and bookings (seed: remark). "
                 "Admin-created rows without those prefixes are left untouched. "
                 "Catalog must already exist (locales, ministry types, audiences, "
-                "positions, facility rental rooms). Suggested flow: catalog seeds "
-                "→ create-superuser (optional) → seed-local-demo.",
+                "positions, facility rental rooms). Suggested flow: init-all "
+                "→ seed-ministry-types → seed-local-demo.",
                 fg="yellow",
             )
         )
