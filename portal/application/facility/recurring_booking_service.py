@@ -20,6 +20,7 @@ from portal.application.facility.pricing_service import PricingService
 from portal.application.facility.recurring_override_mail_content import resolve_bilingual_activity_names
 from portal.application.facility.results import (
     PendingPaymentExpirySweepResult,
+    PendingPaymentSeriesListResult,
     RecurringBookingConflictResult,
     RecurringBookingOccurrenceResult,
     RecurringBookingPreviewResult,
@@ -59,6 +60,7 @@ from portal.infrastructure.persistence.repositories.facility.override_log_reposi
 from portal.infrastructure.persistence.repositories.facility.recurring_booking_repository import RecurringBookingRepository
 from portal.infrastructure.persistence.repositories.facility.room_blackout_repository import RoomBlackoutRepository
 from portal.infrastructure.persistence.repositories.org.ministry_repository import MinistryRepository
+from portal.libs.contexts.request_context import RequestContext, get_request_context
 from portal.libs.contexts.user_context import UserContext, get_user_context
 from portal.libs.logger import logger
 from portal.libs.tracing.distributed_trace import distributed_trace
@@ -139,7 +141,13 @@ class RecurringBookingService:
         self._override_notifier = override_notifier or NullRecurringOverrideNotifier()
         self._expiry_notifier = expiry_notifier or NullRecurringExpiryNotifier()
         self._now_utc = now_utc or (lambda: datetime.now(timezone.utc))
+        self._req_ctx: Optional[RequestContext] = get_request_context()
         self._user_ctx: Optional[UserContext] = get_user_context()
+
+    def _resolved_locale_id(self) -> Optional[UUID]:
+        if self._req_ctx and self._req_ctx.resolved_locale_id:
+            return self._req_ctx.resolved_locale_id
+        return None
 
     @staticmethod
     def _billed_hours(start_at: datetime, end_at: datetime) -> Decimal:
@@ -348,6 +356,11 @@ class RecurringBookingService:
                 "occurrence_count": len(confirmed_occurrences),
             }
         )
+
+    @distributed_trace()
+    async def list_pending_payment_series(self) -> PendingPaymentSeriesListResult:
+        items = await self._series_repository.list_pending_payment_series(self._now_utc(), self._resolved_locale_id())
+        return PendingPaymentSeriesListResult(items=items)
 
     @distributed_trace()
     async def get_series(self, series_id: UUID) -> RecurringBookingSeriesResult:

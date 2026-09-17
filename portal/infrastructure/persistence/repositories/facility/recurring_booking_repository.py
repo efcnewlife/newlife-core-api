@@ -7,10 +7,14 @@ from decimal import Decimal
 from typing import Any, Optional
 from uuid import UUID
 
-from portal.application.facility.results import RecurringBookingSeriesResult
+import sqlalchemy as sa
+
+from portal.application.facility.results import PendingPaymentSeriesListItemResult, RecurringBookingSeriesResult
 from portal.domain.facility.constants import PENDING_PAYMENT_SWEEP_LOCK_CLASS, PENDING_PAYMENT_SWEEP_LOCK_ID, BookingStatus
+from portal.infrastructure.persistence.repositories.facility.booking_repository import BookingRepository
+from portal.infrastructure.persistence.repositories.shared.translation_queries import ministry_name_fallback
 from portal.libs.database import Session
-from portal.models import FacilityBookingSeries
+from portal.models import AuthUser, AuthUserProfile, FacilityBooking, FacilityBookingSeries, OrgMinistryTranslation
 
 
 class RecurringBookingRepository:
@@ -81,6 +85,51 @@ class RecurringBookingRepository:
             .fetch()
         )
         return [self._to_series_result(row) for row in rows or []]
+
+    async def list_pending_payment_series(self, now: datetime, locale_id: Optional[UUID] = None) -> list[PendingPaymentSeriesListItemResult]:
+        occurrence_count = (
+            sa.select(sa.func.count(FacilityBooking.id))
+            .select_from(FacilityBooking)
+            .where(FacilityBooking.series_id == FacilityBookingSeries.id)
+            .where(FacilityBooking.is_deleted == False)
+            .correlate(FacilityBookingSeries)
+            .scalar_subquery()
+        )
+        ministry_name = (
+            sa.select(ministry_name_fallback(locale_id))
+            .select_from(OrgMinistryTranslation)
+            .where(OrgMinistryTranslation.ministry_id == FacilityBookingSeries.ministry_id)
+            .correlate(FacilityBookingSeries)
+            .scalar_subquery()
+        )
+        items: list[PendingPaymentSeriesListItemResult] = await (
+            self._session.select(
+                FacilityBookingSeries.id,
+                FacilityBookingSeries.user_id,
+                AuthUser.email.label("user_email"),
+                BookingRepository._display_name_expr().label("user_display_name"),
+                FacilityBookingSeries.ministry_id,
+                ministry_name.label("ministry_name"),
+                FacilityBookingSeries.quoted_amount,
+                FacilityBookingSeries.currency,
+                occurrence_count.label("occurrence_count"),
+                FacilityBookingSeries.payment_hold_expires_at,
+                FacilityBookingSeries.is_priority,
+            )
+            .select_from(FacilityBookingSeries)
+            .outerjoin(AuthUser, AuthUser.id == FacilityBookingSeries.user_id)
+            .outerjoin(AuthUserProfile, AuthUserProfile.user_id == AuthUser.id)
+            .where(FacilityBookingSeries.is_deleted == False)
+            .where(FacilityBookingSeries.status == BookingStatus.PENDING_PAYMENT.value)
+            .where(self._actionable_pending_hold_clause(now))
+            .order_by(FacilityBookingSeries.payment_hold_expires_at.asc().nullslast())
+            .fetch(as_model=PendingPaymentSeriesListItemResult)
+        )
+        return items or []
+
+    @staticmethod
+    def _actionable_pending_hold_clause(now: datetime):
+        return sa.or_(FacilityBookingSeries.payment_hold_expires_at.is_(None), FacilityBookingSeries.payment_hold_expires_at > now)
 
     async def try_acquire_sweep_lock(self) -> bool:
         locked = await self._session.fetchval("SELECT pg_try_advisory_lock($1, $2)", PENDING_PAYMENT_SWEEP_LOCK_CLASS, PENDING_PAYMENT_SWEEP_LOCK_ID)

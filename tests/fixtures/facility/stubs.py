@@ -20,6 +20,7 @@ from portal.application.facility.results import (
     DiscountRuleResult,
     MinistryDetailResult,
     OverrideLogResult,
+    PendingPaymentSeriesListItemResult,
     RecurringOccupyingBookingResult,
     RentalRateResult,
     RoomDetailResult,
@@ -27,6 +28,7 @@ from portal.application.facility.results import (
     SurchargeResult,
 )
 from portal.domain.facility.constants import BookingStatus
+from portal.domain.facility.recurring import is_pending_payment_hold_active
 from portal.infrastructure.persistence.repositories.facility.rental_repository import RentalRepository
 
 
@@ -602,12 +604,37 @@ class StubRecurringBookingRepository:
     async def list_expired_pending_series(self, now: datetime) -> list:
         expired = []
         for series in self.series_by_id.values():
-            if series.status != BookingStatus.PENDING_PAYMENT.value:
+            if getattr(series, "status", BookingStatus.PENDING_PAYMENT.value) != BookingStatus.PENDING_PAYMENT.value:
                 continue
             if series.payment_hold_expires_at is None or series.payment_hold_expires_at > now:
                 continue
             expired.append(series)
         return expired
+
+    async def list_pending_payment_series(self, now: datetime, locale_id=None) -> list:
+        items = []
+        for series in self.series_by_id.values():
+            if getattr(series, "status", BookingStatus.PENDING_PAYMENT.value) != BookingStatus.PENDING_PAYMENT.value:
+                continue
+            if not is_pending_payment_hold_active(series.payment_hold_expires_at, now):
+                continue
+            if isinstance(series, PendingPaymentSeriesListItemResult):
+                items.append(series)
+                continue
+            items.append(
+                PendingPaymentSeriesListItemResult(
+                    id=series.id,
+                    user_id=series.user_id,
+                    ministry_id=series.ministry_id,
+                    quoted_amount=series.quoted_amount,
+                    currency=series.currency,
+                    occurrence_count=series.occurrence_count,
+                    payment_hold_expires_at=series.payment_hold_expires_at,
+                    is_priority=series.is_priority,
+                )
+            )
+        items.sort(key=lambda item: (item.payment_hold_expires_at is None, item.payment_hold_expires_at or now))
+        return items
 
     async def try_acquire_sweep_lock(self) -> bool:
         self.lock_acquire_calls += 1

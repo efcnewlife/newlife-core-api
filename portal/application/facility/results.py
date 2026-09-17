@@ -565,6 +565,27 @@ class RecurringOverrideNotification(BaseModel):
         return seen
 
 
+class PendingPaymentSeriesListItemResult(UUIDBaseModel):
+    """Actionable Pending-payment Recurring Booking Series for payment confirmation."""
+
+    user_id: UUID = Field(...)
+    user_email: Optional[str] = Field(default=None)
+    user_display_name: Optional[str] = Field(default=None)
+    ministry_id: Optional[UUID] = Field(default=None)
+    ministry_name: Optional[str] = Field(default=None)
+    quoted_amount: Decimal = Field(...)
+    currency: str = Field(...)
+    occurrence_count: int = Field(...)
+    payment_hold_expires_at: Optional[datetime] = Field(default=None)
+    is_priority: bool = Field(default=False)
+
+
+class PendingPaymentSeriesListResult(BaseModel):
+    """Pending-payment Recurring Booking Series awaiting confirmation."""
+
+    items: list[PendingPaymentSeriesListItemResult] = Field(default_factory=list)
+
+
 class RecurringPaymentHoldExpiryNotification(BaseModel):
     """Payload for bilingual Pending-payment hold expiry mail to the Booker."""
 

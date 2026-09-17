@@ -11,12 +11,18 @@ import pytest
 from sqlalchemy.dialects import postgresql
 
 from portal.application.facility.recurring_booking_service import RecurringBookingService
-from portal.application.facility.results import PendingPaymentExpirySweepResult, RecurringBookingOccurrenceResult, RecurringBookingSeriesResult
+from portal.application.facility.results import (
+    PendingPaymentExpirySweepResult,
+    PendingPaymentSeriesListItemResult,
+    RecurringBookingOccurrenceResult,
+    RecurringBookingSeriesResult,
+)
 from portal.domain.facility.constants import PENDING_PAYMENT_HOLD_EXPIRED_REASON, BookingStatus, FacilityErrorCode
 from portal.exceptions.responses import BadRequestException, ForbiddenException, NotFoundException
 from portal.infrastructure.persistence.repositories.facility.booking_repository import BookingRepository
+from portal.infrastructure.persistence.repositories.facility.recurring_booking_repository import RecurringBookingRepository
 from portal.libs.consts.permission import Permission
-from portal.routers.admin.v1.facility.booking_series import confirm_booking_series_payment
+from portal.routers.admin.v1.facility.booking_series import confirm_booking_series_payment, list_pending_payment_booking_series
 from tests.fixtures.facility.factories import make_preview_quote_result, new_uuid
 from tests.fixtures.facility.stubs import (
     StubBookingRepository,
@@ -56,6 +62,24 @@ def _occurrence(series_id, *, status=BookingStatus.PENDING_PAYMENT.value, start_
         quoted_amount=Decimal("100"),
         currency="CAD",
         facility_ids=[new_uuid()],
+    )
+
+
+def _pending_item(
+    *, series_id=None, user_id=None, ministry_id=None, expires_at=None, quoted_amount=Decimal("200"), occurrence_count=2, is_priority=True
+) -> PendingPaymentSeriesListItemResult:
+    return PendingPaymentSeriesListItemResult(
+        id=series_id or uuid4(),
+        user_id=user_id or uuid4(),
+        user_email="booker@efcnewlife.org",
+        user_display_name="Jane Booker",
+        ministry_id=ministry_id or uuid4(),
+        ministry_name="Youth Fellowship",
+        quoted_amount=quoted_amount,
+        currency="CAD",
+        occurrence_count=occurrence_count,
+        payment_hold_expires_at=expires_at if expires_at is not None else NOW + timedelta(hours=48),
+        is_priority=is_priority,
     )
 
 
@@ -279,11 +303,93 @@ async def test_expire_pending_holds_keeps_expiry_when_email_fails(monkeypatch):
     assert series_stub.lock_release_calls == 0
 
 
+@pytest.mark.asyncio
+async def test_list_pending_payment_series_empty(monkeypatch):
+    service, *_ = _service(monkeypatch)
+
+    result = await service.list_pending_payment_series()
+
+    assert result.items == []
+
+
+@pytest.mark.asyncio
+async def test_list_pending_payment_series_orders_actionable_holds(monkeypatch):
+    later = _pending_item(expires_at=NOW + timedelta(hours=48), quoted_amount=Decimal("300"), occurrence_count=3)
+    sooner = _pending_item(expires_at=NOW + timedelta(hours=2), quoted_amount=Decimal("120"), occurrence_count=2)
+    expired = _pending_item(expires_at=NOW - timedelta(seconds=1))
+    confirmed = _series(status=BookingStatus.CONFIRMED.value, expires_at=None)
+    series_stub = StubRecurringBookingRepository()
+    for item in (later, sooner, expired, confirmed):
+        series_stub.series_by_id[item.id] = item
+    service, *_ = _service(monkeypatch, series_stub=series_stub)
+
+    result = await service.list_pending_payment_series()
+
+    assert [item.id for item in result.items] == [sooner.id, later.id]
+    first = result.items[0]
+    assert first.user_id == sooner.user_id
+    assert first.user_email == sooner.user_email
+    assert first.user_display_name == sooner.user_display_name
+    assert first.ministry_id == sooner.ministry_id
+    assert first.ministry_name == sooner.ministry_name
+    assert first.quoted_amount == Decimal("120")
+    assert first.currency == "CAD"
+    assert first.occurrence_count == 2
+    assert first.payment_hold_expires_at == NOW + timedelta(hours=2)
+    assert first.is_priority is True
+
+
+@pytest.mark.asyncio
+async def test_list_pending_payment_series_includes_hold_without_deadline(monkeypatch):
+    item = _pending_item().model_copy(update={"payment_hold_expires_at": None})
+    series_stub = StubRecurringBookingRepository()
+    series_stub.series_by_id[item.id] = item
+    service, *_ = _service(monkeypatch, series_stub=series_stub)
+
+    result = await service.list_pending_payment_series()
+
+    assert [row.id for row in result.items] == [item.id]
+    assert result.items[0].payment_hold_expires_at is None
+
+
+@pytest.mark.asyncio
+async def test_list_pending_payment_series_includes_personal_series(monkeypatch):
+    item = _pending_item().model_copy(update={"ministry_id": None, "ministry_name": None, "is_priority": False})
+    series_stub = StubRecurringBookingRepository()
+    series_stub.series_by_id[item.id] = item
+    service, *_ = _service(monkeypatch, series_stub=series_stub)
+
+    result = await service.list_pending_payment_series()
+
+    assert result.items[0].id == item.id
+    assert result.items[0].ministry_id is None
+    assert result.items[0].ministry_name is None
+    assert result.items[0].is_priority is False
+
+
 def test_confirm_payment_route_requires_booking_payment_permission():
     auth_config = confirm_booking_series_payment.__auth_config__
     assert auth_config.permission_codes == [Permission.FACILITY_BOOKING_PAYMENT.modify]
     assert Permission.FACILITY_BOOKING.modify not in auth_config.permission_codes
     assert auth_config.is_admin is True
+
+
+def test_list_pending_payment_route_requires_booking_payment_read():
+    auth_config = list_pending_payment_booking_series.__auth_config__
+    assert auth_config.permission_codes == [Permission.FACILITY_BOOKING_PAYMENT.read]
+    assert Permission.FACILITY_BOOKING.read not in auth_config.permission_codes
+    assert Permission.FACILITY_BOOKING_PAYMENT.modify not in auth_config.permission_codes
+    assert auth_config.is_admin is True
+
+
+def test_list_pending_payment_series_query_excludes_elapsed_holds():
+    now = datetime(2026, 1, 10, 17, 0, tzinfo=timezone.utc)
+    sql = str(RecurringBookingRepository._actionable_pending_hold_clause(now).compile(dialect=postgresql.dialect()))
+    assert "payment_hold_expires_at" in sql
+    source = getsource(RecurringBookingRepository.list_pending_payment_series)
+    assert "PENDING_PAYMENT" in source
+    assert "_actionable_pending_hold_clause" in source
+    assert "nullslast" in source
 
 
 def test_occupancy_reads_use_query_time_pending_hold_expiry():

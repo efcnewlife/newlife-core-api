@@ -716,6 +716,12 @@ def recurring_booking_preview_to_member_api(result) -> "MemberRecurringBookingPr
     return MemberRecurringBookingPreview.model_validate(result.model_dump())
 
 
+def pending_payment_series_list_to_admin_api(result) -> "AdminPendingPaymentSeriesList":
+    from portal.serializers.admin.v1.facility.booking_series import AdminPendingPaymentSeriesList
+
+    return AdminPendingPaymentSeriesList.model_validate(result.model_dump())
+
+
 def cancel_recurring_booking_series_to_command(model) -> "CancelRecurringBookingSeriesCommand":
     from portal.application.facility.commands import CancelRecurringBookingSeriesCommand
 
