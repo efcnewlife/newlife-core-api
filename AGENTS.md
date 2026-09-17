@@ -58,7 +58,10 @@ uv run pytest tests/application/rbac/test_permission_service.py -v
 ./scripts/check-branch-name.test.sh
 ./scripts/format-staged.test.sh
 
-# Demo pack (after catalog seeds; optional create-superuser first)
+# Catalog bootstrap (locales, RBAC, settings, positions, audiences, rooms/rates, Legal Documents, then interactive superuser)
+uv run python -m portal.cli.main init-all
+
+# Demo pack (after catalog bootstrap; optional)
 uv run python -m portal.cli.main seed-local-demo
 
 # Facility Booking mock-login testing account (dev/staging QA; email suffix @test.local)

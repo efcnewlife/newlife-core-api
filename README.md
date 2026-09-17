@@ -474,54 +474,51 @@ uv run python -m portal.cli.main --help
 Prerequisites: `.env` configured, Docker services running, and `alembic upgrade head` completed.
 
 ```shell
-# 1. Supported locales (en, zh-TW, zh-CN)
-uv run python -m portal.cli.main init-locales
+# Bootstrap entrypoint: catalog/configuration upserts, then interactive superuser
+uv run python -m portal.cli.main init-all
 
-# 2. RBAC catalog (verbs, resources, permissions, admin role)
-uv run python -m portal.cli.main init-rbac
-
-# 3. First portal admin (interactive prompts)
-uv run python -m portal.cli.main create-superuser
-
-# 3b. Optional: Facility Booking mock-login testing account (dev/staging QA)
-uv run python -m portal.cli.main create-mock-user
-
-# 4. Optional: org position seed data
-uv run python -m portal.cli.main seed-positions
-
-# 5. Optional: ministry catalog seed data (before creating ministries)
-uv run python -m portal.cli.main seed-ministry-types
-uv run python -m portal.cli.main seed-target-audiences
-
-# 6. Optional: facility rooms/rates (catalog)
-uv run python -m portal.cli.main seed-facility-rental
-
-# 7. Optional: built-in Legal Documents (Product x Kind; empty bodies)
-#    Requires content.legal_document tables + effective_date (human Alembic; see ADR 0010 / 0011)
-uv run python -m portal.cli.main seed-legal-documents
-
-# 8. Optional: demo ministries, slot templates/blackouts, and bookings
+# Optional: demo ministries, slot templates/blackouts, and bookings (not part of init-all)
 uv run python -m portal.cli.main seed-local-demo
+
+# Optional: Facility Booking mock-login testing account (dev/staging QA)
+uv run python -m portal.cli.main create-mock-user
 ```
 
-| Command                 | Purpose                                                                                                                       |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `init-locales`          | Insert supported `SystemLocale` rows from `portal/cli/datas/locale_data.py`.                                                  |
-| `init-rbac`             | Seed verbs, resources, permissions, and the `admin` role from `portal/cli/datas/rbac_seed_data.py`. Safe to re-run (upserts). |
-| `create-superuser`      | Create an `AuthUser` with `is_admin` / `is_superuser` via interactive prompts.                                                |
-| `create-mock-user`      | Create a member testing account for Facility Booking mock login (email must end with `TESTING_ACCOUNT_EMAIL_SUFFIX`, default `@test.local`). |
-| `seed-positions`        | Upsert org positions and translations from `portal/cli/datas/position_seed_data.py`.                                          |
-| `seed-ministry-types`   | Upsert ministry type catalog (`outreach`, `internal`, `worship`) and translations.                                            |
-| `seed-target-audiences` | Upsert target audience catalog (`children`, `youths`, `adults`, `family`, `all_ages`) and translations.                       |
-| `seed-facility-rental`  | Upsert facility rooms, rates, discounts, and surcharges.                                                                      |
-| `seed-local-demo`       | Replace demo ministries, room slot templates, blackouts, and bookings (requires catalog rooms + ministry prerequisites).      |
-| `reset-rbac`            | **Destructive:** delete all RBAC data and re-seed from `rbac_seed_data`.                                                      |
+`init-all` runs this fail-fast order and stops on the first error, so later steps (including superuser) do not run:
+
+1. `init-locales`
+2. `init-rbac`
+3. `seed-system-settings`
+4. `seed-positions`
+5. `seed-target-audiences`
+6. `seed-facility-rental` (upsert only; never `--reset`)
+7. `seed-legal-documents`
+8. existing interactive `create-superuser`
+
+It does **not** seed Ministry Types, Mock users, Ministries, Bookings, or other business/demo data. Re-running uses the same catalog upsert semantics as the individual commands and never resets or deletes catalog rows.
+
+| Command                  | Purpose                                                                                                                       |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| `init-all`               | **Bootstrap entrypoint.** Upsert catalog data in the order above, then create a superuser.                                    |
+| `init-locales`           | Insert supported `SystemLocale` rows from `portal/cli/datas/locale_data.py`.                                                  |
+| `init-rbac`              | Seed verbs, resources, permissions, and the `admin` role from `portal/cli/datas/rbac_seed_data.py`. Safe to re-run (upserts). |
+| `seed-system-settings`   | Insert missing system settings; never overwrite existing values.                                                              |
+| `create-superuser`       | Create an `AuthUser` with `is_admin` / `is_superuser` via interactive prompts.                                                |
+| `create-mock-user`       | Create a member testing account for Facility Booking mock login (email must end with `TESTING_ACCOUNT_EMAIL_SUFFIX`, default `@test.local`). |
+| `seed-positions`         | Upsert org positions and translations from `portal/cli/datas/position_seed_data.py`.                                          |
+| `seed-ministry-types`    | Upsert ministry type catalog (`outreach`, `internal`, `worship`) and translations. Not part of `init-all`.                    |
+| `seed-target-audiences`  | Upsert target audience catalog (`children`, `youths`, `adults`, `family`, `all_ages`) and translations.                       |
+| `seed-facility-rental`   | Upsert facility rooms, rates, discounts, and surcharges.                                                                      |
+| `seed-legal-documents`   | Insert missing built-in Legal Documents (Product x Kind; empty bodies).                                                       |
+| `seed-local-demo`        | Replace demo ministries, room slot templates, blackouts, and bookings (requires catalog rooms + ministry prerequisites).      |
+| `reset-rbac`             | **Destructive:** delete all RBAC data and re-seed from `rbac_seed_data`.                                                      |
 
 Notes:
 
-- Run `init-locales` before `init-rbac`; RBAC translations depend on locale rows.
-- `seed-positions`, `seed-ministry-types`, `seed-target-audiences`, `seed-facility-rental`, `seed-local-demo`, and `reset-rbac` are blocked when `ENV` is not `dev` unless `--force` is passed.
-- Suggested empty-DB flow: catalog seeds (`init-locales`, `init-rbac`, positions/types/audiences, `seed-facility-rental`) → `create-superuser` (optional) → `seed-local-demo`.
+- Prefer `init-all` for a new environment. Individual catalog commands remain for targeted re-runs.
+- Run `init-locales` before `init-rbac` when invoking those commands separately; RBAC translations depend on locale rows.
+- `seed-positions`, `seed-ministry-types`, `seed-target-audiences`, `seed-facility-rental`, `seed-local-demo`, and `reset-rbac` are blocked when `ENV` is not `dev` unless `--force` is passed. `init-all` uses the existing upsert paths and does not apply those confirmation/`--force` gates.
+- Suggested empty-DB flow: `init-all` → optional `seed-ministry-types` → optional `seed-local-demo`.
 - `seed-local-demo` fails fast when rooms, locales, ministry types, audiences, or owning positions are missing. It creates demo stewards and personal Booker accounts if needed and never deletes those users on re-run (only demo-prefixed ministries / slots / blackouts / booking remarks are replaced).
 - Seed logic lives in `portal/application/cli/*_seed_service.py`; `portal/cli/` provides thin Click entrypoints only.
 

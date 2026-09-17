@@ -4,6 +4,7 @@ Main Click CLI entry aggregating all subcommands.
 
 import click
 
+from .init_all import init_all_process
 from .init_locale import init_locales_process
 from .mock_user import create_mock_user_process
 from .rbac import init_rbac_process, reset_rbac_process
@@ -22,6 +23,12 @@ from .sync_microsoft_users import sync_microsoft_users_process
 @click.group()
 def cli():
     """Portal CLI"""
+
+
+@cli.command(name="init-all")
+def init_all_cmd():
+    """Bootstrap catalog data, then create a superuser via interactive prompts."""
+    init_all_process()
 
 
 @cli.command(name="create-superuser")
