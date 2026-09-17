@@ -44,6 +44,37 @@ def is_within_availability_window(now_local: datetime, opening: date, amount: in
     return window_start <= now_local < window_end
 
 
+def is_first_occurrence_in_availability_window(now_local: datetime, first_occurrence_date: date, amount: int, unit: str) -> bool:
+    """True when First occurrence's Recurring Booking period is currently accepting new Series."""
+    period = use_period_for_date(first_occurrence_date)
+    opening = opening_date_for_period(period, first_occurrence_date.year)
+    return is_within_availability_window(now_local, opening, amount, unit)
+
+
+def is_any_recurring_period_open(now_local: datetime, amount: int, unit: str) -> bool:
+    """True when at least one Recurring Booking period is currently accepting new Series."""
+    for year in range(now_local.year - 1, now_local.year + 3):
+        for period in RecurringUsePeriod:
+            opening = opening_date_for_period(period, year)
+            if is_within_availability_window(now_local, opening, amount, unit):
+                return True
+    return False
+
+
+def next_recurring_opening_date(now_local: datetime) -> date | None:
+    """Next Recurring Booking opening date strictly after now, if any in the nearby years."""
+    candidates: list[date] = []
+    for year in range(now_local.year - 1, now_local.year + 3):
+        for period in RecurringUsePeriod:
+            opening = opening_date_for_period(period, year)
+            opening_at = datetime.combine(opening, time.min, tzinfo=now_local.tzinfo)
+            if opening_at > now_local:
+                candidates.append(opening)
+    if not candidates:
+        return None
+    return min(candidates)
+
+
 def weekly_occurrence_dates(first_occurrence_date: date, last_occurrence_date: date) -> list[date]:
     """Materialize weekly dates from first through last inclusive."""
     dates: list[date] = []

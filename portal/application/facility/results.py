@@ -560,6 +560,13 @@ class RecurringBookingPreviewResult(BaseModel):
     conflicts: list[RecurringBookingConflictResult] = Field(default_factory=list)
 
 
+class RecurringBookingWindowStatusResult(BaseModel):
+    """Whether Recurring Booking currently accepts new Series."""
+
+    is_open: bool = Field(...)
+    next_opening_date: Optional[DateType] = Field(default=None)
+
+
 class RecurringOverrideNotificationItem(BaseModel):
     """One displaced Rental Booking in a Priority Ministry override."""
 

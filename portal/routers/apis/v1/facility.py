@@ -25,6 +25,7 @@ from portal.application.facility.mappers import (
     member_preview_quote_to_command,
     recurring_booking_preview_to_member_api,
     recurring_booking_series_to_member_api,
+    recurring_booking_window_status_to_api,
     room_availability_list_to_api,
 )
 from portal.application.facility.recurring_booking_service import RecurringBookingService
@@ -47,6 +48,7 @@ from portal.serializers.apis.v1.facility import (
     MemberRecurringBookingSeriesCreate,
     MemberRecurringBookingSeriesDetail,
     MemberRecurringBookingSeriesProposal,
+    MemberRecurringBookingWindowStatus,
     MemberRoomAvailabilityList,
 )
 from portal.serializers.mixins.model_mixins import UUIDBaseModel
@@ -108,6 +110,18 @@ async def preview_booking_series(
 ):
     result = await recurring_booking_service.preview_conflicts(create_recurring_booking_series_to_command(model))
     return recurring_booking_preview_to_member_api(result)
+
+
+@router.get(
+    path="/booking-series/availability-window", status_code=status.HTTP_200_OK, response_model=MemberRecurringBookingWindowStatus, response_model_by_alias=True
+)
+@inject
+async def get_booking_series_availability_window(
+    first_occurrence_date: Optional[date] = Query(None),
+    recurring_booking_service: RecurringBookingService = Depends(Provide[Container.recurring_booking_service]),
+):
+    result = await recurring_booking_service.get_window_status(first_occurrence_date)
+    return recurring_booking_window_status_to_api(result)
 
 
 @router.post(path="/booking-series", status_code=status.HTTP_201_CREATED, response_model=MemberRecurringBookingSeriesDetail, response_model_by_alias=True)

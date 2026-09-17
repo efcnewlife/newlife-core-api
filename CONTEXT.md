@@ -67,7 +67,7 @@ The facility-local calendar date one month before a Recurring Booking period beg
 _Avoid_: a rolling booking horizon, opening on the first occurrence date, a UTC-based cutoff
 
 **Recurring Booking availability window**:
-The facility-local duration after a Recurring Booking opening date during which the corresponding Recurring Booking period accepts new Series. The built-in `facility.recurring_booking_availability_window` System Setting is an object with a positive `amount` and a `days`, `weeks`, or `months` unit; months are calendar-relative.
+The facility-local duration after a Recurring Booking opening date during which the corresponding Recurring Booking period accepts new Series. The built-in `facility.recurring_booking_availability_window` System Setting is an object with a positive `amount` and a `days`, `weeks`, or `months` unit; months are calendar-relative. Members can read whether a Series may be started now (optionally for a First occurrence date) via `GET /api/v1/facility/booking-series/availability-window`.
 _Avoid_: confusing availability with a Series use period, a months-only numeric setting, treating four weeks as one calendar month
 
 **Recurring Booking minimum duration**:
