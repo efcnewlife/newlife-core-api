@@ -23,15 +23,25 @@ class RecurringBookingRepository:
     def __init__(self, session: Session):
         self._session = session
 
+    def _ministry_name_subquery(self, locale_id: Optional[UUID]):
+        return (
+            sa.select(ministry_name_fallback(locale_id))
+            .select_from(OrgMinistryTranslation)
+            .where(OrgMinistryTranslation.ministry_id == FacilityBookingSeries.ministry_id)
+            .correlate(FacilityBookingSeries)
+            .scalar_subquery()
+        )
+
     async def insert_series(self, payload: dict[str, Any]) -> None:
         await self._session.insert(FacilityBookingSeries).values(payload).execute()
 
-    async def get_by_id(self, series_id: UUID) -> Optional[RecurringBookingSeriesResult]:
+    async def get_by_id(self, series_id: UUID, locale_id: Optional[UUID] = None) -> Optional[RecurringBookingSeriesResult]:
         row = await (
             self._session.select(
                 FacilityBookingSeries.id,
                 FacilityBookingSeries.user_id,
                 FacilityBookingSeries.ministry_id,
+                self._ministry_name_subquery(locale_id).label("ministry_name"),
                 FacilityBookingSeries.first_occurrence_date,
                 FacilityBookingSeries.last_occurrence_date,
                 FacilityBookingSeries.local_start_time,
@@ -95,13 +105,6 @@ class RecurringBookingRepository:
             .correlate(FacilityBookingSeries)
             .scalar_subquery()
         )
-        ministry_name = (
-            sa.select(ministry_name_fallback(locale_id))
-            .select_from(OrgMinistryTranslation)
-            .where(OrgMinistryTranslation.ministry_id == FacilityBookingSeries.ministry_id)
-            .correlate(FacilityBookingSeries)
-            .scalar_subquery()
-        )
         items: list[PendingPaymentSeriesListItemResult] = await (
             self._session.select(
                 FacilityBookingSeries.id,
@@ -109,7 +112,7 @@ class RecurringBookingRepository:
                 AuthUser.email.label("user_email"),
                 BookingRepository._display_name_expr().label("user_display_name"),
                 FacilityBookingSeries.ministry_id,
-                ministry_name.label("ministry_name"),
+                self._ministry_name_subquery(locale_id).label("ministry_name"),
                 FacilityBookingSeries.quoted_amount,
                 FacilityBookingSeries.currency,
                 occurrence_count.label("occurrence_count"),
@@ -149,6 +152,7 @@ class RecurringBookingRepository:
             id=data["id"],
             user_id=data["user_id"],
             ministry_id=data.get("ministry_id"),
+            ministry_name=data.get("ministry_name"),
             first_occurrence_date=data["first_occurrence_date"],
             last_occurrence_date=data["last_occurrence_date"],
             local_start_time=data["local_start_time"],

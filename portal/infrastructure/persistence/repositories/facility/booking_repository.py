@@ -21,6 +21,7 @@ from portal.application.facility.results import (
     RecurringOccupyingBookingResult,
 )
 from portal.domain.facility.constants import BookingSlotStatus, BookingStatus
+from portal.infrastructure.persistence.repositories.shared.translation_queries import ministry_name_fallback
 from portal.libs.database import Session
 from portal.models import (
     AuthUser,
@@ -32,6 +33,7 @@ from portal.models import (
     FacilityBookingSlot,
     FacilityRoom,
     FacilityRoomTranslation,
+    OrgMinistryTranslation,
 )
 from portal.models.mixins.context import apply_audit_fields_to_rows
 
@@ -69,6 +71,15 @@ class BookingRepository:
             AuthUser.email,
         )
 
+    def _ministry_name_subquery(self, locale_id: Optional[UUID]):
+        return (
+            sa.select(ministry_name_fallback(locale_id))
+            .select_from(OrgMinistryTranslation)
+            .where(OrgMinistryTranslation.ministry_id == FacilityBooking.ministry_id)
+            .correlate(FacilityBooking)
+            .scalar_subquery()
+        )
+
     def _list_query(self, locale_id: Optional[UUID]):
         room_name = FacilityRoom.code
         if locale_id:
@@ -84,6 +95,8 @@ class BookingRepository:
                 room_name.label("facility_name"),
                 FacilityBooking.booking_type,
                 FacilityBooking.series_id,
+                FacilityBooking.ministry_id,
+                self._ministry_name_subquery(locale_id).label("ministry_name"),
                 FacilityBooking.start_at,
                 FacilityBooking.end_at,
                 FacilityBooking.status,
@@ -211,6 +224,7 @@ class BookingRepository:
                 self._display_name_expr().label("user_display_name"),
                 FacilityBooking.facility_id,
                 FacilityBooking.ministry_id,
+                self._ministry_name_subquery(locale_id).label("ministry_name"),
                 FacilityBooking.booking_type,
                 FacilityBooking.series_id,
                 FacilityBooking.start_at,

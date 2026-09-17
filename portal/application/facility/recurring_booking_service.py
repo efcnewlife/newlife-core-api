@@ -334,7 +334,7 @@ class RecurringBookingService:
         operator_id = self._user_ctx.user_id if self._user_ctx else None
         if not operator_id:
             raise ForbiddenException(detail="Authenticated user required")
-        series = await self._series_repository.get_by_id(series_id)
+        series = await self._series_repository.get_by_id(series_id, self._resolved_locale_id())
         if series is None:
             raise NotFoundException(detail="Recurring Booking Series not found", error_code=FacilityErrorCode.BOOKING_SERIES_NOT_FOUND.value)
         occurrences = await self._booking_repository.list_series_occurrences(series_id)
@@ -465,7 +465,7 @@ class RecurringBookingService:
             raise ForbiddenException(detail="Cannot access another user's Recurring Booking Series")
 
     async def _series_with_occurrences(self, series_id: UUID) -> RecurringBookingSeriesResult:
-        series = await self._series_repository.get_by_id(series_id)
+        series = await self._series_repository.get_by_id(series_id, self._resolved_locale_id())
         if series is None:
             raise NotFoundException(detail="Recurring Booking Series not found", error_code=FacilityErrorCode.BOOKING_SERIES_NOT_FOUND.value)
         occurrences = await self._booking_repository.list_series_occurrences(series_id)
