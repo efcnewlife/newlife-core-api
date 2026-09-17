@@ -32,6 +32,7 @@ class RootContainer(containers.DeclarativeContainer):
     token_blacklist_provider = core.token_blacklist_provider
     microsoft_oidc_provider = core.microsoft_oidc_provider
     microsoft_graph_provider = core.microsoft_graph_provider
+    sharepoint_archive_provider = core.sharepoint_archive_provider
     member_refresh_app_binding_provider = core.member_refresh_app_binding_provider
 
     user_repository = admin.user_repository

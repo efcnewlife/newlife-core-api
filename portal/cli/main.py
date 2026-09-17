@@ -6,12 +6,12 @@ import click
 
 from .init_all import init_all_process
 from .init_locale import init_locales_process
-from .mock_user import create_mock_user_process
 from .rbac import init_rbac_process, reset_rbac_process
 from .seed_facility_rental import seed_facility_rental_process
 from .seed_legal_documents import seed_legal_documents_process
 from .seed_local_demo import seed_local_demo_process
 from .seed_ministry_type import seed_ministry_types_process
+from .seed_mock_users import seed_mock_users_process
 from .seed_position import seed_positions_process
 from .seed_position_assignment import seed_position_assignments_process
 from .seed_system_settings import seed_system_settings_process
@@ -35,12 +35,6 @@ def init_all_cmd():
 def create_superuser_cmd():
     """Create a superuser via interactive prompts."""
     create_superuser_process()
-
-
-@cli.command(name="create-mock-user")
-def create_mock_user_cmd():
-    """Create a mock-login testing account (@test.local suffix) via interactive prompts."""
-    create_mock_user_process()
 
 
 @cli.command(name="init-rbac")
@@ -101,6 +95,13 @@ def seed_target_audiences_cmd(force: bool):
 def seed_facility_rental_cmd(force: bool, reset: bool):
     """Seed facility rooms, rates, discounts, and surcharges."""
     seed_facility_rental_process(force=force, reset=reset)
+
+
+@cli.command(name="seed-mock-users")
+@click.option("--force", is_flag=True, default=False, help="Skip confirmation; required to run in staging. Never allowed in production.")
+def seed_mock_users_cmd(force: bool):
+    """Create random personal/steward/owner/inactive Mock users and a steward Ministry, then archive the CSV inventory."""
+    seed_mock_users_process(force=force)
 
 
 @cli.command(name="seed-local-demo")
