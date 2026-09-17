@@ -22,6 +22,7 @@ from portal.application.org.commands import (
     ReplaceMinistryMembersCommand,
     StewardDirectoryQueryCommand,
     SubmitMinistryCommand,
+    UpdateMinistryCommand,
     UpdateRejectedMinistryApplicationCommand,
 )
 from portal.application.org.mappers import approve_ministry_to_command, reject_ministry_to_command
@@ -179,9 +180,51 @@ async def test_create_ministry_with_translation():
     )
     assert result.id is not None
     assert len(stub.insert_calls) == 1
-    assert stub.insert_calls[0]["ministry_type_id"] is not None
+    assert stub.insert_calls[0]["ministry_type_id"] is None
     assert stub.upsert_translation_calls
     assert stub.upsert_translation_calls[0][0]["schedule_note"] == "Summer off"
+
+
+@pytest.mark.asyncio
+async def test_create_ministry_without_ministry_type_persists_unclassified():
+    stub = StubMinistryRepository()
+    service = make_service(stub)
+    await service.create_ministry(CreateMinistryCommand(translations=[OrgTranslationCommand(locale_id=uuid4(), name="Youth Ministry")]))
+    assert stub.insert_calls[0]["ministry_type_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_create_ministry_rejects_inactive_ministry_type():
+    stub = StubMinistryRepository()
+    inactive_type_id = uuid4()
+
+    class InactiveTypeStub(StubMinistryTypeRepository):
+        async def get_active_by_id(self, ministry_type_id):
+            return None
+
+    service = make_service(stub, type_stub=InactiveTypeStub())
+    with pytest.raises(BadRequestException, match="ministry_type_id"):
+        await service.create_ministry(
+            CreateMinistryCommand(ministry_type_id=inactive_type_id, translations=[OrgTranslationCommand(locale_id=uuid4(), name="Youth Ministry")])
+        )
+    assert stub.insert_calls == []
+
+
+@pytest.mark.asyncio
+async def test_update_ministry_omitting_type_preserves_existing_classification():
+    ministry_id = uuid4()
+    existing_type_id = uuid4()
+    stub = StubMinistryRepository(
+        ministry_by_id={
+            ministry_id: MinistryDetailResult(
+                id=ministry_id, name="Youth", status=MinistryStatus.DRAFT.value, ministry_type_id=existing_type_id, has_priority_booking=False, is_active=True
+            )
+        }
+    )
+    service = make_service(stub)
+    await service.update_ministry(ministry_id, UpdateMinistryCommand(has_priority_booking=True, is_active=True))
+    assert "ministry_type_id" not in stub.update_calls[-1]["values"]
+    assert stub.ministry_by_id[ministry_id].ministry_type_id == existing_type_id
 
 
 @pytest.mark.asyncio
@@ -414,6 +457,54 @@ async def test_create_application_persists_type_and_target_audiences():
     assert stub.insert_calls[0]["ministry_type_id"] == ministry_type_id
     assert stub.upsert_target_audiences_calls[0]["audience_ids"] == [adults_id]
     assert stub.update_calls[-1]["values"]["status"] == MinistryStatus.PENDING_APPROVAL.value
+
+
+@pytest.mark.asyncio
+async def test_create_application_without_ministry_type_persists_unclassified():
+    owner_position_id = uuid4()
+    stub = StubMinistryRepository()
+    position_stub = StubPositionRepository(incumbents={owner_position_id: uuid4()})
+    approval_service = make_approval_service(stub, position_stub=position_stub)
+    result = await approval_service.create_application(
+        MinistryApplicationCommand(
+            owner_position_id=owner_position_id,
+            translations=[OrgTranslationCommand(locale_id=uuid4(), name="Badminton")],
+            members=[
+                MinistryMemberEntryCommand(user_id=uuid4(), member_role=MinistryMemberRole.PRIMARY),
+                MinistryMemberEntryCommand(user_id=uuid4(), member_role=MinistryMemberRole.SECONDARY),
+            ],
+        )
+    )
+    assert result.id is not None
+    assert stub.insert_calls[0]["ministry_type_id"] is None
+    assert stub.update_calls[-1]["values"]["status"] == MinistryStatus.PENDING_APPROVAL.value
+
+
+@pytest.mark.asyncio
+async def test_create_application_rejects_inactive_ministry_type():
+    owner_position_id = uuid4()
+    inactive_type_id = uuid4()
+    stub = StubMinistryRepository()
+
+    class InactiveTypeStub(StubMinistryTypeRepository):
+        async def get_active_by_id(self, ministry_type_id):
+            return None
+
+    position_stub = StubPositionRepository(incumbents={owner_position_id: uuid4()})
+    approval_service = make_approval_service(stub, type_stub=InactiveTypeStub(), position_stub=position_stub)
+    with pytest.raises(BadRequestException, match="ministry_type_id"):
+        await approval_service.create_application(
+            MinistryApplicationCommand(
+                owner_position_id=owner_position_id,
+                ministry_type_id=inactive_type_id,
+                translations=[OrgTranslationCommand(locale_id=uuid4(), name="Badminton")],
+                members=[
+                    MinistryMemberEntryCommand(user_id=uuid4(), member_role=MinistryMemberRole.PRIMARY),
+                    MinistryMemberEntryCommand(user_id=uuid4(), member_role=MinistryMemberRole.SECONDARY),
+                ],
+            )
+        )
+    assert stub.insert_calls == []
 
 
 @pytest.mark.asyncio
@@ -683,9 +774,10 @@ async def test_update_rejected_application_locks_owner_position():
     owner_position_id = uuid4()
     secondary_id = uuid4()
     locale_id = uuid4()
+    existing_type_id = uuid4()
     ministry = _pending_ministry(
         ministry_id=ministry_id, owner_position_id=owner_position_id, submitted_by_id=applicant_user_id, status=MinistryStatus.REJECTED.value
-    )
+    ).model_copy(update={"ministry_type_id": existing_type_id})
     stub = StubMinistryRepository(
         ministry_by_id={ministry_id: ministry},
         members_by_ministry={
@@ -713,6 +805,8 @@ async def test_update_rejected_application_locks_owner_position():
     assert stub.upsert_translation_calls
     assert stub.replace_members_calls
     assert stub.update_calls[-1]["values"].get("owner_position_id") is None
+    assert "ministry_type_id" not in stub.update_calls[-1]["values"]
+    assert stub.ministry_by_id[ministry_id].ministry_type_id == existing_type_id
 
 
 @pytest.mark.asyncio
@@ -739,6 +833,8 @@ async def test_resubmit_rejected_application_returns_to_pending_approval():
 
     assert stub.update_calls[-1]["values"]["status"] == MinistryStatus.PENDING_APPROVAL.value
     assert stub.insert_approval_calls
+    assert "ministry_type_id" not in stub.update_calls[-1]["values"]
+    assert stub.ministry_by_id[ministry_id].ministry_type_id is None
 
 
 @pytest.mark.asyncio

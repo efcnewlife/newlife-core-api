@@ -56,9 +56,3 @@ class MinistryTypeRepository:
             .fetchval()
         )
         return name
-
-    async def get_id_by_code(self, code: str) -> Optional[UUID]:
-        ministry_type_id = await (
-            self._session.select(OrgMinistryType.id).where(OrgMinistryType.code == code).where(OrgMinistryType.is_active == True).fetchval()
-        )
-        return ministry_type_id

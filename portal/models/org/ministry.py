@@ -32,7 +32,7 @@ class OrgMinistry(ModelBase, AuditMixin, SortableMixin, DeletedMixin):
     rejected_by_id = Column(UUID, sa.ForeignKey("auth.user.id", ondelete="SET NULL"), nullable=True, comment="User who rejected")
     rejection_reason = Column(sa.String(500), comment="Rejection reason")
     created_by_id = Column(UUID, sa.ForeignKey("auth.user.id", ondelete="SET NULL"), nullable=True, comment="Application creator user ID")
-    ministry_type_id = Column(UUID, sa.ForeignKey(OrgMinistryType.id, ondelete="RESTRICT"), nullable=False, index=True, comment="Ministry type catalog ID")
+    ministry_type_id = Column(UUID, sa.ForeignKey(OrgMinistryType.id, ondelete="RESTRICT"), nullable=True, index=True, comment="Ministry type catalog ID")
 
     owner_position = relationship("OrgPosition", foreign_keys=[owner_position_id], passive_deletes=True)
     ministry_type = relationship("OrgMinistryType", passive_deletes=True)

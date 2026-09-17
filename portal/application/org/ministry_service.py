@@ -25,7 +25,6 @@ from portal.application.org.results import (
     StewardDirectoryPageResult,
 )
 from portal.application.org.target_audience_validation import validate_target_audience_ids
-from portal.domain.org.catalog_codes import MINISTRY_TYPE_INTERNAL
 from portal.domain.org.constants import MinistryMemberRole, MinistryStatus, OrgErrorCode
 from portal.exceptions.responses import ApiBaseException, BadRequestException, NotFoundException
 from portal.infrastructure.persistence.repositories.org.ministry_repository import MinistryRepository
@@ -65,16 +64,13 @@ class MinistryService:
             for item in translation_payloads
         ]
 
-    async def _resolve_ministry_type_id(self, ministry_type_id: Optional[UUID]) -> UUID:
-        if ministry_type_id:
-            ministry_type = await self._ministry_type_repository.get_active_by_id(ministry_type_id)
-            if not ministry_type:
-                raise BadRequestException(detail="Invalid or inactive ministry_type_id")
-            return ministry_type_id
-        default_id = await self._ministry_type_repository.get_id_by_code(MINISTRY_TYPE_INTERNAL)
-        if not default_id:
-            raise BadRequestException(detail="Default ministry type is not seeded")
-        return default_id
+    async def _validate_ministry_type_id(self, ministry_type_id: Optional[UUID]) -> Optional[UUID]:
+        if not ministry_type_id:
+            return None
+        ministry_type = await self._ministry_type_repository.get_active_by_id(ministry_type_id)
+        if not ministry_type:
+            raise BadRequestException(detail="Invalid or inactive ministry_type_id")
+        return ministry_type_id
 
     async def _validate_target_audiences(self, audience_ids: list[UUID]) -> None:
         if not audience_ids:
@@ -129,7 +125,7 @@ class MinistryService:
         translation_payloads = self._build_translation_payloads(command)
         if not translation_payloads:
             raise BadRequestException(detail="translations are required")
-        ministry_type_id = await self._resolve_ministry_type_id(command.ministry_type_id)
+        ministry_type_id = await self._validate_ministry_type_id(command.ministry_type_id)
         await self._validate_target_audiences(command.target_audience_ids)
         validate_ministry_schedules(command.schedules)
         try:
@@ -168,7 +164,7 @@ class MinistryService:
         if command.owner_position_id is not None:
             values["owner_position_id"] = command.owner_position_id
         if command.ministry_type_id is not None:
-            values["ministry_type_id"] = await self._resolve_ministry_type_id(command.ministry_type_id)
+            values["ministry_type_id"] = await self._validate_ministry_type_id(command.ministry_type_id)
         if command.sequence is not None:
             values["sequence"] = command.sequence
         affected = await self._repository.update_ministry(ministry_id, values)

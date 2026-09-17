@@ -96,3 +96,11 @@ async def test_resolve_ministry_type_names_for_mail_prefers_zh_tw_then_zh_cn():
     english_name, chinese_name = await resolve_ministry_type_names_for_mail(lookup, ministry_type_id=ministry_type_id, code_fallback="sports")
     assert english_name == "Sports"
     assert chinese_name == "运动事工"
+
+
+@pytest.mark.asyncio
+async def test_resolve_ministry_type_names_for_mail_without_type_uses_em_dash():
+    lookup = StubMinistryTypeNameLookup({})
+    english_name, chinese_name = await resolve_ministry_type_names_for_mail(lookup, ministry_type_id=None)
+    assert english_name == "—"
+    assert chinese_name == "—"

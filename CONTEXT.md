@@ -209,7 +209,7 @@ _Avoid_: blocking delete until unbind, leftover association rows after file dele
 ### Org / ministry
 
 **Ministry**:
-A church organizational unit with localized names, a ministry type, and a lifecycle status.
+A church organizational unit with localized names, an optional ministry type, and a lifecycle status.
 _Avoid_: MinistryType (catalog), treating a pending Ministry Application as already the same as an Active Ministry
 
 **Ministry Application**:
@@ -217,8 +217,8 @@ A Ministry in the pending-approval lifecycle: the member has submitted it and it
 _Avoid_: Application as a synonym for an Active Ministry, calling the approve/reject decision itself an Application
 
 **Ministry Type**:
-A catalog classification of a Ministry: Outreach, Internal, or Worship.
-_Avoid_: Ministry, free-text type on the Ministry row
+An optional catalog classification of a Ministry: Outreach, Internal, or Worship. A Ministry without a defined classification has no Ministry Type; it must not be silently classified as Internal.
+_Avoid_: Ministry, free-text type on the Ministry row, using Internal as a fallback for an unspecified classification
 
 **Active**:
 The Ministry lifecycle status after approval. Booking and owned-ministry lists include Active Ministries.
