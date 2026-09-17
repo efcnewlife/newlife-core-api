@@ -56,5 +56,5 @@ This ADR covers core-api#150. Booking Payment Confirmation as a mutating action 
 
 ## Related
 
-- core-api#139 (spec), #150 (this slice), #151 (payment confirmation action)
+- core-api#139 (spec), #150 (this slice), #151 / ADR 0022 (payment confirmation action)
 - ADR 0019, ADR 0020, ADR 0012 (Graph/Jinja mail)

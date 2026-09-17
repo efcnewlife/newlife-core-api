@@ -253,7 +253,7 @@ class MemberRecurringBookingSeriesDetail(UUIDBaseModel):
     local_start_time: time = Field(..., serialization_alias="localStartTime")
     local_end_time: time = Field(..., serialization_alias="localEndTime")
     status: str = Field(...)
-    payment_hold_expires_at: datetime = Field(..., serialization_alias="paymentHoldExpiresAt")
+    payment_hold_expires_at: Optional[datetime] = Field(default=None, serialization_alias="paymentHoldExpiresAt")
     quoted_amount: Decimal = Field(..., serialization_alias="quotedAmount")
     currency: str = Field(...)
     occurrence_count: int = Field(..., serialization_alias="occurrenceCount")

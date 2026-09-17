@@ -2,11 +2,14 @@
 Util functions for lifespan
 """
 
-from contextlib import asynccontextmanager
+from asyncio import CancelledError, Event, create_task
+from contextlib import asynccontextmanager, suppress
+from os import environ
 
 from fastapi import FastAPI
 from redis.asyncio import from_url as redis_from_url
 
+from portal.application.facility.pending_payment_expiry_job import pending_payment_expiry_loop
 from portal.config import settings
 from portal.container import Container
 from portal.libs.depends.rate_limiters import create_redis_rate_limiters
@@ -41,7 +44,19 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.error("Failed to initialize Redis rate limiters: %s", e)
             app.state.rate_limiters = None
+
+    sweep_stop = Event()
+    sweep_task = None
+    if hasattr(app, "container") and not environ.get("PYTEST_CURRENT_TEST"):
+        sweep_task = create_task(pending_payment_expiry_loop(app.container, sweep_stop))
+        logger.info("Pending-payment expiry sweep started")
     yield
+
+    sweep_stop.set()
+    if sweep_task is not None:
+        sweep_task.cancel()
+        with suppress(CancelledError):
+            await sweep_task
 
     if redis_connection is not None:
         try:

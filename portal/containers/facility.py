@@ -10,6 +10,7 @@ from portal.application.facility.booking_service import BookingService
 from portal.application.facility.override_log_service import OverrideLogService
 from portal.application.facility.pricing_service import PricingService
 from portal.application.facility.recurring_booking_service import RecurringBookingService
+from portal.application.facility.recurring_expiry_mail_service import RecurringExpiryMailService
 from portal.application.facility.recurring_override_mail_service import RecurringOverrideMailService
 from portal.application.facility.rental_catalog_service import RentalCatalogService
 from portal.application.facility.rental_rate_service import RentalRateService
@@ -88,6 +89,16 @@ class FacilityContainer(containers.DeclarativeContainer):
         enabled=app_settings.GRAPH_MAIL_SEND_ENABLED,
         override_recipients=app_settings.graph_mail_override_recipients(),
     )
+    recurring_expiry_mail_service = providers.Factory(
+        RecurringExpiryMailService,
+        mail_send_port=core.graph_mail_provider,
+        email_template_render_port=core.email_template_render_provider,
+        user_repository=user_repository,
+        room_repository=room_repository,
+        facility_booking_base_url=app_settings.FACILITY_BOOKING_BASE_URL,
+        enabled=app_settings.GRAPH_MAIL_SEND_ENABLED,
+        override_recipients=app_settings.graph_mail_override_recipients(),
+    )
     recurring_booking_service = providers.Factory(
         RecurringBookingService,
         series_repository=recurring_booking_repository,
@@ -99,6 +110,7 @@ class FacilityContainer(containers.DeclarativeContainer):
         user_read_service=user_read_service,
         override_log_repository=override_log_repository,
         override_notifier=recurring_override_mail_service,
+        expiry_notifier=recurring_expiry_mail_service,
     )
     availability_service = providers.Factory(
         AvailabilityService,
