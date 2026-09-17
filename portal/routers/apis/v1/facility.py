@@ -15,6 +15,7 @@ from portal.application.facility.booking_service import BookingService
 from portal.application.facility.commands import BookingRoomLineCommand, CancelBookingCommand, CreateBookingCommand, RoomAvailabilityQueryCommand
 from portal.application.facility.mappers import (
     booking_draft_result_to_api,
+    cancel_recurring_booking_series_to_command,
     create_id_result_to_api,
     create_recurring_booking_series_to_command,
     member_booking_detail_to_api,
@@ -42,6 +43,7 @@ from portal.serializers.apis.v1.facility import (
     MemberPreviewQuoteRequest,
     MemberPreviewQuoteResponse,
     MemberRecurringBookingPreview,
+    MemberRecurringBookingSeriesCancel,
     MemberRecurringBookingSeriesCreate,
     MemberRecurringBookingSeriesDetail,
     MemberRecurringBookingSeriesProposal,
@@ -113,6 +115,26 @@ async def create_booking_series(
     model: MemberRecurringBookingSeriesCreate, recurring_booking_service: RecurringBookingService = Depends(Provide[Container.recurring_booking_service])
 ):
     result = await recurring_booking_service.create_series(create_recurring_booking_series_to_command(model))
+    return recurring_booking_series_to_member_api(result)
+
+
+@router.get(path="/booking-series/{series_id}", status_code=status.HTTP_200_OK, response_model=MemberRecurringBookingSeriesDetail, response_model_by_alias=True)
+@inject
+async def get_my_booking_series(series_id: UUID, recurring_booking_service: RecurringBookingService = Depends(Provide[Container.recurring_booking_service])):
+    result = await recurring_booking_service.get_my_series(series_id)
+    return recurring_booking_series_to_member_api(result)
+
+
+@router.post(
+    path="/booking-series/{series_id}/cancel", status_code=status.HTTP_200_OK, response_model=MemberRecurringBookingSeriesDetail, response_model_by_alias=True
+)
+@inject
+async def cancel_my_booking_series(
+    series_id: UUID,
+    model: MemberRecurringBookingSeriesCancel,
+    recurring_booking_service: RecurringBookingService = Depends(Provide[Container.recurring_booking_service]),
+):
+    result = await recurring_booking_service.cancel_my_series(series_id, cancel_recurring_booking_series_to_command(model))
     return recurring_booking_series_to_member_api(result)
 
 

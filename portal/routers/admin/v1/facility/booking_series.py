@@ -8,6 +8,7 @@ from dependency_injector.wiring import Provide, inject
 from fastapi import Depends, status
 
 from portal.application.facility.mappers import (
+    cancel_recurring_booking_series_to_command,
     create_recurring_booking_series_to_command,
     recurring_booking_preview_to_admin_api,
     recurring_booking_series_to_admin_api,
@@ -18,6 +19,7 @@ from portal.libs.consts.permission import Permission
 from portal.routers.auth_router import AuthRouter
 from portal.serializers.admin.v1.facility.booking_series import (
     AdminRecurringBookingPreview,
+    AdminRecurringBookingSeriesCancel,
     AdminRecurringBookingSeriesCreate,
     AdminRecurringBookingSeriesDetail,
     AdminRecurringBookingSeriesProposal,
@@ -68,4 +70,34 @@ async def confirm_booking_series_payment(
     series_id: UUID, recurring_booking_service: RecurringBookingService = Depends(Provide[Container.recurring_booking_service])
 ):
     result = await recurring_booking_service.confirm_payment(series_id)
+    return recurring_booking_series_to_admin_api(result)
+
+
+@router.get(
+    path="/{series_id}",
+    status_code=status.HTTP_200_OK,
+    response_model=AdminRecurringBookingSeriesDetail,
+    response_model_by_alias=True,
+    permissions=[Permission.FACILITY_BOOKING.read],
+)
+@inject
+async def get_booking_series(series_id: UUID, recurring_booking_service: RecurringBookingService = Depends(Provide[Container.recurring_booking_service])):
+    result = await recurring_booking_service.get_series(series_id)
+    return recurring_booking_series_to_admin_api(result)
+
+
+@router.post(
+    path="/{series_id}/cancel",
+    status_code=status.HTTP_200_OK,
+    response_model=AdminRecurringBookingSeriesDetail,
+    response_model_by_alias=True,
+    permissions=[Permission.FACILITY_BOOKING.modify],
+)
+@inject
+async def cancel_booking_series(
+    series_id: UUID,
+    body: AdminRecurringBookingSeriesCancel,
+    recurring_booking_service: RecurringBookingService = Depends(Provide[Container.recurring_booking_service]),
+):
+    result = await recurring_booking_service.cancel_series(series_id, cancel_recurring_booking_series_to_command(body))
     return recurring_booking_series_to_admin_api(result)

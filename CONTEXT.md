@@ -87,8 +87,8 @@ An individual occurrence that is cancelled or changed without changing the rest 
 _Avoid_: editing the Series when only one occurrence changes, deleting an occurrence with no retained history
 
 **Occurrence cancellation scope**:
-The target of a member or Operator cancellation: one occurrence, that occurrence and every future occurrence, or the entire Series. Member and admin views both present occurrences under their Series. Occurrence modification is deferred from this slice.
-_Avoid_: an unexplained raw RRULE edit, a Series-only management screen, applying a one-occurrence cancellation to all occurrences
+The target of a member or Operator cancellation: `occurrence` (one Booking Occurrence), `this_and_future` (that occurrence and every later one), or `entire_series`. Historical, cancelled, and overridden occurrences are retained and not rewritten. Member and admin views both present occurrences under their Series. Occurrence modification is deferred from this slice.
+_Avoid_: an unexplained raw RRULE edit, a Series-only management screen, applying a one-occurrence cancellation to all occurrences, reusing one-time Booking cancel `single`/`series` tokens
 
 **Recurring Booking conflict preview**:
 A server-backed review of a proposed Recurring Booking Series that lists every unavailable occurrence and distinguishes occupancy, Blackout, and Weekly Rental Booking quota conflicts. It does not create a Series or reserve slots. Occupancy and Blackout conflicts name the affected rooms; quota conflicts are week-level.

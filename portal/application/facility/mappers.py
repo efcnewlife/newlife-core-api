@@ -714,3 +714,9 @@ def recurring_booking_preview_to_member_api(result) -> "MemberRecurringBookingPr
     from portal.serializers.apis.v1.facility import MemberRecurringBookingPreview
 
     return MemberRecurringBookingPreview.model_validate(result.model_dump())
+
+
+def cancel_recurring_booking_series_to_command(model) -> "CancelRecurringBookingSeriesCommand":
+    from portal.application.facility.commands import CancelRecurringBookingSeriesCommand
+
+    return CancelRecurringBookingSeriesCommand(scope=model.scope, occurrence_id=model.occurrence_id, cancel_reason=model.cancel_reason)
