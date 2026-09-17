@@ -83,6 +83,7 @@ class MemberBookingListItem(UUIDBaseModel):
     facility_id: Optional[UUID] = Field(default=None, serialization_alias="facilityId")
     facility_name: Optional[str] = Field(default=None, serialization_alias="facilityName")
     booking_type: str = Field(..., serialization_alias="bookingType")
+    series_id: Optional[UUID] = Field(default=None, serialization_alias="seriesId")
     start_at: datetime = Field(..., serialization_alias="startAt")
     end_at: datetime = Field(..., serialization_alias="endAt")
     status: str = Field(...)

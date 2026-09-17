@@ -83,6 +83,7 @@ class BookingRepository:
                 FacilityBooking.facility_id,
                 room_name.label("facility_name"),
                 FacilityBooking.booking_type,
+                FacilityBooking.series_id,
                 FacilityBooking.start_at,
                 FacilityBooking.end_at,
                 FacilityBooking.status,

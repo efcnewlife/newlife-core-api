@@ -60,6 +60,7 @@ def _booking_list_item_to_api(item: BookingListItemResult) -> MemberBookingListI
         facility_id=item.facility_id,
         facility_name=item.facility_name,
         booking_type=item.booking_type,
+        series_id=item.series_id,
         start_at=item.start_at,
         end_at=item.end_at,
         status=item.status,

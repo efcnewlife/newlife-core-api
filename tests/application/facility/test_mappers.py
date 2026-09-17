@@ -65,6 +65,7 @@ from portal.application.org.results import MinistryDetailResult
 from portal.domain.facility.constants import BookingType, RecurringConflictKind, RentalRateBillingUnit
 from portal.domain.org.constants import MinistryMemberRole
 from portal.infrastructure.persistence.repositories.facility.booking_repository import BookingRepository
+from portal.routers.apis.v1.facility import _booking_list_item_to_api
 from portal.serializers.admin.v1.facility.booking import AdminBookingCancel, AdminBookingQuery, AdminBookingUpdate
 from portal.serializers.admin.v1.facility.override_log import AdminOverrideLogQuery
 from portal.serializers.admin.v1.facility.rental_catalog import AdminDiscountRuleCreate, AdminSurchargeCreate
@@ -639,3 +640,33 @@ def test_blackout_impact_to_api_exposes_series_and_ministry():
     assert dumped["items"][0]["seriesId"] == series_id
     assert dumped["items"][0]["ministryId"] == ministry_id
     assert dumped["items"][0]["status"] == "confirmed"
+
+
+def test_member_booking_list_item_exposes_series_id():
+    series_id = uuid4()
+    result = BookingListItemResult(
+        id=uuid4(),
+        user_id=uuid4(),
+        booking_type="recurring",
+        series_id=series_id,
+        start_at=datetime(2026, 9, 24, 13, 0, tzinfo=timezone.utc),
+        end_at=datetime(2026, 9, 24, 14, 30, tzinfo=timezone.utc),
+        status="confirmed",
+    )
+    dumped = _booking_list_item_to_api(result).model_dump(by_alias=True)
+    assert dumped["seriesId"] == series_id
+    assert dumped["bookingType"] == "recurring"
+
+
+def test_member_booking_list_item_one_time_series_id_is_null():
+    result = BookingListItemResult(
+        id=uuid4(),
+        user_id=uuid4(),
+        booking_type="one_time",
+        start_at=datetime(2026, 9, 18, 15, 0, tzinfo=timezone.utc),
+        end_at=datetime(2026, 9, 18, 16, 30, tzinfo=timezone.utc),
+        status="confirmed",
+    )
+    dumped = _booking_list_item_to_api(result).model_dump(by_alias=True)
+    assert dumped["seriesId"] is None
+    assert dumped["bookingType"] == "one_time"
