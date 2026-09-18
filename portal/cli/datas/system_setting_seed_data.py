@@ -50,4 +50,22 @@ seed_system_settings: list[dict] = [
         "is_active": True,
         "remark": "Hours a Pending-payment Series reserves occupancy before expiry",
     },
+    {
+        "namespace": SettingNamespace.FACILITY.value,
+        "setting_key": FacilitySettingKey.RECURRING_BOOKING_TEST_WINDOW_OVERRIDE.value,
+        "value_type": SettingValueType.BOOLEAN.value,
+        "value": False,
+        "is_built_in": True,
+        "is_active": True,
+        "remark": "Non-production only: opens the Recurring Booking availability window for every Booker without changing the configured business window",
+    },
+    {
+        "namespace": SettingNamespace.FACILITY.value,
+        "setting_key": FacilitySettingKey.RECURRING_BOOKING_TEST_BOOKER_ALLOWLIST.value,
+        "value_type": SettingValueType.OBJECT.value,
+        "value": {"emailAddresses": [], "emailSuffixes": []},
+        "is_built_in": True,
+        "is_active": True,
+        "remark": "Non-production only: exact-email / complete-domain-suffix allowlist making a Testing Account eligible to create a Recurring Booking Series",
+    },
 ]
