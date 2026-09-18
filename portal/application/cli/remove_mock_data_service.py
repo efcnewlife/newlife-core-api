@@ -14,17 +14,27 @@ from uuid import UUID
 
 import click
 
-from portal.application.cli.mock_user_seed_service import resolve_testing_account_email_suffix
+from portal.application.cli.mock_user_seed_service import email_has_testing_suffix, resolve_testing_account_email_suffix
 from portal.libs.database import Session
 from portal.libs.logger import logger
-from portal.models import AuthUser, FacilityBooking, FacilityBookingDraft, FacilityBookingSeries, OrgMinistry, OrgMinistryMember, OrgMinistryTranslation
+from portal.models import (
+    AuthUser,
+    FacilityBooking,
+    FacilityBookingDraft,
+    FacilityBookingSeries,
+    OrgMinistry,
+    OrgMinistryApproval,
+    OrgMinistryMember,
+    OrgMinistryTranslation,
+)
 
-# (label, model) — every model here carries user_id and ministry_id columns.
+# (label, model, user-holding columns to check) — every model here also carries ministry_id.
 _MINISTRY_SCOPED_MODELS = (
-    ("non-Mock Ministry member", OrgMinistryMember),
-    ("non-Mock Booking", FacilityBooking),
-    ("non-Mock Recurring Booking Series", FacilityBookingSeries),
-    ("non-Mock Booking Draft", FacilityBookingDraft),
+    ("non-Mock Ministry member", OrgMinistryMember, (OrgMinistryMember.user_id,)),
+    ("non-Mock Booking", FacilityBooking, (FacilityBooking.user_id,)),
+    ("non-Mock Recurring Booking Series", FacilityBookingSeries, (FacilityBookingSeries.user_id,)),
+    ("non-Mock Booking Draft", FacilityBookingDraft, (FacilityBookingDraft.user_id,)),
+    ("non-Mock Ministry Approval decision", OrgMinistryApproval, (OrgMinistryApproval.requested_by_id, OrgMinistryApproval.resolved_by_id)),
 )
 
 
@@ -57,16 +67,27 @@ class RemoveMockDataService:
         self._email_suffix = email_suffix or resolve_testing_account_email_suffix()
 
     async def _mock_user_ids(self) -> list[UUID]:
-        rows = await self._session.select(AuthUser.id).where(AuthUser.email.like(f"%{self._email_suffix}")).fetchvals()
-        return _unique_uuids(rows)
+        # Same suffix check every other Mock lifecycle command uses, not a raw SQL LIKE (avoids
+        # case-sensitivity and wildcard-escaping drift from a hand-rolled pattern).
+        rows = await self._session.select(AuthUser.id, AuthUser.email).fetch()
+        return _unique_uuids(row["id"] for row in (rows or []) if email_has_testing_suffix(row["email"], suffix=self._email_suffix))
 
     async def _candidate_ministry_ids(self, mock_user_ids: list[UUID]) -> list[UUID]:
         rows = await self._session.select(OrgMinistryMember.ministry_id).where(OrgMinistryMember.user_id.in_(mock_user_ids)).fetchvals()
         return _unique_uuids(rows)
 
-    async def _ministries_with_non_mock_dependency(self, model, *, ministry_ids: list[UUID], mock_user_ids: list[UUID]) -> set[UUID]:
-        rows = await self._session.select(model.ministry_id).where(model.ministry_id.in_(ministry_ids)).where(model.user_id.notin_(mock_user_ids)).fetchvals()
-        return set(_unique_uuids(rows))
+    async def _ministries_with_non_mock_dependency(self, model, *, ministry_ids: list[UUID], mock_user_ids: list[UUID], user_columns: tuple) -> set[UUID]:
+        found: set[UUID] = set()
+        for user_column in user_columns:
+            rows = await (
+                self._session.select(model.ministry_id)
+                .where(model.ministry_id.in_(ministry_ids))
+                .where(user_column.isnot(None))
+                .where(user_column.notin_(mock_user_ids))
+                .fetchvals()
+            )
+            found |= set(_unique_uuids(rows))
+        return found
 
     async def _ministry_names(self, ministry_ids: list[UUID]) -> dict[UUID, str]:
         if not ministry_ids:
@@ -107,8 +128,10 @@ class RemoveMockDataService:
 
         if candidate_ministry_ids:
             offending: dict[str, set[UUID]] = {}
-            for label, model in _MINISTRY_SCOPED_MODELS:
-                found = await self._ministries_with_non_mock_dependency(model, ministry_ids=candidate_ministry_ids, mock_user_ids=mock_user_ids)
+            for label, model, user_columns in _MINISTRY_SCOPED_MODELS:
+                found = await self._ministries_with_non_mock_dependency(
+                    model, ministry_ids=candidate_ministry_ids, mock_user_ids=mock_user_ids, user_columns=user_columns
+                )
                 if found:
                     offending[label] = found
             if offending:

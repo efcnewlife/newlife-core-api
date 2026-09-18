@@ -27,6 +27,7 @@ _TABLE_ATTR = {
     "FacilityBookingDraft": "drafts",
     "OrgMinistry": "ministries",
     "OrgMinistryTranslation": "translations",
+    "OrgMinistryApproval": "approvals",
 }
 
 
@@ -36,6 +37,8 @@ def _matches(row: dict, key: str, op: str, value) -> bool:
         return row_value in value
     if op == "not_in_op":
         return row_value not in value
+    if op == "is_not":
+        return row_value is not None
     if op == "like_op":
         if value.startswith("%") and value.endswith("%") and len(value) > 1:
             return value[1:-1] in row_value
@@ -62,6 +65,7 @@ class FakeSession:
         drafts: list[dict] | None = None,
         ministries: list[dict] | None = None,
         translations: list[dict] | None = None,
+        approvals: list[dict] | None = None,
     ):
         self.users = list(users or [])
         self.ministry_members = list(ministry_members or [])
@@ -70,6 +74,7 @@ class FakeSession:
         self.drafts = list(drafts or [])
         self.ministries = list(ministries or [])
         self.translations = list(translations or [])
+        self.approvals = list(approvals or [])
 
         self.deleted: dict[str, list[set]] = defaultdict(list)
         self.committed = False
@@ -91,7 +96,7 @@ class FakeSession:
             cond = args[0]
             key = cond.left.key
             op = cond.operator.__name__
-            value = cond.right.value
+            value = getattr(cond.right, "value", None)  # NULL literal (`isnot(None)`) has no .value
             self._pending_wheres.append((key, op, value))
         return self
 
@@ -150,6 +155,7 @@ async def test_remove_mock_data_deletes_every_mock_user_and_derived_data():
         series=[{"id": uuid4(), "user_id": STEWARD_ID, "ministry_id": MINISTRY_ID}],
         drafts=[{"id": uuid4(), "user_id": PERSONAL_ID, "ministry_id": None}],
         ministries=[{"id": MINISTRY_ID}],
+        approvals=[{"ministry_id": MINISTRY_ID, "requested_by_id": STEWARD_ID, "resolved_by_id": None}],
     )
     service = RemoveMockDataService(session, email_suffix=MOCK_SUFFIX)
 
@@ -263,6 +269,23 @@ async def test_remove_mock_data_fails_when_candidate_ministry_has_a_non_mock_dra
         users=_mock_users(),
         ministry_members=[{"ministry_id": MINISTRY_ID, "user_id": STEWARD_ID}],
         drafts=[{"id": uuid4(), "user_id": REAL_USER_ID, "ministry_id": MINISTRY_ID}],
+        ministries=[{"id": MINISTRY_ID}],
+    )
+    service = RemoveMockDataService(session, email_suffix=MOCK_SUFFIX)
+
+    with pytest.raises(MockDataDependencyError):
+        await service.run()
+
+    assert session.deleted == {}
+    assert session.committed is False
+
+
+@pytest.mark.asyncio
+async def test_remove_mock_data_fails_when_candidate_ministry_has_a_non_mock_approval_decision():
+    session = FakeSession(
+        users=_mock_users(),
+        ministry_members=[{"ministry_id": MINISTRY_ID, "user_id": STEWARD_ID}],
+        approvals=[{"ministry_id": MINISTRY_ID, "requested_by_id": STEWARD_ID, "resolved_by_id": REAL_USER_ID}],
         ministries=[{"id": MINISTRY_ID}],
     )
     service = RemoveMockDataService(session, email_suffix=MOCK_SUFFIX)
