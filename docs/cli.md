@@ -74,7 +74,7 @@ uv run python -m portal.cli.main seed-local-demo
 | Command | Purpose | Prerequisites and outcomes |
 | --- | --- | --- |
 | `seed-mock-users [--force]` | Create the complete Mock inventory: five `personal`, three `steward`, one `owner`, and one inactive `@test.local` Testing accounts plus ten scheduled Mock Ministries; generate the account and Ministry CSV inventory. | Requires a catalog locale and configured SharePoint archive writer. The CSV pair is retained locally and uploaded to the configured `Testing Account/<env>` SharePoint folder. A new run is rejected while an active Mock snapshot exists; run `remove-mock-data` first. |
-| `seed-mock-data [--force]` | Complete QA Booking and approval scenarios for the current Mock inventory. | Requires exactly one current local inventory pair produced by `seed-mock-users`, an active Room, and an active owner-capable Position. Creates a personal Rental Booking, activates the steward Ministry and creates its Church Activity Booking, assigns the owner Mock user, and creates a pending Ministry Application. |
+| `seed-mock-data [--force]` | Complete the near-term Facility Booking fixture suite for the current Mock inventory. | Requires exactly one current local inventory pair produced by `seed-mock-users`, catalog rooms, and an active owner-capable Position. Creates weekly slot templates, campus-wide and room-specific Blackouts, ten confirmed Bookings (six personal, four Ministry, including one multi-room), assigns the owner Mock user, and creates a pending Ministry Application. Does not create accounts or inventory Ministries. Booking placement searches the next 30 days and fails atomically when a complete suite cannot be placed. |
 | `remove-mock-data [--force]` | Permanently delete all `@test.local` Mock users and their derived QA data. | Removes profiles, tokens, Bookings, recurring series, drafts, Ministries, and Mock steward/position relationships. Preserves catalog data and both local and SharePoint CSV archives. Fails before deleting anything if a candidate Ministry has a non-Mock dependency. |
 
 Recommended Mock QA flow:
@@ -86,7 +86,7 @@ uv run python -m portal.cli.main init-all
 # Create a fresh inventory and archive it locally and in SharePoint
 uv run python -m portal.cli.main seed-mock-users
 
-# Add booking and approval scenarios for that inventory
+# Add near-term Booking, Blackout, slot-template, and approval fixtures for that inventory
 uv run python -m portal.cli.main seed-mock-data
 
 # Remove all generated Mock QA data when finished

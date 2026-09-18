@@ -41,6 +41,18 @@ def compute_mock_run_identity(moment: datetime, env: str) -> str:
     return f"{env}-{moment.strftime('%Y-%m-%d_%H%M')}"
 
 
+def parse_mock_run_identity(account_csv: Path, *, env: str) -> str:
+    """Read the shared Mock run identity from the current account CSV filename."""
+    suffix = f"_{env}_{_ACCOUNT_SUFFIX}"
+    name = account_csv.name
+    if not name.endswith(suffix):
+        raise MockSeedInventoryError(f"Cannot read Mock run identity from {name}.")
+    stamp = name[: -len(suffix)]
+    if not stamp:
+        raise MockSeedInventoryError(f"Cannot read Mock run identity from {name}.")
+    return f"{env}-{stamp}"
+
+
 def _format_value(value: Any) -> str:
     if isinstance(value, bool):
         return "true" if value else "false"
