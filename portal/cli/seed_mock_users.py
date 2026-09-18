@@ -1,5 +1,5 @@
 """
-seed-mock-users CLI: random Mock users + a steward Ministry, archived to SharePoint (ADR 0025).
+seed-mock-users CLI: complete Mock Testing-account and Ministry inventory, archived to SharePoint (ADR 0025).
 """
 
 import asyncio
@@ -9,7 +9,12 @@ import click
 
 from portal.application.cli.mock_account_archive import MockSeedArchiveCollisionError
 from portal.application.cli.mock_lifecycle_guard import mock_lifecycle_environment_guard_error
-from portal.application.cli.seed_mock_users_service import MockSeedArchiveUploadError, MockSeedCatalogPrerequisiteError, SeedMockUsersService
+from portal.application.cli.seed_mock_users_service import (
+    MockSeedArchiveUploadError,
+    MockSeedCatalogPrerequisiteError,
+    MockSnapshotExistsError,
+    SeedMockUsersService,
+)
 from portal.config import settings
 from portal.container import Container
 from portal.libs.logger import logger
@@ -26,12 +31,21 @@ async def seed_mock_users() -> None:
             session, archive_writer, env=settings.ENV, default_locale_code=settings.DEFAULT_LOCALE, output_dir=Path(settings.MOCK_SEED_OUTPUT_DIR)
         )
         await service.run()
+    except MockSnapshotExistsError as error:
+        await session.rollback()
+        click.echo(click.style(f"seed-mock-users failed: {error}", fg="red"))
+        raise SystemExit(1) from error
     except MockSeedCatalogPrerequisiteError as error:
         await session.rollback()
         click.echo(click.style(f"seed-mock-users failed: {error}", fg="red"))
         raise SystemExit(1) from error
     except MockSeedArchiveCollisionError as error:
-        click.echo(click.style(f"seed-mock-users failed: {error} Data was committed; re-run after the collision clears.", fg="red"))
+        click.echo(
+            click.style(
+                f"seed-mock-users failed: {error} Data was committed as an active Mock snapshot. Run remove-mock-data, then retry after the next minute.",
+                fg="red",
+            )
+        )
         raise SystemExit(1) from error
     except MockSeedArchiveUploadError as error:
         click.echo(
@@ -65,10 +79,10 @@ def seed_mock_users_process(*, force: bool = False) -> None:
     if not force:
         click.echo(
             click.style(
-                "WARNING: This creates 4 fresh random @test.local Mock users (personal/steward/owner/inactive) and "
-                "one steward Ministry, then archives an account/Ministry CSV pair locally and to SharePoint. "
-                "Catalog data (locales) must already exist. Every run creates new random data; it never resets "
-                "or removes earlier Mock data.",
+                "WARNING: This creates the complete Mock inventory: five personal, three steward, one owner, and "
+                "one inactive @test.local Testing accounts plus ten scheduled Mock Ministries, then archives the "
+                "account/Ministry CSV pair locally and to SharePoint. Catalog data (locales) must already exist. "
+                "A new run is rejected while an active Mock snapshot exists; run remove-mock-data first.",
                 fg="yellow",
             )
         )

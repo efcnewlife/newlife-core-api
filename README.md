@@ -482,7 +482,7 @@ uv run python -m portal.cli.main init-all
 # Optional: demo ministries, slot templates/blackouts, and bookings (not part of init-all)
 uv run python -m portal.cli.main seed-local-demo
 
-# Optional: random Facility Booking Mock users + a steward Ministry (dev/staging QA)
+# Optional: complete Mock Testing-account and Ministry inventory (dev/staging QA)
 uv run python -m portal.cli.main seed-mock-users
 ```
 
@@ -506,7 +506,7 @@ It does **not** seed Ministry Types, Mock users, Ministries, Bookings, or other 
 | `init-rbac`             | Seed verbs, resources, permissions, and the `admin` role from `portal/cli/datas/rbac_seed_data.py`. Safe to re-run (upserts).                |
 | `seed-system-settings`  | Insert missing system settings; never overwrite existing values.                                                                             |
 | `create-superuser`      | Create an `AuthUser` with `is_admin` / `is_superuser` via interactive prompts.                                                               |
-| `seed-mock-users`       | **Mock QA data lifecycle.** Create 4 fresh random `@test.local` Mock users (personal/steward/owner/inactive) and a steward Ministry, then archive an account/Ministry CSV pair locally and to SharePoint. See [ADR 0025](docs/adr/0025-mock-qa-data-lifecycle.md), including its SharePoint archive-writer provisioning section. |
+| `seed-mock-users`       | **Mock QA data lifecycle.** Create five personal, three steward, one owner, and one inactive `@test.local` Testing accounts plus ten scheduled Mock Ministries, then archive an account/Ministry CSV pair locally and to SharePoint. Rejected while an active Mock snapshot exists. See [ADR 0025](docs/adr/0025-mock-qa-data-lifecycle.md), including its SharePoint archive-writer provisioning section. |
 | `seed-positions`        | Upsert org positions and translations from `portal/cli/datas/position_seed_data.py`.                                                         |
 | `seed-ministry-types`   | Upsert ministry type catalog (`outreach`, `internal`, `worship`) and translations. Not part of `init-all`.                                   |
 | `seed-target-audiences` | Upsert target audience catalog (`children`, `youths`, `adults`, `family`, `all_ages`) and translations.                                      |

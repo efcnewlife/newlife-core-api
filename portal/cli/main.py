@@ -102,7 +102,7 @@ def seed_facility_rental_cmd(force: bool, reset: bool):
 @cli.command(name="seed-mock-users")
 @click.option("--force", is_flag=True, default=False, help="Skip confirmation; required to run in staging. Never allowed in production.")
 def seed_mock_users_cmd(force: bool):
-    """Create random personal/steward/owner/inactive Mock users and a steward Ministry, then archive the CSV inventory."""
+    """Create the complete Mock Testing-account and Ministry inventory, then archive the CSV pair."""
     seed_mock_users_process(force=force)
 
 

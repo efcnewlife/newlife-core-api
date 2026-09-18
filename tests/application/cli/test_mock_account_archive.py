@@ -13,6 +13,7 @@ from portal.application.cli.mock_account_archive import (
     MockSeedArchiveCollisionError,
     MockSeedInventoryError,
     compute_archive_filenames,
+    compute_mock_run_identity,
     find_local_archive_pair,
     read_csv_rows,
     remove_previous_archive_pair,
@@ -27,6 +28,12 @@ def test_compute_archive_filenames_matches_exact_schema():
 
     assert filenames.account_filename == "2026-09-17_1405_dev_test_account.csv"
     assert filenames.ministry_filename == "2026-09-17_1405_dev_ministry.csv"
+
+
+def test_compute_mock_run_identity_uses_env_and_minute_stamp():
+    moment = datetime(2026, 9, 17, 14, 5)
+
+    assert compute_mock_run_identity(moment, "dev") == "dev-2026-09-17_1405"
 
 
 def test_write_csv_writes_header_and_rows(tmp_path: Path):

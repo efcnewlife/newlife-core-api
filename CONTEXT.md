@@ -14,6 +14,22 @@ _Avoid_: demo user, production account, superuser, fake frontend session
 The `@test.local` account credential of a Mock user that is eligible for Mock login when it is verified and active. It is the login qualification, not the user's business persona.
 _Avoid_: Mock user as a synonym for the credential, production login, admin account
 
+**Mock fixture**:
+A run-scoped, near-term generated test entity associated only with Mock users. Mock fixtures cover display and QA scenarios for Ministries, Bookings, slot templates, and Blackouts, and are distinguishable from real data by their Mock run identity.
+_Avoid_: fixed demo data, a production fixture, a non-login test record
+
+**Mock run identity**:
+The environment-and-minute identity shared by one complete Mock fixture generation run. It links the run's machine-readable markers and display labels without replacing an individual Testing account's random email suffix.
+_Avoid_: an account persona, a credential, a user-facing fixture purpose
+
+**Mock run marker**:
+The machine-readable `mock:` identity, including a Mock run identity, carried by a Mock-owned fixture that is not otherwise linked to a Testing account. It permits removal of that fixture without selecting manually created data.
+_Avoid_: a user-facing display name, a broad cleanup wildcard, the legacy `seed:` marker
+
+**Legacy demo fixture**:
+The retired fixed local data bundle formerly used to display Ministries, Bookings, slot templates, and Blackouts. Its non-login `seed.*@local.test` Demo accounts are neither Mock users nor Testing accounts; new test fixtures are generated as Mock data instead.
+_Avoid_: treating a legacy demo fixture as a supported QA credential, mixing it with generated Mock data
+
 **Catalog bootstrap**:
 The `init-all` command's catalog and configuration foundation for a new environment: locales, RBAC, system settings, positions, target audiences, facility rooms/rates, and Legal Documents, finishing with interactive superuser creation. It does not seed Ministry Types, Mock users, Ministries, Bookings, or other business/demo data. Re-running upserts existing catalog rows and never resets or deletes them.
 _Avoid_: treating seed-local-demo as bootstrap, requiring Ministry Type for a new environment, resetting catalog rows on re-run

@@ -13,33 +13,50 @@ from portal.application.cli.mock_user_persona import (
 
 
 def _fixed_token():
-    calls = iter(["aaaa", "bbbb", "cccc", "dddd", "eeee"])
+    calls = iter(["aaaa", "bbbb", "cccc", "dddd", "eeee", "ffff", "gggg", "hhhh", "iiii", "jjjj"])
     return lambda: next(calls)
 
 
-def test_generate_mock_user_personas_returns_the_four_fixed_personas():
+def test_generate_mock_user_personas_returns_the_agreed_persona_matrix():
     personas = generate_mock_user_personas(email_suffix="@test.local", random_token=_fixed_token())
 
-    assert [p.persona for p in personas] == [PERSONA_PERSONAL, PERSONA_STEWARD, PERSONA_OWNER, PERSONA_INACTIVE]
+    assert [p.persona for p in personas] == [
+        PERSONA_PERSONAL,
+        PERSONA_PERSONAL,
+        PERSONA_PERSONAL,
+        PERSONA_PERSONAL,
+        PERSONA_PERSONAL,
+        PERSONA_STEWARD,
+        PERSONA_STEWARD,
+        PERSONA_STEWARD,
+        PERSONA_OWNER,
+        PERSONA_INACTIVE,
+    ]
 
 
 def test_generate_mock_user_personas_email_and_name_format():
     personas = generate_mock_user_personas(email_suffix="@test.local", random_token=_fixed_token())
 
-    personal = personas[0]
-    assert personal.email == "personal.aaaa@test.local"
-    assert personal.first_name == "Personal+aaaa"
-    assert personal.last_name == "Mock"
+    assert [p.email for p in personas] == [
+        "personal.aaaa@test.local",
+        "personal.bbbb@test.local",
+        "personal.cccc@test.local",
+        "personal.dddd@test.local",
+        "personal.eeee@test.local",
+        "steward.ffff@test.local",
+        "steward.gggg@test.local",
+        "steward.hhhh@test.local",
+        "owner.iiii@test.local",
+        "inactive.jjjj@test.local",
+    ]
+    assert personas[0].first_name == "Personal+aaaa"
+    assert personas[0].last_name == "Mock"
 
 
 def test_generate_mock_user_personas_only_inactive_persona_is_inactive():
     personas = generate_mock_user_personas(email_suffix="@test.local", random_token=_fixed_token())
 
-    active_flags = {p.persona: p.is_active for p in personas}
-    assert active_flags[PERSONA_PERSONAL] is True
-    assert active_flags[PERSONA_STEWARD] is True
-    assert active_flags[PERSONA_OWNER] is True
-    assert active_flags[PERSONA_INACTIVE] is False
+    assert [p.is_active for p in personas] == [True, True, True, True, True, True, True, True, True, False]
 
 
 def test_generate_mock_user_personas_uses_configured_suffix():
@@ -48,11 +65,13 @@ def test_generate_mock_user_personas_uses_configured_suffix():
     assert all(p.email.endswith("@qa.test") for p in personas)
 
 
-def test_generate_mock_user_personas_each_persona_has_a_distinct_purpose():
+def test_generate_mock_user_personas_repeated_personas_have_distinct_purposes():
     personas = generate_mock_user_personas(email_suffix="@test.local", random_token=_fixed_token())
 
-    purposes = {p.purpose for p in personas}
-    assert len(purposes) == 4
+    purposes = [p.purpose for p in personas]
+    assert len(purposes) == 10
+    assert len(set(purposes)) == 10
+    assert set(p.persona for p in personas) == {PERSONA_PERSONAL, PERSONA_STEWARD, PERSONA_OWNER, PERSONA_INACTIVE}
 
 
 def test_generate_mock_ministry_code_is_prefixed_and_uppercase():
