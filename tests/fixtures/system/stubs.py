@@ -4,6 +4,8 @@ System setting test stubs.
 
 from zoneinfo import ZoneInfo
 
+from portal.application.system.results import RecurringBookingAvailabilityWindowResult, RecurringBookingTestBookerAllowlistResult
+
 
 class StubSettingService:
     """Minimal SettingService stub for facility consumers."""
@@ -37,8 +39,6 @@ class StubSettingService:
         return self._max_booking_lines
 
     async def get_recurring_booking_availability_window(self):
-        from portal.application.system.results import RecurringBookingAvailabilityWindowResult
-
         return RecurringBookingAvailabilityWindowResult(amount=self._availability_amount, unit=self._availability_unit)
 
     async def get_min_recurring_booking_weeks(self) -> int:
@@ -51,6 +51,4 @@ class StubSettingService:
         return self._test_window_override
 
     async def get_recurring_booking_test_booker_allowlist(self):
-        from portal.application.system.results import RecurringBookingTestBookerAllowlistResult
-
         return RecurringBookingTestBookerAllowlistResult(email_addresses=self._test_booker_email_addresses, email_suffixes=self._test_booker_email_suffixes)
