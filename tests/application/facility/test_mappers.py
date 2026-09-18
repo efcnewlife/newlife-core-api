@@ -29,6 +29,7 @@ from portal.application.facility.mappers import (
     delete_model_to_command,
     discount_rule_to_api,
     member_booking_detail_to_api,
+    member_browse_booking_to_api,
     member_preview_quote_result_to_api,
     member_preview_quote_to_command,
     override_log_pages_query_to_command,
@@ -53,6 +54,7 @@ from portal.application.facility.results import (
     BookingRoomLineResult,
     DayAvailabilityResult,
     DiscountRuleResult,
+    MemberBrowseBookingResult,
     PendingPaymentSeriesListItemResult,
     PendingPaymentSeriesListResult,
     PreviewQuoteResult,
@@ -71,7 +73,6 @@ from portal.domain.facility.constants import BookingType, RecurringConflictKind,
 from portal.domain.org.constants import MinistryMemberRole
 from portal.infrastructure.persistence.repositories.facility.booking_repository import BookingRepository
 from portal.infrastructure.persistence.repositories.facility.recurring_booking_repository import RecurringBookingRepository
-from portal.routers.apis.v1.facility import _booking_list_item_to_api
 from portal.serializers.admin.v1.facility.booking import AdminBookingCancel, AdminBookingQuery, AdminBookingUpdate
 from portal.serializers.admin.v1.facility.override_log import AdminOverrideLogQuery
 from portal.serializers.admin.v1.facility.rental_catalog import AdminDiscountRuleCreate, AdminSurchargeCreate
@@ -651,7 +652,7 @@ def test_blackout_impact_to_api_exposes_series_and_ministry():
 
 def test_member_booking_list_item_exposes_series_id():
     series_id = uuid4()
-    result = BookingListItemResult(
+    result = MemberBrowseBookingResult(
         id=uuid4(),
         user_id=uuid4(),
         booking_type="recurring",
@@ -660,13 +661,13 @@ def test_member_booking_list_item_exposes_series_id():
         end_at=datetime(2026, 9, 24, 14, 30, tzinfo=timezone.utc),
         status="confirmed",
     )
-    dumped = _booking_list_item_to_api(result).model_dump(by_alias=True)
+    dumped = member_browse_booking_to_api(result).model_dump(by_alias=True)
     assert dumped["seriesId"] == series_id
     assert dumped["bookingType"] == "recurring"
 
 
 def test_member_booking_list_item_one_time_series_id_is_null():
-    result = BookingListItemResult(
+    result = MemberBrowseBookingResult(
         id=uuid4(),
         user_id=uuid4(),
         booking_type="one_time",
@@ -674,7 +675,7 @@ def test_member_booking_list_item_one_time_series_id_is_null():
         end_at=datetime(2026, 9, 18, 16, 30, tzinfo=timezone.utc),
         status="confirmed",
     )
-    dumped = _booking_list_item_to_api(result).model_dump(by_alias=True)
+    dumped = member_browse_booking_to_api(result).model_dump(by_alias=True)
     assert dumped["seriesId"] is None
     assert dumped["bookingType"] == "one_time"
 

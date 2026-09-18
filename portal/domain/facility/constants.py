@@ -45,6 +45,22 @@ class BookingStatus(str, Enum):
     OVERRIDDEN = "overridden"
 
 
+class MyBookingsSection(str, Enum):
+    """Member My Bookings browse section."""
+
+    UPCOMING = "upcoming"
+    OVERRIDDEN = "overridden"
+    PAST = "past"
+    CANCELLED_OR_EXPIRED = "cancelled_or_expired"
+
+
+class MyBookingsCardKind(str, Enum):
+    """Card kind returned by the My Bookings browse contract."""
+
+    ONE_TIME = "one_time"
+    SERIES = "series"
+
+
 class BookingSlotStatus(str, Enum):
     """Expanded booking slot occupancy status."""
 

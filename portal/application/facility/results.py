@@ -401,6 +401,48 @@ class BookingRangeResult(BaseModel):
     items: list[BookingListItemResult] = Field(default_factory=list)
 
 
+class MemberBrowseBookingResult(UUIDBaseModel):
+    """One Booking row used to assemble a My Bookings browse card."""
+
+    title: str = Field(default="")
+    user_id: UUID = Field(...)
+    facility_id: Optional[UUID] = Field(default=None)
+    facility_name: Optional[str] = Field(default=None)
+    booking_type: str = Field(...)
+    series_id: Optional[UUID] = Field(default=None)
+    series_title: Optional[str] = Field(default=None)
+    ministry_id: Optional[UUID] = Field(default=None)
+    start_at: datetime = Field(...)
+    end_at: datetime = Field(...)
+    status: str = Field(...)
+    quoted_amount: Optional[Decimal] = Field(default=None)
+    currency: Optional[str] = Field(default=None)
+    payment_hold_expires_at: Optional[datetime] = Field(default=None)
+
+
+class MemberBrowseCardResult(BaseModel):
+    """One-time Booking or Recurring Booking Series projection for one section."""
+
+    kind: str = Field(...)
+    is_booker: bool = Field(...)
+    is_view_only: bool = Field(...)
+    photo_urls: list[str] = Field(default_factory=list)
+    booking: Optional[MemberBrowseBookingResult] = Field(default=None)
+    series_id: Optional[UUID] = Field(default=None)
+    series_title: Optional[str] = Field(default=None)
+    occurrences: list[MemberBrowseBookingResult] = Field(default_factory=list)
+
+
+class MemberBrowsePageResult(BaseModel):
+    """Paginated My Bookings browse page for one section."""
+
+    page: int = Field(...)
+    page_size: int = Field(...)
+    total: int = Field(...)
+    section: str = Field(...)
+    items: list[MemberBrowseCardResult] = Field(default_factory=list)
+
+
 class OverrideLogResult(UUIDBaseModel):
     """Override audit log row."""
 

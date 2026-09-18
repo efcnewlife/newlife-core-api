@@ -11,7 +11,8 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from portal.domain.facility.booking_title import BookingTitle
-from portal.domain.facility.constants import PREVIEW_QUOTE_MAX_LINES
+from portal.domain.facility.constants import PREVIEW_QUOTE_MAX_LINES, MyBookingsSection
+from portal.serializers.mixins.base import PaginationBaseResponseModel
 from portal.serializers.mixins.model_mixins import UUIDBaseModel
 
 
@@ -100,10 +101,32 @@ class MemberBookingListItem(UUIDBaseModel):
     currency: Optional[str] = Field(default=None)
 
 
-class MemberBookingList(BaseModel):
-    """Member bookings."""
+class MemberBookingBrowseQuery(BaseModel):
+    """Participant-scoped My Bookings browse query."""
 
-    items: list[MemberBookingListItem] = Field(default_factory=list)
+    section: MyBookingsSection = Field(...)
+    page: int = Field(default=0, ge=0)
+    page_size: int = Field(default=20, ge=1, le=50)
+
+
+class MemberBookingBrowseCard(BaseModel):
+    """One-time Booking or Recurring Booking Series projection for one section."""
+
+    kind: str = Field(...)
+    is_booker: bool = Field(..., serialization_alias="isBooker")
+    is_view_only: bool = Field(..., serialization_alias="isViewOnly")
+    photo_urls: list[str] = Field(default_factory=list, serialization_alias="photoUrls")
+    booking: Optional[MemberBookingListItem] = Field(default=None)
+    series_id: Optional[UUID] = Field(default=None, serialization_alias="seriesId")
+    series_title: Optional[str] = Field(default=None, serialization_alias="seriesTitle")
+    occurrences: list[MemberBookingListItem] = Field(default_factory=list)
+
+
+class MemberBookingBrowsePage(PaginationBaseResponseModel):
+    """Paginated My Bookings browse page."""
+
+    section: str = Field(...)
+    items: list[MemberBookingBrowseCard] = Field(default_factory=list)
 
 
 class MemberBookingDetailRoom(BaseModel):

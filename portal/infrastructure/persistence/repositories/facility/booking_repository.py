@@ -17,6 +17,7 @@ from portal.application.facility.results import (
     BookingListItemResult,
     BookingRoomLineResult,
     BookingSlotResult,
+    MemberBrowseBookingResult,
     RecurringBookingOccurrenceResult,
     RecurringOccupyingBookingResult,
 )
@@ -528,13 +529,51 @@ class BookingRepository:
             ),
         )
 
-    async def list_user_bookings(self, user_id: UUID, locale_id: Optional[UUID]) -> list[BookingListItemResult]:
-        # Reuse pages query with large page for member "mine" list
-        from portal.application.facility.commands import BookingPagesQueryCommand
+    async def list_participant_bookings(self, user_id: UUID, ministry_ids: list[UUID], locale_id: Optional[UUID]) -> list[MemberBrowseBookingResult]:
+        participant_clause = FacilityBooking.user_id == user_id
+        if ministry_ids:
+            participant_clause = sa.or_(participant_clause, FacilityBooking.ministry_id.in_(ministry_ids))
+        items = await (
+            self._browse_query(locale_id)
+            .where(FacilityBooking.is_deleted == False)
+            .where(FacilityBooking.status != BookingStatus.DRAFT.value)
+            .where(participant_clause)
+            .order_by(FacilityBooking.start_at.asc(), FacilityBooking.id.asc())
+            .fetch(as_model=MemberBrowseBookingResult)
+        )
+        return items or []
 
-        command = BookingPagesQueryCommand(page=0, page_size=100, user_id=user_id, order_by="start_at", descending=True)
-        items, _count = await self.fetch_pages(command, locale_id)
-        return items
+    def _browse_query(self, locale_id: Optional[UUID]):
+        room_name = FacilityRoom.code
+        if locale_id:
+            room_name = sa.func.coalesce(FacilityRoomTranslation.name, FacilityRoom.code)
+        query = (
+            self._session.select(
+                FacilityBooking.id,
+                FacilityBooking.title,
+                FacilityBooking.user_id,
+                FacilityBooking.facility_id,
+                room_name.label("facility_name"),
+                FacilityBooking.booking_type,
+                FacilityBooking.series_id,
+                FacilityBookingSeries.title.label("series_title"),
+                FacilityBooking.ministry_id,
+                FacilityBooking.start_at,
+                FacilityBooking.end_at,
+                FacilityBooking.status,
+                FacilityBooking.quoted_amount,
+                FacilityBooking.currency,
+                FacilityBookingSeries.payment_hold_expires_at,
+            )
+            .select_from(FacilityBooking)
+            .outerjoin(FacilityBookingSeries, FacilityBookingSeries.id == FacilityBooking.series_id)
+            .outerjoin(FacilityRoom, FacilityRoom.id == FacilityBooking.facility_id)
+        )
+        if locale_id:
+            query = query.outerjoin(
+                FacilityRoomTranslation, sa.and_(FacilityRoomTranslation.room_id == FacilityRoom.id, FacilityRoomTranslation.locale_id == locale_id)
+            )
+        return query
 
     async def get_user_id_for_booking(self, booking_id: UUID) -> Optional[UUID]:
         return await self._session.select(FacilityBooking.user_id).where(FacilityBooking.id == booking_id).where(FacilityBooking.is_deleted == False).fetchval()

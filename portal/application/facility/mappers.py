@@ -20,6 +20,7 @@ from portal.application.facility.commands import (
     CreateSurchargeCommand,
     DeleteCommand,
     FacilityTranslationCommand,
+    MemberBrowseQueryCommand,
     MemberPreviewQuoteCommand,
     MemberPreviewQuoteLineCommand,
     PagesQueryCommand,
@@ -42,6 +43,9 @@ from portal.application.facility.results import (
     DayAvailabilityResult,
     DiscountRuleListResult,
     DiscountRuleResult,
+    MemberBrowseBookingResult,
+    MemberBrowseCardResult,
+    MemberBrowsePageResult,
     PreviewQuoteResult,
     RentalRateListResult,
     RentalRatePageResult,
@@ -113,12 +117,16 @@ from portal.serializers.admin.v1.facility.room_slot_template import (
 )
 from portal.serializers.admin.v1.facility.translation import AdminFacilityTranslationInput, AdminFacilityTranslationItem
 from portal.serializers.apis.v1.facility import (
+    MemberBookingBrowseCard,
+    MemberBookingBrowsePage,
+    MemberBookingBrowseQuery,
     MemberBookingDetail,
     MemberBookingDetailRoom,
     MemberBookingDraftCreate,
     MemberBookingDraftDetail,
     MemberBookingDraftLine,
     MemberBookingDraftUpdate,
+    MemberBookingListItem,
     MemberDayAvailability,
     MemberPreviewQuoteLineInput,
     MemberPreviewQuoteRequest,
@@ -501,6 +509,49 @@ def member_booking_detail_to_api(result: BookingDetailResult) -> MemberBookingDe
         quoted_amount=result.quoted_amount,
         currency=result.currency,
         rooms=[MemberBookingDetailRoom(facility_id=line.facility_id, facility_name=line.facility_name) for line in result.rooms],
+    )
+
+
+def member_browse_query_to_command(model: MemberBookingBrowseQuery) -> MemberBrowseQueryCommand:
+    return MemberBrowseQueryCommand(section=model.section, page=model.page, page_size=model.page_size)
+
+
+def member_browse_booking_to_api(item: MemberBrowseBookingResult) -> MemberBookingListItem:
+    return MemberBookingListItem(
+        id=item.id,
+        title=item.title,
+        facility_id=item.facility_id,
+        facility_name=item.facility_name,
+        booking_type=item.booking_type,
+        series_id=item.series_id,
+        start_at=item.start_at,
+        end_at=item.end_at,
+        status=item.status,
+        quoted_amount=str(item.quoted_amount) if item.quoted_amount is not None else None,
+        currency=item.currency,
+    )
+
+
+def member_browse_card_to_api(card: MemberBrowseCardResult) -> MemberBookingBrowseCard:
+    return MemberBookingBrowseCard(
+        kind=card.kind,
+        is_booker=card.is_booker,
+        is_view_only=card.is_view_only,
+        photo_urls=card.photo_urls,
+        booking=member_browse_booking_to_api(card.booking) if card.booking else None,
+        series_id=card.series_id,
+        series_title=card.series_title,
+        occurrences=[member_browse_booking_to_api(item) for item in card.occurrences],
+    )
+
+
+def member_browse_page_to_api(result: MemberBrowsePageResult) -> MemberBookingBrowsePage:
+    return MemberBookingBrowsePage(
+        page=result.page,
+        page_size=result.page_size,
+        total=result.total,
+        section=result.section,
+        items=[member_browse_card_to_api(item) for item in result.items],
     )
 
 

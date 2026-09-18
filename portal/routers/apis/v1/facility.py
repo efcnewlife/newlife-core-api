@@ -3,7 +3,7 @@ Member facility API routes (availability + bookings).
 """
 
 from datetime import date
-from typing import Optional
+from typing import Annotated, Optional
 from uuid import UUID
 
 from dependency_injector.wiring import Provide, inject
@@ -21,6 +21,8 @@ from portal.application.facility.mappers import (
     member_booking_detail_to_api,
     member_booking_draft_create_to_command,
     member_booking_draft_update_to_command,
+    member_browse_page_to_api,
+    member_browse_query_to_command,
     member_preview_quote_result_to_api,
     member_preview_quote_to_command,
     recurring_booking_preview_to_member_api,
@@ -30,18 +32,17 @@ from portal.application.facility.mappers import (
     update_title_to_command,
 )
 from portal.application.facility.recurring_booking_service import RecurringBookingService
-from portal.application.facility.results import BookingListItemResult
 from portal.container import Container
 from portal.routers.auth_router import AuthRouter
 from portal.serializers.apis.v1.facility import (
+    MemberBookingBrowsePage,
+    MemberBookingBrowseQuery,
     MemberBookingCancel,
     MemberBookingCreate,
     MemberBookingDetail,
     MemberBookingDraftCreate,
     MemberBookingDraftDetail,
     MemberBookingDraftUpdate,
-    MemberBookingList,
-    MemberBookingListItem,
     MemberBookingTitleUpdate,
     MemberPreviewQuoteRequest,
     MemberPreviewQuoteResponse,
@@ -57,22 +58,6 @@ from portal.serializers.apis.v1.facility import (
 from portal.serializers.mixins.model_mixins import UUIDBaseModel
 
 router: AuthRouter = AuthRouter()
-
-
-def _booking_list_item_to_api(item: BookingListItemResult) -> MemberBookingListItem:
-    return MemberBookingListItem(
-        id=item.id,
-        title=item.title,
-        facility_id=item.facility_id,
-        facility_name=item.facility_name,
-        booking_type=item.booking_type,
-        series_id=item.series_id,
-        start_at=item.start_at,
-        end_at=item.end_at,
-        status=item.status,
-        quoted_amount=str(item.quoted_amount) if item.quoted_amount is not None else None,
-        currency=item.currency,
-    )
 
 
 @router.get(path="/rooms/availability", status_code=status.HTTP_200_OK, response_model=MemberRoomAvailabilityList, response_model_by_alias=True)
@@ -93,11 +78,13 @@ async def preview_quote(model: MemberPreviewQuoteRequest, booking_service: Booki
     return member_preview_quote_result_to_api(result)
 
 
-@router.get(path="/bookings/mine", status_code=status.HTTP_200_OK, response_model=MemberBookingList, response_model_by_alias=True)
+@router.get(path="/bookings/mine", status_code=status.HTTP_200_OK, response_model=MemberBookingBrowsePage, response_model_by_alias=True)
 @inject
-async def get_my_bookings(booking_service: BookingService = Depends(Provide[Container.booking_service])):
-    items = await booking_service.list_my_bookings()
-    return MemberBookingList(items=[_booking_list_item_to_api(item) for item in items])
+async def get_my_bookings(
+    query_model: Annotated[MemberBookingBrowseQuery, Query()], booking_service: BookingService = Depends(Provide[Container.booking_service])
+):
+    result = await booking_service.browse_my_bookings(member_browse_query_to_command(query_model))
+    return member_browse_page_to_api(result)
 
 
 @router.get(path="/bookings/{booking_id}", status_code=status.HTTP_200_OK, response_model=MemberBookingDetail, response_model_by_alias=True)

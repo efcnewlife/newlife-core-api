@@ -2,12 +2,13 @@
 Facility booking admin application service.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Optional
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
+from portal.application.content.file_service import FileService
 from portal.application.facility.booking_line_validation import (
     ResolvedBookingLine,
     envelope_interval,
@@ -21,17 +22,35 @@ from portal.application.facility.commands import (
     BookingRoomLineCommand,
     CancelBookingCommand,
     CreateBookingCommand,
+    MemberBrowseQueryCommand,
     MemberPreviewQuoteCommand,
     PreviewQuoteCommand,
     PreviewQuoteRoomLineCommand,
     UpdateBookingCommand,
     UpdateTitleCommand,
 )
+from portal.application.facility.my_bookings import card_primary_facility_id, paginate_my_bookings_cards, project_my_bookings_cards
 from portal.application.facility.pricing_service import PricingService
-from portal.application.facility.results import BookingDetailResult, BookingListItemResult, BookingPageResult, BookingRangeResult, PreviewQuoteResult
+from portal.application.facility.results import (
+    BookingDetailResult,
+    BookingPageResult,
+    BookingRangeResult,
+    MemberBrowseCardResult,
+    MemberBrowsePageResult,
+    PreviewQuoteResult,
+)
 from portal.application.org.results import CreateIdResult
 from portal.application.system.setting_service import SettingService
-from portal.domain.facility.constants import BOOKING_RANGE_MAX_DAYS, BookingErrorCode, BookingSlotStatus, BookingStatus, BookingType, FacilityErrorCode
+from portal.domain.content.constants import FILE_RESOURCE_KIND_FACILITY_ROOM
+from portal.domain.facility.constants import (
+    BOOKING_RANGE_MAX_DAYS,
+    ROOM_GALLERY_MAX_FILES,
+    BookingErrorCode,
+    BookingSlotStatus,
+    BookingStatus,
+    BookingType,
+    FacilityErrorCode,
+)
 from portal.domain.org.constants import MinistryStatus
 from portal.exceptions.responses import BadRequestException, ConflictErrorException, ForbiddenException, NotFoundException
 from portal.infrastructure.persistence.repositories.facility.booking_draft_repository import BookingDraftRepository
@@ -54,6 +73,7 @@ class BookingService:
         room_blackout_repository: RoomBlackoutRepository,
         setting_service: SettingService,
         booking_draft_repository: BookingDraftRepository,
+        file_service: FileService,
     ):
         self._repository = booking_repository
         self._pricing_service = pricing_service
@@ -61,6 +81,7 @@ class BookingService:
         self._blackout_repository = room_blackout_repository
         self._setting_service = setting_service
         self._booking_draft_repository = booking_draft_repository
+        self._file_service = file_service
         self._req_ctx: Optional[RequestContext] = get_request_context()
         self._user_ctx: Optional[UserContext] = get_user_context()
 
@@ -316,11 +337,30 @@ class BookingService:
         return CreateIdResult(id=booking_id)
 
     @distributed_trace()
-    async def list_my_bookings(self) -> list[BookingListItemResult]:
+    async def browse_my_bookings(self, command: MemberBrowseQueryCommand, now: Optional[datetime] = None) -> MemberBrowsePageResult:
         user_id = self._user_ctx.user_id if self._user_ctx else None
         if not user_id:
             raise ForbiddenException(detail="Authenticated user required")
-        return await self._repository.list_user_bookings(user_id, self._resolved_locale_id())
+        browse_now = now or datetime.now(timezone.utc)
+        locale_id = self._resolved_locale_id()
+        owned = await self._ministry_repository.list_owned_active(user_id, locale_id)
+        ministry_ids = [item.id for item in owned]
+        rows = await self._repository.list_participant_bookings(user_id, ministry_ids, locale_id)
+        facility_tz = await self._setting_service.get_facility_timezone()
+        cards = project_my_bookings_cards(rows, section=command.section, user_id=user_id, now=browse_now, facility_tz=facility_tz)
+        page_items, total = paginate_my_bookings_cards(cards, command.page, command.page_size)
+        page_items = await self._attach_browse_photos(page_items)
+        return MemberBrowsePageResult(page=command.page, page_size=command.page_size, total=total, section=command.section.value, items=page_items)
+
+    async def _attach_browse_photos(self, cards: list[MemberBrowseCardResult]) -> list[MemberBrowseCardResult]:
+        facility_ids = [facility_id for facility_id in (card_primary_facility_id(card) for card in cards) if facility_id is not None]
+        urls_by_room = await self._file_service.get_signed_urls_by_resource_ids(facility_ids, resource_name=FILE_RESOURCE_KIND_FACILITY_ROOM)
+        attached: list[MemberBrowseCardResult] = []
+        for card in cards:
+            facility_id = card_primary_facility_id(card)
+            photo_urls = urls_by_room.get(facility_id, [])[:ROOM_GALLERY_MAX_FILES] if facility_id else []
+            attached.append(card.model_copy(update={"photo_urls": photo_urls}))
+        return attached
 
     @distributed_trace()
     async def update_my_booking_title(self, booking_id: UUID, command: UpdateTitleCommand) -> BookingDetailResult:

@@ -19,6 +19,7 @@ from portal.application.facility.results import (
     BookingListItemResult,
     DiscountRuleResult,
     MinistryDetailResult,
+    MinistryListItemResult,
     OverrideLogResult,
     PendingPaymentSeriesListItemResult,
     RecurringOccupyingBookingResult,
@@ -262,6 +263,7 @@ class StubBookingRepository:
         deleted_ids: set[UUID] | None = None,
         rental_starts: list[datetime] | None = None,
         occupying_bookings: list[RecurringOccupyingBookingResult] | None = None,
+        participant_bookings: list | None = None,
     ):
         self.exists = exists
         self.booking_meta = booking_meta or {"booking_type": "one_time", "currency": "CAD"}
@@ -270,6 +272,7 @@ class StubBookingRepository:
         self.occupying_bookings = occupying_bookings or []
         self.detail = detail
         self.range_items = range_items or []
+        self.participant_bookings = participant_bookings or []
         self.deleted_ids = deleted_ids or set()
         self.rental_starts = rental_starts or []
         self.cancel_calls: list[dict] = []
@@ -320,8 +323,9 @@ class StubBookingRepository:
     async def insert_booking(self, payload: dict) -> None:
         self.insert_calls.append(payload)
 
-    async def list_user_bookings(self, user_id: UUID, locale_id=None) -> list[BookingListItemResult]:
-        return [item for item in self.range_items if item.user_id == user_id]
+    async def list_participant_bookings(self, user_id: UUID, ministry_ids: list[UUID], locale_id=None):
+        ministry_id_set = set(ministry_ids)
+        return [item for item in self.participant_bookings if item.user_id == user_id or (item.ministry_id is not None and item.ministry_id in ministry_id_set)]
 
     async def get_user_id_for_booking(self, booking_id: UUID) -> UUID | None:
         if self.detail is not None and self.detail.id == booking_id:
@@ -542,12 +546,14 @@ class StubMinistryRepository:
         update_affected: int = 1,
         booking_member_user_ids: set[UUID] | None = None,
         members_by_ministry: dict[UUID, list] | None = None,
+        owned_active_ids: list[UUID] | None = None,
     ):
         self.ministry_by_id = ministry_by_id or {}
         self.insert_raises_unique = insert_raises_unique
         self.update_affected = update_affected
         self.booking_member_user_ids = booking_member_user_ids
         self.members_by_ministry = members_by_ministry or {}
+        self.owned_active_ids = owned_active_ids or []
         self.insert_calls: list[dict] = []
         self.replace_members_calls: list[dict] = []
         self.membership_check_calls: list[dict] = []
@@ -580,6 +586,9 @@ class StubMinistryRepository:
 
     async def list_active(self, locale_id):
         return []
+
+    async def list_owned_active(self, user_id: UUID, locale_id, *, include_pending: bool = False):
+        return [MinistryListItemResult(id=ministry_id, status="active") for ministry_id in self.owned_active_ids]
 
     async def get_status(self, ministry_id: UUID) -> str | None:
         ministry = self.ministry_by_id.get(ministry_id)
