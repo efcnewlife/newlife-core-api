@@ -75,7 +75,7 @@ uv run python -m portal.cli.main seed-local-demo
 | --- | --- | --- |
 | `seed-mock-users [--force]` | Create the complete Mock inventory: five `personal`, three `steward`, one `owner`, and one inactive `@test.local` Testing accounts plus ten scheduled Mock Ministries; generate the account and Ministry CSV inventory. | Requires a catalog locale and configured SharePoint archive writer. The CSV pair is retained locally and uploaded to the configured `Testing Account/<env>` SharePoint folder. A new run is rejected while an active Mock snapshot exists; run `remove-mock-data` first. |
 | `seed-mock-data [--force]` | Complete the near-term Facility Booking fixture suite for the current Mock inventory. | Requires exactly one current local inventory pair produced by `seed-mock-users`, catalog rooms, and an active owner-capable Position. Creates weekly slot templates, campus-wide and room-specific Blackouts, ten confirmed Bookings (six personal, four Ministry, including one multi-room), assigns the owner Mock user, and creates a pending Ministry Application. Does not create accounts or inventory Ministries. Booking placement searches the next 30 days and fails atomically when a complete suite cannot be placed. |
-| `remove-mock-data [--force]` | Permanently delete all `@test.local` Mock users and their derived QA data. | Removes profiles, tokens, Bookings, recurring series, drafts, Ministries, and Mock steward/position relationships. Preserves catalog data and both local and SharePoint CSV archives. Fails before deleting anything if a candidate Ministry has a non-Mock dependency. |
+| `remove-mock-data [--force] [--include-legacy-demo]` | Permanently delete all `@test.local` Mock users, their derived QA data, and current `mock:`-marked slot templates and Blackouts. | Removes profiles, tokens, Bookings, recurring series, drafts, Ministries, Mock steward/position relationships, and marker-owned non-user fixtures. Preserves catalog data and both local and SharePoint CSV archives. Fails before deleting anything if a candidate Ministry has a non-Mock dependency. `--include-legacy-demo` also removes only the exact known `seed.*@local.test` Demo accounts and `seed:`-marked fixtures; a non-legacy dependency fails the whole run. The transition flag uses the same Mock lifecycle environment guard. |
 
 Recommended Mock QA flow:
 
@@ -91,6 +91,9 @@ uv run python -m portal.cli.main seed-mock-data
 
 # Remove all generated Mock QA data when finished
 uv run python -m portal.cli.main remove-mock-data
+
+# Optional transition: also remove exact known legacy Demo accounts and seed: markers
+uv run python -m portal.cli.main remove-mock-data --include-legacy-demo
 ```
 
 For staging, use `--force` with every Mock QA lifecycle command:
@@ -99,6 +102,7 @@ For staging, use `--force` with every Mock QA lifecycle command:
 uv run python -m portal.cli.main seed-mock-users --force
 uv run python -m portal.cli.main seed-mock-data --force
 uv run python -m portal.cli.main remove-mock-data --force
+uv run python -m portal.cli.main remove-mock-data --force --include-legacy-demo
 ```
 
 ## Microsoft Entra user synchronization

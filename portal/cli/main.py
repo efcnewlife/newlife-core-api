@@ -115,9 +115,15 @@ def seed_mock_data_cmd(force: bool):
 
 @cli.command(name="remove-mock-data")
 @click.option("--force", is_flag=True, default=False, help="Skip confirmation; required to run in staging. Never allowed in production.")
-def remove_mock_data_cmd(force: bool):
-    """Delete every @test.local Mock user and its derived QA data (Bookings, Drafts, Ministries); catalog data is preserved."""
-    remove_mock_data_process(force=force)
+@click.option(
+    "--include-legacy-demo",
+    is_flag=True,
+    default=False,
+    help="Also remove exact known seed.*@local.test Demo accounts and seed:-marked fixtures. Same environment guard as the rest of the Mock lifecycle.",
+)
+def remove_mock_data_cmd(force: bool, include_legacy_demo: bool):
+    """Delete every @test.local Mock user, derived QA data, and mock:-marked fixtures; catalog data is preserved."""
+    remove_mock_data_process(force=force, include_legacy_demo=include_legacy_demo)
 
 
 @cli.command(name="seed-local-demo")

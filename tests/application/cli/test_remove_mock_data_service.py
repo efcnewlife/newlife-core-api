@@ -7,7 +7,9 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from portal.application.cli.remove_mock_data_service import MockDataDependencyError, RemoveMockDataService
+from portal.application.cli.remove_mock_data_service import LEGACY_DEMO_ACCOUNT_EMAILS, MockDataDependencyError, RemoveMockDataService
+from portal.cli.datas.facility_booking_seed_data import DEMO_PERSONAL_BOOKER_EMAILS
+from portal.cli.datas.ministry_seed_data import DEMO_PRIMARY_USER_EMAIL, DEMO_SECONDARY_2_USER_EMAIL, DEMO_SECONDARY_USER_EMAIL
 
 MOCK_SUFFIX = "@test.local"
 
@@ -28,6 +30,8 @@ _TABLE_ATTR = {
     "OrgMinistry": "ministries",
     "OrgMinistryTranslation": "translations",
     "OrgMinistryApproval": "approvals",
+    "FacilityRoomSlotTemplate": "slot_templates",
+    "FacilityRoomBlackout": "blackouts",
 }
 
 
@@ -66,6 +70,8 @@ class FakeSession:
         ministries: list[dict] | None = None,
         translations: list[dict] | None = None,
         approvals: list[dict] | None = None,
+        slot_templates: list[dict] | None = None,
+        blackouts: list[dict] | None = None,
     ):
         self.users = list(users or [])
         self.ministry_members = list(ministry_members or [])
@@ -75,6 +81,8 @@ class FakeSession:
         self.ministries = list(ministries or [])
         self.translations = list(translations or [])
         self.approvals = list(approvals or [])
+        self.slot_templates = list(slot_templates or [])
+        self.blackouts = list(blackouts or [])
 
         self.deleted: dict[str, list[set]] = defaultdict(list)
         self.committed = False
@@ -113,7 +121,7 @@ class FakeSession:
 
     async def fetch(self):
         keys = [c.key for c in self._pending_cols]
-        return [{k: row[k] for k in keys} for row in self._filtered()]
+        return [{k: row.get(k) for k in keys} for row in self._filtered()]
 
     def delete(self, model):
         self._pending_delete_model = model.__name__
@@ -183,7 +191,15 @@ async def test_remove_mock_data_never_deletes_models_outside_mock_scope():
 
     await service.run()
 
-    assert set(session.deleted.keys()) <= {"FacilityBooking", "FacilityBookingSeries", "FacilityBookingDraft", "OrgMinistry", "AuthUser"}
+    assert set(session.deleted.keys()) <= {
+        "FacilityBooking",
+        "FacilityBookingSeries",
+        "FacilityBookingDraft",
+        "OrgMinistry",
+        "AuthUser",
+        "FacilityRoomSlotTemplate",
+        "FacilityRoomBlackout",
+    }
 
 
 @pytest.mark.asyncio
@@ -227,6 +243,28 @@ async def test_remove_mock_data_fails_when_candidate_ministry_has_a_non_mock_mem
 
     assert session.deleted == {}
     assert session.committed is False
+
+
+@pytest.mark.asyncio
+async def test_remove_mock_data_leaves_marked_fixtures_when_a_non_mock_dependency_blocks_cleanup():
+    slot_templates, blackouts = _marked_fixture_rows()
+    session = FakeSession(
+        users=_mock_users(),
+        ministry_members=[{"ministry_id": MINISTRY_ID, "user_id": STEWARD_ID}, {"ministry_id": MINISTRY_ID, "user_id": REAL_USER_ID}],
+        ministries=[{"id": MINISTRY_ID}],
+        translations=[{"ministry_id": MINISTRY_ID, "name": "Mock Ministry ABCD"}],
+        slot_templates=slot_templates,
+        blackouts=blackouts,
+    )
+    service = RemoveMockDataService(session, email_suffix=MOCK_SUFFIX)
+
+    with pytest.raises(MockDataDependencyError, match="Mock Ministry ABCD"):
+        await service.run()
+
+    assert session.deleted == {}
+    assert session.committed is False
+    assert any(row["id"] == MOCK_SLOT_TEMPLATE_ID for row in session.slot_templates)
+    assert any(row["id"] == MOCK_BLACKOUT_ID for row in session.blackouts)
 
 
 @pytest.mark.asyncio
@@ -307,3 +345,199 @@ async def test_remove_mock_data_honors_configured_email_suffix():
 
     assert result.removed_user_count == 1
     assert session.deleted["AuthUser"] == [{PERSONAL_ID}]
+
+
+MOCK_SLOT_TEMPLATE_ID = uuid4()
+MANUAL_SLOT_TEMPLATE_ID = uuid4()
+MOCK_BLACKOUT_ID = uuid4()
+MANUAL_BLACKOUT_ID = uuid4()
+SEED_SLOT_TEMPLATE_ID = uuid4()
+SEED_BLACKOUT_ID = uuid4()
+LEGACY_BOOKER_ID = uuid4()
+ARBITRARY_LOCAL_ID = uuid4()
+SEED_MINISTRY_ID = uuid4()
+
+
+def _marked_fixture_rows() -> tuple[list[dict], list[dict]]:
+    slot_templates = [
+        {"id": MOCK_SLOT_TEMPLATE_ID, "name": "Mock all-week daytime (mock:dev-2026-09-18_1430)"},
+        {"id": MANUAL_SLOT_TEMPLATE_ID, "name": "Sunday morning operator template"},
+        {"id": SEED_SLOT_TEMPLATE_ID, "name": "seed:All-week daytime"},
+    ]
+    blackouts = [
+        {"id": MOCK_BLACKOUT_ID, "name": "Mock campus holiday (mock:dev-2026-09-18_1430)"},
+        {"id": MANUAL_BLACKOUT_ID, "name": "Choir rehearsal closure"},
+        {"id": SEED_BLACKOUT_ID, "name": "seed:Campus holiday demo"},
+    ]
+    return slot_templates, blackouts
+
+
+@pytest.mark.asyncio
+async def test_remove_mock_data_deletes_mock_marked_slot_templates_and_blackouts():
+    slot_templates, blackouts = _marked_fixture_rows()
+    session = FakeSession(users=_mock_users(), slot_templates=slot_templates, blackouts=blackouts)
+    service = RemoveMockDataService(session, email_suffix=MOCK_SUFFIX)
+
+    result = await service.run()
+
+    assert result.removed_slot_template_count == 1
+    assert result.removed_blackout_count == 1
+    assert session.deleted["FacilityRoomSlotTemplate"] == [{MOCK_SLOT_TEMPLATE_ID}]
+    assert session.deleted["FacilityRoomBlackout"] == [{MOCK_BLACKOUT_ID}]
+    assert any(row["id"] == MANUAL_SLOT_TEMPLATE_ID for row in session.slot_templates)
+    assert any(row["id"] == SEED_SLOT_TEMPLATE_ID for row in session.slot_templates)
+    assert any(row["id"] == MANUAL_BLACKOUT_ID for row in session.blackouts)
+    assert any(row["id"] == SEED_BLACKOUT_ID for row in session.blackouts)
+    assert session.committed is True
+
+
+@pytest.mark.asyncio
+async def test_remove_mock_data_removes_marked_fixtures_when_no_mock_users_exist():
+    slot_templates, blackouts = _marked_fixture_rows()
+    session = FakeSession(users=[{"id": REAL_USER_ID, "email": "real.person@efcnewlife.org"}], slot_templates=slot_templates, blackouts=blackouts)
+    service = RemoveMockDataService(session, email_suffix=MOCK_SUFFIX)
+
+    result = await service.run()
+
+    assert result.removed_user_count == 0
+    assert result.removed_slot_template_count == 1
+    assert result.removed_blackout_count == 1
+    assert session.deleted["FacilityRoomSlotTemplate"] == [{MOCK_SLOT_TEMPLATE_ID}]
+    assert session.deleted["FacilityRoomBlackout"] == [{MOCK_BLACKOUT_ID}]
+    assert any(row["id"] == REAL_USER_ID for row in session.users)
+    assert session.committed is True
+
+
+def _legacy_and_local_users() -> list[dict]:
+    return [
+        {"id": LEGACY_BOOKER_ID, "email": "seed.booker.1@local.test"},
+        {"id": ARBITRARY_LOCAL_ID, "email": "other.person@local.test"},
+        {"id": REAL_USER_ID, "email": "real.person@efcnewlife.org"},
+    ]
+
+
+@pytest.mark.asyncio
+async def test_remove_mock_data_leaves_legacy_demo_identities_and_seed_markers_alone():
+    slot_templates, blackouts = _marked_fixture_rows()
+    session = FakeSession(
+        users=_legacy_and_local_users(),
+        ministry_members=[{"ministry_id": SEED_MINISTRY_ID, "user_id": LEGACY_BOOKER_ID}],
+        ministries=[{"id": SEED_MINISTRY_ID}],
+        translations=[{"ministry_id": SEED_MINISTRY_ID, "name": "seed: Demo Badminton"}],
+        slot_templates=slot_templates,
+        blackouts=blackouts,
+    )
+    service = RemoveMockDataService(session, email_suffix=MOCK_SUFFIX)
+
+    result = await service.run()
+
+    assert result.removed_user_count == 0
+    assert result.removed_ministry_count == 0
+    assert any(row["id"] == LEGACY_BOOKER_ID for row in session.users)
+    assert any(row["id"] == SEED_MINISTRY_ID for row in session.ministries)
+    assert any(row["id"] == SEED_SLOT_TEMPLATE_ID for row in session.slot_templates)
+    assert any(row["id"] == SEED_BLACKOUT_ID for row in session.blackouts)
+
+
+@pytest.mark.asyncio
+async def test_include_legacy_demo_removes_exact_demo_identities_and_seed_markers_only():
+    slot_templates, blackouts = _marked_fixture_rows()
+    session = FakeSession(
+        users=_legacy_and_local_users(),
+        ministry_members=[{"ministry_id": SEED_MINISTRY_ID, "user_id": LEGACY_BOOKER_ID}],
+        ministries=[{"id": SEED_MINISTRY_ID}],
+        translations=[{"ministry_id": SEED_MINISTRY_ID, "name": "seed: Demo Badminton"}],
+        slot_templates=slot_templates,
+        blackouts=blackouts,
+    )
+    service = RemoveMockDataService(session, email_suffix=MOCK_SUFFIX)
+
+    result = await service.run(include_legacy_demo=True)
+
+    assert result.removed_user_count == 1
+    assert result.removed_ministry_count == 1
+    assert result.removed_slot_template_count == 2
+    assert result.removed_blackout_count == 2
+    assert session.deleted["AuthUser"] == [{LEGACY_BOOKER_ID}]
+    assert session.deleted["OrgMinistry"] == [{SEED_MINISTRY_ID}]
+    assert session.deleted["FacilityRoomSlotTemplate"] == [{MOCK_SLOT_TEMPLATE_ID, SEED_SLOT_TEMPLATE_ID}]
+    assert session.deleted["FacilityRoomBlackout"] == [{MOCK_BLACKOUT_ID, SEED_BLACKOUT_ID}]
+    assert any(row["id"] == ARBITRARY_LOCAL_ID for row in session.users)
+    assert any(row["id"] == REAL_USER_ID for row in session.users)
+    assert any(row["id"] == MANUAL_SLOT_TEMPLATE_ID for row in session.slot_templates)
+    assert any(row["id"] == MANUAL_BLACKOUT_ID for row in session.blackouts)
+    assert session.committed is True
+
+
+@pytest.mark.asyncio
+async def test_include_legacy_demo_fails_atomically_on_a_non_legacy_ministry_dependency():
+    session = FakeSession(
+        users=_legacy_and_local_users(),
+        ministry_members=[{"ministry_id": SEED_MINISTRY_ID, "user_id": LEGACY_BOOKER_ID}, {"ministry_id": SEED_MINISTRY_ID, "user_id": REAL_USER_ID}],
+        ministries=[{"id": SEED_MINISTRY_ID}],
+        translations=[{"ministry_id": SEED_MINISTRY_ID, "name": "seed: Demo Badminton"}],
+        slot_templates=[{"id": SEED_SLOT_TEMPLATE_ID, "name": "seed:All-week daytime"}],
+        blackouts=[{"id": SEED_BLACKOUT_ID, "name": "seed:Campus holiday demo"}],
+    )
+    service = RemoveMockDataService(session, email_suffix=MOCK_SUFFIX)
+
+    with pytest.raises(MockDataDependencyError, match="seed: Demo Badminton"):
+        await service.run(include_legacy_demo=True)
+
+    assert session.deleted == {}
+    assert session.committed is False
+    assert any(row["id"] == LEGACY_BOOKER_ID for row in session.users)
+    assert any(row["id"] == SEED_SLOT_TEMPLATE_ID for row in session.slot_templates)
+
+
+@pytest.mark.asyncio
+async def test_include_legacy_demo_fails_atomically_on_a_seed_marked_booking_owned_by_a_non_legacy_user():
+    session = FakeSession(
+        users=_legacy_and_local_users(), bookings=[{"id": uuid4(), "user_id": REAL_USER_ID, "ministry_id": None, "remark": "seed:personal-1 classroom-105"}]
+    )
+    service = RemoveMockDataService(session, email_suffix=MOCK_SUFFIX)
+
+    with pytest.raises(MockDataDependencyError, match="seed-marked Booking"):
+        await service.run(include_legacy_demo=True)
+
+    assert session.deleted == {}
+    assert session.committed is False
+    assert any(row["id"] == REAL_USER_ID for row in session.users)
+    assert len(session.bookings) == 1
+
+
+@pytest.mark.asyncio
+async def test_include_legacy_demo_still_removes_the_current_mock_snapshot():
+    slot_templates, blackouts = _marked_fixture_rows()
+    session = FakeSession(
+        users=[
+            {"id": PERSONAL_ID, "email": "personal.aaaa@test.local"},
+            {"id": STEWARD_ID, "email": "steward.aaaa@test.local"},
+            {"id": LEGACY_BOOKER_ID, "email": "seed.booker.1@local.test"},
+            {"id": ARBITRARY_LOCAL_ID, "email": "other.person@local.test"},
+            {"id": REAL_USER_ID, "email": "real.person@efcnewlife.org"},
+        ],
+        ministry_members=[{"ministry_id": MINISTRY_ID, "user_id": STEWARD_ID}, {"ministry_id": SEED_MINISTRY_ID, "user_id": LEGACY_BOOKER_ID}],
+        ministries=[{"id": MINISTRY_ID}, {"id": SEED_MINISTRY_ID}],
+        translations=[{"ministry_id": MINISTRY_ID, "name": "Mock Ministry ABCD"}, {"ministry_id": SEED_MINISTRY_ID, "name": "seed: Demo Badminton"}],
+        slot_templates=slot_templates,
+        blackouts=blackouts,
+    )
+    service = RemoveMockDataService(session, email_suffix=MOCK_SUFFIX)
+
+    result = await service.run(include_legacy_demo=True)
+
+    assert result.removed_user_count == 3
+    assert result.removed_ministry_count == 2
+    assert session.deleted["AuthUser"] == [{PERSONAL_ID, STEWARD_ID, LEGACY_BOOKER_ID}]
+    assert session.deleted["OrgMinistry"] == [{MINISTRY_ID, SEED_MINISTRY_ID}]
+    assert any(row["id"] == ARBITRARY_LOCAL_ID for row in session.users)
+    assert any(row["id"] == REAL_USER_ID for row in session.users)
+
+
+def test_legacy_demo_account_emails_match_known_seed_identities():
+    assert LEGACY_DEMO_ACCOUNT_EMAILS == frozenset(DEMO_PERSONAL_BOOKER_EMAILS) | {
+        DEMO_PRIMARY_USER_EMAIL,
+        DEMO_SECONDARY_USER_EMAIL,
+        DEMO_SECONDARY_2_USER_EMAIL,
+    }
