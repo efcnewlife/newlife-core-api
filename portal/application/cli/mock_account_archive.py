@@ -36,6 +36,11 @@ def compute_archive_filenames(moment: datetime, env: str) -> ArchiveFilenames:
     return ArchiveFilenames(account_filename=f"{stamp}_{env}_{_ACCOUNT_SUFFIX}", ministry_filename=f"{stamp}_{env}_{_MINISTRY_SUFFIX}")
 
 
+def compute_mock_run_identity(moment: datetime, env: str) -> str:
+    """Return the shared `<env>-<YYYY-MM-DD_HHMM>` Mock run identity for one generation run."""
+    return f"{env}-{moment.strftime('%Y-%m-%d_%H%M')}"
+
+
 def _format_value(value: Any) -> str:
     if isinstance(value, bool):
         return "true" if value else "false"
