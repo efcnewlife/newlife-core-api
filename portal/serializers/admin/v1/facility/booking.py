@@ -135,7 +135,6 @@ class AdminBookingCreate(BaseModel):
     title: BookingTitle = Field(...)
     start_at: datetime = Field(...)
     end_at: datetime = Field(...)
-    is_mission_aligned: bool = Field(default=False)
     ministry_id: Optional[UUID] = Field(default=None)
     rooms: list[AdminBookingRoomInput] = Field(default_factory=list)
     surcharge_codes: list[str] = Field(default_factory=list)
@@ -147,7 +146,6 @@ class AdminBookingUpdate(BaseModel):
 
     start_at: datetime = Field(...)
     end_at: datetime = Field(...)
-    is_mission_aligned: bool = Field(default=False)
     ministry_id: Optional[UUID] = Field(default=None)
     rooms: list[AdminBookingRoomInput] = Field(default_factory=list)
     surcharge_codes: list[str] = Field(default_factory=list)

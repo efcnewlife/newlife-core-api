@@ -63,7 +63,9 @@ class FacilityContainer(containers.DeclarativeContainer):
     rental_rate_service = providers.Factory(RentalRateService, rental_repository=rental_repository, room_repository=room_repository)
     rental_catalog_service = providers.Factory(RentalCatalogService, rental_repository=rental_repository)
     discount_eligibility_service = providers.Factory(DiscountEligibilityService, rental_repository=rental_repository, ministry_repository=ministry_repository)
-    pricing_service = providers.Factory(PricingService, rental_repository=rental_repository, room_repository=room_repository)
+    pricing_service = providers.Factory(
+        PricingService, rental_repository=rental_repository, room_repository=room_repository, discount_eligibility_service=discount_eligibility_service
+    )
     booking_service = providers.Factory(
         BookingService,
         booking_repository=booking_repository,

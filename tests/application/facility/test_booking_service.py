@@ -18,13 +18,15 @@ from portal.application.facility.commands import (
     PreviewQuoteCommand,
     PreviewQuoteRoomLineCommand,
 )
+from portal.application.facility.discount_eligibility_service import DiscountEligibilityService
 from portal.application.facility.pricing_service import PricingService
 from portal.application.facility.results import BookingDetailResult, BookingDraftDetailResult, BookingRoomLineResult, PreviewQuoteRoomLineResult
-from portal.domain.facility.constants import BookingStatus, BookingType
+from portal.domain.facility.constants import BookingStatus, BookingType, RentalDiscountCode
 from portal.exceptions.responses import BadRequestException, ConflictErrorException, ForbiddenException, NotFoundException
 from tests.fixtures.facility.factories import (
     make_booking_list_item,
     make_create_booking_command,
+    make_discount_rule,
     make_hourly_and_daily_rates,
     make_ministry_detail,
     make_preview_quote_result,
@@ -613,13 +615,36 @@ async def test_preview_quote_for_member_honors_ministry_gate(monkeypatch):
     room_id = uuid4()
     start = datetime(2026, 8, 22, 14, 0, tzinfo=timezone.utc)
     end = datetime(2026, 8, 22, 18, 0, tzinfo=timezone.utc)
-    command = MemberPreviewQuoteCommand(
-        is_mission_aligned=True, ministry_id=ministry_id, lines=[MemberPreviewQuoteLineCommand(facility_id=room_id, start_at=start, end_at=end)]
-    )
+    command = MemberPreviewQuoteCommand(ministry_id=ministry_id, lines=[MemberPreviewQuoteLineCommand(facility_id=room_id, start_at=start, end_at=end)])
     result = await service.preview_quote_for_member(command)
     assert result.quoted_amount == Decimal("150")
-    assert service._pricing_service.preview_calls[-1].is_mission_aligned is True
     assert service._pricing_service.preview_calls[-1].ministry_id == ministry_id
+    assert service._pricing_service.preview_calls[-1].booker_id == user_id
+
+
+@pytest.mark.asyncio
+async def test_preview_quote_for_member_qualifying_ministry_applies_thirty_percent(monkeypatch):
+    booker_id = uuid4()
+    _user_ctx(monkeypatch, user_id=booker_id)
+    ministry = make_ministry_detail()
+    room_id = new_uuid()
+    rental = StubRentalRepository(
+        rates_by_facility={room_id: make_hourly_and_daily_rates(room_id)},
+        discount_rules=[
+            make_discount_rule(RentalDiscountCode.MISSION_ALIGNED.value, Decimal("30")),
+            make_discount_rule(RentalDiscountCode.RECURRING_WEEKLY_MONTHLY.value, Decimal("20")),
+        ],
+    )
+    ministry_stub = StubMinistryRepository(ministry_by_id={ministry.id: ministry}, booking_member_user_ids={booker_id})
+    service = _real_pricing_booking_service(room_id=room_id, ministry_stub=ministry_stub, rental=rental)
+    start = datetime(2026, 5, 1, 10, 0, tzinfo=timezone.utc)
+    end = datetime(2026, 5, 1, 14, 0, tzinfo=timezone.utc)
+    result = await service.preview_quote_for_member(
+        MemberPreviewQuoteCommand(ministry_id=ministry.id, lines=[MemberPreviewQuoteLineCommand(facility_id=room_id, start_at=start, end_at=end)])
+    )
+    assert result.discount_code == RentalDiscountCode.MISSION_ALIGNED.value
+    assert result.discount_percent == Decimal("30")
+    assert result.quoted_amount == Decimal("28.00")
 
 
 @pytest.mark.asyncio
@@ -648,15 +673,10 @@ async def test_preview_quote_for_member_same_room_different_subtotals(monkeypatc
     _user_ctx(monkeypatch)
     room_id = new_uuid()
     rental = StubRentalRepository(rates_by_facility={room_id: make_hourly_and_daily_rates(room_id, hourly_amount=Decimal("10"))})
-    pricing = PricingService(rental, StubRoomRepository(existing_ids={room_id}))
+    ministry_stub = StubMinistryRepository()
+    pricing = PricingService(rental, StubRoomRepository(existing_ids={room_id}), DiscountEligibilityService(rental, ministry_stub))
     service = BookingService(
-        StubBookingRepository(),
-        pricing,
-        StubMinistryRepository(),
-        StubRoomBlackoutRepository(),
-        StubSettingService(),
-        StubBookingDraftRepository(),
-        StubFileService(),
+        StubBookingRepository(), pricing, ministry_stub, StubRoomBlackoutRepository(), StubSettingService(), StubBookingDraftRepository(), StubFileService()
     )
     command = MemberPreviewQuoteCommand(
         lines=[
@@ -705,3 +725,104 @@ async def test_preview_quote_for_member_rejects_non_steward(monkeypatch):
     command = MemberPreviewQuoteCommand(ministry_id=ministry_id, lines=[MemberPreviewQuoteLineCommand(facility_id=uuid4(), start_at=start, end_at=end)])
     with pytest.raises(ForbiddenException):
         await service.preview_quote_for_member(command)
+
+
+def _real_pricing_booking_service(*, room_id, ministry_stub, rental):
+    pricing = PricingService(rental, StubRoomRepository(existing_ids={room_id}), DiscountEligibilityService(rental, ministry_stub))
+    return BookingService(
+        StubBookingRepository(), pricing, ministry_stub, StubRoomBlackoutRepository(), StubSettingService(), StubBookingDraftRepository(), StubFileService()
+    )
+
+
+@pytest.mark.asyncio
+async def test_create_booking_qualifying_ministry_applies_thirty_percent(monkeypatch):
+    booker_id = uuid4()
+    _user_ctx(monkeypatch, user_id=booker_id)
+    ministry = make_ministry_detail()
+    room_id = new_uuid()
+    rental = StubRentalRepository(
+        rates_by_facility={room_id: make_hourly_and_daily_rates(room_id)},
+        discount_rules=[
+            make_discount_rule(RentalDiscountCode.MISSION_ALIGNED.value, Decimal("30")),
+            make_discount_rule(RentalDiscountCode.RECURRING_WEEKLY_MONTHLY.value, Decimal("20")),
+        ],
+    )
+    ministry_stub = StubMinistryRepository(ministry_by_id={ministry.id: ministry}, booking_member_user_ids={booker_id})
+    service = _real_pricing_booking_service(room_id=room_id, ministry_stub=ministry_stub, rental=rental)
+    await service.create_booking(make_create_booking_command(facility_id=room_id, user_id=booker_id, ministry_id=ministry.id))
+    payload = service._repository.insert_calls[0]
+    assert payload["discount_percent"] == Decimal("30")
+    assert payload["discount_amount"] == Decimal("12.00")
+    assert payload["quoted_amount"] == Decimal("28.00")
+    assert payload["is_mission_aligned"] is True
+
+
+@pytest.mark.asyncio
+async def test_create_booking_without_ministry_does_not_apply_a_discount(monkeypatch):
+    booker_id = uuid4()
+    _user_ctx(monkeypatch, user_id=booker_id)
+    room_id = new_uuid()
+    rental = StubRentalRepository(
+        rates_by_facility={room_id: make_hourly_and_daily_rates(room_id)},
+        discount_rules=[
+            make_discount_rule(RentalDiscountCode.MISSION_ALIGNED.value, Decimal("30")),
+            make_discount_rule(RentalDiscountCode.RECURRING_WEEKLY_MONTHLY.value, Decimal("20")),
+        ],
+    )
+    service = _real_pricing_booking_service(room_id=room_id, ministry_stub=StubMinistryRepository(), rental=rental)
+    await service.create_booking(make_create_booking_command(facility_id=room_id, user_id=booker_id))
+    payload = service._repository.insert_calls[0]
+    assert payload["discount_percent"] == Decimal("0")
+    assert payload["quoted_amount"] == Decimal("40.00")
+    assert payload["is_mission_aligned"] is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", [BookingStatus.CONFIRMED.value, BookingStatus.PENDING_PAYMENT.value])
+async def test_price_locked_booking_update_keeps_financial_snapshot(monkeypatch, status):
+    _user_ctx(monkeypatch)
+    booking_id = uuid4()
+    room_id = new_uuid()
+    start = datetime(2026, 5, 1, 10, 0, tzinfo=timezone.utc)
+    end = datetime(2026, 5, 1, 14, 0, tzinfo=timezone.utc)
+    pricing_stub = StubPricingService(make_preview_quote_result(quoted_amount=Decimal("999"), discount_percent=Decimal("50")))
+    booking_stub = StubBookingRepository(
+        exists=True,
+        booking_meta={"booking_type": "one_time", "currency": "CAD", "status": status},
+        detail=BookingDetailResult(
+            id=booking_id,
+            user_id=uuid4(),
+            booking_type="one_time",
+            start_at=start,
+            end_at=end,
+            status=status,
+            is_mission_aligned=True,
+            subtotal_amount=Decimal("200"),
+            discount_percent=Decimal("30"),
+            discount_amount=Decimal("60"),
+            surcharge_amount=Decimal("0"),
+            quoted_amount=Decimal("140"),
+            currency="CAD",
+            rooms=[
+                BookingRoomLineResult(
+                    id=uuid4(),
+                    facility_id=room_id,
+                    start_at=start,
+                    end_at=end,
+                    billed_hours=Decimal("4"),
+                    rental_rate_name="Hourly",
+                    billing_unit="hourly",
+                    unit_amount=Decimal("10"),
+                    currency="CAD",
+                    line_subtotal=Decimal("40"),
+                )
+            ],
+        ),
+    )
+    service = _booking_service(booking_stub, pricing_stub=pricing_stub)
+    await service.update_booking(booking_id, make_update_booking_command(facility_id=room_id, start_at=start, end_at=end))
+    header = booking_stub.update_header_calls[0]
+    assert header["quoted_amount"] == Decimal("140")
+    assert header["discount_percent"] == Decimal("30")
+    assert header["is_mission_aligned"] is True
+    assert pricing_stub.preview_calls == []

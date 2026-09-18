@@ -220,7 +220,6 @@ class MemberPreviewQuoteLineCommand(BaseModel):
 class MemberPreviewQuoteCommand(BaseModel):
     """Member preview quote input."""
 
-    is_mission_aligned: bool = Field(default=False)
     ministry_id: Optional[UUID] = Field(default=None)
     currency: str = Field(default="CAD")
     surcharge_codes: list[str] = Field(default_factory=list)
@@ -231,12 +230,12 @@ class PreviewQuoteCommand(BaseModel):
     """Preview rental quote."""
 
     booking_type: BookingType = Field(...)
-    is_mission_aligned: bool = Field(default=False)
     currency: str = Field(default="CAD")
     as_of_date: Optional[date] = Field(default=None)
     room_lines: list[PreviewQuoteRoomLineCommand] = Field(default_factory=list)
     surcharge_codes: list[str] = Field(default_factory=list)
     ministry_id: Optional[UUID] = Field(default=None)
+    booker_id: Optional[UUID] = Field(default=None, description="Booker; omit to use UserContext")
 
 
 class MemberBrowseQueryCommand(BaseModel):
@@ -289,7 +288,6 @@ class UpdateBookingCommand(BaseModel):
 
     start_at: datetime = Field(...)
     end_at: datetime = Field(...)
-    is_mission_aligned: bool = Field(default=False)
     ministry_id: Optional[UUID] = Field(default=None)
     rooms: list[BookingRoomLineCommand] = Field(default_factory=list)
     surcharge_codes: list[str] = Field(default_factory=list)
@@ -308,7 +306,6 @@ class CreateBookingCommand(BaseModel):
     title: BookingTitle = Field(...)
     start_at: datetime = Field(...)
     end_at: datetime = Field(...)
-    is_mission_aligned: bool = Field(default=False)
     ministry_id: Optional[UUID] = Field(default=None)
     user_id: Optional[UUID] = Field(default=None, description="Booker; omit to use UserContext")
     rooms: list[BookingRoomLineCommand] = Field(default_factory=list)
@@ -335,7 +332,6 @@ class CreateRecurringBookingSeriesCommand(BaseModel):
     last_occurrence_date: date = Field(...)
     local_start_time: time = Field(...)
     local_end_time: time = Field(...)
-    is_mission_aligned: bool = Field(default=False)
     rooms: list[BookingRoomLineCommand] = Field(default_factory=list)
     surcharge_codes: list[str] = Field(default_factory=list)
     remark: Optional[str] = Field(default=None)
@@ -387,7 +383,6 @@ class CreateRecurringSeriesDraftCommand(BaseModel):
     last_occurrence_date: date = Field(...)
     local_start_time: time = Field(...)
     local_end_time: time = Field(...)
-    is_mission_aligned: bool = Field(default=False)
     rooms: list[BookingRoomLineCommand] = Field(default_factory=list)
     surcharge_codes: list[str] = Field(default_factory=list)
     remark: Optional[str] = Field(default=None)

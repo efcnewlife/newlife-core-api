@@ -23,14 +23,13 @@ Replace the shared-interval member preview shape with **per-line times**:
   - `start_at` (required)
   - `end_at` (required)
 - Top-level `start_at` / `end_at` are **removed** from the member preview request (breaking change; no v1 dual-shape).
-- Booking-level fields unchanged: `ministry_id`, `is_mission_aligned`, `currency`, `surcharge_codes`.
+- Booking-level fields unchanged: `ministry_id`, `currency`, `surcharge_codes`. Discount eligibility is resolved server-side; the request does not accept `is_mission_aligned`.
 
 Example request shape (snake_case on the wire per member API convention):
 
 ```json
 {
   "ministry_id": "...",
-  "is_mission_aligned": false,
   "currency": "CAD",
   "surcharge_codes": [],
   "lines": [{ "facility_id": "...", "start_at": "...", "end_at": "..." }]

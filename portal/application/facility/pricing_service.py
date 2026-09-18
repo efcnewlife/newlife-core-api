@@ -6,9 +6,10 @@ from decimal import ROUND_HALF_UP, Decimal
 from typing import Optional
 from uuid import UUID
 
-from portal.application.facility.commands import PreviewQuoteCommand
+from portal.application.facility.commands import EvaluateDiscountEligibilityCommand, PreviewQuoteCommand
+from portal.application.facility.discount_eligibility_service import DiscountEligibilityService
 from portal.application.facility.results import PreviewQuoteResult, PreviewQuoteRoomLineResult, RentalRateResult
-from portal.domain.facility.constants import BookingType, RentalDiscountCode, RentalRateBillingUnit, RentalSurchargeChargeType
+from portal.domain.facility.constants import RentalRateBillingUnit, RentalSurchargeChargeType
 from portal.exceptions.responses import BadRequestException
 from portal.infrastructure.persistence.repositories.facility.rental_repository import RentalRepository
 from portal.infrastructure.persistence.repositories.facility.room_repository import RoomRepository
@@ -20,9 +21,10 @@ MONEY_QUANT = Decimal("0.01")
 class PricingService:
     """Rental quote calculation per booking room lines."""
 
-    def __init__(self, rental_repository: RentalRepository, room_repository: RoomRepository):
+    def __init__(self, rental_repository: RentalRepository, room_repository: RoomRepository, discount_eligibility_service: DiscountEligibilityService):
         self._rental_repository = rental_repository
         self._room_repository = room_repository
+        self._discount_eligibility_service = discount_eligibility_service
 
     @staticmethod
     def _quantize(amount: Decimal) -> Decimal:
@@ -78,12 +80,10 @@ class PricingService:
                 )
             )
 
-        discount_percent = Decimal("0")
-        if command.is_mission_aligned:
-            discount_percent = await self._mission_discount_percent(Decimal("0"))
-        elif command.booking_type == BookingType.RECURRING:
-            discount_percent = await self._recurring_discount_percent(Decimal("0"))
-
+        eligibility = await self._discount_eligibility_service.evaluate(
+            EvaluateDiscountEligibilityCommand(booking_type=command.booking_type, ministry_id=command.ministry_id, booker_id=command.booker_id)
+        )
+        discount_percent = eligibility.discount_percent
         discount_amount = self._quantize(subtotal * discount_percent / Decimal("100"))
         after_discount = subtotal - discount_amount
         surcharge_amount = await self._compute_surcharges(command, after_discount)
@@ -91,6 +91,7 @@ class PricingService:
 
         return PreviewQuoteResult(
             subtotal_amount=self._quantize(subtotal),
+            discount_code=eligibility.discount_code,
             discount_percent=discount_percent,
             discount_amount=discount_amount,
             surcharge_amount=self._quantize(surcharge_amount),
@@ -98,20 +99,6 @@ class PricingService:
             currency=command.currency,
             room_lines=room_lines,
         )
-
-    async def _mission_discount_percent(self, fallback: Decimal) -> Decimal:
-        rules = await self._rental_repository.list_discount_rules()
-        for rule in rules:
-            if rule.code == RentalDiscountCode.MISSION_ALIGNED.value and rule.is_active:
-                return Decimal(str(rule.percent_off))
-        return fallback
-
-    async def _recurring_discount_percent(self, fallback: Decimal) -> Decimal:
-        rules = await self._rental_repository.list_discount_rules()
-        for rule in rules:
-            if rule.code == RentalDiscountCode.RECURRING_WEEKLY_MONTHLY.value and rule.is_active:
-                return Decimal(str(rule.percent_off))
-        return fallback
 
     @staticmethod
     def _compute_line_subtotal(billing_unit: str, unit_amount: Decimal, billed_hours: Decimal) -> Decimal:

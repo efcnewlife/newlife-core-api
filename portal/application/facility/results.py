@@ -295,6 +295,7 @@ class PreviewQuoteResult(BaseModel):
     """Preview quote totals."""
 
     subtotal_amount: Decimal = Field(...)
+    discount_code: Optional[str] = Field(default=None)
     discount_percent: Decimal = Field(...)
     discount_amount: Decimal = Field(...)
     surcharge_amount: Decimal = Field(...)
@@ -357,6 +358,15 @@ class BookingListItemResult(UUIDBaseModel):
     quoted_amount: Optional[Decimal] = Field(default=None)
     currency: Optional[str] = Field(default=None)
     created_at: Optional[datetime] = Field(default=None)
+
+
+class BookingTypeAndFlagsResult(BaseModel):
+    """Persisted booking type, discount snapshot flag, currency, and status."""
+
+    booking_type: str = Field(...)
+    is_mission_aligned: bool = Field(default=False)
+    currency: Optional[str] = Field(default=None)
+    status: Optional[str] = Field(default=None)
 
 
 class BookingDetailResult(UUIDBaseModel):
@@ -732,6 +742,7 @@ class RecurringProposalEvaluationResult(BaseModel):
     conflicts: list[RecurringBookingConflictResult] = Field(default_factory=list)
     quoted_amount: Decimal = Field(...)
     subtotal_amount: Decimal = Field(...)
+    discount_code: Optional[str] = Field(default=None)
     discount_percent: Decimal = Field(...)
     discount_amount: Decimal = Field(...)
     surcharge_amount: Decimal = Field(...)

@@ -17,6 +17,7 @@ from portal.application.facility.results import (
     BookingListItemResult,
     BookingRoomLineResult,
     BookingSlotResult,
+    BookingTypeAndFlagsResult,
     MemberBrowseBookingResult,
     RecurringBookingOccurrenceResult,
     RecurringOccupyingBookingResult,
@@ -581,9 +582,9 @@ class BookingRepository:
     async def get_user_id_for_booking(self, booking_id: UUID) -> Optional[UUID]:
         return await self._session.select(FacilityBooking.user_id).where(FacilityBooking.id == booking_id).where(FacilityBooking.is_deleted == False).fetchval()
 
-    async def get_booking_type_and_flags(self, booking_id: UUID) -> Optional[dict]:
+    async def get_booking_type_and_flags(self, booking_id: UUID) -> Optional[BookingTypeAndFlagsResult]:
         return await (
-            self._session.select(FacilityBooking.booking_type, FacilityBooking.is_mission_aligned, FacilityBooking.currency)
+            self._session.select(FacilityBooking.booking_type, FacilityBooking.is_mission_aligned, FacilityBooking.currency, FacilityBooking.status)
             .where(FacilityBooking.id == booking_id)
-            .fetchrow()
+            .fetchrow(as_model=BookingTypeAndFlagsResult)
         )

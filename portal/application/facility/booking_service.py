@@ -29,6 +29,7 @@ from portal.application.facility.commands import (
     UpdateBookingCommand,
     UpdateTitleCommand,
 )
+from portal.application.facility.discount_eligibility_service import is_mission_aligned_discount
 from portal.application.facility.my_bookings import card_primary_facility_id, paginate_my_bookings_cards, project_my_bookings_cards
 from portal.application.facility.participant_detail import assemble_participant_booking_detail
 from portal.application.facility.pricing_service import PricingService
@@ -40,6 +41,7 @@ from portal.application.facility.results import (
     MemberBrowsePageResult,
     ParticipantBookingDetailResult,
     PreviewQuoteResult,
+    PreviewQuoteRoomLineResult,
 )
 from portal.application.org.results import CreateIdResult
 from portal.application.system.setting_service import SettingService
@@ -53,6 +55,7 @@ from portal.domain.facility.constants import (
     BookingStatus,
     BookingType,
     FacilityErrorCode,
+    RentalDiscountCode,
 )
 from portal.domain.facility.participant_detail import is_current_booking_participant
 from portal.domain.org.constants import MinistryStatus
@@ -64,6 +67,8 @@ from portal.infrastructure.persistence.repositories.org.ministry_repository impo
 from portal.libs.contexts.request_context import RequestContext, get_request_context
 from portal.libs.contexts.user_context import UserContext, get_user_context
 from portal.libs.tracing.distributed_trace import distributed_trace
+
+_PRICE_LOCKED_STATUSES = {BookingStatus.CONFIRMED.value, BookingStatus.PENDING_PAYMENT.value}
 
 
 class BookingService:
@@ -99,6 +104,33 @@ class BookingService:
         delta = end_at - start_at
         hours = Decimal(str(delta.total_seconds())) / Decimal("3600")
         return hours.quantize(Decimal("0.01"))
+
+    @staticmethod
+    def _quote_from_existing(existing: BookingDetailResult) -> PreviewQuoteResult:
+        room_lines = [
+            PreviewQuoteRoomLineResult(
+                facility_id=line.facility_id,
+                billed_hours=line.billed_hours or Decimal("0"),
+                rental_rate_name=line.rental_rate_name or "",
+                billing_unit=line.billing_unit or "",
+                unit_amount=line.unit_amount or Decimal("0"),
+                currency=line.currency or existing.currency or "CAD",
+                applicability=line.applicability,
+                is_default=bool(line.is_default),
+                line_subtotal=line.line_subtotal or Decimal("0"),
+            )
+            for line in existing.rooms
+        ]
+        return PreviewQuoteResult(
+            subtotal_amount=existing.subtotal_amount or Decimal("0"),
+            discount_code=RentalDiscountCode.MISSION_ALIGNED.value if existing.is_mission_aligned else None,
+            discount_percent=existing.discount_percent or Decimal("0"),
+            discount_amount=existing.discount_amount or Decimal("0"),
+            surcharge_amount=existing.surcharge_amount or Decimal("0"),
+            quoted_amount=existing.quoted_amount or Decimal("0"),
+            currency=existing.currency or "CAD",
+            room_lines=room_lines,
+        )
 
     async def _raise_if_too_many_booking_lines(self, rooms: list[BookingRoomLineCommand]) -> None:
         max_lines = await self._setting_service.get_max_booking_lines()
@@ -165,25 +197,33 @@ class BookingService:
             PreviewQuoteRoomLineCommand(facility_id=line.facility_id, billed_hours=self._billed_hours(line.start_at, line.end_at)) for line in resolved_lines
         ]
 
-        booking_type_value = meta["booking_type"] if isinstance(meta, dict) else meta.booking_type
-        currency_value = meta.get("currency") if isinstance(meta, dict) else meta.currency
-        booking_type = BookingType(booking_type_value)
-        currency = currency_value or "CAD"
-        quote = await self._pricing_service.preview_quote(
-            PreviewQuoteCommand(
-                booking_type=booking_type,
-                is_mission_aligned=command.is_mission_aligned,
-                currency=currency,
-                room_lines=quote_lines,
-                surcharge_codes=command.surcharge_codes,
+        booking_type = BookingType(meta.booking_type)
+        currency = meta.currency or "CAD"
+        if meta.status in _PRICE_LOCKED_STATUSES:
+            existing = await self._repository.get_detail(booking_id, self._resolved_locale_id())
+            if existing is None:
+                raise NotFoundException(
+                    detail="Booking not found", error_code=FacilityErrorCode.BOOKING_NOT_FOUND.value, context={"booking_id": str(booking_id)}
+                )
+            quote = self._quote_from_existing(existing)
+        else:
+            booker_id = await self._repository.get_user_id_for_booking(booking_id)
+            quote = await self._pricing_service.preview_quote(
+                PreviewQuoteCommand(
+                    booking_type=booking_type,
+                    currency=currency,
+                    room_lines=quote_lines,
+                    surcharge_codes=command.surcharge_codes,
+                    ministry_id=command.ministry_id,
+                    booker_id=booker_id,
+                )
             )
-        )
 
         primary_facility_id_value = primary_facility_id(resolved_lines)
         room_rows = []
         slot_rows = []
         for idx, line in enumerate(resolved_lines):
-            quoted_line = quote.room_lines[idx]
+            quoted_line = quote.room_lines[idx] if idx < len(quote.room_lines) else None
             room_rows.append(
                 dict(
                     id=uuid4(),
@@ -192,14 +232,14 @@ class BookingService:
                     sequence=line.sequence,
                     start_at=line.start_at,
                     end_at=line.end_at,
-                    billed_hours=quoted_line.billed_hours,
-                    rental_rate_name=quoted_line.rental_rate_name,
-                    billing_unit=quoted_line.billing_unit,
-                    unit_amount=quoted_line.unit_amount,
-                    currency=quoted_line.currency,
-                    applicability=quoted_line.applicability,
-                    is_default=quoted_line.is_default,
-                    line_subtotal=quoted_line.line_subtotal,
+                    billed_hours=quoted_line.billed_hours if quoted_line else self._billed_hours(line.start_at, line.end_at),
+                    rental_rate_name=quoted_line.rental_rate_name if quoted_line else "",
+                    billing_unit=quoted_line.billing_unit if quoted_line else "",
+                    unit_amount=quoted_line.unit_amount if quoted_line else Decimal("0"),
+                    currency=quoted_line.currency if quoted_line else quote.currency,
+                    applicability=quoted_line.applicability if quoted_line else None,
+                    is_default=quoted_line.is_default if quoted_line else False,
+                    line_subtotal=quoted_line.line_subtotal if quoted_line else Decimal("0"),
                 )
             )
             slot_rows.append(
@@ -221,7 +261,7 @@ class BookingService:
                 ministry_id=command.ministry_id,
                 start_at=header_start,
                 end_at=header_end,
-                is_mission_aligned=command.is_mission_aligned,
+                is_mission_aligned=is_mission_aligned_discount(quote.discount_code),
                 billed_hours=total_billed,
                 subtotal_amount=quote.subtotal_amount,
                 discount_percent=quote.discount_percent,
@@ -263,10 +303,11 @@ class BookingService:
         quote = await self._pricing_service.preview_quote(
             PreviewQuoteCommand(
                 booking_type=BookingType.ONE_TIME,
-                is_mission_aligned=command.is_mission_aligned,
                 currency="CAD",
                 room_lines=quote_lines,
                 surcharge_codes=command.surcharge_codes,
+                ministry_id=command.ministry_id,
+                booker_id=booker_id,
             )
         )
 
@@ -283,7 +324,7 @@ class BookingService:
                 start_at=header_start,
                 end_at=header_end,
                 status=BookingStatus.CONFIRMED.value,
-                is_mission_aligned=command.is_mission_aligned,
+                is_mission_aligned=is_mission_aligned_discount(quote.discount_code),
                 billed_hours=total_billed,
                 subtotal_amount=quote.subtotal_amount,
                 discount_percent=quote.discount_percent,
@@ -437,11 +478,11 @@ class BookingService:
         return await self._pricing_service.preview_quote(
             PreviewQuoteCommand(
                 booking_type=BookingType.ONE_TIME,
-                is_mission_aligned=command.is_mission_aligned,
                 currency=command.currency,
                 room_lines=quote_lines,
                 surcharge_codes=command.surcharge_codes,
                 ministry_id=command.ministry_id,
+                booker_id=self._user_ctx.user_id if self._user_ctx else None,
             )
         )
 

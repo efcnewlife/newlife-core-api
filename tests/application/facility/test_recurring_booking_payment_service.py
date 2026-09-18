@@ -157,6 +157,24 @@ async def test_confirm_payment_confirms_series_and_pending_occurrences(monkeypat
 
 
 @pytest.mark.asyncio
+async def test_confirm_payment_does_not_reprice_pending_series(monkeypatch):
+    series = _series()
+    original_quoted = series.quoted_amount
+    series_stub = StubRecurringBookingRepository()
+    booking_stub = StubBookingRepository()
+    _seed_pending_series(series_stub, booking_stub, series)
+    service, *_ = _service(monkeypatch, series_stub=series_stub, booking_stub=booking_stub)
+
+    result = await service.confirm_payment(series.id)
+
+    assert result.quoted_amount == original_quoted == Decimal("200")
+    assert service._pricing_service.preview_calls == []
+    assert series_stub.update_series_calls[0]["status"] == BookingStatus.CONFIRMED.value
+    assert "quoted_amount" not in series_stub.update_series_calls[0]
+    assert booking_stub.confirm_series_calls == [{"series_id": series.id, "operator_id": result.confirmed_by_id}]
+
+
+@pytest.mark.asyncio
 async def test_confirm_payment_is_idempotent_when_already_confirmed(monkeypatch):
     series = _series(status=BookingStatus.CONFIRMED.value, expires_at=None)
     series_stub = StubRecurringBookingRepository()

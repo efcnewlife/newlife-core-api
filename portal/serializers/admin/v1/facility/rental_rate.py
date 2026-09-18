@@ -85,7 +85,8 @@ class AdminPreviewQuoteRequest(BaseModel):
     """Preview quote request."""
 
     booking_type: str = Field(..., description="Booking type")
-    is_mission_aligned: bool = Field(False, description="Mission aligned")
+    ministry_id: Optional[UUID] = Field(default=None, description="Ministry association")
+    user_id: Optional[UUID] = Field(default=None, description="On-behalf Booker; omit to use the Operator")
     currency: str = Field("CAD", description="Currency")
     as_of_date: Optional[date] = Field(None, description="Pricing as-of date")
     room_lines: list[AdminPreviewQuoteRoomLine] = Field(default_factory=list, description="Room lines")

@@ -332,20 +332,6 @@ class RentalRepository:
             .execute()
         )
 
-    async def get_active_discount_percent(self, booking_type: str, is_mission_aligned: bool) -> Decimal:
-        rules = await self.list_discount_rules()
-        active = {rule.code: rule for rule in rules if rule.is_active}
-        if is_mission_aligned and "mission_aligned" in {code for code in active}:
-            mission_code = "mission_aligned"
-            for rule in rules:
-                if rule.code == mission_code and rule.is_active:
-                    return Decimal(str(rule.percent_off))
-        if booking_type == "recurring":
-            for rule in rules:
-                if rule.code == "recurring_weekly_monthly" and rule.is_active:
-                    return Decimal(str(rule.percent_off))
-        return Decimal("0")
-
     @staticmethod
     def pick_rate_for_line(rates: list[RentalRateResult], billed_hours: Decimal, allow_first_active: bool = True) -> tuple[Optional[RentalRateResult], str]:
         ctx = RateSelectionContext(billed_hours=billed_hours)

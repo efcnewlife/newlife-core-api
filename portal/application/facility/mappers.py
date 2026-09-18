@@ -420,11 +420,12 @@ def rental_rate_pages_query_to_command(model) -> tuple[PagesQueryCommand, UUID |
 def preview_quote_to_command(model: AdminPreviewQuoteRequest) -> PreviewQuoteCommand:
     return PreviewQuoteCommand(
         booking_type=BookingType(model.booking_type),
-        is_mission_aligned=model.is_mission_aligned,
         currency=model.currency,
         as_of_date=model.as_of_date,
         room_lines=[PreviewQuoteRoomLineCommand(facility_id=line.facility_id, billed_hours=line.billed_hours) for line in model.room_lines],
         surcharge_codes=model.surcharge_codes,
+        ministry_id=model.ministry_id,
+        booker_id=model.user_id,
     )
 
 
@@ -455,7 +456,6 @@ def preview_quote_result_to_api(result: PreviewQuoteResult) -> AdminPreviewQuote
 
 def member_preview_quote_to_command(model: MemberPreviewQuoteRequest) -> MemberPreviewQuoteCommand:
     return MemberPreviewQuoteCommand(
-        is_mission_aligned=model.is_mission_aligned,
         ministry_id=model.ministry_id,
         currency=model.currency,
         surcharge_codes=model.surcharge_codes,
@@ -766,7 +766,6 @@ def create_booking_to_command(model) -> "CreateBookingCommand":
         title=model.title,
         start_at=model.start_at,
         end_at=model.end_at,
-        is_mission_aligned=model.is_mission_aligned,
         ministry_id=model.ministry_id,
         rooms=[
             BookingRoomLineCommand(facility_id=room.facility_id, start_at=room.start_at, end_at=room.end_at, sequence=room.sequence) for room in model.rooms
@@ -783,7 +782,6 @@ def update_booking_to_command(model) -> "UpdateBookingCommand":
     return UpdateBookingCommand(
         start_at=model.start_at,
         end_at=model.end_at,
-        is_mission_aligned=model.is_mission_aligned,
         ministry_id=model.ministry_id,
         rooms=[
             BookingRoomLineCommand(facility_id=room.facility_id, start_at=room.start_at, end_at=room.end_at, sequence=room.sequence) for room in model.rooms
@@ -835,7 +833,6 @@ def create_recurring_booking_series_to_command(model) -> "CreateRecurringBooking
         last_occurrence_date=model.last_occurrence_date,
         local_start_time=model.local_start_time,
         local_end_time=model.local_end_time,
-        is_mission_aligned=model.is_mission_aligned,
         rooms=[BookingRoomLineCommand(facility_id=room.facility_id, sequence=room.sequence) for room in model.rooms],
         surcharge_codes=model.surcharge_codes,
         remark=model.remark,

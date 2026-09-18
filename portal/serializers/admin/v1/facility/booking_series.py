@@ -29,7 +29,6 @@ class AdminRecurringBookingSeriesProposal(BaseModel):
     last_occurrence_date: date = Field(...)
     local_start_time: time = Field(...)
     local_end_time: time = Field(...)
-    is_mission_aligned: bool = Field(default=False)
     rooms: list[AdminRecurringBookingSeriesRoomInput] = Field(default_factory=list)
     surcharge_codes: list[str] = Field(default_factory=list)
     remark: Optional[str] = Field(default=None)

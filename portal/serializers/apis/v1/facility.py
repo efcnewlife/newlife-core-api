@@ -66,7 +66,6 @@ class MemberBookingCreate(BaseModel):
     title: BookingTitle = Field(...)
     start_at: datetime = Field(...)
     end_at: datetime = Field(...)
-    is_mission_aligned: bool = Field(default=False)
     ministry_id: Optional[UUID] = Field(default=None)
     rooms: list[MemberBookingRoomInput] = Field(default_factory=list)
     surcharge_codes: list[str] = Field(default_factory=list)
@@ -206,7 +205,6 @@ class MemberPreviewQuoteLineInput(BaseModel):
 class MemberPreviewQuoteRequest(BaseModel):
     """Preview quote for One-time booking lines (each with its own interval)."""
 
-    is_mission_aligned: bool = Field(default=False)
     ministry_id: Optional[UUID] = Field(default=None)
     currency: str = Field(default="CAD")
     surcharge_codes: list[str] = Field(default_factory=list)
@@ -315,7 +313,6 @@ class MemberRecurringBookingSeriesProposal(BaseModel):
     last_occurrence_date: DateType = Field(...)
     local_start_time: time = Field(...)
     local_end_time: time = Field(...)
-    is_mission_aligned: bool = Field(default=False)
     rooms: list[MemberRecurringBookingSeriesRoomInput] = Field(default_factory=list)
     surcharge_codes: list[str] = Field(default_factory=list)
     remark: Optional[str] = Field(default=None)

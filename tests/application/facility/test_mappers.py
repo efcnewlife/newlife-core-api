@@ -148,15 +148,20 @@ def test_room_detail_to_api_round_trip_key_fields():
 
 def test_preview_quote_to_command():
     facility_id = uuid4()
+    ministry_id = uuid4()
+    booker_id = uuid4()
     model = AdminPreviewQuoteRequest(
         booking_type=BookingType.RECURRING.value,
-        is_mission_aligned=True,
+        ministry_id=ministry_id,
+        user_id=booker_id,
         room_lines=[AdminPreviewQuoteRoomLine(facility_id=facility_id, billed_hours=Decimal("6"))],
         surcharge_codes=["audio_system"],
     )
     command = preview_quote_to_command(model)
     assert command.booking_type == BookingType.RECURRING
-    assert command.is_mission_aligned is True
+    assert command.ministry_id == ministry_id
+    assert command.booker_id == booker_id
+    assert not hasattr(command, "is_mission_aligned")
     assert command.room_lines[0].facility_id == facility_id
     assert command.room_lines[0].billed_hours == Decimal("6")
     assert command.surcharge_codes == ["audio_system"]
@@ -307,14 +312,10 @@ def test_booking_and_member_mappers():
     from portal.serializers.admin.v1.facility.booking import AdminBookingRoomInput
 
     update_model = AdminBookingUpdate(
-        start_at=start,
-        end_at=end,
-        is_mission_aligned=True,
-        rooms=[AdminBookingRoomInput(facility_id=facility_id, sequence=0)],
-        surcharge_codes=["audio_system"],
+        start_at=start, end_at=end, rooms=[AdminBookingRoomInput(facility_id=facility_id, sequence=0)], surcharge_codes=["audio_system"]
     )
     update_cmd = update_booking_to_command(update_model)
-    assert update_cmd.is_mission_aligned is True
+    assert not hasattr(update_cmd, "is_mission_aligned")
     assert update_cmd.rooms[0].facility_id == facility_id
 
     cancel_cmd = cancel_booking_to_command(AdminBookingCancel(scope="series", cancel_reason="weather"))
@@ -398,7 +399,6 @@ def test_member_preview_quote_to_command_maps_per_line_intervals():
     line_two_start = datetime(2026, 8, 22, 18, 0, tzinfo=timezone.utc)
     line_two_end = datetime(2026, 8, 22, 22, 0, tzinfo=timezone.utc)
     model = MemberPreviewQuoteRequest(
-        is_mission_aligned=True,
         surcharge_codes=["audio_system"],
         lines=[
             MemberPreviewQuoteLineInput(facility_id=facility_id, start_at=line_one_start, end_at=line_one_end),
@@ -406,7 +406,7 @@ def test_member_preview_quote_to_command_maps_per_line_intervals():
         ],
     )
     command = member_preview_quote_to_command(model)
-    assert command.is_mission_aligned is True
+    assert not hasattr(command, "is_mission_aligned")
     assert command.ministry_id is None
     assert command.surcharge_codes == ["audio_system"]
     assert command.lines[0].facility_id == facility_id
