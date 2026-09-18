@@ -1,9 +1,8 @@
 """
 Shared app-only Microsoft Graph client construction.
 
-Extracted so each dedicated Entra app registration (the general-purpose app in
-MSGraphClientBase, and the least-privilege SharePoint archive-writer app) can
-build its GraphServiceClient the same way without duplicating the
+Extracted so Graph providers (users, mail, SharePoint) can build a
+GraphServiceClient the same way without duplicating the
 credential -> auth-provider -> adapter -> client wiring.
 """
 

@@ -4,9 +4,11 @@
 .scratch
 example
 temp
+mock-seed/
 docs/*
 !docs/adr/
 !docs/agents/
+!docs/cli.md
 
 ### Python template
 # Byte-compiled / optimized / DLL files

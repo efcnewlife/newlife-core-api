@@ -57,7 +57,6 @@ class Configuration(BaseSettings):
     IS_DEV: bool = ENV not in ["prod", "stg"]
     APP_FQDN: str = os.getenv(key="APP_FQDN", default="localhost")
     BASE_URL: str = f"https://{APP_FQDN}" if IS_PROD else f"http://{APP_FQDN}"
-    ADMIN_PORTAL_URL: str = os.getenv(key="ADMIN_PORTAL_URL", default="http://localhost:5173")
     DEFAULT_LOCALE: str = os.getenv(key="DEFAULT_LOCALE", default="en")
 
     # [FastAPI]
@@ -66,20 +65,16 @@ class Configuration(BaseSettings):
     DOCS_BASIC_AUTH_USERNAME: str = os.getenv(key="DOCS_BASIC_AUTH_USERNAME", default="developer")
     DOCS_BASIC_AUTH_PASSWORD: str = os.getenv(key="DOCS_BASIC_AUTH_PASSWORD", default="developer")
 
+    # [Logging]
+    SENSITIVE_PARAMS: set[str] = set(os.getenv(key="SENSITIVE_PARAMS", default="password,secret,api_key").split(","))
+
+    # [URLs]
+    ADMIN_PORTAL_URL: str = os.getenv(key="ADMIN_PORTAL_URL", default="http://localhost:5173")
+    FACILITY_BOOKING_BASE_URL: str = os.getenv(key="FACILITY_BOOKING_BASE_URL", default="http://localhost:5174")
+
     # [CORS]
     CORS_ALLOWED_ORIGINS: list[str] = os.getenv(key="CORS_ALLOWED_ORIGINS", default="*").split()
     CORS_ALLOW_ORIGINS_REGEX: Optional[str] = os.getenv(key="CORS_ALLOW_ORIGINS_REGEX")
-
-    # [STORAGE]
-    STORAGE_BACKEND: str = os.getenv(key="STORAGE_BACKEND", default="azure_blob")
-    AZURE_STORAGE_ACCOUNT_NAME: Optional[str] = os.getenv(key="AZURE_STORAGE_ACCOUNT_NAME", default=None)
-    AZURE_STORAGE_CONNECTION_STRING: Optional[str] = os.getenv(key="AZURE_STORAGE_CONNECTION_STRING", default=None)
-    AZURE_STORAGE_CONTAINER_NAME: str = os.getenv(key="AZURE_STORAGE_CONTAINER_NAME", default="files")
-    AZURE_STORAGE_REGION: str = os.getenv(key="AZURE_STORAGE_REGION", default="eastus")
-    AZURE_STORAGE_BLOB_PREFIX: str = os.getenv(key="AZURE_STORAGE_BLOB_PREFIX", default=f"original_files/{ENV}")
-    AZURE_BLOB_CACHE_CONTROL: str = os.getenv(key="AZURE_BLOB_CACHE_CONTROL", default="max-age=86400")
-    SIGNED_URL_EXPIRY_SECONDS: int = int(os.getenv(key="SIGNED_URL_EXPIRY_SECONDS", default="3600"))
-    MAX_UPLOAD_SIZE: int = int(os.getenv(key="MAX_UPLOAD_SIZE", default=5 * 1024 * 1024))  # 5MB
 
     # [Redis]
     REDIS_URL: Optional[str] = os.getenv(key="REDIS_URL")
@@ -108,41 +103,15 @@ class Configuration(BaseSettings):
     REFRESH_TOKEN_HASH_SALT: str = os.getenv(key="REFRESH_TOKEN_HASH_SALT", default="")
     REFRESH_TOKEN_HASH_PEPPER: str = os.getenv(key="REFRESH_TOKEN_HASH_PEPPER", default="")
 
-    # [Microsoft Entra ID — Admin Portal SPA token exchange]
-    AZURE_TENANT_ID: Optional[str] = os.getenv(key="AZURE_TENANT_ID", default=None)
-    AZURE_APP_CLIENT_ID: Optional[str] = os.getenv(key="AZURE_APP_CLIENT_ID", default=None)
-    AZURE_APP_CLIENT_SECRET: Optional[str] = os.getenv(key="AZURE_APP_CLIENT_SECRET", default=None)
-    AZURE_ALLOWED_ISSUERS: Optional[str] = os.getenv(key="AZURE_ALLOWED_ISSUERS", default=None)
-
-    # [Microsoft Graph Mail.Send — ministry application notifications]
-    GRAPH_MAIL_SEND_ENABLED: bool = Converter.to_bool(os.getenv(key="GRAPH_MAIL_SEND_ENABLED", default="false"), default=False)
-    GRAPH_MAIL_SENDER_MAILBOX: Optional[str] = os.getenv(key="GRAPH_MAIL_SENDER_MAILBOX", default=None)
-    GRAPH_MAIL_OVERRIDE_TO: Optional[str] = os.getenv(key="GRAPH_MAIL_OVERRIDE_TO", default=None)
-    FACILITY_BOOKING_BASE_URL: str = os.getenv(key="FACILITY_BOOKING_BASE_URL", default="http://localhost:5174")
-
-    # [Member web apps — Origin -> app_code for /api/v1 auth]
+    # [Member SPAs for /api/v1 auth]
     # Format: code|origin|origin,code|origin
     # Example: facility-booking|http://localhost:5174,another-app|http://localhost:5180
     MEMBER_WEB_APPS: str = os.getenv(key="MEMBER_WEB_APPS", default="facility-booking|http://localhost:5174")
 
-    # [Member mock login — dev/staging QA only; never enable in production]
+    # [Member mock login]
     MOCK_LOGIN_ENABLED: bool = Converter.to_bool(os.getenv(key="MOCK_LOGIN_ENABLED", default="false"), default=False)
     MOCK_LOGIN_SECRET: Optional[str] = os.getenv(key="MOCK_LOGIN_SECRET", default=None)
     TESTING_ACCOUNT_EMAIL_SUFFIX: str = os.getenv(key="TESTING_ACCOUNT_EMAIL_SUFFIX", default="@test.local")
-
-    # [Mock QA data lifecycle — seed-mock-users account/Ministry CSV archive (ADR 0025)]
-    # Non-repository local retention path for the latest CSV pair per environment.
-    MOCK_SEED_OUTPUT_DIR: str = os.getenv(key="MOCK_SEED_OUTPUT_DIR", default=str(Path.home() / ".newlife-core-api" / "mock-seed"))
-    # Dedicated app-only Entra registration, isolated from AZURE_APP_CLIENT_ID: Sites.Selected
-    # plus an explicit write grant on the single SharePoint site below. Never Sites.ReadWrite.All.
-    SHAREPOINT_TENANT_ID: Optional[str] = os.getenv(key="SHAREPOINT_TENANT_ID", default=None)
-    SHAREPOINT_APP_CLIENT_ID: Optional[str] = os.getenv(key="SHAREPOINT_APP_CLIENT_ID", default=None)
-    SHAREPOINT_APP_CLIENT_SECRET: Optional[str] = os.getenv(key="SHAREPOINT_APP_CLIENT_SECRET", default=None)
-    SHAREPOINT_SITE_ID: Optional[str] = os.getenv(key="SHAREPOINT_SITE_ID", default=None)
-    SHAREPOINT_DRIVE_ID: Optional[str] = os.getenv(key="SHAREPOINT_DRIVE_ID", default=None)
-    # Path within the drive to the "Test Account" archive root; dev/stg child folders below it.
-    SHAREPOINT_TEST_ACCOUNT_FOLDER_DEV: str = os.getenv(key="SHAREPOINT_TEST_ACCOUNT_FOLDER_DEV", default="Test Account/dev")
-    SHAREPOINT_TEST_ACCOUNT_FOLDER_STG: str = os.getenv(key="SHAREPOINT_TEST_ACCOUNT_FOLDER_STG", default="Test Account/stg")
 
     # [Token Blacklist]
     TOKEN_BLACKLIST_REDIS_DB: int = int(os.getenv(key="TOKEN_BLACKLIST_REDIS_DB", default="1"))
@@ -151,8 +120,34 @@ class Configuration(BaseSettings):
     # [Rate Limiting]
     RATE_LIMITERS_CONFIG: Optional[RateLimitersConfig] = None
 
-    # [Logging]
-    SENSITIVE_PARAMS: set[str] = set(os.getenv(key="SENSITIVE_PARAMS", default="password,secret,api_key").split(","))
+    # [Microsoft]
+    # [[Azure Applications]]
+    AZURE_TENANT_ID: Optional[str] = os.getenv(key="AZURE_TENANT_ID", default=None)
+    AZURE_APP_CLIENT_ID: Optional[str] = os.getenv(key="AZURE_APP_CLIENT_ID", default=None)
+    AZURE_APP_CLIENT_SECRET: Optional[str] = os.getenv(key="AZURE_APP_CLIENT_SECRET", default=None)
+    AZURE_ALLOWED_ISSUERS: Optional[str] = os.getenv(key="AZURE_ALLOWED_ISSUERS", default=None)
+
+    # [[Azure Blob Storage]]
+    STORAGE_BACKEND: str = os.getenv(key="STORAGE_BACKEND", default="azure_blob")
+    AZURE_STORAGE_ACCOUNT_NAME: Optional[str] = os.getenv(key="AZURE_STORAGE_ACCOUNT_NAME", default=None)
+    AZURE_STORAGE_CONNECTION_STRING: Optional[str] = os.getenv(key="AZURE_STORAGE_CONNECTION_STRING", default=None)
+    AZURE_STORAGE_CONTAINER_NAME: str = os.getenv(key="AZURE_STORAGE_CONTAINER_NAME", default="files")
+    AZURE_STORAGE_REGION: str = os.getenv(key="AZURE_STORAGE_REGION", default="eastus")
+    AZURE_STORAGE_BLOB_PREFIX: str = os.getenv(key="AZURE_STORAGE_BLOB_PREFIX", default=f"original_files/{ENV}")
+    AZURE_BLOB_CACHE_CONTROL: str = os.getenv(key="AZURE_BLOB_CACHE_CONTROL", default="max-age=86400")
+    SIGNED_URL_EXPIRY_SECONDS: int = int(os.getenv(key="SIGNED_URL_EXPIRY_SECONDS", default="3600"))
+    MAX_UPLOAD_SIZE: int = int(os.getenv(key="MAX_UPLOAD_SIZE", default=5 * 1024 * 1024))  # 5MB
+
+    # [[Microsoft Graph Mail.Send]]
+    GRAPH_MAIL_SEND_ENABLED: bool = Converter.to_bool(os.getenv(key="GRAPH_MAIL_SEND_ENABLED", default="false"), default=False)
+    GRAPH_MAIL_SENDER_MAILBOX: Optional[str] = os.getenv(key="GRAPH_MAIL_SENDER_MAILBOX", default=None)
+    GRAPH_MAIL_OVERRIDE_TO: Optional[str] = os.getenv(key="GRAPH_MAIL_OVERRIDE_TO", default=None)
+
+    # [[SharePoint]]
+    MOCK_SEED_OUTPUT_DIR: str = os.getenv(key="MOCK_SEED_OUTPUT_DIR", default="mock-seed")
+    SHAREPOINT_SITE_ID: Optional[str] = os.getenv(key="SHAREPOINT_SITE_ID", default=None)
+    SHAREPOINT_DRIVE_ID: Optional[str] = os.getenv(key="SHAREPOINT_DRIVE_ID", default=None)
+    SHAREPOINT_TEST_ACCOUNT_FOLDER: str = os.getenv(key="SHAREPOINT_TEST_ACCOUNT_FOLDER", default="Testing Account")
 
     @model_validator(mode="after")
     def _load_rate_limiters_config(self) -> "Configuration":

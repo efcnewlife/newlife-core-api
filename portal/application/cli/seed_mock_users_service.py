@@ -43,7 +43,7 @@ MINISTRY_TYPE_SCHEMA_ERROR = (
 class ArchiveWriter(Protocol):
     """Port for the SharePoint (or fake) archive collaborator."""
 
-    async def upload_csv_pair(self, *, env: str, account_csv: Path, ministry_csv: Path) -> Any: ...
+    async def upload_csv_pair(self, *, account_csv: Path, ministry_csv: Path) -> Any: ...
 
 
 Clock = Callable[[], datetime]
@@ -186,7 +186,7 @@ class SeedMockUsersService:
         click.echo(click.style(f"Local CSV pair written: {account_path}, {ministry_path}", fg="green"))
 
         try:
-            await self._archive_writer.upload_csv_pair(env=self._env, account_csv=account_path, ministry_csv=ministry_path)
+            await self._archive_writer.upload_csv_pair(account_csv=account_path, ministry_csv=ministry_path)
         except Exception as exc:
             raise MockSeedArchiveUploadError(account_csv=account_path, ministry_csv=ministry_path, reason=str(exc)) from exc
 

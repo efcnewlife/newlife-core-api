@@ -31,11 +31,10 @@ def _write(path: Path, text: str) -> Path:
 
 
 @pytest.mark.asyncio
-async def test_upload_csv_pair_routes_dev_and_stg_to_distinct_folders(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+async def test_upload_csv_pair_uses_configured_folder(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     from portal.config import settings
 
-    monkeypatch.setattr(settings, "SHAREPOINT_TEST_ACCOUNT_FOLDER_DEV", "Test Account/dev")
-    monkeypatch.setattr(settings, "SHAREPOINT_TEST_ACCOUNT_FOLDER_STG", "Test Account/stg")
+    monkeypatch.setattr(settings, "SHAREPOINT_TEST_ACCOUNT_FOLDER", "Testing Account")
     monkeypatch.setattr(settings, "SHAREPOINT_DRIVE_ID", "drive-1")
 
     fake = FakeSharePoint()
@@ -43,25 +42,25 @@ async def test_upload_csv_pair_routes_dev_and_stg_to_distinct_folders(tmp_path: 
     account_csv = _write(tmp_path / "a.csv", "account")
     ministry_csv = _write(tmp_path / "m.csv", "ministry")
 
-    await provider.upload_csv_pair(env="dev", account_csv=account_csv, ministry_csv=ministry_csv)
+    await provider.upload_csv_pair(account_csv=account_csv, ministry_csv=ministry_csv)
 
-    assert set(fake.uploaded) == {"Test Account/dev/a.csv", "Test Account/dev/m.csv"}
+    assert set(fake.uploaded) == {"Testing Account/a.csv", "Testing Account/m.csv"}
 
 
 @pytest.mark.asyncio
 async def test_upload_csv_pair_refuses_to_overwrite_an_existing_remote_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     from portal.config import settings
 
-    monkeypatch.setattr(settings, "SHAREPOINT_TEST_ACCOUNT_FOLDER_DEV", "Test Account/dev")
+    monkeypatch.setattr(settings, "SHAREPOINT_TEST_ACCOUNT_FOLDER", "Testing Account")
     monkeypatch.setattr(settings, "SHAREPOINT_DRIVE_ID", "drive-1")
 
-    fake = FakeSharePoint(existing_paths={"Test Account/dev/a.csv"})
+    fake = FakeSharePoint(existing_paths={"Testing Account/a.csv"})
     provider = SharePointArchiveProvider(sharepoint_factory=lambda: fake)
     account_csv = _write(tmp_path / "a.csv", "account")
     ministry_csv = _write(tmp_path / "m.csv", "ministry")
 
     with pytest.raises(RuntimeError, match="refusing to overwrite"):
-        await provider.upload_csv_pair(env="dev", account_csv=account_csv, ministry_csv=ministry_csv)
+        await provider.upload_csv_pair(account_csv=account_csv, ministry_csv=ministry_csv)
 
     assert fake.uploaded == {}
 
@@ -74,18 +73,4 @@ async def test_upload_csv_pair_raises_when_not_configured(tmp_path: Path):
     ministry_csv = _write(tmp_path / "m.csv", "ministry")
 
     with pytest.raises(RuntimeError, match="not configured"):
-        await provider.upload_csv_pair(env="dev", account_csv=account_csv, ministry_csv=ministry_csv)
-
-
-@pytest.mark.asyncio
-async def test_upload_csv_pair_rejects_unmapped_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    from portal.config import settings
-
-    monkeypatch.setattr(settings, "SHAREPOINT_DRIVE_ID", "drive-1")
-    fake = FakeSharePoint()
-    provider = SharePointArchiveProvider(sharepoint_factory=lambda: fake)
-    account_csv = _write(tmp_path / "a.csv", "account")
-    ministry_csv = _write(tmp_path / "m.csv", "ministry")
-
-    with pytest.raises(ValueError, match="prod"):
-        await provider.upload_csv_pair(env="prod", account_csv=account_csv, ministry_csv=ministry_csv)
+        await provider.upload_csv_pair(account_csv=account_csv, ministry_csv=ministry_csv)

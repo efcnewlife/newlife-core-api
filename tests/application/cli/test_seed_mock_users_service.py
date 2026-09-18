@@ -71,10 +71,10 @@ class FakeSession:
 class FakeArchiveWriter:
     def __init__(self, *, fail: bool = False):
         self.fail = fail
-        self.calls: list[tuple[str, Path, Path]] = []
+        self.calls: list[tuple[Path, Path]] = []
 
-    async def upload_csv_pair(self, *, env: str, account_csv: Path, ministry_csv: Path):
-        self.calls.append((env, account_csv, ministry_csv))
+    async def upload_csv_pair(self, *, account_csv: Path, ministry_csv: Path):
+        self.calls.append((account_csv, ministry_csv))
         if self.fail:
             raise RuntimeError("simulated SharePoint upload failure")
 
@@ -113,7 +113,7 @@ async def test_seed_mock_users_creates_four_personas_and_a_steward_ministry(tmp_
     assert session.inserted["OrgMinistryMember"][0]["member_role"] == "primary"
 
     assert session.committed is True
-    assert archive_writer.calls == [("dev", result.account_csv, result.ministry_csv)]
+    assert archive_writer.calls == [(result.account_csv, result.ministry_csv)]
     assert result.account_csv.exists()
     assert result.ministry_csv.exists()
 

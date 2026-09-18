@@ -469,6 +469,8 @@ After migrations, seed baseline data and create the first admin account. Run all
 uv run python -m portal.cli.main --help
 ```
 
+For the complete command reference, options, environment guards, and Mock QA lifecycle flow, see [docs/cli.md](docs/cli.md).
+
 #### Recommended order (fresh database)
 
 Prerequisites: `.env` configured, Docker services running, and `alembic upgrade head` completed.
