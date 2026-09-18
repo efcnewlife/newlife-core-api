@@ -1,6 +1,6 @@
 """
-seed-mock-data CLI: complete the Facility Booking QA scenarios for the current local
-Mock user inventory (ADR 0025).
+seed-mock-data CLI: complete the near-term Facility Booking fixture suite for the
+current local Mock inventory (ADR 0025).
 """
 
 import asyncio
@@ -48,9 +48,9 @@ def seed_mock_data_process(*, force: bool = False) -> None:
     if not force:
         click.echo(
             click.style(
-                "WARNING: This reads the current local Mock user inventory (seed-mock-users) and creates a personal "
-                "Rental Booking, activates the steward Ministry with a Church Activity Booking, assigns the owner "
-                "Mock user to an Owner position, and creates a pending Ministry Application in that Owner's queue.",
+                "WARNING: This reads the current local Mock inventory (seed-mock-users) and creates weekly slot templates, "
+                "campus-wide and room-specific Blackouts, ten confirmed Bookings, an Owner-position assignment, "
+                "and a pending Ministry Application. It does not create Testing accounts or inventory Ministries.",
                 fg="yellow",
             )
         )
@@ -58,6 +58,6 @@ def seed_mock_data_process(*, force: bool = False) -> None:
             click.echo("Aborted.")
             raise SystemExit(0)
 
-    click.echo(click.style("Seeding Mock Booking and approval scenarios...", fg="cyan"))
+    click.echo(click.style("Seeding Mock Facility Booking fixtures...", fg="cyan"))
     asyncio.run(seed_mock_data())
     click.echo(click.style("Done.", fg="green"))

@@ -15,6 +15,7 @@ from portal.application.cli.mock_account_archive import (
     compute_archive_filenames,
     compute_mock_run_identity,
     find_local_archive_pair,
+    parse_mock_run_identity,
     read_csv_rows,
     remove_previous_archive_pair,
     write_csv,
@@ -34,6 +35,12 @@ def test_compute_mock_run_identity_uses_env_and_minute_stamp():
     moment = datetime(2026, 9, 17, 14, 5)
 
     assert compute_mock_run_identity(moment, "dev") == "dev-2026-09-17_1405"
+
+
+def test_parse_mock_run_identity_reads_stamp_from_account_csv_name(tmp_path: Path):
+    account_csv = tmp_path / "2026-09-17_1405_dev_test_account.csv"
+
+    assert parse_mock_run_identity(account_csv, env="dev") == "dev-2026-09-17_1405"
 
 
 def test_write_csv_writes_header_and_rows(tmp_path: Path):

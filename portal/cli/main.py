@@ -109,7 +109,7 @@ def seed_mock_users_cmd(force: bool):
 @cli.command(name="seed-mock-data")
 @click.option("--force", is_flag=True, default=False, help="Skip confirmation; required to run in staging. Never allowed in production.")
 def seed_mock_data_cmd(force: bool):
-    """Complete Facility Booking QA scenarios (Bookings, Owner assignment, Ministry Application) for the current Mock user inventory."""
+    """Complete Facility Booking QA fixtures (slots, Blackouts, Bookings, Owner assignment, Ministry Application) for the current Mock inventory."""
     seed_mock_data_process(force=force)
 
 
