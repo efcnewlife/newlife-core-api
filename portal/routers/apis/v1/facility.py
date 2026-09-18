@@ -195,7 +195,6 @@ async def create_booking(model: MemberBookingCreate, booking_service: BookingSer
         CreateBookingCommand(
             start_at=model.start_at,
             end_at=model.end_at,
-            is_mission_aligned=model.is_mission_aligned,
             ministry_id=model.ministry_id,
             rooms=[
                 BookingRoomLineCommand(facility_id=line.facility_id, start_at=line.start_at, end_at=line.end_at, sequence=line.sequence) for line in model.rooms

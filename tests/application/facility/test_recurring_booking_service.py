@@ -10,15 +10,25 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from portal.application.facility.commands import BookingRoomLineCommand, CreateRecurringBookingSeriesCommand
+from portal.application.facility.discount_eligibility_service import DiscountEligibilityService
+from portal.application.facility.pricing_service import PricingService
 from portal.application.facility.recurring_booking_service import RecurringBookingService
 from portal.application.facility.results import RecurringBookingPreviewResult, RecurringBookingSeriesResult, RecurringOccupyingBookingResult
 from portal.application.org.results import MinistryMemberResult
 from portal.config import settings
-from portal.domain.facility.constants import BookingErrorCode, BookingSlotStatus, BookingStatus, BookingType, FacilityErrorCode, RecurringConflictKind
+from portal.domain.facility.constants import (
+    BookingErrorCode,
+    BookingSlotStatus,
+    BookingStatus,
+    BookingType,
+    FacilityErrorCode,
+    RecurringConflictKind,
+    RentalDiscountCode,
+)
 from portal.domain.facility.recurring import localize_wall_time
 from portal.domain.org.constants import MinistryMemberRole, MinistryStatus
 from portal.exceptions.responses import BadRequestException, ConflictErrorException, ForbiddenException
-from tests.fixtures.facility.factories import make_ministry_detail, make_preview_quote_result, new_uuid
+from tests.fixtures.facility.factories import make_discount_rule, make_hourly_and_daily_rates, make_ministry_detail, make_preview_quote_result, new_uuid
 from tests.fixtures.facility.stubs import (
     StubBookingRepository,
     StubMinistryRepository,
@@ -26,7 +36,9 @@ from tests.fixtures.facility.stubs import (
     StubPricingService,
     StubRecurringBookingRepository,
     StubRecurringOverrideNotifier,
+    StubRentalRepository,
     StubRoomBlackoutRepository,
+    StubRoomRepository,
     StubUserReadService,
 )
 from tests.fixtures.system.stubs import StubSettingService
@@ -816,3 +828,69 @@ async def test_priority_override_mail_failure_does_not_block_create(monkeypatch)
     result = await service.create_series(_command(facility_id=room_id, ministry_id=ministry_id, last_occurrence_date=SIX_WEEK_LAST_TUESDAY))
     assert result.occurrence_count == 6
     assert len(notifier.calls) == 1
+
+
+def _real_pricing_for_room(room_id, ministry_stub):
+    rental = StubRentalRepository(
+        rates_by_facility={room_id: make_hourly_and_daily_rates(room_id)},
+        discount_rules=[
+            make_discount_rule(RentalDiscountCode.MISSION_ALIGNED.value, Decimal("30")),
+            make_discount_rule(RentalDiscountCode.RECURRING_WEEKLY_MONTHLY.value, Decimal("20")),
+        ],
+    )
+    return PricingService(rental, StubRoomRepository(existing_ids={room_id}), DiscountEligibilityService(rental, ministry_stub))
+
+
+@pytest.mark.asyncio
+async def test_create_series_without_ministry_applies_recurring_discount(monkeypatch):
+    room_id = new_uuid()
+    ministry_stub = StubMinistryRepository()
+    service, series_stub, booking_stub, *_ = _service(monkeypatch, ministry_stub=ministry_stub)
+    service._pricing_service = _real_pricing_for_room(room_id, ministry_stub)
+    result = await service.create_series(_command(facility_id=room_id))
+    assert result.quoted_amount == Decimal("64.00")
+    assert series_stub.insert_series_calls[0]["discount_percent"] == Decimal("20")
+    assert series_stub.insert_series_calls[0]["quoted_amount"] == Decimal("64.00")
+    assert series_stub.insert_series_calls[0]["is_mission_aligned"] is False
+    assert all(row["discount_percent"] == Decimal("20") for row in booking_stub.insert_calls)
+
+
+@pytest.mark.asyncio
+async def test_create_series_qualifying_ministry_applies_thirty_percent_not_recurring(monkeypatch):
+    user_id = uuid4()
+    room_id = new_uuid()
+    ministry = make_ministry_detail()
+    ministry_stub = StubMinistryRepository(ministry_by_id={ministry.id: ministry}, booking_member_user_ids={user_id})
+    service, series_stub, *_ = _service(monkeypatch, user_id=user_id, ministry_stub=ministry_stub)
+    service._pricing_service = _real_pricing_for_room(room_id, ministry_stub)
+    await service.create_series(_command(facility_id=room_id, ministry_id=ministry.id))
+    payload = series_stub.insert_series_calls[0]
+    assert payload["discount_percent"] == Decimal("30")
+    assert payload["quoted_amount"] == Decimal("56.00")
+    assert payload["is_mission_aligned"] is True
+
+
+@pytest.mark.asyncio
+async def test_evaluate_proposal_resolves_discount_independently_of_create(monkeypatch):
+    room_id = new_uuid()
+    ministry_stub = StubMinistryRepository()
+    service, *_ = _service(monkeypatch, ministry_stub=ministry_stub)
+    service._pricing_service = _real_pricing_for_room(room_id, ministry_stub)
+    evaluation = await service.evaluate_proposal(_command(facility_id=room_id))
+    assert evaluation.discount_percent == Decimal("20")
+    assert evaluation.quoted_amount == Decimal("64.00")
+    assert evaluation.discount_code == RentalDiscountCode.RECURRING_WEEKLY_MONTHLY.value
+
+
+@pytest.mark.asyncio
+async def test_evaluate_proposal_qualifying_ministry_applies_thirty_percent_not_recurring(monkeypatch):
+    user_id = uuid4()
+    room_id = new_uuid()
+    ministry = make_ministry_detail()
+    ministry_stub = StubMinistryRepository(ministry_by_id={ministry.id: ministry}, booking_member_user_ids={user_id})
+    service, *_ = _service(monkeypatch, user_id=user_id, ministry_stub=ministry_stub)
+    service._pricing_service = _real_pricing_for_room(room_id, ministry_stub)
+    evaluation = await service.evaluate_proposal(_command(facility_id=room_id, ministry_id=ministry.id))
+    assert evaluation.discount_percent == Decimal("30")
+    assert evaluation.quoted_amount == Decimal("56.00")
+    assert evaluation.discount_code == RentalDiscountCode.MISSION_ALIGNED.value

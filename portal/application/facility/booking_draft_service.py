@@ -137,9 +137,7 @@ class BookingDraftService:
             quote_lines.append(PreviewQuoteRoomLineCommand(facility_id=line.facility_id, billed_hours=self._billed_hours(line.start_at, line.end_at)))
 
         quote = await self._pricing_service.preview_quote(
-            PreviewQuoteCommand(
-                booking_type=BookingType.ONE_TIME, is_mission_aligned=False, currency="CAD", room_lines=quote_lines, ministry_id=row.ministry_id
-            )
+            PreviewQuoteCommand(booking_type=BookingType.ONE_TIME, currency="CAD", room_lines=quote_lines, ministry_id=row.ministry_id, booker_id=user_id)
         )
 
         return BookingDraftResult(

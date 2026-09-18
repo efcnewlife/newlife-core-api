@@ -17,6 +17,7 @@ from portal.application.facility.results import (
     BookingDraftDetailResult,
     BookingDraftStoredLineResult,
     BookingListItemResult,
+    BookingTypeAndFlagsResult,
     DiscountRuleResult,
     MinistryDetailResult,
     MinistryListItemResult,
@@ -299,7 +300,15 @@ class StubBookingRepository:
     async def get_booking_type_and_flags(self, booking_id: UUID):
         if not self.exists:
             return None
-        return self.booking_meta
+        meta = self.booking_meta
+        if isinstance(meta, BookingTypeAndFlagsResult):
+            return meta
+        return BookingTypeAndFlagsResult(
+            booking_type=meta.get("booking_type", "one_time"),
+            is_mission_aligned=meta.get("is_mission_aligned", False),
+            currency=meta.get("currency"),
+            status=meta.get("status"),
+        )
 
     async def has_confirmed_slot_overlap(self, facility_id: UUID, start_at: datetime, end_at: datetime, exclude_booking_id: UUID | None = None) -> bool:
         occupying = await self.list_occupying_slots(facility_id, start_at, end_at)

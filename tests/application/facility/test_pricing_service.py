@@ -7,23 +7,26 @@ from decimal import Decimal
 import pytest
 
 from portal.application.facility.commands import PreviewQuoteCommand, PreviewQuoteRoomLineCommand
+from portal.application.facility.discount_eligibility_service import DiscountEligibilityService
 from portal.application.facility.pricing_service import PricingService
 from portal.domain.facility.constants import BookingType, RentalDiscountCode, RentalRateBillingUnit, RentalSurchargeChargeType
 from portal.exceptions.responses import BadRequestException
 from tests.fixtures.facility.factories import (
     make_discount_rule,
     make_hourly_and_daily_rates,
+    make_ministry_detail,
     make_preview_quote_command,
     make_rental_rate,
     make_surcharge,
     new_uuid,
 )
-from tests.fixtures.facility.stubs import StubRentalRepository, StubRoomRepository
+from tests.fixtures.facility.stubs import StubMinistryRepository, StubRentalRepository, StubRoomRepository
 
 
-def _pricing_service(rental_stub: StubRentalRepository, room_ids: set | None = None) -> PricingService:
+def _pricing_service(rental_stub: StubRentalRepository, room_ids: set | None = None, ministry_stub: StubMinistryRepository | None = None) -> PricingService:
     room_stub = StubRoomRepository(existing_ids=room_ids or set())
-    return PricingService(rental_stub, room_stub)
+    eligibility = DiscountEligibilityService(rental_stub, ministry_stub or StubMinistryRepository())
+    return PricingService(rental_stub, room_stub, eligibility)
 
 
 @pytest.mark.asyncio
@@ -81,6 +84,7 @@ async def test_preview_quote_same_room_different_durations_different_subtotals()
     service = _pricing_service(rental, {room_id})
     command = PreviewQuoteCommand(
         booking_type=BookingType.ONE_TIME,
+        booker_id=new_uuid(),
         room_lines=[
             PreviewQuoteRoomLineCommand(facility_id=room_id, billed_hours=Decimal("2")),
             PreviewQuoteRoomLineCommand(facility_id=room_id, billed_hours=Decimal("4")),
@@ -105,6 +109,7 @@ async def test_preview_quote_sums_multiple_room_lines():
     service = _pricing_service(rental, {room_a, room_b})
     command = PreviewQuoteCommand(
         booking_type=BookingType.ONE_TIME,
+        booker_id=new_uuid(),
         room_lines=[
             PreviewQuoteRoomLineCommand(facility_id=room_a, billed_hours=Decimal("2")),
             PreviewQuoteRoomLineCommand(facility_id=room_b, billed_hours=Decimal("2")),
@@ -115,8 +120,10 @@ async def test_preview_quote_sums_multiple_room_lines():
 
 
 @pytest.mark.asyncio
-async def test_preview_quote_mission_discount_not_stacked_with_recurring():
+async def test_preview_quote_qualifying_ministry_receives_thirty_percent_not_stacked_with_recurring():
     room_id = new_uuid()
+    booker_id = new_uuid()
+    ministry = make_ministry_detail()
     rental = StubRentalRepository(
         rates_by_facility={room_id: make_hourly_and_daily_rates(room_id)},
         discount_rules=[
@@ -124,24 +131,61 @@ async def test_preview_quote_mission_discount_not_stacked_with_recurring():
             make_discount_rule(RentalDiscountCode.RECURRING_WEEKLY_MONTHLY.value, Decimal("20")),
         ],
     )
-    service = _pricing_service(rental, {room_id})
-    command = make_preview_quote_command(facility_id=room_id, billed_hours=Decimal("6"), booking_type=BookingType.RECURRING, is_mission_aligned=True)
+    service = _pricing_service(
+        rental, {room_id}, ministry_stub=StubMinistryRepository(ministry_by_id={ministry.id: ministry}, booking_member_user_ids={booker_id})
+    )
+    command = make_preview_quote_command(
+        facility_id=room_id, billed_hours=Decimal("6"), booking_type=BookingType.RECURRING, ministry_id=ministry.id, booker_id=booker_id
+    )
     result = await service.preview_quote(command)
+    assert result.discount_code == RentalDiscountCode.MISSION_ALIGNED.value
     assert result.discount_percent == Decimal("30")
     assert result.discount_amount == Decimal("60.00")
+    assert result.quoted_amount == Decimal("140.00")
 
 
 @pytest.mark.asyncio
-async def test_preview_quote_recurring_discount():
+async def test_preview_quote_recurring_discount_without_ministry():
     room_id = new_uuid()
     rental = StubRentalRepository(
         rates_by_facility={room_id: make_hourly_and_daily_rates(room_id)},
         discount_rules=[make_discount_rule(RentalDiscountCode.RECURRING_WEEKLY_MONTHLY.value, Decimal("20"))],
     )
     service = _pricing_service(rental, {room_id})
-    command = make_preview_quote_command(facility_id=room_id, booking_type=BookingType.RECURRING, is_mission_aligned=False)
+    command = make_preview_quote_command(facility_id=room_id, billed_hours=Decimal("6"), booking_type=BookingType.RECURRING)
     result = await service.preview_quote(command)
+    assert result.discount_code == RentalDiscountCode.RECURRING_WEEKLY_MONTHLY.value
     assert result.discount_percent == Decimal("20")
+    assert result.discount_amount == Decimal("40.00")
+    assert result.quoted_amount == Decimal("160.00")
+
+
+@pytest.mark.asyncio
+async def test_preview_quote_applies_discount_to_room_subtotals_then_adds_surcharges():
+    room_id = new_uuid()
+    booker_id = new_uuid()
+    ministry = make_ministry_detail()
+    rental = StubRentalRepository(
+        rates_by_facility={room_id: make_hourly_and_daily_rates(room_id)},
+        discount_rules=[make_discount_rule(RentalDiscountCode.MISSION_ALIGNED.value, Decimal("30"))],
+        surcharges=[make_surcharge(charge_type=RentalSurchargeChargeType.FLAT.value, unit_amount=Decimal("25"))],
+    )
+    service = _pricing_service(
+        rental, {room_id}, ministry_stub=StubMinistryRepository(ministry_by_id={ministry.id: ministry}, booking_member_user_ids={booker_id})
+    )
+    command = make_preview_quote_command(
+        facility_id=room_id,
+        billed_hours=Decimal("6"),
+        booking_type=BookingType.ONE_TIME,
+        ministry_id=ministry.id,
+        booker_id=booker_id,
+        surcharge_codes=["audio_system"],
+    )
+    result = await service.preview_quote(command)
+    assert result.subtotal_amount == Decimal("200.00")
+    assert result.discount_amount == Decimal("60.00")
+    assert result.surcharge_amount == Decimal("25.00")
+    assert result.quoted_amount == Decimal("165.00")
 
 
 @pytest.mark.asyncio

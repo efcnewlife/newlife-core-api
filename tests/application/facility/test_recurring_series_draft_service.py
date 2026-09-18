@@ -13,7 +13,7 @@ from portal.application.facility.commands import BookingRoomLineCommand, CreateR
 from portal.application.facility.recurring_booking_service import RecurringBookingService
 from portal.application.facility.recurring_series_draft_service import RecurringSeriesDraftService
 from portal.application.facility.results import RecurringOccupyingBookingResult, RecurringSeriesDraftDetailResult, RecurringSeriesDraftStoredRoomResult
-from portal.domain.facility.constants import BookingErrorCode, BookingStatus, FacilityErrorCode
+from portal.domain.facility.constants import BookingErrorCode, BookingStatus, FacilityErrorCode, RentalDiscountCode
 from portal.domain.facility.recurring import localize_wall_time
 from portal.exceptions.responses import BadRequestException, ConflictErrorException, ForbiddenException, NotFoundException
 from tests.fixtures.facility.factories import make_preview_quote_result, new_uuid
@@ -163,6 +163,7 @@ async def test_create_draft_returns_id_and_persists_weekly_proposal(monkeypatch)
     assert stored["local_start_time"] == time(10, 0)
     assert stored["local_end_time"] == time(12, 0)
     assert stored["excluded_dates"] == []
+    assert stored["is_mission_aligned"] is False
     assert draft_stub.insert_room_calls[0][0]["facility_id"] == room_id
 
 
@@ -455,3 +456,17 @@ async def test_delete_all_my_drafts_never_deletes_a_created_series(monkeypatch):
     assert series_stub.update_series_calls == []
     assert booking_stub.cancel_calls == []
     assert stub.draft_by_id == {}
+
+
+@pytest.mark.asyncio
+async def test_get_draft_is_mission_aligned_follows_live_evaluation(monkeypatch):
+    user_id = uuid4()
+    draft_id = uuid4()
+    stub = StubRecurringSeriesDraftRepository(draft_by_id={draft_id: _stored_draft(draft_id=draft_id, user_id=user_id, room_id=new_uuid())})
+    quote = make_preview_quote_result(quoted_amount=Decimal("280")).model_copy(update={"discount_code": RentalDiscountCode.MISSION_ALIGNED.value})
+    service, *_ = _service(monkeypatch, user_id=user_id, draft_stub=stub, pricing_stub=StubPricingService(quote))
+
+    result = await service.get_draft(draft_id)
+
+    assert result.is_mission_aligned is True
+    assert result.quoted_amount == Decimal("1120")

@@ -177,16 +177,18 @@ def make_preview_quote_command(
     facility_id: UUID | None = None,
     billed_hours: Decimal = Decimal("6"),
     booking_type: BookingType = BookingType.ONE_TIME,
-    is_mission_aligned: bool = False,
+    ministry_id: UUID | None = None,
+    booker_id: UUID | None = None,
     surcharge_codes: list[str] | None = None,
 ) -> PreviewQuoteCommand:
     room_id = facility_id or new_uuid()
     return PreviewQuoteCommand(
         booking_type=booking_type,
-        is_mission_aligned=is_mission_aligned,
         currency="CAD",
         room_lines=[PreviewQuoteRoomLineCommand(facility_id=room_id, billed_hours=billed_hours)],
         surcharge_codes=surcharge_codes or [],
+        ministry_id=ministry_id,
+        booker_id=booker_id or new_uuid(),
     )
 
 

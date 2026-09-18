@@ -18,6 +18,7 @@ from portal.application.facility.commands import (
     PreviewQuoteRoomLineCommand,
     UpdateTitleCommand,
 )
+from portal.application.facility.discount_eligibility_service import is_mission_aligned_discount
 from portal.application.facility.participant_detail import assemble_participant_booking_detail, assemble_participant_series_detail
 from portal.application.facility.pricing_service import PricingService
 from portal.application.facility.recurring_override_mail_content import resolve_bilingual_activity_names
@@ -222,7 +223,7 @@ class RecurringBookingService:
 
         remaining_conflicts = [item for item in conflicts if item.occurrence_date not in excluded_dates]
         blocking = [item for item in remaining_conflicts if not item.is_overridable]
-        quote = await self._quote_remaining_occurrences(command, remaining)
+        quote = await self._quote_remaining_occurrences(command, remaining, booker_id=prepared.booker_id)
         invalidity_code = None
         invalidity_detail = None
         if blocking:
@@ -235,6 +236,7 @@ class RecurringBookingService:
             conflicts=conflicts,
             quoted_amount=quote["quoted_amount"],
             subtotal_amount=quote["subtotal_amount"],
+            discount_code=quote["discount_code"],
             discount_percent=quote["discount_percent"],
             discount_amount=quote["discount_amount"],
             surcharge_amount=quote["surcharge_amount"],
@@ -290,12 +292,12 @@ class RecurringBookingService:
             quote = await self._pricing_service.preview_quote(
                 PreviewQuoteCommand(
                     booking_type=BookingType.RECURRING,
-                    is_mission_aligned=command.is_mission_aligned,
                     currency="CAD",
                     as_of_date=occurrence_date,
                     room_lines=quote_lines,
                     surcharge_codes=command.surcharge_codes,
                     ministry_id=command.ministry_id,
+                    booker_id=booker_id,
                 )
             )
             occurrence_quotes.append(quote)
@@ -328,7 +330,7 @@ class RecurringBookingService:
                 surcharge_amount=series_surcharge,
                 quoted_amount=series_quoted,
                 currency=currency,
-                is_mission_aligned=command.is_mission_aligned,
+                is_mission_aligned=is_mission_aligned_discount(quote.discount_code),
                 is_priority=is_priority,
                 remark=command.remark,
                 title=command.title,
@@ -354,7 +356,7 @@ class RecurringBookingService:
                     start_at=start_at,
                     end_at=end_at,
                     status=BookingStatus.PENDING_PAYMENT.value,
-                    is_mission_aligned=command.is_mission_aligned,
+                    is_mission_aligned=is_mission_aligned_discount(quote.discount_code),
                     billed_hours=total_billed,
                     subtotal_amount=quote.subtotal_amount,
                     discount_percent=quote.discount_percent,
@@ -806,25 +808,26 @@ class RecurringBookingService:
             invalidity_detail=error.detail,
         )
 
-    async def _quote_remaining_occurrences(self, command: CreateRecurringBookingSeriesCommand, remaining: list[_PreparedOccurrence]) -> dict:
+    async def _quote_remaining_occurrences(self, command: CreateRecurringBookingSeriesCommand, remaining: list[_PreparedOccurrence], booker_id: UUID) -> dict:
         series_quoted = Decimal("0")
         series_subtotal = Decimal("0")
         series_discount = Decimal("0")
         series_surcharge = Decimal("0")
         currency = "CAD"
         discount_percent = Decimal("0")
+        discount_code = None
         for item in remaining:
             billed_hours = self._billed_hours(item.start_at, item.end_at)
             quote_lines = [PreviewQuoteRoomLineCommand(facility_id=room.facility_id, billed_hours=billed_hours) for room in command.rooms]
             quote = await self._pricing_service.preview_quote(
                 PreviewQuoteCommand(
                     booking_type=BookingType.RECURRING,
-                    is_mission_aligned=command.is_mission_aligned,
                     currency="CAD",
                     as_of_date=item.occurrence_date,
                     room_lines=quote_lines,
                     surcharge_codes=command.surcharge_codes,
                     ministry_id=command.ministry_id,
+                    booker_id=booker_id,
                 )
             )
             series_quoted += quote.quoted_amount
@@ -833,6 +836,7 @@ class RecurringBookingService:
             series_surcharge += quote.surcharge_amount
             currency = quote.currency
             discount_percent = quote.discount_percent
+            discount_code = quote.discount_code
         return {
             "quoted_amount": series_quoted,
             "subtotal_amount": series_subtotal,
@@ -840,6 +844,7 @@ class RecurringBookingService:
             "discount_amount": series_discount,
             "surcharge_amount": series_surcharge,
             "currency": currency,
+            "discount_code": discount_code,
         }
 
     @staticmethod

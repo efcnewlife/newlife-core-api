@@ -11,6 +11,7 @@ from portal.application.facility.commands import (
     CreateRecurringSeriesDraftCommand,
     UpdateRecurringSeriesDraftCommand,
 )
+from portal.application.facility.discount_eligibility_service import is_mission_aligned_discount
 from portal.application.facility.recurring_booking_service import RecurringBookingService
 from portal.application.facility.results import (
     RecurringBookingSeriesResult,
@@ -59,7 +60,6 @@ class RecurringSeriesDraftService:
             last_occurrence_date=command.last_occurrence_date,
             local_start_time=command.local_start_time,
             local_end_time=command.local_end_time,
-            is_mission_aligned=command.is_mission_aligned,
             rooms=command.rooms,
             surcharge_codes=command.surcharge_codes,
             remark=command.remark,
@@ -75,7 +75,6 @@ class RecurringSeriesDraftService:
             last_occurrence_date=row.last_occurrence_date,
             local_start_time=row.local_start_time,
             local_end_time=row.local_end_time,
-            is_mission_aligned=row.is_mission_aligned,
             rooms=[BookingRoomLineCommand(facility_id=room.facility_id, sequence=room.sequence) for room in row.rooms],
             surcharge_codes=row.surcharge_codes,
             remark=row.remark,
@@ -93,7 +92,7 @@ class RecurringSeriesDraftService:
             last_occurrence_date=command.last_occurrence_date,
             local_start_time=command.local_start_time,
             local_end_time=command.local_end_time,
-            is_mission_aligned=command.is_mission_aligned,
+            is_mission_aligned=False,
             remark=command.remark,
             surcharge_codes=list(command.surcharge_codes),
             excluded_dates=list(command.excluded_dates),
@@ -113,7 +112,7 @@ class RecurringSeriesDraftService:
             last_occurrence_date=row.last_occurrence_date,
             local_start_time=row.local_start_time,
             local_end_time=row.local_end_time,
-            is_mission_aligned=row.is_mission_aligned,
+            is_mission_aligned=is_mission_aligned_discount(evaluation.discount_code),
             remark=row.remark,
             surcharge_codes=row.surcharge_codes,
             excluded_dates=row.excluded_dates,

@@ -21,6 +21,10 @@ def _no_discount() -> DiscountEligibilityResult:
     return DiscountEligibilityResult(discount_code=None, discount_percent=Decimal("0"))
 
 
+def is_mission_aligned_discount(discount_code: Optional[str]) -> bool:
+    return discount_code == RentalDiscountCode.MISSION_ALIGNED.value
+
+
 class DiscountEligibilityService:
     """Resolve the one Booking Discount applicable to a proposed booking."""
 
