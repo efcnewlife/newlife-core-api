@@ -21,6 +21,7 @@ from portal.application.cli.mock_account_archive import (
     remove_previous_archive_pair,
     write_csv,
 )
+from portal.application.cli.mock_locale_lookup import resolve_default_locale_id
 from portal.application.cli.mock_user_persona import (
     PERSONA_STEWARD,
     MockUserPersona,
@@ -31,7 +32,7 @@ from portal.application.cli.mock_user_persona import (
 from portal.application.cli.mock_user_seed_service import MockUserSeedService, resolve_testing_account_email_suffix
 from portal.domain.org.constants import MinistryMemberRole, MinistryStatus
 from portal.libs.database import Session
-from portal.models import OrgMinistry, OrgMinistryMember, OrgMinistryTranslation, SystemLocale
+from portal.models import OrgMinistry, OrgMinistryMember, OrgMinistryTranslation
 
 MINISTRY_TYPE_SCHEMA_ERROR = (
     "Ministry Type is required (NOT NULL) by this database. seed-mock-users needs the optional-Ministry-Type "
@@ -69,17 +70,6 @@ class SeedMockUsersResult:
     ministry_name: str
     account_csv: Path
     ministry_csv: Path
-
-
-async def _resolve_default_locale_id(session: Session, default_locale_code: str) -> Optional[UUID]:
-    target = default_locale_code.strip().lower()
-    rows = (
-        await session.select(SystemLocale.id, SystemLocale.language_code).where(SystemLocale.is_active == True).where(SystemLocale.is_deleted == False).fetch()
-    )
-    for row in rows or []:
-        if str(row["language_code"]).strip().lower() == target:
-            return row["id"]
-    return None
 
 
 def _account_csv_row(persona: MockUserPersona) -> dict[str, Any]:
@@ -157,7 +147,7 @@ class SeedMockUsersService:
         )
 
     async def run(self) -> SeedMockUsersResult:
-        locale_id = await _resolve_default_locale_id(self._session, self._default_locale_code)
+        locale_id = await resolve_default_locale_id(self._session, self._default_locale_code)
         if not locale_id:
             raise MockSeedCatalogPrerequisiteError(f"Locale {self._default_locale_code!r} not found or inactive. Run init-all (or init-locales) first.")
 

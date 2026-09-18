@@ -16,6 +16,7 @@ import click
 from asyncpg import NotNullViolationError
 
 from portal.application.cli.mock_account_archive import MockSeedInventoryError, find_local_archive_pair, read_csv_rows
+from portal.application.cli.mock_locale_lookup import resolve_default_locale_id
 from portal.application.cli.mock_user_persona import PERSONA_OWNER, PERSONA_PERSONAL, PERSONA_STEWARD
 from portal.domain.facility.constants import BookingSlotStatus, BookingStatus, BookingType
 from portal.domain.org.constants import MinistryApprovalStatus, MinistryMemberRole, MinistryStatus
@@ -32,8 +33,14 @@ from portal.models import (
     OrgMinistryMember,
     OrgMinistryTranslation,
     OrgPosition,
-    SystemLocale,
 )
+
+# The steward Ministry created by seed-mock-users has no owner_position_id, so activating it here
+# has no real incumbent to record as approver (ADR 0025: Mock data bypasses the real submit/approve
+# workflow). approved_by_id stays unset rather than attributing approval to the submitting steward,
+# which portal/application/org/ministry_approval_service.py never allows (only an owner-position
+# incumbent may approve, never the applicant).
+STEWARD_MINISTRY_APPROVAL_COMMENT = "Simulated approval (seed-mock-data)"
 
 MINISTRY_TYPE_SCHEMA_ERROR = (
     "Ministry Type is required (NOT NULL) by this database. seed-mock-data needs the optional-Ministry-Type "
@@ -63,17 +70,6 @@ class SeedMockDataResult:
     owner_position_code: str
     ministry_application_id: UUID
     ministry_application_name: str
-
-
-async def _resolve_default_locale_id(session: Session, default_locale_code: str) -> Optional[UUID]:
-    target = default_locale_code.strip().lower()
-    rows = (
-        await session.select(SystemLocale.id, SystemLocale.language_code).where(SystemLocale.is_active == True).where(SystemLocale.is_deleted == False).fetch()
-    )
-    for row in rows or []:
-        if str(row["language_code"]).strip().lower() == target:
-            return row["id"]
-    return None
 
 
 def _as_uuid(value: object) -> UUID:
@@ -216,11 +212,11 @@ class SeedMockDataService:
         ministry_code = ministry_row["ministry_code"].strip()
         ministry_name = ministry_row["ministry_name"].strip()
 
-        personal_id = await self._resolve_user_id(account_rows[PERSONA_PERSONAL]["email"], label="Personal")
-        steward_id = await self._resolve_user_id(account_rows[PERSONA_STEWARD]["email"], label="Steward")
-        owner_id = await self._resolve_user_id(account_rows[PERSONA_OWNER]["email"], label="Owner")
+        personal_id = await self._resolve_user_id(account_rows[PERSONA_PERSONAL]["email"], label=PERSONA_PERSONAL.capitalize())
+        steward_id = await self._resolve_user_id(account_rows[PERSONA_STEWARD]["email"], label=PERSONA_STEWARD.capitalize())
+        owner_id = await self._resolve_user_id(account_rows[PERSONA_OWNER]["email"], label=PERSONA_OWNER.capitalize())
 
-        locale_id = await _resolve_default_locale_id(self._session, self._default_locale_code)
+        locale_id = await resolve_default_locale_id(self._session, self._default_locale_code)
         if not locale_id:
             raise MockDataPrerequisiteError(f"Locale {self._default_locale_code!r} not found or inactive. Run init-all (or init-locales) first.")
 
@@ -242,10 +238,21 @@ class SeedMockDataService:
 
         await (
             self._session.update(OrgMinistry)
-            .values(
-                status=MinistryStatus.ACTIVE.value, is_active=True, submitted_at=now, submitted_by_id=steward_id, approved_at=now, approved_by_id=steward_id
-            )
+            .values(status=MinistryStatus.ACTIVE.value, is_active=True, submitted_at=now, submitted_by_id=steward_id, approved_at=now, approved_by_id=None)
             .where(OrgMinistry.id == ministry_id)
+            .execute()
+        )
+        await (
+            self._session.insert(OrgMinistryApproval)
+            .values(
+                id=uuid.uuid4(),
+                ministry_id=ministry_id,
+                owner_position_id=None,
+                status=MinistryApprovalStatus.APPROVED.value,
+                requested_by_id=steward_id,
+                decided_at=now,
+                comment=STEWARD_MINISTRY_APPROVAL_COMMENT,
+            )
             .execute()
         )
 

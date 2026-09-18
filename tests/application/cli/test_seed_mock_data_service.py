@@ -273,13 +273,15 @@ async def test_seed_mock_data_completes_all_four_scenarios(tmp_path: Path):
     assert church_booking["ministry_id"] == MINISTRY_ID
     assert church_booking["id"] == result.church_activity_booking_id
 
-    # The steward's Ministry is activated in place (same id, not a new row).
+    # The steward's Ministry is activated in place (same id, not a new row). No incumbent exists
+    # for this Ministry (owner_position_id stays unset), so approved_by_id stays unset too rather
+    # than recording the submitting steward as their own approver.
     assert len(session.updated["OrgMinistry"]) == 1
     activation = session.updated["OrgMinistry"][0]
     assert activation["status"] == MinistryStatus.ACTIVE.value
     assert activation["is_active"] is True
     assert activation["submitted_by_id"] == STEWARD_ID
-    assert activation["approved_by_id"] == STEWARD_ID
+    assert activation["approved_by_id"] is None
     assert result.ministry_id == MINISTRY_ID
 
     # Owner assigned as the Owner-position incumbent: closes any prior open assignment, then inserts the new one.
@@ -302,10 +304,15 @@ async def test_seed_mock_data_completes_all_four_scenarios(tmp_path: Path):
     assert application["id"] == result.ministry_application_id
 
     approvals = session.inserted["OrgMinistryApproval"]
-    assert len(approvals) == 1
-    assert approvals[0]["status"] == MinistryApprovalStatus.PENDING.value
-    assert approvals[0]["owner_position_id"] == POSITION_ID
-    assert approvals[0]["requested_by_id"] == STEWARD_ID
+    assert len(approvals) == 2
+    activation_approval = next(a for a in approvals if a["ministry_id"] == MINISTRY_ID)
+    assert activation_approval["status"] == MinistryApprovalStatus.APPROVED.value
+    assert activation_approval["owner_position_id"] is None
+
+    application_approval = next(a for a in approvals if a["ministry_id"] == application["id"])
+    assert application_approval["status"] == MinistryApprovalStatus.PENDING.value
+    assert application_approval["owner_position_id"] == POSITION_ID
+    assert application_approval["requested_by_id"] == STEWARD_ID
 
     members = session.inserted["OrgMinistryMember"]
     assert any(m["ministry_id"] == application["id"] and m["user_id"] == STEWARD_ID for m in members)
