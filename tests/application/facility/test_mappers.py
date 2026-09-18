@@ -12,6 +12,7 @@ import pytest
 from pydantic import ValidationError
 
 from portal.application.facility.mappers import (
+    admin_discount_eligibility_to_command,
     blackout_impact_to_api,
     booking_detail_to_api,
     booking_page_to_api,
@@ -28,9 +29,12 @@ from portal.application.facility.mappers import (
     create_room_to_command,
     create_surcharge_to_command,
     delete_model_to_command,
+    discount_eligibility_to_admin_api,
+    discount_eligibility_to_member_api,
     discount_rule_to_api,
     member_booking_detail_to_api,
     member_browse_booking_to_api,
+    member_discount_eligibility_to_command,
     member_preview_quote_result_to_api,
     member_preview_quote_to_command,
     member_recurring_series_draft_create_to_command,
@@ -57,6 +61,7 @@ from portal.application.facility.results import (
     BookingRangeResult,
     BookingRoomLineResult,
     DayAvailabilityResult,
+    DiscountEligibilityResult,
     DiscountRuleResult,
     MemberBrowseBookingResult,
     PendingPaymentSeriesListItemResult,
@@ -79,7 +84,7 @@ from portal.domain.facility.constants import BookingType, RecurringConflictKind,
 from portal.domain.org.constants import MinistryMemberRole
 from portal.infrastructure.persistence.repositories.facility.booking_repository import BookingRepository
 from portal.infrastructure.persistence.repositories.facility.recurring_booking_repository import RecurringBookingRepository
-from portal.serializers.admin.v1.facility.booking import AdminBookingCancel, AdminBookingQuery, AdminBookingUpdate
+from portal.serializers.admin.v1.facility.booking import AdminBookingCancel, AdminBookingQuery, AdminBookingUpdate, AdminDiscountEligibilityRequest
 from portal.serializers.admin.v1.facility.override_log import AdminOverrideLogQuery
 from portal.serializers.admin.v1.facility.rental_catalog import AdminDiscountRuleCreate, AdminSurchargeCreate
 from portal.serializers.admin.v1.facility.rental_rate import AdminPreviewQuoteRequest, AdminPreviewQuoteRoomLine, AdminRentalRateCreate
@@ -90,6 +95,7 @@ from portal.serializers.admin.v1.facility.translation import AdminFacilityTransl
 from portal.serializers.admin.v1.ministry import AdminMinistryCreate, AdminMinistryMemberInput, AdminMinistryReplaceMembers
 from portal.serializers.admin.v1.org.translation import AdminOrgTranslationInput
 from portal.serializers.apis.v1.facility import (
+    MemberDiscountEligibilityRequest,
     MemberPreviewQuoteLineInput,
     MemberPreviewQuoteRequest,
     MemberRecurringBookingSeriesCancel,
@@ -237,6 +243,39 @@ def test_catalog_mappers():
     rule_result = DiscountRuleResult(id=uuid4(), code="mission_aligned", percent_off=Decimal("30"))
     api_rule = discount_rule_to_api(rule_result)
     assert api_rule.code == "mission_aligned"
+
+    with pytest.raises(ValidationError):
+        AdminDiscountRuleCreate(code="mission_aligned", percent_off=Decimal("100.01"))
+    with pytest.raises(ValidationError):
+        AdminDiscountRuleCreate(code="mission_aligned", percent_off=Decimal("12.345"))
+
+
+def test_discount_eligibility_mappers():
+    ministry_id = uuid4()
+    booker_id = uuid4()
+    member_command = member_discount_eligibility_to_command(MemberDiscountEligibilityRequest(booking_type=BookingType.RECURRING, ministry_id=ministry_id))
+    assert member_command.booking_type == BookingType.RECURRING
+    assert member_command.ministry_id == ministry_id
+    assert member_command.booker_id is None
+    assert "user_id" not in MemberDiscountEligibilityRequest.model_fields
+
+    admin_command = admin_discount_eligibility_to_command(
+        AdminDiscountEligibilityRequest(booking_type=BookingType.ONE_TIME, ministry_id=ministry_id, user_id=booker_id)
+    )
+    assert admin_command.booking_type == BookingType.ONE_TIME
+    assert admin_command.ministry_id == ministry_id
+    assert admin_command.booker_id == booker_id
+
+    result = DiscountEligibilityResult(discount_code="mission_aligned", discount_percent=Decimal("30"))
+    member_api = discount_eligibility_to_member_api(result)
+    admin_api = discount_eligibility_to_admin_api(result)
+    assert member_api.model_dump(by_alias=True) == {"discountCode": "mission_aligned", "discountPercent": Decimal("30")}
+    assert admin_api.model_dump(by_alias=True) == {"discountCode": "mission_aligned", "discountPercent": Decimal("30")}
+
+    none_result = DiscountEligibilityResult(discount_code=None, discount_percent=Decimal("0"))
+    none_api = discount_eligibility_to_member_api(none_result)
+    assert none_api.discount_code is None
+    assert none_api.discount_percent == Decimal("0")
 
 
 def test_ministry_mappers():

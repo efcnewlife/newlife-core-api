@@ -9,7 +9,9 @@ from dependency_injector.wiring import Provide, inject
 from fastapi import Depends, Query, status
 
 from portal.application.facility.booking_service import BookingService
+from portal.application.facility.discount_eligibility_service import DiscountEligibilityService
 from portal.application.facility.mappers import (
+    admin_discount_eligibility_to_command,
     booking_detail_to_api,
     booking_page_to_api,
     booking_pages_query_to_command,
@@ -18,6 +20,7 @@ from portal.application.facility.mappers import (
     cancel_booking_to_command,
     create_booking_to_command,
     create_id_result_to_api,
+    discount_eligibility_to_admin_api,
     update_booking_to_command,
 )
 from portal.container import Container
@@ -32,6 +35,8 @@ from portal.serializers.admin.v1.facility.booking import (
     AdminBookingRange,
     AdminBookingRangeQuery,
     AdminBookingUpdate,
+    AdminDiscountEligibilityRequest,
+    AdminDiscountEligibilityResponse,
 )
 from portal.serializers.mixins.model_mixins import UUIDBaseModel
 
@@ -52,6 +57,21 @@ async def get_booking_range(
 ):
     result = await booking_service.get_booking_range(command=booking_range_query_to_command(query_model))
     return booking_range_to_api(result)
+
+
+@router.post(
+    path="/discount-eligibility",
+    status_code=status.HTTP_200_OK,
+    response_model=AdminDiscountEligibilityResponse,
+    response_model_by_alias=True,
+    permissions=[Permission.FACILITY_BOOKING.read],
+)
+@inject
+async def evaluate_discount_eligibility(
+    body: AdminDiscountEligibilityRequest, discount_eligibility_service: DiscountEligibilityService = Depends(Provide[Container.discount_eligibility_service])
+):
+    result = await discount_eligibility_service.evaluate(command=admin_discount_eligibility_to_command(body))
+    return discount_eligibility_to_admin_api(result)
 
 
 @router.post(path="", status_code=status.HTTP_201_CREATED, response_model=UUIDBaseModel, permissions=[Permission.FACILITY_BOOKING.create])

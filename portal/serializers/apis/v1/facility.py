@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 
 from portal.domain.facility.booking_title import BookingTitle, OptionalBookingTitle
 from portal.domain.facility.cancellation_reason import MemberCancellationReason
-from portal.domain.facility.constants import PREVIEW_QUOTE_MAX_LINES, MyBookingsSection
+from portal.domain.facility.constants import PREVIEW_QUOTE_MAX_LINES, BookingType, MyBookingsSection
 from portal.serializers.mixins.base import PaginationBaseResponseModel
 from portal.serializers.mixins.model_mixins import UUIDBaseModel
 
@@ -237,6 +237,20 @@ class MemberPreviewQuoteResponse(BaseModel):
     quoted_amount: Decimal = Field(..., serialization_alias="quotedAmount")
     currency: str = Field(...)
     room_lines: list[MemberPreviewQuoteRoomLineResult] = Field(default_factory=list, serialization_alias="roomLines")
+
+
+class MemberDiscountEligibilityRequest(BaseModel):
+    """Member preflight for the effective Booking Discount."""
+
+    booking_type: BookingType = Field(...)
+    ministry_id: Optional[UUID] = Field(default=None)
+
+
+class MemberDiscountEligibilityResponse(BaseModel):
+    """Effective Booking Discount for a member proposal."""
+
+    discount_code: Optional[str] = Field(default=None, serialization_alias="discountCode")
+    discount_percent: Decimal = Field(..., serialization_alias="discountPercent")
 
 
 class MemberBookingDraftLineInput(BaseModel):

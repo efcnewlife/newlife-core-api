@@ -8,6 +8,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
+from portal.domain.facility.discount_percent import DiscountPercent
 from portal.serializers.mixins.model_mixins import UUIDBaseModel
 
 
@@ -32,7 +33,7 @@ class AdminDiscountRuleWrite(BaseModel):
     """Discount rule write."""
 
     code: str = Field(..., description="Discount code")
-    percent_off: Decimal = Field(..., description="Percent off")
+    percent_off: DiscountPercent = Field(..., description="Percent off")
     is_active: bool = Field(True, description="Active flag")
     description: Optional[str] = Field(None, description="Description")
 

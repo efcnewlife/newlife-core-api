@@ -13,16 +13,19 @@ from portal.application.facility.availability_service import AvailabilityService
 from portal.application.facility.booking_draft_service import BookingDraftService
 from portal.application.facility.booking_service import BookingService
 from portal.application.facility.commands import BookingRoomLineCommand, CancelBookingCommand, CreateBookingCommand, RoomAvailabilityQueryCommand
+from portal.application.facility.discount_eligibility_service import DiscountEligibilityService
 from portal.application.facility.mappers import (
     booking_draft_result_to_api,
     cancel_recurring_booking_series_to_command,
     create_id_result_to_api,
     create_recurring_booking_series_to_command,
+    discount_eligibility_to_member_api,
     member_booking_detail_to_api,
     member_booking_draft_create_to_command,
     member_booking_draft_update_to_command,
     member_browse_page_to_api,
     member_browse_query_to_command,
+    member_discount_eligibility_to_command,
     member_preview_quote_result_to_api,
     member_preview_quote_to_command,
     member_recurring_series_draft_create_to_command,
@@ -49,6 +52,8 @@ from portal.serializers.apis.v1.facility import (
     MemberBookingDraftDetail,
     MemberBookingDraftUpdate,
     MemberBookingTitleUpdate,
+    MemberDiscountEligibilityRequest,
+    MemberDiscountEligibilityResponse,
     MemberPreviewQuoteRequest,
     MemberPreviewQuoteResponse,
     MemberRecurringBookingPreview,
@@ -84,6 +89,15 @@ async def get_rooms_availability(
 async def preview_quote(model: MemberPreviewQuoteRequest, booking_service: BookingService = Depends(Provide[Container.booking_service])):
     result = await booking_service.preview_quote_for_member(member_preview_quote_to_command(model))
     return member_preview_quote_result_to_api(result)
+
+
+@router.post(path="/discount-eligibility", status_code=status.HTTP_200_OK, response_model=MemberDiscountEligibilityResponse, response_model_by_alias=True)
+@inject
+async def evaluate_discount_eligibility(
+    model: MemberDiscountEligibilityRequest, discount_eligibility_service: DiscountEligibilityService = Depends(Provide[Container.discount_eligibility_service])
+):
+    result = await discount_eligibility_service.evaluate(member_discount_eligibility_to_command(model))
+    return discount_eligibility_to_member_api(result)
 
 
 @router.get(path="/bookings/mine", status_code=status.HTTP_200_OK, response_model=MemberBookingBrowsePage, response_model_by_alias=True)

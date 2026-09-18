@@ -73,13 +73,13 @@ facility_discount_seed_rows: list[dict[str, Any]] = [
         "code": RentalDiscountCode.RECURRING_WEEKLY_MONTHLY.value,
         "percent_off": Decimal("20.00"),
         "is_active": True,
-        "description": "20% discount for activities recurring weekly or monthly (policy 4b)",
+        "description": "20% Recurring Discount for Recurring Bookings that do not receive the Ministry Discount",
     },
     {
         "code": RentalDiscountCode.MISSION_ALIGNED.value,
         "percent_off": Decimal("30.00"),
         "is_active": True,
-        "description": "30% discount for activities aligned with church mission and vision (policy 4c)",
+        "description": "30% Ministry Discount for an Active Ministry Booking whose Booker is a current primary or secondary member",
     },
 ]
 

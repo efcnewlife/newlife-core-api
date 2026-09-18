@@ -250,6 +250,13 @@ class DiscountRuleListResult(BaseModel):
     items: list[DiscountRuleResult] = Field(default_factory=list)
 
 
+class DiscountEligibilityResult(BaseModel):
+    """Effective Booking Discount for a proposed booking type, Ministry, and Booker."""
+
+    discount_code: Optional[str] = Field(default=None)
+    discount_percent: Decimal = Field(...)
+
+
 class SurchargeResult(UUIDBaseModel):
     """Surcharge row."""
 

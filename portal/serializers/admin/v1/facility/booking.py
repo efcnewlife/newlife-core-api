@@ -10,6 +10,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from portal.domain.facility.booking_title import BookingTitle
+from portal.domain.facility.constants import BookingType
 from portal.serializers.mixins.base import GenericQueryBaseModel, PaginationBaseResponseModel
 from portal.serializers.mixins.model_mixins import UUIDBaseModel
 
@@ -157,3 +158,18 @@ class AdminBookingCancel(BaseModel):
 
     scope: str = Field(default="single")
     cancel_reason: Optional[str] = Field(default=None)
+
+
+class AdminDiscountEligibilityRequest(BaseModel):
+    """Admin preflight for the effective Booking Discount."""
+
+    booking_type: BookingType = Field(...)
+    ministry_id: Optional[UUID] = Field(default=None)
+    user_id: UUID = Field(..., description="On-behalf Booker")
+
+
+class AdminDiscountEligibilityResponse(BaseModel):
+    """Effective Booking Discount for an admin on-behalf proposal."""
+
+    discount_code: Optional[str] = Field(default=None, serialization_alias="discountCode")
+    discount_percent: Decimal = Field(..., serialization_alias="discountPercent")
