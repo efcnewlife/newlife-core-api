@@ -23,6 +23,8 @@ from portal.application.facility.results import (
     OverrideLogResult,
     PendingPaymentSeriesListItemResult,
     RecurringOccupyingBookingResult,
+    RecurringSeriesDraftDetailResult,
+    RecurringSeriesDraftStoredRoomResult,
     RentalRateResult,
     RoomDetailResult,
     RoomSlotTemplateResult,
@@ -787,6 +789,67 @@ class StubBookingDraftRepository:
 
     async def get_detail(self, booking_draft_id: UUID) -> Optional[BookingDraftDetailResult]:
         return self.draft_by_id.get(booking_draft_id)
+
+
+class StubRecurringSeriesDraftRepository:
+    """In-memory Recurring Series Draft stub."""
+
+    def __init__(self, draft_by_id: dict[UUID, RecurringSeriesDraftDetailResult] | None = None):
+        self.draft_by_id = draft_by_id or {}
+        self.insert_draft_calls: list[dict] = []
+        self.insert_room_calls: list[list[dict]] = []
+        self.update_header_calls: list[dict] = []
+        self.replace_room_calls: list[list[dict]] = []
+        self.delete_draft_calls: list[UUID] = []
+        self.delete_all_for_user_calls: list[UUID] = []
+
+    async def insert_draft(self, payload: dict) -> None:
+        self.insert_draft_calls.append(payload)
+        self.draft_by_id[payload["id"]] = RecurringSeriesDraftDetailResult(
+            id=payload["id"],
+            user_id=payload["user_id"],
+            title=payload.get("title"),
+            ministry_id=payload.get("ministry_id"),
+            first_occurrence_date=payload["first_occurrence_date"],
+            last_occurrence_date=payload["last_occurrence_date"],
+            local_start_time=payload["local_start_time"],
+            local_end_time=payload["local_end_time"],
+            is_mission_aligned=payload.get("is_mission_aligned", False),
+            remark=payload.get("remark"),
+            surcharge_codes=list(payload.get("surcharge_codes") or []),
+            excluded_dates=list(payload.get("excluded_dates") or []),
+            rooms=[],
+        )
+
+    async def insert_rooms(self, room_rows: list[dict]) -> None:
+        self.insert_room_calls.append(room_rows)
+        for row in room_rows:
+            draft = self.draft_by_id.get(row["series_draft_id"])
+            if draft is not None:
+                draft.rooms.append(RecurringSeriesDraftStoredRoomResult(facility_id=row["facility_id"], sequence=row["sequence"]))
+
+    async def update_header(self, series_draft_id: UUID, values: dict) -> None:
+        self.update_header_calls.append(values)
+        draft = self.draft_by_id.get(series_draft_id)
+        if draft is not None:
+            self.draft_by_id[series_draft_id] = draft.model_copy(update=values)
+
+    async def replace_rooms(self, series_draft_id: UUID, room_rows: list[dict]) -> None:
+        self.replace_room_calls.append(room_rows)
+        draft = self.draft_by_id.get(series_draft_id)
+        if draft is not None:
+            draft.rooms = [RecurringSeriesDraftStoredRoomResult(facility_id=row["facility_id"], sequence=row["sequence"]) for row in room_rows]
+
+    async def delete_draft(self, series_draft_id: UUID) -> None:
+        self.delete_draft_calls.append(series_draft_id)
+        self.draft_by_id.pop(series_draft_id, None)
+
+    async def delete_all_for_user(self, user_id: UUID) -> None:
+        self.delete_all_for_user_calls.append(user_id)
+        self.draft_by_id = {draft_id: draft for draft_id, draft in self.draft_by_id.items() if draft.user_id != user_id}
+
+    async def get_detail(self, series_draft_id: UUID) -> Optional[RecurringSeriesDraftDetailResult]:
+        return self.draft_by_id.get(series_draft_id)
 
 
 class StubPricingService:

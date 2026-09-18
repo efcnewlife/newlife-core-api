@@ -37,6 +37,7 @@ from portal.application.facility.results import (
     RecurringOverrideNotification,
     RecurringOverrideNotificationItem,
     RecurringPaymentHoldExpiryNotification,
+    RecurringProposalEvaluationResult,
     RoomBlackoutResult,
 )
 from portal.application.system.setting_service import SettingService
@@ -179,6 +180,71 @@ class RecurringBookingService:
         prepared = await self._prepare_series(command)
         conflicts = await self._collect_conflicts(command, prepared)
         return RecurringBookingPreviewResult(conflicts=conflicts)
+
+    @distributed_trace()
+    async def evaluate_proposal(self, command: CreateRecurringBookingSeriesCommand) -> RecurringProposalEvaluationResult:
+        hold_hours = await self._setting_service.get_pending_payment_hold_hours()
+        payment_hold_expires_at = self._now_utc() + timedelta(hours=hold_hours)
+        try:
+            prepared = await self._prepare_series(command)
+        except ForbiddenException:
+            raise
+        except BadRequestException as error:
+            return self._unevaluable_proposal(error, hold_hours, payment_hold_expires_at)
+
+        conflicts = await self._collect_conflicts(command, prepared)
+        generated_dates = {item.occurrence_date for item in prepared.occurrences}
+        conflict_dates = {item.occurrence_date for item in conflicts}
+        excluded_dates = set(command.excluded_dates)
+        if excluded_dates - generated_dates or excluded_dates - conflict_dates:
+            return self._unevaluable_proposal(
+                BadRequestException(
+                    detail="excluded_dates must be occurrence dates that currently conflict", error_code=FacilityErrorCode.RECURRING_INVALID_EXCLUSION.value
+                ),
+                hold_hours,
+                payment_hold_expires_at,
+                conflicts=conflicts,
+            )
+
+        remaining = [item for item in prepared.occurrences if item.occurrence_date not in excluded_dates]
+        min_weeks = await self._setting_service.get_min_recurring_booking_weeks()
+        if len(remaining) < min_weeks:
+            return self._unevaluable_proposal(
+                BadRequestException(
+                    detail=f"Recurring Booking Series requires at least {min_weeks} weekly occurrences",
+                    error_code=FacilityErrorCode.RECURRING_MIN_OCCURRENCES.value,
+                ),
+                hold_hours,
+                payment_hold_expires_at,
+                conflicts=conflicts,
+                occurrence_count=len(remaining),
+            )
+
+        remaining_conflicts = [item for item in conflicts if item.occurrence_date not in excluded_dates]
+        blocking = [item for item in remaining_conflicts if not item.is_overridable]
+        quote = await self._quote_remaining_occurrences(command, remaining)
+        invalidity_code = None
+        invalidity_detail = None
+        if blocking:
+            invalidity_code, invalidity_detail = self._blocking_conflict_invalidity(blocking[0])
+        elif not command.title:
+            invalidity_code = FacilityErrorCode.BOOKING_TITLE_INVALID.value
+            invalidity_detail = "Title is required"
+        return RecurringProposalEvaluationResult(
+            is_confirmable=invalidity_code is None,
+            conflicts=conflicts,
+            quoted_amount=quote["quoted_amount"],
+            subtotal_amount=quote["subtotal_amount"],
+            discount_percent=quote["discount_percent"],
+            discount_amount=quote["discount_amount"],
+            surcharge_amount=quote["surcharge_amount"],
+            currency=quote["currency"],
+            occurrence_count=len(remaining),
+            pending_payment_hold_hours=hold_hours,
+            payment_hold_expires_at=payment_hold_expires_at,
+            invalidity_code=invalidity_code,
+            invalidity_detail=invalidity_detail,
+        )
 
     @distributed_trace()
     async def get_window_status(self, first_occurrence_date: Optional[date] = None) -> RecurringBookingWindowStatusResult:
@@ -714,6 +780,78 @@ class RecurringBookingService:
             self._raise_remaining_conflict(blocking[0])
         overridable = [item for item in remaining_conflicts if item.is_overridable]
         return remaining, overridable
+
+    @staticmethod
+    def _unevaluable_proposal(
+        error: BadRequestException,
+        hold_hours: int,
+        payment_hold_expires_at: datetime,
+        *,
+        conflicts: Optional[list[RecurringBookingConflictResult]] = None,
+        occurrence_count: int = 0,
+    ) -> RecurringProposalEvaluationResult:
+        return RecurringProposalEvaluationResult(
+            is_confirmable=False,
+            conflicts=conflicts or [],
+            quoted_amount=Decimal("0"),
+            subtotal_amount=Decimal("0"),
+            discount_percent=Decimal("0"),
+            discount_amount=Decimal("0"),
+            surcharge_amount=Decimal("0"),
+            currency="CAD",
+            occurrence_count=occurrence_count,
+            pending_payment_hold_hours=hold_hours,
+            payment_hold_expires_at=payment_hold_expires_at,
+            invalidity_code=error.error_code,
+            invalidity_detail=error.detail,
+        )
+
+    async def _quote_remaining_occurrences(self, command: CreateRecurringBookingSeriesCommand, remaining: list[_PreparedOccurrence]) -> dict:
+        series_quoted = Decimal("0")
+        series_subtotal = Decimal("0")
+        series_discount = Decimal("0")
+        series_surcharge = Decimal("0")
+        currency = "CAD"
+        discount_percent = Decimal("0")
+        for item in remaining:
+            billed_hours = self._billed_hours(item.start_at, item.end_at)
+            quote_lines = [PreviewQuoteRoomLineCommand(facility_id=room.facility_id, billed_hours=billed_hours) for room in command.rooms]
+            quote = await self._pricing_service.preview_quote(
+                PreviewQuoteCommand(
+                    booking_type=BookingType.RECURRING,
+                    is_mission_aligned=command.is_mission_aligned,
+                    currency="CAD",
+                    as_of_date=item.occurrence_date,
+                    room_lines=quote_lines,
+                    surcharge_codes=command.surcharge_codes,
+                    ministry_id=command.ministry_id,
+                )
+            )
+            series_quoted += quote.quoted_amount
+            series_subtotal += quote.subtotal_amount
+            series_discount += quote.discount_amount
+            series_surcharge += quote.surcharge_amount
+            currency = quote.currency
+            discount_percent = quote.discount_percent
+        return {
+            "quoted_amount": series_quoted,
+            "subtotal_amount": series_subtotal,
+            "discount_percent": discount_percent,
+            "discount_amount": series_discount,
+            "surcharge_amount": series_surcharge,
+            "currency": currency,
+        }
+
+    @staticmethod
+    def _blocking_conflict_invalidity(conflict: RecurringBookingConflictResult) -> tuple[str, str]:
+        facility_id = conflict.facility_ids[0] if conflict.facility_ids else None
+        if conflict.kind == RecurringConflictKind.MINISTRY.value:
+            return FacilityErrorCode.RECURRING_MINISTRY_CONFLICT.value, "Room is occupied by another Ministry Series"
+        if conflict.kind == RecurringConflictKind.OCCUPANCY.value:
+            return BookingErrorCode.SCHEDULING_CONFLICT.value, f"Room {facility_id} has a scheduling conflict"
+        if conflict.kind == RecurringConflictKind.BLACKOUT.value:
+            return BookingErrorCode.ROOM_BLACKOUT.value, f"Room {facility_id} is closed for the selected time"
+        return FacilityErrorCode.RECURRING_WEEKLY_QUOTA.value, "Booker already has a Rental Booking in that facility-local week"
 
     @staticmethod
     def _raise_remaining_conflict(conflict: RecurringBookingConflictResult) -> None:

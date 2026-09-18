@@ -545,6 +545,30 @@ class BookingDraftResult(UUIDBaseModel):
     currency: str = Field(...)
 
 
+class RecurringSeriesDraftStoredRoomResult(BaseModel):
+    """One persisted Recurring Series Draft room, as read from the repository."""
+
+    facility_id: UUID = Field(...)
+    sequence: int = Field(default=0)
+
+
+class RecurringSeriesDraftDetailResult(UUIDBaseModel):
+    """Persisted Recurring Series Draft proposal, as read from the repository."""
+
+    user_id: UUID = Field(...)
+    title: Optional[str] = Field(default=None)
+    ministry_id: Optional[UUID] = Field(default=None)
+    first_occurrence_date: DateType = Field(...)
+    last_occurrence_date: DateType = Field(...)
+    local_start_time: time = Field(...)
+    local_end_time: time = Field(...)
+    is_mission_aligned: bool = Field(default=False)
+    remark: Optional[str] = Field(default=None)
+    surcharge_codes: list[str] = Field(default_factory=list)
+    excluded_dates: list[DateType] = Field(default_factory=list)
+    rooms: list[RecurringSeriesDraftStoredRoomResult] = Field(default_factory=list)
+
+
 class RecurringBookingOccurrenceResult(UUIDBaseModel):
     """One materialized Booking Occurrence in a Recurring Booking Series."""
 
@@ -692,6 +716,53 @@ class RecurringBookingConflictResult(BaseModel):
     ministry_id: Optional[UUID] = Field(default=None)
     ministry_steward_display_name: Optional[str] = Field(default=None)
     ministry_steward_email: Optional[str] = Field(default=None)
+
+
+class RecurringProposalEvaluationResult(BaseModel):
+    """Live Recurring Booking Series proposal evaluation; does not persist a Series."""
+
+    is_confirmable: bool = Field(...)
+    conflicts: list[RecurringBookingConflictResult] = Field(default_factory=list)
+    quoted_amount: Decimal = Field(...)
+    subtotal_amount: Decimal = Field(...)
+    discount_percent: Decimal = Field(...)
+    discount_amount: Decimal = Field(...)
+    surcharge_amount: Decimal = Field(...)
+    currency: str = Field(...)
+    occurrence_count: int = Field(...)
+    pending_payment_hold_hours: int = Field(...)
+    payment_hold_expires_at: datetime = Field(...)
+    invalidity_code: Optional[str] = Field(default=None)
+    invalidity_detail: Optional[str] = Field(default=None)
+
+
+class RecurringSeriesDraftResult(UUIDBaseModel):
+    """Recurring Series Draft with live revalidation, quote, and payment-hold information."""
+
+    title: Optional[str] = Field(default=None)
+    ministry_id: Optional[UUID] = Field(default=None)
+    first_occurrence_date: DateType = Field(...)
+    last_occurrence_date: DateType = Field(...)
+    local_start_time: time = Field(...)
+    local_end_time: time = Field(...)
+    is_mission_aligned: bool = Field(default=False)
+    remark: Optional[str] = Field(default=None)
+    surcharge_codes: list[str] = Field(default_factory=list)
+    excluded_dates: list[DateType] = Field(default_factory=list)
+    rooms: list[RecurringSeriesDraftStoredRoomResult] = Field(default_factory=list)
+    conflicts: list[RecurringBookingConflictResult] = Field(default_factory=list)
+    is_confirmable: bool = Field(...)
+    invalidity_code: Optional[str] = Field(default=None)
+    invalidity_detail: Optional[str] = Field(default=None)
+    quoted_amount: Decimal = Field(...)
+    subtotal_amount: Decimal = Field(...)
+    discount_percent: Decimal = Field(...)
+    discount_amount: Decimal = Field(...)
+    surcharge_amount: Decimal = Field(...)
+    currency: str = Field(...)
+    occurrence_count: int = Field(...)
+    pending_payment_hold_hours: int = Field(...)
+    payment_hold_expires_at: datetime = Field(...)
 
 
 class RecurringBookingPreviewResult(BaseModel):

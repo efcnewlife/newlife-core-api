@@ -369,6 +369,26 @@ class UpdateBookingDraftCommand(BaseModel):
     lines: list[BookingDraftLineCommand] = Field(default_factory=list)
 
 
+class CreateRecurringSeriesDraftCommand(BaseModel):
+    """Create a Recurring Series Draft from a preview-ready weekly proposal."""
+
+    title: OptionalBookingTitle = Field(default=None)
+    ministry_id: Optional[UUID] = Field(default=None)
+    first_occurrence_date: date = Field(...)
+    last_occurrence_date: date = Field(...)
+    local_start_time: time = Field(...)
+    local_end_time: time = Field(...)
+    is_mission_aligned: bool = Field(default=False)
+    rooms: list[BookingRoomLineCommand] = Field(default_factory=list)
+    surcharge_codes: list[str] = Field(default_factory=list)
+    remark: Optional[str] = Field(default=None)
+    excluded_dates: list[date] = Field(default_factory=list)
+
+
+class UpdateRecurringSeriesDraftCommand(CreateRecurringSeriesDraftCommand):
+    """Replace a Recurring Series Draft proposal in place (last-write-wins; no merge)."""
+
+
 __all__ = [
     "ReplaceMinistryMembersCommand",
     "BookingDraftLineCommand",
@@ -381,6 +401,7 @@ __all__ = [
     "CreateBookingCommand",
     "CreateBookingDraftCommand",
     "CreateRecurringBookingSeriesCommand",
+    "CreateRecurringSeriesDraftCommand",
     "CreateDiscountRuleCommand",
     "CreateMinistryCommand",
     "CreateRentalRateCommand",
@@ -398,6 +419,7 @@ __all__ = [
     "RoomAvailabilityQueryCommand",
     "UpdateBookingCommand",
     "UpdateBookingDraftCommand",
+    "UpdateRecurringSeriesDraftCommand",
     "UpdateDiscountRuleCommand",
     "UpdateMinistryCommand",
     "UpdateRentalRateCommand",

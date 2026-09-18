@@ -62,6 +62,7 @@ class RootContainer(containers.DeclarativeContainer):
     booking_service = admin.facility.booking_service
     booking_draft_service = admin.facility.booking_draft_service
     recurring_booking_service = admin.facility.recurring_booking_service
+    recurring_series_draft_service = admin.facility.recurring_series_draft_service
     availability_service = admin.facility.availability_service
     override_log_service = admin.facility.override_log_service
 

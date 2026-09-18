@@ -33,6 +33,7 @@ from portal.application.facility.mappers import (
     member_browse_booking_to_api,
     member_preview_quote_result_to_api,
     member_preview_quote_to_command,
+    member_recurring_series_draft_create_to_command,
     override_log_pages_query_to_command,
     pages_query_to_command,
     pending_payment_series_list_to_admin_api,
@@ -41,6 +42,7 @@ from portal.application.facility.mappers import (
     recurring_booking_preview_to_member_api,
     recurring_booking_series_to_admin_api,
     recurring_booking_series_to_member_api,
+    recurring_series_draft_result_to_api,
     room_availability_item_to_api,
     room_detail_to_api,
     update_booking_to_command,
@@ -65,6 +67,8 @@ from portal.application.facility.results import (
     RecurringBookingOccurrenceResult,
     RecurringBookingPreviewResult,
     RecurringBookingSeriesResult,
+    RecurringSeriesDraftResult,
+    RecurringSeriesDraftStoredRoomResult,
     RoomAvailabilityResult,
     RoomDetailResult,
     TranslationItemResult,
@@ -92,6 +96,7 @@ from portal.serializers.apis.v1.facility import (
     MemberRecurringBookingSeriesCreate,
     MemberRecurringBookingSeriesProposal,
     MemberRecurringBookingSeriesRoomInput,
+    MemberRecurringSeriesDraftCreate,
 )
 from portal.serializers.mixins import DeleteBaseModel, GenericQueryBaseModel
 
@@ -492,6 +497,53 @@ def test_create_recurring_booking_series_to_command_preview_proposal_has_no_excl
     )
     command = create_recurring_booking_series_to_command(model)
     assert command.excluded_dates == []
+
+
+def test_member_recurring_series_draft_create_to_command_keeps_title_optional_and_exclusions():
+    room_id = uuid4()
+    model = MemberRecurringSeriesDraftCreate(
+        first_occurrence_date=date(2026, 1, 6),
+        last_occurrence_date=date(2026, 1, 27),
+        local_start_time=time(10, 0),
+        local_end_time=time(12, 0),
+        rooms=[MemberRecurringBookingSeriesRoomInput(facility_id=room_id, sequence=0)],
+        excluded_dates=[date(2026, 1, 13)],
+    )
+    command = member_recurring_series_draft_create_to_command(model)
+    assert command.title is None
+    assert command.excluded_dates == [date(2026, 1, 13)]
+    assert command.rooms[0].facility_id == room_id
+
+
+def test_recurring_series_draft_result_to_api_exposes_confirmability_without_widening_booking_draft():
+    draft_id = uuid4()
+    room_id = uuid4()
+    result = RecurringSeriesDraftResult(
+        id=draft_id,
+        title="Weekly choir",
+        first_occurrence_date=date(2026, 1, 6),
+        last_occurrence_date=date(2026, 1, 27),
+        local_start_time=time(10, 0),
+        local_end_time=time(12, 0),
+        rooms=[RecurringSeriesDraftStoredRoomResult(facility_id=room_id, sequence=0)],
+        is_confirmable=True,
+        quoted_amount=Decimal("400"),
+        subtotal_amount=Decimal("400"),
+        discount_percent=Decimal("0"),
+        discount_amount=Decimal("0"),
+        surcharge_amount=Decimal("0"),
+        currency="CAD",
+        occurrence_count=4,
+        pending_payment_hold_hours=72,
+        payment_hold_expires_at=datetime(2025, 12, 11, 17, 0, tzinfo=timezone.utc),
+    )
+    dumped = recurring_series_draft_result_to_api(result).model_dump(by_alias=True)
+    assert dumped["id"] == str(draft_id)
+    assert dumped["isConfirmable"] is True
+    assert dumped["quotedAmount"] == Decimal("400")
+    assert dumped["pendingPaymentHoldHours"] == 72
+    assert dumped["rooms"][0]["facilityId"] == room_id
+    assert "lines" not in dumped
 
 
 def test_recurring_booking_preview_to_member_api_uses_camel_case():

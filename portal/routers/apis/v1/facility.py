@@ -25,14 +25,18 @@ from portal.application.facility.mappers import (
     member_browse_query_to_command,
     member_preview_quote_result_to_api,
     member_preview_quote_to_command,
+    member_recurring_series_draft_create_to_command,
+    member_recurring_series_draft_update_to_command,
     participant_series_detail_to_api,
     recurring_booking_preview_to_member_api,
     recurring_booking_series_to_member_api,
     recurring_booking_window_status_to_api,
+    recurring_series_draft_result_to_api,
     room_availability_list_to_api,
     update_title_to_command,
 )
 from portal.application.facility.recurring_booking_service import RecurringBookingService
+from portal.application.facility.recurring_series_draft_service import RecurringSeriesDraftService
 from portal.container import Container
 from portal.routers.auth_router import AuthRouter
 from portal.serializers.apis.v1.facility import (
@@ -54,6 +58,9 @@ from portal.serializers.apis.v1.facility import (
     MemberRecurringBookingSeriesProposal,
     MemberRecurringBookingSeriesTitleUpdate,
     MemberRecurringBookingWindowStatus,
+    MemberRecurringSeriesDraftCreate,
+    MemberRecurringSeriesDraftDetail,
+    MemberRecurringSeriesDraftUpdate,
     MemberRoomAvailabilityList,
 )
 from portal.serializers.mixins.model_mixins import UUIDBaseModel
@@ -221,3 +228,65 @@ async def update_booking_draft(
 ):
     result = await booking_draft_service.update_draft(booking_draft_id, member_booking_draft_update_to_command(model))
     return booking_draft_result_to_api(result)
+
+
+@router.post(path="/booking-series-drafts", status_code=status.HTTP_201_CREATED, response_model=UUIDBaseModel)
+@inject
+async def create_booking_series_draft(
+    model: MemberRecurringSeriesDraftCreate,
+    recurring_series_draft_service: RecurringSeriesDraftService = Depends(Provide[Container.recurring_series_draft_service]),
+):
+    result = await recurring_series_draft_service.create_draft(member_recurring_series_draft_create_to_command(model))
+    return create_id_result_to_api(result)
+
+
+@router.delete(path="/booking-series-drafts", status_code=status.HTTP_204_NO_CONTENT)
+@inject
+async def delete_my_booking_series_drafts(
+    recurring_series_draft_service: RecurringSeriesDraftService = Depends(Provide[Container.recurring_series_draft_service]),
+):
+    await recurring_series_draft_service.delete_all_my_drafts()
+
+
+@router.get(
+    path="/booking-series-drafts/{series_draft_id}",
+    status_code=status.HTTP_200_OK,
+    response_model=MemberRecurringSeriesDraftDetail,
+    response_model_by_alias=True,
+)
+@inject
+async def get_booking_series_draft(
+    series_draft_id: UUID, recurring_series_draft_service: RecurringSeriesDraftService = Depends(Provide[Container.recurring_series_draft_service])
+):
+    result = await recurring_series_draft_service.get_draft(series_draft_id)
+    return recurring_series_draft_result_to_api(result)
+
+
+@router.patch(
+    path="/booking-series-drafts/{series_draft_id}",
+    status_code=status.HTTP_200_OK,
+    response_model=MemberRecurringSeriesDraftDetail,
+    response_model_by_alias=True,
+)
+@inject
+async def update_booking_series_draft(
+    series_draft_id: UUID,
+    model: MemberRecurringSeriesDraftUpdate,
+    recurring_series_draft_service: RecurringSeriesDraftService = Depends(Provide[Container.recurring_series_draft_service]),
+):
+    result = await recurring_series_draft_service.update_draft(series_draft_id, member_recurring_series_draft_update_to_command(model))
+    return recurring_series_draft_result_to_api(result)
+
+
+@router.post(
+    path="/booking-series-drafts/{series_draft_id}/confirm",
+    status_code=status.HTTP_201_CREATED,
+    response_model=MemberRecurringBookingSeriesDetail,
+    response_model_by_alias=True,
+)
+@inject
+async def confirm_booking_series_draft(
+    series_draft_id: UUID, recurring_series_draft_service: RecurringSeriesDraftService = Depends(Provide[Container.recurring_series_draft_service])
+):
+    result = await recurring_series_draft_service.confirm_draft(series_draft_id)
+    return recurring_booking_series_to_member_api(result)

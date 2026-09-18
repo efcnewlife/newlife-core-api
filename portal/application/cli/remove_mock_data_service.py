@@ -1,8 +1,8 @@
 """
 `remove-mock-data` orchestration: hard-delete every `@test.local` Mock user and all
 QA business data it derived — Bookings, Recurring Booking Series, Booking Drafts,
-Ministries, steward/position relationships, and `mock:`-marked slot templates and
-Blackouts — while preserving catalog data (locales, RBAC, positions, rooms, rates,
+Recurring Series Drafts, Ministries, steward/position relationships, and `mock:`-marked
+slot templates and Blackouts — while preserving catalog data (locales, RBAC, positions, rooms, rates,
 system settings, Legal Documents, ...) and CSV archives.
 
 Never guesses: a candidate Ministry that also has a non-Mock (or, when opted in,
@@ -24,6 +24,7 @@ from portal.models import (
     FacilityBooking,
     FacilityBookingDraft,
     FacilityBookingSeries,
+    FacilityBookingSeriesDraft,
     FacilityRoomBlackout,
     FacilityRoomSlotTemplate,
     OrgMinistry,
@@ -52,6 +53,7 @@ _MINISTRY_SCOPED_MODELS = (
     ("non-Mock Booking", FacilityBooking, (FacilityBooking.user_id,)),
     ("non-Mock Recurring Booking Series", FacilityBookingSeries, (FacilityBookingSeries.user_id,)),
     ("non-Mock Booking Draft", FacilityBookingDraft, (FacilityBookingDraft.user_id,)),
+    ("non-Mock Recurring Series Draft", FacilityBookingSeriesDraft, (FacilityBookingSeriesDraft.user_id,)),
     ("non-Mock Ministry Approval decision", OrgMinistryApproval, (OrgMinistryApproval.requested_by_id, OrgMinistryApproval.resolved_by_id)),
 )
 
@@ -213,6 +215,9 @@ class RemoveMockDataService:
         booking_count = await self._delete_ministry_scoped(FacilityBooking, scoped_user_ids=scoped_user_ids, candidate_ministry_ids=candidate_ministry_ids)
         series_count = await self._delete_ministry_scoped(FacilityBookingSeries, scoped_user_ids=scoped_user_ids, candidate_ministry_ids=candidate_ministry_ids)
         draft_count = await self._delete_ministry_scoped(FacilityBookingDraft, scoped_user_ids=scoped_user_ids, candidate_ministry_ids=candidate_ministry_ids)
+        draft_count += await self._delete_ministry_scoped(
+            FacilityBookingSeriesDraft, scoped_user_ids=scoped_user_ids, candidate_ministry_ids=candidate_ministry_ids
+        )
 
         if candidate_ministry_ids:
             await self._session.delete(OrgMinistry).where(OrgMinistry.id.in_(candidate_ministry_ids)).execute()
