@@ -30,6 +30,34 @@ _Avoid_: instance when the Booking aggregate is meant, assuming every Booking be
 The user who owns the booking (`user_id`). Ministry membership and booker-facing rules apply to this person, not to whoever submitted the create request.
 _Avoid_: owner (ambiguous), customer, member (role-specific), on-behalf user
 
+**Booking Participant**:
+A user associated with a Booking as its Booker or as the current primary or secondary member of the Booking's Active Ministry. A Booking Participant may view the Booking but does not gain Booker ownership.
+_Avoid_: Booker as every participant, delegated Booker, Ministry-owned Booking
+
+**Booker self-service authority**:
+The authority reserved for the Booker to cancel, view payment instructions for, or rebook an eligible Booking through member-facing flows. Booking Participants who are not the Booker have view-only access.
+_Avoid_: Ministry-member cancellation authority, participant-as-Booker, shared self-service control
+
+**Current Ministry Booking Participant**:
+A Booking Participant whose current primary or secondary membership of the Booking's Active Ministry grants view access to a Ministry-associated Booking. Leaving the Ministry removes that view access, including for historical Bookings.
+_Avoid_: historical membership entitlement, permanent participant archive, former-member view access
+
+**Participant Booking detail**:
+The complete scheduling and lifecycle information a Booking Participant may view: rooms, times, status, reasons, remark, price, and the Booker's name and email. Payment instructions remain Booker-only and Booker identity appears in detail rather than a list card.
+_Avoid_: anonymous Booking detail, participant payment authority, hiding Booker identity
+
+**My Bookings**:
+The member-facing collection of Bookings in which the authenticated user is a Booking Participant. Its collapsible Upcoming, Overridden, Past, and Cancelled or Expired sections organize Booking records; Upcoming is initially expanded. Recurring Booking Occurrences are presented under their Recurring Booking Series, and each section is paginated.
+_Avoid_: calendar-only view, a Booker-only list, flat recurring-occurrence list
+
+**Member cancellation reason**:
+The required 1-250-character explanation a Booker provides when cancelling a Booking or Recurring Booking Occurrence through My Bookings. For a multi-occurrence cancellation it is retained on every affected Occurrence as the lifecycle reason visible in Booking detail.
+_Avoid_: silent member cancellation, optional explanation, an internal-only reason
+
+**Booking lifecycle timeline**:
+The ordered record of a Booking's creation and lifecycle outcome events, including cancellation, override, and pending-payment expiry when they occur. It is part of complete Booking detail.
+_Avoid_: a status-only detail, an admin audit-log substitute, hiding an expiry as a missing Booking
+
 **Operator**:
 The authenticated admin (or member) who performed the create action. For admin on-behalf create, Operator differs from Booker. v1 records Operator only via immutable audit `created_by_id` / `created_by` — no dedicated business column — and shows them on admin booking **detail** as Created by (always, including when Operator equals Booker).
 _Avoid_: admin (role, not the act), creator (too generic), booked-by field, 代訂人-only label when self-booked
