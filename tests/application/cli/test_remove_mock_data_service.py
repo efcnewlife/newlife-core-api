@@ -8,8 +8,6 @@ from uuid import UUID, uuid4
 import pytest
 
 from portal.application.cli.remove_mock_data_service import LEGACY_DEMO_ACCOUNT_EMAILS, MockDataDependencyError, RemoveMockDataService
-from portal.cli.datas.facility_booking_seed_data import DEMO_PERSONAL_BOOKER_EMAILS
-from portal.cli.datas.ministry_seed_data import DEMO_PRIMARY_USER_EMAIL, DEMO_SECONDARY_2_USER_EMAIL, DEMO_SECONDARY_USER_EMAIL
 
 MOCK_SUFFIX = "@test.local"
 
@@ -536,8 +534,15 @@ async def test_include_legacy_demo_still_removes_the_current_mock_snapshot():
 
 
 def test_legacy_demo_account_emails_match_known_seed_identities():
-    assert LEGACY_DEMO_ACCOUNT_EMAILS == frozenset(DEMO_PERSONAL_BOOKER_EMAILS) | {
-        DEMO_PRIMARY_USER_EMAIL,
-        DEMO_SECONDARY_USER_EMAIL,
-        DEMO_SECONDARY_2_USER_EMAIL,
-    }
+    assert LEGACY_DEMO_ACCOUNT_EMAILS == frozenset(
+        {
+            "seed.booker.1@local.test",
+            "seed.booker.2@local.test",
+            "seed.booker.3@local.test",
+            "seed.booker.4@local.test",
+            "seed.booker.5@local.test",
+            "seed.ministry.primary@local.test",
+            "seed.ministry.secondary@local.test",
+            "seed.ministry.secondary2@local.test",
+        }
+    )

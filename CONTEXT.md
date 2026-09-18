@@ -27,12 +27,12 @@ The machine-readable `mock:` identity, including a Mock run identity, carried by
 _Avoid_: a user-facing display name, a broad cleanup wildcard, the legacy `seed:` marker
 
 **Legacy demo fixture**:
-The retired fixed local data bundle formerly used to display Ministries, Bookings, slot templates, and Blackouts. Its non-login `seed.*@local.test` Demo accounts are neither Mock users nor Testing accounts; new test fixtures are generated as Mock data instead.
-_Avoid_: treating a legacy demo fixture as a supported QA credential, mixing it with generated Mock data
+The retired fixed local data bundle formerly used to display Ministries, Bookings, slot templates, and Blackouts. Its non-login `seed.*@local.test` Demo accounts are neither Mock users nor Testing accounts; new test fixtures are generated as Mock data instead. Leftover exact Demo-account identities and `seed:` markers are removed only by the opt-in `remove-mock-data --include-legacy-demo` transition, not by ordinary Mock cleanup.
+_Avoid_: treating a legacy demo fixture as a supported QA credential, mixing it with generated Mock data, treating ordinary `remove-mock-data` as a demo-pack wipe
 
 **Catalog bootstrap**:
-The `init-all` command's catalog and configuration foundation for a new environment: locales, RBAC, system settings, positions, target audiences, facility rooms/rates, and Legal Documents, finishing with interactive superuser creation. It does not seed Ministry Types, Mock users, Ministries, Bookings, or other business/demo data. Re-running upserts existing catalog rows and never resets or deletes them.
-_Avoid_: treating seed-local-demo as bootstrap, requiring Ministry Type for a new environment, resetting catalog rows on re-run
+The `init-all` command's catalog and configuration foundation for a new environment: locales, RBAC, system settings, positions, target audiences, facility rooms/rates, and Legal Documents, finishing with interactive superuser creation. It does not seed Ministry Types, Mock users, Ministries, Bookings, or other business fixtures. Re-running upserts existing catalog rows and never resets or deletes them.
+_Avoid_: treating Mock fixtures or the retired local demo pack as bootstrap, requiring Ministry Type for a new environment, resetting catalog rows on re-run
 
 **Recurring Booking Series**:
 A scheduling rule and the materialized set of independently managed Booking occurrences it creates. It is distinct from each occurrence, which remains an individual Booking with its own lines and occupancy slots. It is not itself room occupancy.

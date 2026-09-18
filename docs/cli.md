@@ -27,7 +27,7 @@ Before commands that read or write the database:
 
 ## Environment guards
 
-Most business/demo commands run in `dev` by default. For the commands marked **Force outside dev**, `--force` both skips the confirmation prompt and permits the command when `ENV` is `stg` or `prod`.
+Most catalog seed commands run in `dev` by default. For the commands marked **Force outside dev**, `--force` both skips the confirmation prompt and permits the command when `ENV` is `stg` or `prod`.
 
 Mock QA lifecycle commands use a stricter policy:
 
@@ -41,7 +41,7 @@ Mock QA lifecycle commands use a stricter policy:
 
 | Command | Purpose | Notes |
 | --- | --- | --- |
-| `init-all` | Bootstrap the catalog and then create a superuser interactively. | Runs locales, RBAC, system settings, positions, target audiences, facility rooms/rates, Legal Documents, then `create-superuser`. It is fail-fast and does not seed Ministry Types or business/demo data. |
+| `init-all` | Bootstrap the catalog and then create a superuser interactively. | Runs locales, RBAC, system settings, positions, target audiences, facility rooms/rates, Legal Documents, then `create-superuser`. It is fail-fast and does not seed Ministry Types or business fixtures. |
 | `create-superuser` | Create an admin superuser through interactive prompts. | Use after a catalog exists if `init-all` was not used. |
 | `init-locales` | Insert supported system locales. | Run before `init-rbac` when executing catalog steps individually. |
 | `init-rbac` | Upsert verbs, resources, permissions, roles, and role-permission mappings. | Safe to re-run. |
@@ -53,21 +53,9 @@ Mock QA lifecycle commands use a stricter policy:
 | `seed-target-audiences [--force]` | Upsert target-audience catalog rows and translations. | **Force outside dev.** |
 | `seed-facility-rental [--force]` | Upsert rooms, rates, discounts, and surcharges. | **Force outside dev.** |
 | `seed-facility-rental [--force] --reset` | Clear Facility rental/booking seed data and rebuild the facility catalog. | **Destructive.** Deletes bookings, blackouts, slot templates, rooms, rates, discounts, and surcharges before reseeding. **Force outside dev.** |
-
-## Local demo commands
-
-| Command | Purpose | Notes |
-| --- | --- | --- |
-| `seed-local-demo [--force]` | Seed demo Ministries, slot templates, blackouts, and Bookings. | Requires catalog prerequisites including rooms, Ministry Types, audiences, and owning positions. It replaces only seed-prefixed demo data and preserves unrelated admin-created rows. **Force outside dev.** |
 | `seed-position-assignments [--force]` | Assign configured users to positions as incumbents. | Uses the seed data's email and position-code mappings. **Force outside dev.** |
 
-Recommended local demo flow:
-
-```bash
-uv run python -m portal.cli.main init-all
-uv run python -m portal.cli.main seed-ministry-types
-uv run python -m portal.cli.main seed-local-demo
-```
+`seed-local-demo` is retired with no compatibility alias. Generated Facility Booking test data uses the Mock QA lifecycle below. Existing `seed.*@local.test` Demo accounts and `seed:` markers are removed only with `remove-mock-data --include-legacy-demo`.
 
 ## Mock QA lifecycle commands
 

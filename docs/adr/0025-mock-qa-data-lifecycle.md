@@ -20,6 +20,7 @@ Mock login needs more than a single manually entered account to exercise real Fa
 - A new `seed-mock-users` run is rejected while an active Mock snapshot exists. Operators must run `remove-mock-data` first. Local and SharePoint CSV retention rules are unchanged.
 - Same-minute CSV name collisions are errors; local output retains only the latest pair per environment, while SharePoint retains all historical pairs.
 - The existing Graph Entra application (`AZURE_APP_CLIENT_ID`) uses site-scoped `Sites.Selected` plus an explicit write grant for the supplied archive site. Upload failure leaves committed data and local CSVs intact, reports failure, and exits nonzero.
+- `seed-local-demo` is retired with no compatibility alias. Operators use `init-all` for catalog bootstrap and the Mock QA lifecycle for generated Facility Booking test data. Existing `seed.*@local.test` Demo accounts and `seed:` markers remain only as a cleanup target for `remove-mock-data --include-legacy-demo`.
 
 ## `seed-mock-users`
 
