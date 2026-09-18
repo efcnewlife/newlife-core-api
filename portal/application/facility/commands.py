@@ -275,7 +275,7 @@ class OverrideLogPagesQueryCommand(PagesQueryCommand):
 
 
 class BookingRoomLineCommand(BaseModel):
-    """Room line on booking update."""
+    """Room line on booking create."""
 
     facility_id: UUID = Field(...)
     start_at: Optional[datetime] = Field(default=None)
@@ -284,12 +284,10 @@ class BookingRoomLineCommand(BaseModel):
 
 
 class UpdateBookingCommand(BaseModel):
-    """Admin update booking times/rooms."""
+    """Constrained Admin Booking update: title, Ministry, and surcharge selection."""
 
-    start_at: datetime = Field(...)
-    end_at: datetime = Field(...)
+    title: BookingTitle = Field(...)
     ministry_id: Optional[UUID] = Field(default=None)
-    rooms: list[BookingRoomLineCommand] = Field(default_factory=list)
     surcharge_codes: list[str] = Field(default_factory=list)
 
 

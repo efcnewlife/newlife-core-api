@@ -299,11 +299,10 @@ def make_booking_list_item(
     )
 
 
-def make_update_booking_command(facility_id: UUID | None = None, start_at: datetime | None = None, end_at: datetime | None = None) -> UpdateBookingCommand:
-    room_id = facility_id or new_uuid()
-    start = start_at or datetime(2026, 5, 1, 10, 0, tzinfo=timezone.utc)
-    end = end_at or datetime(2026, 5, 1, 14, 0, tzinfo=timezone.utc)
-    return UpdateBookingCommand(start_at=start, end_at=end, rooms=[BookingRoomLineCommand(facility_id=room_id, sequence=0)])
+def make_update_booking_command(
+    title: str = "Choir practice", ministry_id: UUID | None = None, surcharge_codes: list[str] | None = None
+) -> UpdateBookingCommand:
+    return UpdateBookingCommand(title=title, ministry_id=ministry_id, surcharge_codes=surcharge_codes or [])
 
 
 def make_create_booking_command(

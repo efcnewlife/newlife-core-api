@@ -776,18 +776,9 @@ def create_booking_to_command(model) -> "CreateBookingCommand":
 
 
 def update_booking_to_command(model) -> "UpdateBookingCommand":
-    from portal.application.facility.commands import BookingRoomLineCommand, UpdateBookingCommand
-    from portal.serializers.admin.v1.facility.booking import AdminBookingUpdate
+    from portal.application.facility.commands import UpdateBookingCommand
 
-    return UpdateBookingCommand(
-        start_at=model.start_at,
-        end_at=model.end_at,
-        ministry_id=model.ministry_id,
-        rooms=[
-            BookingRoomLineCommand(facility_id=room.facility_id, start_at=room.start_at, end_at=room.end_at, sequence=room.sequence) for room in model.rooms
-        ],
-        surcharge_codes=model.surcharge_codes,
-    )
+    return UpdateBookingCommand(title=model.title, ministry_id=model.ministry_id, surcharge_codes=model.surcharge_codes)
 
 
 def cancel_booking_to_command(model) -> "CancelBookingCommand":

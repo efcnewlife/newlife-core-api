@@ -105,91 +105,127 @@ async def test_cancel_booking_single_scope_cancels_slots():
     assert stub.cancel_calls[0]["cancel_slots"] is True
 
 
-@pytest.mark.asyncio
-async def test_update_booking_invalid_time_range():
-    room_id = new_uuid()
-    command = make_update_booking_command(
-        facility_id=room_id, start_at=datetime(2026, 5, 1, 14, 0, tzinfo=timezone.utc), end_at=datetime(2026, 5, 1, 10, 0, tzinfo=timezone.utc)
+def _updatable_booking(*, booking_id, user_id=None, ministry_id=None, title="Choir practice") -> BookingDetailResult:
+    start = datetime(2026, 5, 1, 10, 0, tzinfo=timezone.utc)
+    end = datetime(2026, 5, 1, 14, 0, tzinfo=timezone.utc)
+    room_id = uuid4()
+    return BookingDetailResult(
+        id=booking_id,
+        title=title,
+        user_id=user_id or uuid4(),
+        ministry_id=ministry_id,
+        booking_type="one_time",
+        start_at=start,
+        end_at=end,
+        status="confirmed",
+        is_mission_aligned=True,
+        subtotal_amount=Decimal("200"),
+        discount_percent=Decimal("30"),
+        discount_amount=Decimal("60"),
+        surcharge_amount=Decimal("25"),
+        quoted_amount=Decimal("165"),
+        currency="CAD",
+        rooms=[
+            BookingRoomLineResult(
+                id=uuid4(),
+                facility_id=room_id,
+                start_at=start,
+                end_at=end,
+                billed_hours=Decimal("4"),
+                rental_rate_name="Hourly",
+                billing_unit="hourly",
+                unit_amount=Decimal("50"),
+                currency="CAD",
+                line_subtotal=Decimal("200"),
+            )
+        ],
     )
-    service = _booking_service(StubBookingRepository())
-    with pytest.raises(BadRequestException) as exc_info:
-        await service.update_booking(uuid4(), command)
-    assert "end_at" in str(exc_info.value.detail)
-    assert exc_info.value.error_code == "FACILITY_BOOKING_INVALID_TIME_RANGE"
 
 
 @pytest.mark.asyncio
-async def test_update_booking_requires_rooms():
-    service = _booking_service(StubBookingRepository())
-    command = make_update_booking_command()
-    command.rooms = []
-    with pytest.raises(BadRequestException, match="At least one room"):
-        await service.update_booking(uuid4(), command)
+async def test_update_booking_not_found():
+    service = _booking_service(StubBookingRepository(exists=False))
+    with pytest.raises(NotFoundException) as exc_info:
+        await service.update_booking(uuid4(), make_update_booking_command())
+    assert exc_info.value.error_code == "FACILITY_BOOKING_NOT_FOUND"
 
 
 @pytest.mark.asyncio
-async def test_update_booking_rejects_fourth_line():
-    room_ids = [new_uuid() for _ in range(4)]
-    command = make_update_booking_command()
-    command.rooms = [BookingRoomLineCommand(facility_id=room_id, sequence=idx) for idx, room_id in enumerate(room_ids)]
-    service = _booking_service(StubBookingRepository())
-    with pytest.raises(BadRequestException) as exc_info:
-        await service.update_booking(uuid4(), command)
-    assert "At most 3" in str(exc_info.value.detail)
-    assert exc_info.value.error_code == "FACILITY_BOOKING_MAX_ROOMS"
-
-
-@pytest.mark.asyncio
-async def test_update_booking_slot_overlap_conflict():
-    room_id = new_uuid()
-    stub = StubBookingRepository(has_overlap=True)
-    service = _booking_service(stub)
-    with pytest.raises(ConflictErrorException) as exc_info:
-        await service.update_booking(uuid4(), make_update_booking_command(facility_id=room_id))
-    exc = exc_info.value
-    assert exc.status_code == 409
-    assert exc.error_code == "FACILITY_BOOKING_SCHEDULING_CONFLICT"
-    assert exc.context == {"facility_id": str(room_id)}
-    assert "scheduling conflict" in str(exc.detail)
-
-
-@pytest.mark.asyncio
-async def test_update_booking_blackout_conflict():
-    room_id = new_uuid()
-    stub = StubBookingRepository(has_overlap=False)
-    service = _booking_service(stub, blackout_stub=StubRoomBlackoutRepository(has_overlap=True))
-    with pytest.raises(BadRequestException) as exc_info:
-        await service.update_booking(uuid4(), make_update_booking_command(facility_id=room_id))
-    exc = exc_info.value
-    assert exc.status_code == 400
-    assert exc.error_code == "FACILITY_BOOKING_ROOM_BLACKOUT"
-    assert exc.context == {"facility_id": str(room_id)}
-    assert "closed for the selected time" in str(exc.detail)
-
-
-@pytest.mark.asyncio
-async def test_update_booking_persists_quote_on_header():
+async def test_update_booking_updates_title_and_ministry_without_changing_rooms(monkeypatch):
+    operator_id = uuid4()
+    booker_id = uuid4()
+    ministry = make_ministry_detail()
+    _user_ctx(monkeypatch, user_id=operator_id)
     booking_id = uuid4()
-    room_id = new_uuid()
-    quote = make_preview_quote_result(quoted_amount=Decimal("150"), discount_percent=Decimal("10"))
-    booking_stub = StubBookingRepository(
-        exists=True,
-        detail=BookingDetailResult(
-            id=booking_id,
-            user_id=uuid4(),
-            booking_type="one_time",
-            start_at=datetime(2026, 5, 1, 10, 0, tzinfo=timezone.utc),
-            end_at=datetime(2026, 5, 1, 14, 0, tzinfo=timezone.utc),
-            status="confirmed",
-            quoted_amount=quote.quoted_amount,
-        ),
+    existing = _updatable_booking(booking_id=booking_id, user_id=booker_id)
+    booking_stub = StubBookingRepository(exists=True, detail=existing)
+    ministry_stub = StubMinistryRepository(ministry_by_id={ministry.id: ministry}, booking_member_user_ids={booker_id})
+    service = _booking_service(booking_stub, ministry_stub=ministry_stub)
+    result = await service.update_booking(
+        booking_id, make_update_booking_command(title="Updated choir", ministry_id=ministry.id, surcharge_codes=["audio_system"])
     )
-    service = _booking_service(booking_stub, pricing_stub=StubPricingService(quote))
-    await service.update_booking(booking_id, make_update_booking_command(facility_id=room_id))
     header = booking_stub.update_header_calls[0]
-    assert header["quoted_amount"] == Decimal("150")
-    assert header["discount_percent"] == Decimal("10")
-    assert len(booking_stub.replace_rooms_calls[0]) == 1
+    assert header == {"title": "Updated choir", "ministry_id": ministry.id}
+    assert booking_stub.replace_rooms_calls == []
+    assert booking_stub.replace_slots_calls == []
+    assert result.title == "Updated choir"
+    assert result.ministry_id == ministry.id
+    assert result.rooms[0].facility_id == existing.rooms[0].facility_id
+    assert result.rooms[0].start_at == existing.rooms[0].start_at
+    assert result.rooms[0].end_at == existing.rooms[0].end_at
+
+
+@pytest.mark.asyncio
+async def test_update_booking_validates_ministry_against_booker(monkeypatch):
+    operator_id = uuid4()
+    booker_id = uuid4()
+    ministry = make_ministry_detail()
+    _user_ctx(monkeypatch, user_id=operator_id)
+    booking_id = uuid4()
+    booking_stub = StubBookingRepository(exists=True, detail=_updatable_booking(booking_id=booking_id, user_id=booker_id))
+    ministry_stub = StubMinistryRepository(ministry_by_id={ministry.id: ministry}, booking_member_user_ids={booker_id})
+    service = _booking_service(booking_stub, ministry_stub=ministry_stub)
+    await service.update_booking(booking_id, make_update_booking_command(ministry_id=ministry.id))
+    assert ministry_stub.membership_check_calls[0]["user_id"] == booker_id
+
+
+@pytest.mark.asyncio
+async def test_update_booking_rejects_when_booker_not_ministry_member(monkeypatch):
+    operator_id = uuid4()
+    booker_id = uuid4()
+    ministry = make_ministry_detail()
+    _user_ctx(monkeypatch, user_id=operator_id)
+    booking_id = uuid4()
+    service = _booking_service(
+        StubBookingRepository(exists=True, detail=_updatable_booking(booking_id=booking_id, user_id=booker_id)),
+        ministry_stub=StubMinistryRepository(ministry_by_id={ministry.id: ministry}, booking_member_user_ids={operator_id}),
+    )
+    with pytest.raises(ForbiddenException, match="not a ministry owner"):
+        await service.update_booking(booking_id, make_update_booking_command(ministry_id=ministry.id))
+
+
+@pytest.mark.asyncio
+async def test_update_booking_does_not_overwrite_price_snapshots(monkeypatch):
+    _user_ctx(monkeypatch)
+    booking_id = uuid4()
+    existing = _updatable_booking(booking_id=booking_id)
+    pricing_stub = StubPricingService(make_preview_quote_result(quoted_amount=Decimal("999"), discount_percent=Decimal("50")))
+    booking_stub = StubBookingRepository(exists=True, detail=existing)
+    service = _booking_service(booking_stub, pricing_stub=pricing_stub)
+    result = await service.update_booking(booking_id, make_update_booking_command(title="Clerical fix", surcharge_codes=["audio_system"]))
+    header = booking_stub.update_header_calls[0]
+    assert "quoted_amount" not in header
+    assert "discount_percent" not in header
+    assert "discount_amount" not in header
+    assert "surcharge_amount" not in header
+    assert "subtotal_amount" not in header
+    assert "is_mission_aligned" not in header
+    assert pricing_stub.preview_calls == []
+    assert result.quoted_amount == Decimal("165")
+    assert result.discount_percent == Decimal("30")
+    assert result.surcharge_amount == Decimal("25")
+    assert result.rooms[0].unit_amount == Decimal("50")
+    assert result.rooms[0].line_subtotal == Decimal("200")
 
 
 def test_billed_hours_rounds_to_two_decimal_places():
@@ -775,54 +811,3 @@ async def test_create_booking_without_ministry_does_not_apply_a_discount(monkeyp
     assert payload["discount_percent"] == Decimal("0")
     assert payload["quoted_amount"] == Decimal("40.00")
     assert payload["is_mission_aligned"] is False
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("status", [BookingStatus.CONFIRMED.value, BookingStatus.PENDING_PAYMENT.value])
-async def test_price_locked_booking_update_keeps_financial_snapshot(monkeypatch, status):
-    _user_ctx(monkeypatch)
-    booking_id = uuid4()
-    room_id = new_uuid()
-    start = datetime(2026, 5, 1, 10, 0, tzinfo=timezone.utc)
-    end = datetime(2026, 5, 1, 14, 0, tzinfo=timezone.utc)
-    pricing_stub = StubPricingService(make_preview_quote_result(quoted_amount=Decimal("999"), discount_percent=Decimal("50")))
-    booking_stub = StubBookingRepository(
-        exists=True,
-        booking_meta={"booking_type": "one_time", "currency": "CAD", "status": status},
-        detail=BookingDetailResult(
-            id=booking_id,
-            user_id=uuid4(),
-            booking_type="one_time",
-            start_at=start,
-            end_at=end,
-            status=status,
-            is_mission_aligned=True,
-            subtotal_amount=Decimal("200"),
-            discount_percent=Decimal("30"),
-            discount_amount=Decimal("60"),
-            surcharge_amount=Decimal("0"),
-            quoted_amount=Decimal("140"),
-            currency="CAD",
-            rooms=[
-                BookingRoomLineResult(
-                    id=uuid4(),
-                    facility_id=room_id,
-                    start_at=start,
-                    end_at=end,
-                    billed_hours=Decimal("4"),
-                    rental_rate_name="Hourly",
-                    billing_unit="hourly",
-                    unit_amount=Decimal("10"),
-                    currency="CAD",
-                    line_subtotal=Decimal("40"),
-                )
-            ],
-        ),
-    )
-    service = _booking_service(booking_stub, pricing_stub=pricing_stub)
-    await service.update_booking(booking_id, make_update_booking_command(facility_id=room_id, start_at=start, end_at=end))
-    header = booking_stub.update_header_calls[0]
-    assert header["quoted_amount"] == Decimal("140")
-    assert header["discount_percent"] == Decimal("30")
-    assert header["is_mission_aligned"] is True
-    assert pricing_stub.preview_calls == []
