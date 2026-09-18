@@ -55,8 +55,8 @@ The authority reserved for the Booker to edit a Booking title, cancel, view paym
 _Avoid_: Ministry-member cancellation authority, participant-as-Booker, shared self-service control
 
 **Booking title**:
-A required, editable, non-unique, trimmed 1-30-character plain-text label owned by one Booking. It is distinct from the optional Booking remark and from a Room or Ministry name; only the Booker may edit it.
-_Avoid_: remark as the title, Booking reference, localized Room name, markup content, participant title editing
+A required, editable, non-unique, trimmed 1-30-character plain-text label owned by one Booking. It is distinct from the optional Booking remark and from a Room or Ministry name; the Booker may edit it through self-service and an authorized Administrator may edit it separately without changing commercial terms.
+_Avoid_: remark as the title, Booking reference, localized Room name, markup content, participant title editing, repricing on a title edit
 
 **Recurring Booking Series title**:
 A required, editable, non-unique, trimmed 1-30-character plain-text label owned by one Recurring Booking Series. It is copied to every new Booking Occurrence as its initial title, after which the Series and Occurrence titles are independently editable by the Booker.
@@ -229,6 +229,22 @@ _Avoid_: Rate as a priced catalog row of its own, global NULL-facility Rate rows
 **Preview quote**:
 Server-computed rental totals for a proposed set of Booking lines (each with its own interval): per-line amounts from the selected Rental Rate Template, then booking-level ministry discount and surcharges. The quoted amount is line subtotals minus discount plus surcharges. There is no minimum-fee floor and no Rental Policy Setting in the pricing model. Distinct from creating a booking.
 _Avoid_: client-side HST or totals, a single shared interval for all lines on member preview, treating Preview quote as a created booking, minimum fee / policy floor as part of the quote
+
+**Booking Discount**:
+An admin-managed percentage reduction of a Booking's room-line subtotal. An Active Ministry Booking whose Booker is its current primary or secondary member receives the Ministry Discount (30%); otherwise, a Recurring Booking receives the Recurring Discount (20%). Only one Booking Discount applies, and surcharges are added after the reduction. A configured percentage is from 0 to 100 with at most two decimal places; an inactive or absent rule is no discount.
+_Avoid_: stacking Ministry and Recurring Discounts, discounting surcharges, a client-supplied discount amount
+
+**Booking Discount Eligibility**:
+The server-resolved result that identifies the one Booking Discount applicable to a proposed booking type, Ministry association, and Booker. It supports preflight display only; quote and create independently re-evaluate it.
+_Avoid_: a Ministry-only discount checker, trusting a cached preflight for creation, a client-controlled `is_mission_aligned` flag
+
+**Confirmed price snapshot**:
+The persisted line-rate and Booking or Series financial values captured when a Booking becomes Confirmed. A Pending-payment Recurring Booking Series locks its quoted price when it is created, and payment confirmation does not reprice it. Later rate or discount-rule changes never reprice either snapshot.
+_Avoid_: repricing a Confirmed Booking, retroactive discount-rule changes, a live total for historical Bookings
+
+**Admin Booking edit**:
+The limited admin change surface for an existing Booking: title, Ministry association, and surcharge selection may be submitted, while header or line times and Room selection cannot be changed. Room or time changes are handled manually until separately designed.
+_Avoid_: changing Rooms without their time intervals, silently repricing a Confirmed Booking, treating Admin Booking edit as an unrestricted update
 
 **Booking Draft**:
 A standalone, non-locking snapshot of a member's proposed Booking lines (date, ministry, lines), created when the member clicks Review Booking on the Timetable and addressed by an opaque id. It never reserves the room — availability and price are recomputed live on every read, never cached on the Draft. Only its creator may view or edit it; edits PATCH the same Draft in place. It is deleted in the same request that creates the real Booking from it; an abandoned Draft is not otherwise cleaned up on a schedule. A member entering Start Booking deletes all of that member's Booking Drafts as an explicit action (every entry, not just a detected restart), independent of the (absent) expiry job. Distinct from a `facility.booking` row and from `BookingStatus.DRAFT`, which is unused today.
