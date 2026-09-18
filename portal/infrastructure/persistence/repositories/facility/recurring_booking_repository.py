@@ -41,8 +41,11 @@ class RecurringBookingRepository:
                 FacilityBookingSeries.id,
                 FacilityBookingSeries.title,
                 FacilityBookingSeries.user_id,
+                AuthUser.email.label("user_email"),
+                BookingRepository._display_name_expr().label("user_display_name"),
                 FacilityBookingSeries.ministry_id,
                 self._ministry_name_subquery(locale_id).label("ministry_name"),
+                FacilityBookingSeries.remark,
                 FacilityBookingSeries.first_occurrence_date,
                 FacilityBookingSeries.last_occurrence_date,
                 FacilityBookingSeries.local_start_time,
@@ -53,7 +56,11 @@ class RecurringBookingRepository:
                 FacilityBookingSeries.currency,
                 FacilityBookingSeries.is_priority,
                 FacilityBookingSeries.updated_by_id,
+                FacilityBookingSeries.created_at,
             )
+            .select_from(FacilityBookingSeries)
+            .join(AuthUser, AuthUser.id == FacilityBookingSeries.user_id)
+            .outerjoin(AuthUserProfile, AuthUserProfile.user_id == AuthUser.id)
             .where(FacilityBookingSeries.id == series_id)
             .where(FacilityBookingSeries.is_deleted == False)
             .fetchrow()
@@ -154,8 +161,11 @@ class RecurringBookingRepository:
             id=data["id"],
             title=data.get("title") or "",
             user_id=data["user_id"],
+            user_email=data.get("user_email"),
+            user_display_name=data.get("user_display_name"),
             ministry_id=data.get("ministry_id"),
             ministry_name=data.get("ministry_name"),
+            remark=data.get("remark"),
             first_occurrence_date=data["first_occurrence_date"],
             last_occurrence_date=data["last_occurrence_date"],
             local_start_time=data["local_start_time"],
@@ -167,4 +177,5 @@ class RecurringBookingRepository:
             is_priority=bool(data.get("is_priority")),
             occurrence_count=0,
             confirmed_by_id=confirmed_by_id,
+            created_at=data.get("created_at"),
         )

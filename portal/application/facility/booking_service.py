@@ -30,6 +30,7 @@ from portal.application.facility.commands import (
     UpdateTitleCommand,
 )
 from portal.application.facility.my_bookings import card_primary_facility_id, paginate_my_bookings_cards, project_my_bookings_cards
+from portal.application.facility.participant_detail import assemble_participant_booking_detail
 from portal.application.facility.pricing_service import PricingService
 from portal.application.facility.results import (
     BookingDetailResult,
@@ -37,11 +38,13 @@ from portal.application.facility.results import (
     BookingRangeResult,
     MemberBrowseCardResult,
     MemberBrowsePageResult,
+    ParticipantBookingDetailResult,
     PreviewQuoteResult,
 )
 from portal.application.org.results import CreateIdResult
 from portal.application.system.setting_service import SettingService
 from portal.domain.content.constants import FILE_RESOURCE_KIND_FACILITY_ROOM
+from portal.domain.facility.cancellation_reason import InvalidMemberCancellationReason, normalize_member_cancellation_reason
 from portal.domain.facility.constants import (
     BOOKING_RANGE_MAX_DAYS,
     ROOM_GALLERY_MAX_FILES,
@@ -51,6 +54,7 @@ from portal.domain.facility.constants import (
     BookingType,
     FacilityErrorCode,
 )
+from portal.domain.facility.participant_detail import is_current_booking_participant
 from portal.domain.org.constants import MinistryStatus
 from portal.exceptions.responses import BadRequestException, ConflictErrorException, ForbiddenException, NotFoundException
 from portal.infrastructure.persistence.repositories.facility.booking_draft_repository import BookingDraftRepository
@@ -362,15 +366,32 @@ class BookingService:
             attached.append(card.model_copy(update={"photo_urls": photo_urls}))
         return attached
 
+    async def _owned_ministry_ids(self, user_id: UUID) -> list[UUID]:
+        owned = await self._ministry_repository.list_owned_active(user_id, self._resolved_locale_id())
+        return [item.id for item in owned]
+
+    async def _require_participant_booking(self, booking_id: UUID, user_id: UUID) -> BookingDetailResult:
+        row = await self._repository.get_detail(booking_id, self._resolved_locale_id())
+        if not row or not is_current_booking_participant(
+            viewer_id=user_id, booker_id=row.user_id, ministry_id=row.ministry_id, owned_ministry_ids=await self._owned_ministry_ids(user_id)
+        ):
+            raise NotFoundException(detail="Booking not found", error_code=FacilityErrorCode.BOOKING_NOT_FOUND.value, context={"booking_id": str(booking_id)})
+        return row
+
+    @staticmethod
+    def _require_member_cancellation_reason(cancel_reason: Optional[str]) -> str:
+        try:
+            return normalize_member_cancellation_reason(cancel_reason or "")
+        except InvalidMemberCancellationReason as exc:
+            raise BadRequestException(detail=str(exc), error_code=FacilityErrorCode.BOOKING_CANCEL_REASON_INVALID.value) from exc
+
     @distributed_trace()
-    async def update_my_booking_title(self, booking_id: UUID, command: UpdateTitleCommand) -> BookingDetailResult:
+    async def update_my_booking_title(self, booking_id: UUID, command: UpdateTitleCommand) -> ParticipantBookingDetailResult:
         user_id = self._user_ctx.user_id if self._user_ctx else None
         if not user_id:
             raise ForbiddenException(detail="Authenticated user required")
-        owner_id = await self._repository.get_user_id_for_booking(booking_id)
-        if not owner_id:
-            raise NotFoundException(detail="Booking not found", error_code=FacilityErrorCode.BOOKING_NOT_FOUND.value, context={"booking_id": str(booking_id)})
-        if owner_id != user_id:
+        row = await self._require_participant_booking(booking_id, user_id)
+        if row.user_id != user_id:
             raise ForbiddenException(detail="Cannot update another user's booking")
         await self._repository.update_booking_header(booking_id, dict(title=command.title))
         return await self.get_my_booking_by_id(booking_id)
@@ -380,22 +401,23 @@ class BookingService:
         user_id = self._user_ctx.user_id if self._user_ctx else None
         if not user_id:
             raise ForbiddenException(detail="Authenticated user required")
-        owner_id = await self._repository.get_user_id_for_booking(booking_id)
-        if not owner_id:
-            raise NotFoundException(detail="Booking not found", error_code=FacilityErrorCode.BOOKING_NOT_FOUND.value, context={"booking_id": str(booking_id)})
-        if owner_id != user_id:
+        row = await self._require_participant_booking(booking_id, user_id)
+        if row.user_id != user_id:
             raise ForbiddenException(detail="Cannot cancel another user's booking")
-        await self.cancel_booking(booking_id, command)
+        cancel_reason = self._require_member_cancellation_reason(command.cancel_reason)
+        await self.cancel_booking(booking_id, CancelBookingCommand(scope=command.scope, cancel_reason=cancel_reason))
 
     @distributed_trace()
-    async def get_my_booking_by_id(self, booking_id: UUID) -> BookingDetailResult:
+    async def get_my_booking_by_id(self, booking_id: UUID, now: Optional[datetime] = None) -> ParticipantBookingDetailResult:
         user_id = self._user_ctx.user_id if self._user_ctx else None
         if not user_id:
             raise ForbiddenException(detail="Authenticated user required")
-        row = await self._repository.get_detail(booking_id, self._resolved_locale_id())
-        if not row or row.user_id != user_id:
-            raise NotFoundException(detail="Booking not found", error_code=FacilityErrorCode.BOOKING_NOT_FOUND.value, context={"booking_id": str(booking_id)})
-        return row
+        row = await self._require_participant_booking(booking_id, user_id)
+        browse_now = now or datetime.now(timezone.utc)
+        facility_tz = await self._setting_service.get_facility_timezone()
+        facility_ids = [line.facility_id for line in row.rooms]
+        urls_by_room = await self._file_service.get_signed_urls_by_resource_ids(facility_ids, resource_name=FILE_RESOURCE_KIND_FACILITY_ROOM)
+        return assemble_participant_booking_detail(row, viewer_id=user_id, now=browse_now, facility_tz=facility_tz, photo_urls_by_room=urls_by_room)
 
     @distributed_trace()
     async def preview_quote_for_member(self, command: MemberPreviewQuoteCommand) -> PreviewQuoteResult:

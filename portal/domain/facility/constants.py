@@ -45,6 +45,15 @@ class BookingStatus(str, Enum):
     OVERRIDDEN = "overridden"
 
 
+class BookingLifecycleEventKind(str, Enum):
+    """Member-visible Booking lifecycle timeline kinds."""
+
+    CREATED = "created"
+    CANCELLED = "cancelled"
+    OVERRIDDEN = "overridden"
+    PAYMENT_EXPIRED = "payment_expired"
+
+
 class MyBookingsSection(str, Enum):
     """Member My Bookings browse section."""
 
@@ -159,6 +168,7 @@ class FacilityErrorCode(str, Enum):
     BOOKING_DUPLICATE_LINE = "FACILITY_BOOKING_DUPLICATE_LINE"
     BOOKING_DRAFT_NOT_FOUND = "FACILITY_BOOKING_DRAFT_NOT_FOUND"
     BOOKING_TITLE_INVALID = "FACILITY_BOOKING_TITLE_INVALID"
+    BOOKING_CANCEL_REASON_INVALID = "FACILITY_BOOKING_CANCEL_REASON_INVALID"
     RECURRING_USE_PERIOD = "FACILITY_RECURRING_USE_PERIOD"
     RECURRING_AVAILABILITY_WINDOW = "FACILITY_RECURRING_AVAILABILITY_WINDOW"
     RECURRING_MIN_OCCURRENCES = "FACILITY_RECURRING_MIN_OCCURRENCES"

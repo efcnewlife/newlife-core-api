@@ -25,6 +25,7 @@ from portal.application.facility.mappers import (
     member_browse_query_to_command,
     member_preview_quote_result_to_api,
     member_preview_quote_to_command,
+    participant_series_detail_to_api,
     recurring_booking_preview_to_member_api,
     recurring_booking_series_to_member_api,
     recurring_booking_window_status_to_api,
@@ -136,8 +137,8 @@ async def create_booking_series(
 @router.get(path="/booking-series/{series_id}", status_code=status.HTTP_200_OK, response_model=MemberRecurringBookingSeriesDetail, response_model_by_alias=True)
 @inject
 async def get_my_booking_series(series_id: UUID, recurring_booking_service: RecurringBookingService = Depends(Provide[Container.recurring_booking_service])):
-    result = await recurring_booking_service.get_my_series(series_id)
-    return recurring_booking_series_to_member_api(result)
+    result = await recurring_booking_service.get_my_series_detail(series_id)
+    return participant_series_detail_to_api(result)
 
 
 @router.patch(

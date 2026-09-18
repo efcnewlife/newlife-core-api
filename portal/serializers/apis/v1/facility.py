@@ -11,6 +11,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from portal.domain.facility.booking_title import BookingTitle
+from portal.domain.facility.cancellation_reason import MemberCancellationReason
 from portal.domain.facility.constants import PREVIEW_QUOTE_MAX_LINES, MyBookingsSection
 from portal.serializers.mixins.base import PaginationBaseResponseModel
 from portal.serializers.mixins.model_mixins import UUIDBaseModel
@@ -77,7 +78,7 @@ class MemberBookingCancel(BaseModel):
     """Cancel booking request."""
 
     scope: str = Field(default="single")
-    cancel_reason: Optional[str] = Field(default=None)
+    cancel_reason: MemberCancellationReason = Field(...)
 
 
 class MemberBookingTitleUpdate(BaseModel):
@@ -129,23 +130,69 @@ class MemberBookingBrowsePage(PaginationBaseResponseModel):
     items: list[MemberBookingBrowseCard] = Field(default_factory=list)
 
 
-class MemberBookingDetailRoom(BaseModel):
+class MemberBookingDetailRoom(UUIDBaseModel):
     """Room line on member booking detail."""
 
     facility_id: UUID = Field(..., serialization_alias="facilityId")
     facility_name: Optional[str] = Field(default=None, serialization_alias="facilityName")
+    sequence: int = Field(default=0)
+    start_at: datetime = Field(..., serialization_alias="startAt")
+    end_at: datetime = Field(..., serialization_alias="endAt")
+    billed_hours: Optional[Decimal] = Field(default=None, serialization_alias="billedHours")
+    rental_rate_name: Optional[str] = Field(default=None, serialization_alias="rentalRateName")
+    billing_unit: Optional[str] = Field(default=None, serialization_alias="billingUnit")
+    unit_amount: Optional[Decimal] = Field(default=None, serialization_alias="unitAmount")
+    currency: Optional[str] = Field(default=None)
+    line_subtotal: Optional[Decimal] = Field(default=None, serialization_alias="lineSubtotal")
+    photo_urls: list[str] = Field(default_factory=list, serialization_alias="photoUrls")
+
+
+class MemberBookingTimelineEvent(BaseModel):
+    """Member-visible lifecycle timeline entry."""
+
+    kind: str = Field(...)
+    occurred_at: datetime = Field(..., serialization_alias="occurredAt")
+    reason: Optional[str] = Field(default=None)
+
+
+class MemberBookingActions(BaseModel):
+    """Booker-only self-service eligibility."""
+
+    can_edit_title: bool = Field(..., serialization_alias="canEditTitle")
+    can_cancel: bool = Field(..., serialization_alias="canCancel")
+    can_view_payment_instructions: bool = Field(..., serialization_alias="canViewPaymentInstructions")
+    can_book_again: bool = Field(..., serialization_alias="canBookAgain")
+    book_again_date: Optional[DateType] = Field(default=None, serialization_alias="bookAgainDate")
 
 
 class MemberBookingDetail(UUIDBaseModel):
-    """Booker-scoped booking read for Payment."""
+    """Participant-authorized Booking or Occurrence detail."""
 
     title: str = Field(default="")
     status: str = Field(...)
+    booking_type: str = Field(default="", serialization_alias="bookingType")
+    series_id: Optional[UUID] = Field(default=None, serialization_alias="seriesId")
     start_at: datetime = Field(..., serialization_alias="startAt")
     end_at: datetime = Field(..., serialization_alias="endAt")
+    ministry_id: Optional[UUID] = Field(default=None, serialization_alias="ministryId")
+    ministry_name: Optional[str] = Field(default=None, serialization_alias="ministryName")
+    remark: Optional[str] = Field(default=None)
+    booker_display_name: Optional[str] = Field(default=None, serialization_alias="bookerDisplayName")
+    booker_email: Optional[str] = Field(default=None, serialization_alias="bookerEmail")
     quoted_amount: Optional[Decimal] = Field(default=None, serialization_alias="quotedAmount")
+    subtotal_amount: Optional[Decimal] = Field(default=None, serialization_alias="subtotalAmount")
+    discount_percent: Optional[Decimal] = Field(default=None, serialization_alias="discountPercent")
+    discount_amount: Optional[Decimal] = Field(default=None, serialization_alias="discountAmount")
+    surcharge_amount: Optional[Decimal] = Field(default=None, serialization_alias="surchargeAmount")
     currency: Optional[str] = Field(default=None)
+    payment_hold_expires_at: Optional[datetime] = Field(default=None, serialization_alias="paymentHoldExpiresAt")
+    is_booker: bool = Field(default=False, serialization_alias="isBooker")
+    is_view_only: bool = Field(default=True, serialization_alias="isViewOnly")
     rooms: list[MemberBookingDetailRoom] = Field(default_factory=list)
+    timeline: list[MemberBookingTimelineEvent] = Field(default_factory=list)
+    actions: MemberBookingActions = Field(
+        default_factory=lambda: MemberBookingActions(can_edit_title=False, can_cancel=False, can_view_payment_instructions=False, can_book_again=False)
+    )
 
 
 class MemberPreviewQuoteLineInput(BaseModel):
@@ -278,27 +325,21 @@ class MemberRecurringBookingSeriesCancel(BaseModel):
 
     scope: str = Field(...)
     occurrence_id: Optional[UUID] = Field(default=None)
-    cancel_reason: Optional[str] = Field(default=None)
+    cancel_reason: MemberCancellationReason = Field(...)
 
 
-class MemberRecurringBookingOccurrence(UUIDBaseModel):
+class MemberRecurringBookingOccurrence(MemberBookingDetail):
     """Materialized Booking Occurrence on a Recurring Booking Series."""
-
-    title: str = Field(default="")
-    start_at: datetime = Field(..., serialization_alias="startAt")
-    end_at: datetime = Field(..., serialization_alias="endAt")
-    status: str = Field(...)
-    quoted_amount: Decimal = Field(..., serialization_alias="quotedAmount")
-    currency: str = Field(...)
-    facility_ids: list[UUID] = Field(default_factory=list, serialization_alias="facilityIds")
 
 
 class MemberRecurringBookingSeriesDetail(UUIDBaseModel):
     """Created Recurring Booking Series with occurrences."""
 
     title: str = Field(default="")
-    user_id: UUID = Field(..., serialization_alias="userId")
+    user_id: Optional[UUID] = Field(default=None, serialization_alias="userId")
     ministry_id: Optional[UUID] = Field(default=None, serialization_alias="ministryId")
+    ministry_name: Optional[str] = Field(default=None, serialization_alias="ministryName")
+    remark: Optional[str] = Field(default=None)
     first_occurrence_date: DateType = Field(..., serialization_alias="firstOccurrenceDate")
     last_occurrence_date: DateType = Field(..., serialization_alias="lastOccurrenceDate")
     local_start_time: time = Field(..., serialization_alias="localStartTime")
@@ -309,7 +350,15 @@ class MemberRecurringBookingSeriesDetail(UUIDBaseModel):
     currency: str = Field(...)
     occurrence_count: int = Field(..., serialization_alias="occurrenceCount")
     is_priority: bool = Field(default=False, serialization_alias="isPriority")
-    occurrences: list[MemberRecurringBookingOccurrence] = Field(default_factory=list)
+    booker_display_name: Optional[str] = Field(default=None, serialization_alias="bookerDisplayName")
+    booker_email: Optional[str] = Field(default=None, serialization_alias="bookerEmail")
+    is_booker: bool = Field(default=False, serialization_alias="isBooker")
+    is_view_only: bool = Field(default=True, serialization_alias="isViewOnly")
+    timeline: list[MemberBookingTimelineEvent] = Field(default_factory=list)
+    actions: MemberBookingActions = Field(
+        default_factory=lambda: MemberBookingActions(can_edit_title=False, can_cancel=False, can_view_payment_instructions=False, can_book_again=False)
+    )
+    occurrences: list[MemberBookingDetail] = Field(default_factory=list)
 
 
 class MemberRecurringBookingConflict(BaseModel):

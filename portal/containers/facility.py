@@ -111,6 +111,7 @@ class FacilityContainer(containers.DeclarativeContainer):
         override_log_repository=override_log_repository,
         override_notifier=recurring_override_mail_service,
         expiry_notifier=recurring_expiry_mail_service,
+        file_service=file_service,
     )
     room_blackout_service = providers.Factory(
         RoomBlackoutService,

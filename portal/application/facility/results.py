@@ -380,8 +380,10 @@ class BookingDetailResult(UUIDBaseModel):
     cancelled_at: Optional[datetime] = Field(default=None)
     cancel_reason: Optional[str] = Field(default=None)
     remark: Optional[str] = Field(default=None)
+    created_at: Optional[datetime] = Field(default=None)
     created_by_id: Optional[UUID] = Field(default=None)
     created_by: Optional[str] = Field(default=None)
+    payment_hold_expires_at: Optional[datetime] = Field(default=None)
     rooms: list[BookingRoomLineResult] = Field(default_factory=list)
     slots: list[BookingSlotResult] = Field(default_factory=list)
 
@@ -560,8 +562,11 @@ class RecurringBookingSeriesResult(UUIDBaseModel):
 
     title: str = Field(default="")
     user_id: UUID = Field(...)
+    user_email: Optional[str] = Field(default=None)
+    user_display_name: Optional[str] = Field(default=None)
     ministry_id: Optional[UUID] = Field(default=None)
     ministry_name: Optional[str] = Field(default=None)
+    remark: Optional[str] = Field(default=None)
     first_occurrence_date: DateType = Field(...)
     last_occurrence_date: DateType = Field(...)
     local_start_time: time = Field(...)
@@ -573,7 +578,96 @@ class RecurringBookingSeriesResult(UUIDBaseModel):
     occurrence_count: int = Field(...)
     is_priority: bool = Field(default=False)
     confirmed_by_id: Optional[UUID] = Field(default=None)
+    created_at: Optional[datetime] = Field(default=None)
     occurrences: list[RecurringBookingOccurrenceResult] = Field(default_factory=list)
+
+
+class ParticipantTimelineEventResult(BaseModel):
+    """Member-visible Booking lifecycle timeline entry."""
+
+    kind: str = Field(...)
+    occurred_at: datetime = Field(...)
+    reason: Optional[str] = Field(default=None)
+
+
+class ParticipantActionEligibilityResult(BaseModel):
+    """Booker-only self-service eligibility."""
+
+    can_edit_title: bool = Field(...)
+    can_cancel: bool = Field(...)
+    can_view_payment_instructions: bool = Field(...)
+    can_book_again: bool = Field(...)
+    book_again_date: Optional[DateType] = Field(default=None)
+
+
+class ParticipantRoomLineResult(UUIDBaseModel):
+    """Room line on participant Booking detail."""
+
+    facility_id: UUID = Field(...)
+    facility_name: Optional[str] = Field(default=None)
+    sequence: int = Field(default=0)
+    start_at: datetime = Field(...)
+    end_at: datetime = Field(...)
+    billed_hours: Optional[Decimal] = Field(default=None)
+    rental_rate_name: Optional[str] = Field(default=None)
+    billing_unit: Optional[str] = Field(default=None)
+    unit_amount: Optional[Decimal] = Field(default=None)
+    currency: Optional[str] = Field(default=None)
+    line_subtotal: Optional[Decimal] = Field(default=None)
+    photo_urls: list[str] = Field(default_factory=list)
+
+
+class ParticipantBookingDetailResult(UUIDBaseModel):
+    """Complete participant-authorized Booking or Occurrence detail."""
+
+    title: str = Field(default="")
+    status: str = Field(...)
+    booking_type: str = Field(...)
+    series_id: Optional[UUID] = Field(default=None)
+    start_at: datetime = Field(...)
+    end_at: datetime = Field(...)
+    ministry_id: Optional[UUID] = Field(default=None)
+    ministry_name: Optional[str] = Field(default=None)
+    remark: Optional[str] = Field(default=None)
+    booker_display_name: Optional[str] = Field(default=None)
+    booker_email: Optional[str] = Field(default=None)
+    subtotal_amount: Optional[Decimal] = Field(default=None)
+    discount_percent: Optional[Decimal] = Field(default=None)
+    discount_amount: Optional[Decimal] = Field(default=None)
+    surcharge_amount: Optional[Decimal] = Field(default=None)
+    quoted_amount: Optional[Decimal] = Field(default=None)
+    currency: Optional[str] = Field(default=None)
+    payment_hold_expires_at: Optional[datetime] = Field(default=None)
+    is_booker: bool = Field(...)
+    is_view_only: bool = Field(...)
+    rooms: list[ParticipantRoomLineResult] = Field(default_factory=list)
+    timeline: list[ParticipantTimelineEventResult] = Field(default_factory=list)
+    actions: ParticipantActionEligibilityResult = Field(...)
+
+
+class ParticipantSeriesDetailResult(UUIDBaseModel):
+    """Complete participant-authorized Recurring Booking Series detail."""
+
+    title: str = Field(default="")
+    status: str = Field(...)
+    ministry_id: Optional[UUID] = Field(default=None)
+    ministry_name: Optional[str] = Field(default=None)
+    remark: Optional[str] = Field(default=None)
+    first_occurrence_date: DateType = Field(...)
+    last_occurrence_date: DateType = Field(...)
+    local_start_time: time = Field(...)
+    local_end_time: time = Field(...)
+    payment_hold_expires_at: Optional[datetime] = Field(default=None)
+    quoted_amount: Decimal = Field(...)
+    currency: str = Field(...)
+    occurrence_count: int = Field(...)
+    booker_display_name: Optional[str] = Field(default=None)
+    booker_email: Optional[str] = Field(default=None)
+    is_booker: bool = Field(...)
+    is_view_only: bool = Field(...)
+    timeline: list[ParticipantTimelineEventResult] = Field(default_factory=list)
+    actions: ParticipantActionEligibilityResult = Field(...)
+    occurrences: list[ParticipantBookingDetailResult] = Field(default_factory=list)
 
 
 class RecurringOccupyingBookingResult(BaseModel):

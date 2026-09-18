@@ -46,6 +46,8 @@ from portal.application.facility.results import (
     MemberBrowseBookingResult,
     MemberBrowseCardResult,
     MemberBrowsePageResult,
+    ParticipantBookingDetailResult,
+    ParticipantSeriesDetailResult,
     PreviewQuoteResult,
     RentalRateListResult,
     RentalRatePageResult,
@@ -117,6 +119,7 @@ from portal.serializers.admin.v1.facility.room_slot_template import (
 )
 from portal.serializers.admin.v1.facility.translation import AdminFacilityTranslationInput, AdminFacilityTranslationItem
 from portal.serializers.apis.v1.facility import (
+    MemberBookingActions,
     MemberBookingBrowseCard,
     MemberBookingBrowsePage,
     MemberBookingBrowseQuery,
@@ -127,6 +130,7 @@ from portal.serializers.apis.v1.facility import (
     MemberBookingDraftLine,
     MemberBookingDraftUpdate,
     MemberBookingListItem,
+    MemberBookingTimelineEvent,
     MemberDayAvailability,
     MemberPreviewQuoteLineInput,
     MemberPreviewQuoteRequest,
@@ -499,16 +503,55 @@ def room_availability_list_to_api(result: RoomAvailabilityListResult) -> MemberR
     )
 
 
-def member_booking_detail_to_api(result: BookingDetailResult) -> MemberBookingDetail:
+def member_booking_detail_to_api(result: ParticipantBookingDetailResult) -> MemberBookingDetail:
     return MemberBookingDetail(
         id=result.id,
         title=result.title,
         status=result.status,
+        booking_type=result.booking_type,
+        series_id=result.series_id,
         start_at=result.start_at,
         end_at=result.end_at,
+        ministry_id=result.ministry_id,
+        ministry_name=result.ministry_name,
+        remark=result.remark,
+        booker_display_name=result.booker_display_name,
+        booker_email=result.booker_email,
         quoted_amount=result.quoted_amount,
+        subtotal_amount=result.subtotal_amount,
+        discount_percent=result.discount_percent,
+        discount_amount=result.discount_amount,
+        surcharge_amount=result.surcharge_amount,
         currency=result.currency,
-        rooms=[MemberBookingDetailRoom(facility_id=line.facility_id, facility_name=line.facility_name) for line in result.rooms],
+        payment_hold_expires_at=result.payment_hold_expires_at,
+        is_booker=result.is_booker,
+        is_view_only=result.is_view_only,
+        rooms=[
+            MemberBookingDetailRoom(
+                id=line.id,
+                facility_id=line.facility_id,
+                facility_name=line.facility_name,
+                sequence=line.sequence,
+                start_at=line.start_at,
+                end_at=line.end_at,
+                billed_hours=line.billed_hours,
+                rental_rate_name=line.rental_rate_name,
+                billing_unit=line.billing_unit,
+                unit_amount=line.unit_amount,
+                currency=line.currency,
+                line_subtotal=line.line_subtotal,
+                photo_urls=line.photo_urls,
+            )
+            for line in result.rooms
+        ],
+        timeline=[MemberBookingTimelineEvent(kind=event.kind, occurred_at=event.occurred_at, reason=event.reason) for event in result.timeline],
+        actions=MemberBookingActions(
+            can_edit_title=result.actions.can_edit_title,
+            can_cancel=result.actions.can_cancel,
+            can_view_payment_instructions=result.actions.can_view_payment_instructions,
+            can_book_again=result.actions.can_book_again,
+            book_again_date=result.actions.book_again_date,
+        ),
     )
 
 
@@ -761,7 +804,62 @@ def recurring_booking_series_to_admin_api(result) -> "AdminRecurringBookingSerie
 def recurring_booking_series_to_member_api(result) -> "MemberRecurringBookingSeriesDetail":
     from portal.serializers.apis.v1.facility import MemberRecurringBookingSeriesDetail
 
-    return MemberRecurringBookingSeriesDetail.model_validate(result.model_dump())
+    return MemberRecurringBookingSeriesDetail(
+        id=result.id,
+        title=result.title,
+        ministry_id=result.ministry_id,
+        ministry_name=getattr(result, "ministry_name", None),
+        remark=getattr(result, "remark", None),
+        first_occurrence_date=result.first_occurrence_date,
+        last_occurrence_date=result.last_occurrence_date,
+        local_start_time=result.local_start_time,
+        local_end_time=result.local_end_time,
+        status=result.status,
+        payment_hold_expires_at=result.payment_hold_expires_at,
+        quoted_amount=result.quoted_amount,
+        currency=result.currency,
+        occurrence_count=result.occurrence_count,
+        is_priority=getattr(result, "is_priority", False),
+        user_id=getattr(result, "user_id", None),
+        booker_display_name=getattr(result, "booker_display_name", None) or getattr(result, "user_display_name", None),
+        booker_email=getattr(result, "booker_email", None) or getattr(result, "user_email", None),
+        is_booker=getattr(result, "is_booker", True),
+        is_view_only=getattr(result, "is_view_only", False),
+        timeline=[MemberBookingTimelineEvent(kind=event.kind, occurred_at=event.occurred_at, reason=event.reason) for event in getattr(result, "timeline", [])],
+        actions=_member_actions_to_api(getattr(result, "actions", None)),
+        occurrences=[_member_occurrence_to_api(item) for item in result.occurrences],
+    )
+
+
+def participant_series_detail_to_api(result: ParticipantSeriesDetailResult) -> "MemberRecurringBookingSeriesDetail":
+    return recurring_booking_series_to_member_api(result)
+
+
+def _member_actions_to_api(actions) -> MemberBookingActions:
+    if actions is None:
+        return MemberBookingActions(can_edit_title=False, can_cancel=False, can_view_payment_instructions=False, can_book_again=False)
+    return MemberBookingActions(
+        can_edit_title=actions.can_edit_title,
+        can_cancel=actions.can_cancel,
+        can_view_payment_instructions=actions.can_view_payment_instructions,
+        can_book_again=actions.can_book_again,
+        book_again_date=actions.book_again_date,
+    )
+
+
+def _member_occurrence_to_api(item) -> MemberBookingDetail:
+    if isinstance(item, ParticipantBookingDetailResult):
+        return member_booking_detail_to_api(item)
+    return MemberBookingDetail(
+        id=item.id,
+        title=getattr(item, "title", ""),
+        status=item.status,
+        booking_type=getattr(item, "booking_type", ""),
+        start_at=item.start_at,
+        end_at=item.end_at,
+        quoted_amount=item.quoted_amount,
+        currency=item.currency,
+    )
 
 
 def recurring_booking_preview_to_admin_api(result) -> "AdminRecurringBookingPreview":
