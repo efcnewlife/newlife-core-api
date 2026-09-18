@@ -83,8 +83,12 @@ The facility-local duration after a Recurring Booking opening date during which 
 _Avoid_: confusing availability with a Series use period, a months-only numeric setting, treating four weeks as one calendar month
 
 **Recurring Booking test-window override**:
-An environment-scoped test control that makes the Recurring Booking availability window open without changing that window's configured business policy. It applies uniformly to every Booker in that test environment and is not an account privilege.
-_Avoid_: Repeated booking bypass, test-user exception, changing the availability-window setting for a test run
+A Boolean System Setting that makes the Recurring Booking availability window open without changing that window's configured business policy. It applies uniformly to every Booker in its non-production environment, is ignored in production, and is closed when absent, inactive, or invalid; it is not an account privilege.
+_Avoid_: Repeated booking bypass, test-user exception, changing the availability-window setting for a test run, deployment-only flag
+
+**Recurring Booking test Booker allowlist**:
+A System Setting with separate exact email-address and whole-domain-suffix lists that makes matching Testing Accounts eligible to create a Recurring Booking Series. It is ignored in production, is closed when absent, inactive, or invalid, and does not make an unlisted account eligible.
+_Avoid_: a blanket Mock-user exemption, substring matching, an administrator role bypass
 
 **Recurring Booking minimum duration**:
 The Booker selects first and last occurrences within one Recurring Booking period, and `facility.min_recurring_booking_weeks` requires at least four unexcluded weekly occurrences.

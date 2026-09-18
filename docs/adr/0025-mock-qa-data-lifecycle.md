@@ -18,6 +18,10 @@ Mock login needs more than a single manually entered account to exercise real Fa
 - Same-minute CSV name collisions are errors; local output retains only the latest pair per environment, while SharePoint retains all historical pairs.
 - A dedicated app-only Microsoft Entra application uses site-scoped `Sites.Selected` plus an explicit write grant for the supplied archive site. Upload failure leaves committed data and local CSVs intact, reports failure, and exits nonzero.
 
+## `seed-mock-data`
+
+Reads the single local account/Ministry CSV pair for the current environment (fails if missing or ambiguous — retention keeps only one pair per env locally) and completes the scenarios `seed-mock-users` cannot: a personal Rental Booking for the `personal` Mock user, activation of the `steward` Mock user's draft Ministry plus a Church Activity Booking on it, assignment of the `owner` Mock user as the incumbent of the first active `can_own_ministry` Position, and a second, pending Ministry Application (submitted by the `steward` Mock user) owned by that same Position so it appears in the new incumbent's approval queue. All writes are one transaction. It re-runs the same dev/staging guard as `seed-mock-users` and fails clearly (naming the missing prerequisite command) when the inventory, the steward Ministry is not still in `draft`, no active Room, or no `can_own_ministry` Position exists.
+
 ## SharePoint archive-writer provisioning (`seed-mock-users`)
 
 Non-secret configuration (`portal/config.py`, `example.env`): `SHAREPOINT_TENANT_ID`, `SHAREPOINT_APP_CLIENT_ID`, `SHAREPOINT_SITE_ID`, `SHAREPOINT_DRIVE_ID`, `SHAREPOINT_TEST_ACCOUNT_FOLDER_DEV`, `SHAREPOINT_TEST_ACCOUNT_FOLDER_STG`. The only secret is `SHAREPOINT_APP_CLIENT_SECRET`; it is never written to CSVs, logs, or this document.
