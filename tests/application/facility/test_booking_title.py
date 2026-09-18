@@ -7,7 +7,7 @@ from uuid import uuid4
 import pytest
 from pydantic import ValidationError
 
-from portal.application.facility.commands import CreateBookingCommand, CreateRecurringBookingSeriesCommand, UpdateTitleCommand
+from portal.application.facility.commands import CreateBookingCommand, CreateRecurringBookingSeriesCommand, MemberBrowseQueryCommand, UpdateTitleCommand
 from portal.application.facility.mappers import (
     create_booking_to_command,
     create_recurring_booking_series_to_command,
@@ -15,8 +15,8 @@ from portal.application.facility.mappers import (
     recurring_booking_series_to_member_api,
     update_title_to_command,
 )
-from portal.application.facility.results import BookingDetailResult, BookingListItemResult, RecurringBookingOccurrenceResult, RecurringBookingSeriesResult
-from portal.domain.facility.constants import BookingStatus, FacilityErrorCode
+from portal.application.facility.results import BookingDetailResult, MemberBrowseBookingResult, RecurringBookingOccurrenceResult, RecurringBookingSeriesResult
+from portal.domain.facility.constants import BookingStatus, FacilityErrorCode, MyBookingsSection
 from portal.exceptions.responses import BadRequestException, ForbiddenException, NotFoundException
 from portal.routers.apis.v1.facility import router as member_facility_router
 from portal.serializers.admin.v1.facility.booking import AdminBookingCreate, AdminBookingRoomInput
@@ -121,11 +121,12 @@ async def test_member_booking_read_exposes_title(monkeypatch):
     booking_id = uuid4()
     detail = _booking_detail(booking_id=booking_id, user_id=owner_id)
     detail = detail.model_copy(update={"title": "Choir practice"})
-    service = _booking_service(StubBookingRepository(detail=detail, range_items=[_list_item(booking_id, owner_id, "Choir practice")]))
+    service = _booking_service(StubBookingRepository(detail=detail, participant_bookings=[_list_item(booking_id, owner_id, "Choir practice")]))
     read = await service.get_my_booking_by_id(booking_id)
     assert read.title == "Choir practice"
-    items = await service.list_my_bookings()
-    assert items[0].title == "Choir practice"
+    items = await service.browse_my_bookings(MemberBrowseQueryCommand(section=MyBookingsSection.PAST), now=datetime(2026, 9, 18, 16, 0, tzinfo=timezone.utc))
+    assert items.items[0].booking is not None
+    assert items.items[0].booking.title == "Choir practice"
 
 
 @pytest.mark.asyncio
@@ -320,8 +321,8 @@ def test_member_title_update_routes_exist():
     assert ("/booking-series/{series_id}/title", "PATCH") in routes
 
 
-def _list_item(booking_id, user_id, title: str) -> BookingListItemResult:
-    return BookingListItemResult(
+def _list_item(booking_id, user_id, title: str) -> MemberBrowseBookingResult:
+    return MemberBrowseBookingResult(
         id=booking_id,
         title=title,
         user_id=user_id,

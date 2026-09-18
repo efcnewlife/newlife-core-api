@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 from portal.application.org.commands import CreateMinistryCommand, MinistryMemberEntryCommand, ReplaceMinistryMembersCommand, UpdateMinistryCommand
 from portal.application.rbac.commands import BulkIdsCommand, DeleteCommand, PagesQueryCommand
 from portal.domain.facility.booking_title import BookingTitle, OptionalBookingTitle
-from portal.domain.facility.constants import PREVIEW_QUOTE_MAX_LINES, BookingType, RentalRateBillingUnit
+from portal.domain.facility.constants import PREVIEW_QUOTE_MAX_LINES, BookingType, MyBookingsSection, RentalRateBillingUnit
 
 
 class FacilityTranslationCommand(BaseModel):
@@ -228,6 +228,14 @@ class PreviewQuoteCommand(BaseModel):
     room_lines: list[PreviewQuoteRoomLineCommand] = Field(default_factory=list)
     surcharge_codes: list[str] = Field(default_factory=list)
     ministry_id: Optional[UUID] = Field(default=None)
+
+
+class MemberBrowseQueryCommand(BaseModel):
+    """Participant-scoped My Bookings browse query."""
+
+    section: MyBookingsSection = Field(...)
+    page: int = Field(default=0, ge=0)
+    page_size: int = Field(default=20, ge=1, le=50)
 
 
 class BookingPagesQueryCommand(PagesQueryCommand):

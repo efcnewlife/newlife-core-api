@@ -34,6 +34,7 @@ from tests.fixtures.facility.factories import (
 from tests.fixtures.facility.stubs import (
     StubBookingDraftRepository,
     StubBookingRepository,
+    StubFileService,
     StubMinistryRepository,
     StubPricingService,
     StubRentalRepository,
@@ -62,6 +63,7 @@ def _booking_service(
     ministry_stub: StubMinistryRepository | None = None,
     setting_stub: StubSettingService | None = None,
     booking_draft_stub: StubBookingDraftRepository | None = None,
+    file_service: StubFileService | None = None,
 ) -> BookingService:
     quote = make_preview_quote_result(quoted_amount=Decimal("150"), discount_percent=Decimal("10"))
     return BookingService(
@@ -71,6 +73,7 @@ def _booking_service(
         blackout_stub or StubRoomBlackoutRepository(),
         setting_stub or StubSettingService(),
         booking_draft_stub or StubBookingDraftRepository(),
+        file_service or StubFileService(),
     )
 
 
@@ -647,7 +650,13 @@ async def test_preview_quote_for_member_same_room_different_subtotals(monkeypatc
     rental = StubRentalRepository(rates_by_facility={room_id: make_hourly_and_daily_rates(room_id, hourly_amount=Decimal("10"))})
     pricing = PricingService(rental, StubRoomRepository(existing_ids={room_id}))
     service = BookingService(
-        StubBookingRepository(), pricing, StubMinistryRepository(), StubRoomBlackoutRepository(), StubSettingService(), StubBookingDraftRepository()
+        StubBookingRepository(),
+        pricing,
+        StubMinistryRepository(),
+        StubRoomBlackoutRepository(),
+        StubSettingService(),
+        StubBookingDraftRepository(),
+        StubFileService(),
     )
     command = MemberPreviewQuoteCommand(
         lines=[

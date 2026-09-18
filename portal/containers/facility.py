@@ -67,6 +67,7 @@ class FacilityContainer(containers.DeclarativeContainer):
         room_blackout_repository=room_blackout_repository,
         setting_service=setting_service,
         booking_draft_repository=booking_draft_repository,
+        file_service=file_service,
     )
     booking_draft_service = providers.Factory(
         BookingDraftService,
