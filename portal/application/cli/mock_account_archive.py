@@ -20,6 +20,10 @@ class MockSeedArchiveCollisionError(Exception):
     """Raised when the computed archive filename already exists (same-minute collision)."""
 
 
+class MockSeedInventoryError(Exception):
+    """Raised when the local account/Ministry CSV inventory pair is missing or ambiguous."""
+
+
 @dataclass(frozen=True)
 class ArchiveFilenames:
     account_filename: str
@@ -48,6 +52,39 @@ def write_csv(path: Path, columns: tuple[str, ...], rows: list[dict[str, Any]]) 
         writer.writerow(columns)
         for row in rows:
             writer.writerow([_format_value(row.get(column)) for column in columns])
+
+
+def find_local_archive_pair(output_dir: Path, *, env: str) -> tuple[Path, Path]:
+    """
+    Return the single local (account_csv, ministry_csv) pair for `env`.
+
+    `seed-mock-users` retains only the latest local pair per env (`remove_previous_archive_pair`),
+    so a consumer reading "the current Mock user inventory" must find exactly one pair. Raises
+    MockSeedInventoryError when none exists or more than one candidate is present (ambiguous).
+    """
+    if not output_dir.exists():
+        raise MockSeedInventoryError(f"No local Mock inventory found in {output_dir} for env {env!r}. Run seed-mock-users first.")
+
+    account_matches = sorted(output_dir.glob(f"*_{env}_{_ACCOUNT_SUFFIX}"))
+    ministry_matches = sorted(output_dir.glob(f"*_{env}_{_MINISTRY_SUFFIX}"))
+
+    if not account_matches or not ministry_matches:
+        raise MockSeedInventoryError(f"No local Mock inventory CSV pair found for env {env!r} in {output_dir}. Run seed-mock-users first.")
+    if len(account_matches) > 1 or len(ministry_matches) > 1:
+        raise MockSeedInventoryError(f"Ambiguous local Mock inventory for env {env!r}: expected exactly one CSV pair in {output_dir}.")
+
+    account_csv, ministry_csv = account_matches[0], ministry_matches[0]
+    account_stamp = account_csv.name[: -len(f"_{env}_{_ACCOUNT_SUFFIX}")]
+    ministry_stamp = ministry_csv.name[: -len(f"_{env}_{_MINISTRY_SUFFIX}")]
+    if account_stamp != ministry_stamp:
+        raise MockSeedInventoryError(f"Mismatched local Mock inventory pair for env {env!r}: {account_csv.name} vs {ministry_csv.name}.")
+    return account_csv, ministry_csv
+
+
+def read_csv_rows(path: Path) -> list[dict[str, str]]:
+    """Read a Mock inventory CSV into row dicts, keyed by header column."""
+    with path.open("r", newline="", encoding="utf-8") as handle:
+        return list(csv.DictReader(handle))
 
 
 def remove_previous_archive_pair(output_dir: Path, *, env: str, keep: tuple[Path, Path]) -> None:

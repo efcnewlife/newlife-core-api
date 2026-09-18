@@ -11,6 +11,7 @@ from .seed_facility_rental import seed_facility_rental_process
 from .seed_legal_documents import seed_legal_documents_process
 from .seed_local_demo import seed_local_demo_process
 from .seed_ministry_type import seed_ministry_types_process
+from .seed_mock_data import seed_mock_data_process
 from .seed_mock_users import seed_mock_users_process
 from .seed_position import seed_positions_process
 from .seed_position_assignment import seed_position_assignments_process
@@ -102,6 +103,13 @@ def seed_facility_rental_cmd(force: bool, reset: bool):
 def seed_mock_users_cmd(force: bool):
     """Create random personal/steward/owner/inactive Mock users and a steward Ministry, then archive the CSV inventory."""
     seed_mock_users_process(force=force)
+
+
+@cli.command(name="seed-mock-data")
+@click.option("--force", is_flag=True, default=False, help="Skip confirmation; required to run in staging. Never allowed in production.")
+def seed_mock_data_cmd(force: bool):
+    """Complete Facility Booking QA scenarios (Bookings, Owner assignment, Ministry Application) for the current Mock user inventory."""
+    seed_mock_data_process(force=force)
 
 
 @cli.command(name="seed-local-demo")
