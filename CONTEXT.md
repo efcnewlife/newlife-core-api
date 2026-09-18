@@ -35,8 +35,16 @@ A user associated with a Booking as its Booker or as the current primary or seco
 _Avoid_: Booker as every participant, delegated Booker, Ministry-owned Booking
 
 **Booker self-service authority**:
-The authority reserved for the Booker to cancel, view payment instructions for, or rebook an eligible Booking through member-facing flows. Booking Participants who are not the Booker have view-only access.
+The authority reserved for the Booker to edit a Booking title, cancel, view payment instructions for, or rebook an eligible Booking through member-facing flows. Booking Participants who are not the Booker have view-only access.
 _Avoid_: Ministry-member cancellation authority, participant-as-Booker, shared self-service control
+
+**Booking title**:
+A required, editable, non-unique, trimmed 1-30-character plain-text label owned by one Booking. It is distinct from the optional Booking remark and from a Room or Ministry name; only the Booker may edit it.
+_Avoid_: remark as the title, Booking reference, localized Room name, markup content, participant title editing
+
+**Recurring Booking Series title**:
+A required, editable, non-unique, trimmed 1-30-character plain-text label owned by one Recurring Booking Series. It is copied to every new Booking Occurrence as its initial title, after which the Series and Occurrence titles are independently editable by the Booker.
+_Avoid_: occurrence title as the Series title, an immutable scheduling label, a shared reference code, later Series-title propagation
 
 **Current Ministry Booking Participant**:
 A Booking Participant whose current primary or secondary membership of the Booking's Active Ministry grants view access to a Ministry-associated Booking. Leaving the Ministry removes that view access, including for historical Bookings.
@@ -55,8 +63,8 @@ The required 1-250-character explanation a Booker provides when cancelling a Boo
 _Avoid_: silent member cancellation, optional explanation, an internal-only reason
 
 **Booking lifecycle timeline**:
-The ordered record of a Booking's creation and lifecycle outcome events, including cancellation, override, and pending-payment expiry when they occur. It is part of complete Booking detail.
-_Avoid_: a status-only detail, an admin audit-log substitute, hiding an expiry as a missing Booking
+The ordered record of a Booking's creation and lifecycle outcome events, including cancellation, override, and pending-payment expiry when they occur. It is part of complete Booking detail but does not expose an Operator or a replacement Ministry or activity; title revisions are not lifecycle events.
+_Avoid_: a status-only detail, an admin audit-log substitute, hiding an expiry as a missing Booking, cross-Ministry activity disclosure, title revision history
 
 **Operator**:
 The authenticated admin (or member) who performed the create action. For admin on-behalf create, Operator differs from Booker. v1 records Operator only via immutable audit `created_by_id` / `created_by` — no dedicated business column — and shows them on admin booking **detail** as Created by (always, including when Operator equals Booker).
