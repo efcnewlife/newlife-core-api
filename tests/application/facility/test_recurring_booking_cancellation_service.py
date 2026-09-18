@@ -83,7 +83,7 @@ def _series(*, series_id=None, user_id=None, status=BookingStatus.CONFIRMED.valu
     )
 
 
-def _service(monkeypatch, *, operator_id=None, series_stub=None, booking_stub=None):
+def _service(monkeypatch, *, operator_id=None, series_stub=None, booking_stub=None, ministry_stub=None):
     operator_id = operator_id or uuid4()
     _user_ctx(monkeypatch, user_id=operator_id)
     series_stub = series_stub or StubRecurringBookingRepository()
@@ -92,7 +92,7 @@ def _service(monkeypatch, *, operator_id=None, series_stub=None, booking_stub=No
         series_repository=series_stub,
         booking_repository=booking_stub,
         pricing_service=StubPricingService(make_preview_quote_result(quoted_amount=Decimal("100"))),
-        ministry_repository=StubMinistryRepository(),
+        ministry_repository=ministry_stub or StubMinistryRepository(),
         room_blackout_repository=StubRoomBlackoutRepository(),
         setting_service=StubSettingService(max_booking_lines=10),
         user_read_service=StubUserReadService(),
@@ -339,12 +339,17 @@ async def test_cancel_my_series_is_owner_only(monkeypatch):
     _seed_series(series_stub, booking_stub, series)
     service, *_ = _service(monkeypatch, operator_id=uuid4(), series_stub=series_stub, booking_stub=booking_stub)
 
-    with pytest.raises(ForbiddenException):
-        await service.cancel_my_series(series.id, CancelRecurringBookingSeriesCommand(scope=RecurringCancellationScope.ENTIRE_SERIES.value))
+    with pytest.raises(NotFoundException) as exc_info:
+        await service.cancel_my_series(
+            series.id, CancelRecurringBookingSeriesCommand(scope=RecurringCancellationScope.ENTIRE_SERIES.value, cancel_reason="Moving")
+        )
+    assert exc_info.value.error_code == FacilityErrorCode.BOOKING_SERIES_NOT_FOUND.value
     assert booking_stub.cancel_calls == []
 
     owner_service, series_stub, booking_stub, _ = _service(monkeypatch, operator_id=booker_id, series_stub=series_stub, booking_stub=booking_stub)
-    result = await owner_service.cancel_my_series(series.id, CancelRecurringBookingSeriesCommand(scope=RecurringCancellationScope.ENTIRE_SERIES.value))
+    result = await owner_service.cancel_my_series(
+        series.id, CancelRecurringBookingSeriesCommand(scope=RecurringCancellationScope.ENTIRE_SERIES.value, cancel_reason="Moving")
+    )
     assert result.status == BookingStatus.CANCELLED.value
     assert booking_stub.cancel_calls
 
@@ -392,8 +397,9 @@ async def test_get_my_series_is_owner_only(monkeypatch):
     booking_stub = StubBookingRepository()
     _seed_series(series_stub, booking_stub, series)
     stranger, *_ = _service(monkeypatch, operator_id=uuid4(), series_stub=series_stub, booking_stub=booking_stub)
-    with pytest.raises(ForbiddenException):
+    with pytest.raises(NotFoundException) as exc_info:
         await stranger.get_my_series(series.id)
+    assert exc_info.value.error_code == FacilityErrorCode.BOOKING_SERIES_NOT_FOUND.value
 
     owner, *_ = _service(monkeypatch, operator_id=booker_id, series_stub=series_stub, booking_stub=booking_stub)
     result = await owner.get_my_series(series.id)

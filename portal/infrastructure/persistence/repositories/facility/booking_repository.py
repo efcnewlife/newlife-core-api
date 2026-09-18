@@ -246,12 +246,15 @@ class BookingRepository:
                 FacilityBooking.cancelled_at,
                 FacilityBooking.cancel_reason,
                 FacilityBooking.remark,
+                FacilityBooking.created_at,
                 FacilityBooking.created_by_id,
                 FacilityBooking.created_by,
+                FacilityBookingSeries.payment_hold_expires_at,
             )
             .select_from(FacilityBooking)
             .join(AuthUser, AuthUser.id == FacilityBooking.user_id)
             .outerjoin(AuthUserProfile, AuthUserProfile.user_id == AuthUser.id)
+            .outerjoin(FacilityBookingSeries, FacilityBookingSeries.id == FacilityBooking.series_id)
             .where(FacilityBooking.id == booking_id)
             .where(FacilityBooking.is_deleted == False)
             .fetchrow(as_model=BookingDetailResult)

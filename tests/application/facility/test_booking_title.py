@@ -3,6 +3,7 @@
 from datetime import datetime, time, timezone
 from decimal import Decimal
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 import pytest
 from pydantic import ValidationError
@@ -15,9 +16,10 @@ from portal.application.facility.mappers import (
     recurring_booking_series_to_member_api,
     update_title_to_command,
 )
+from portal.application.facility.participant_detail import assemble_participant_booking_detail
 from portal.application.facility.results import BookingDetailResult, MemberBrowseBookingResult, RecurringBookingOccurrenceResult, RecurringBookingSeriesResult
 from portal.domain.facility.constants import BookingStatus, FacilityErrorCode, MyBookingsSection
-from portal.exceptions.responses import BadRequestException, ForbiddenException, NotFoundException
+from portal.exceptions.responses import BadRequestException, NotFoundException
 from portal.routers.apis.v1.facility import router as member_facility_router
 from portal.serializers.admin.v1.facility.booking import AdminBookingCreate, AdminBookingRoomInput
 from portal.serializers.apis.v1.facility import (
@@ -151,8 +153,9 @@ async def test_non_booker_cannot_update_booking_title(monkeypatch):
     booking_id = uuid4()
     detail = _booking_detail(booking_id=booking_id, user_id=uuid4()).model_copy(update={"title": "Choir practice"})
     service = _booking_service(StubBookingRepository(detail=detail))
-    with pytest.raises(ForbiddenException, match="another user's booking"):
+    with pytest.raises(NotFoundException) as exc_info:
         await service.update_my_booking_title(booking_id, UpdateTitleCommand(title="Hijack"))
+    assert exc_info.value.error_code == FacilityErrorCode.BOOKING_NOT_FOUND.value
 
 
 @pytest.mark.asyncio
@@ -271,8 +274,9 @@ async def test_non_booker_cannot_update_series_title(monkeypatch):
         occurrence_count=0,
     )
     service, *_rest = _service(monkeypatch, series_stub=StubRecurringBookingRepository(series_by_id={series_id: series}))
-    with pytest.raises(ForbiddenException, match="another user's Recurring Booking Series"):
+    with pytest.raises(NotFoundException) as exc_info:
         await service.update_my_series_title(series_id, UpdateTitleCommand(title="Hijack"))
+    assert exc_info.value.error_code == FacilityErrorCode.BOOKING_SERIES_NOT_FOUND.value
 
 
 def test_mappers_and_member_reads_expose_titles():
@@ -291,7 +295,8 @@ def test_mappers_and_member_reads_expose_titles():
     assert create_recurring_booking_series_to_command(member_create).title == "Weekly choir"
     assert update_title_to_command(MemberBookingTitleUpdate(title="  Renamed  ")).title == "Renamed"
     detail = BookingDetailResult(id=uuid4(), title="Choir practice", user_id=uuid4(), booking_type="one_time", start_at=start, end_at=end, status="confirmed")
-    assert member_booking_detail_to_api(detail).title == "Choir practice"
+    assembled = assemble_participant_booking_detail(detail, viewer_id=detail.user_id, now=start, facility_tz=ZoneInfo("America/Toronto"), photo_urls_by_room={})
+    assert member_booking_detail_to_api(assembled).title == "Choir practice"
     series = RecurringBookingSeriesResult(
         id=uuid4(),
         title="Weekly choir",

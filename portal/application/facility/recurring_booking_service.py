@@ -9,6 +9,7 @@ from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
 from portal.application.auth.user_read_service import UserReadService
+from portal.application.content.file_service import FileService
 from portal.application.facility.booking_line_validation import ResolvedBookingLine, primary_facility_id, validate_booking_lines
 from portal.application.facility.commands import (
     CancelRecurringBookingSeriesCommand,
@@ -17,11 +18,14 @@ from portal.application.facility.commands import (
     PreviewQuoteRoomLineCommand,
     UpdateTitleCommand,
 )
+from portal.application.facility.participant_detail import assemble_participant_booking_detail, assemble_participant_series_detail
 from portal.application.facility.pricing_service import PricingService
 from portal.application.facility.recurring_override_mail_content import resolve_bilingual_activity_names
 from portal.application.facility.results import (
     BlackoutImpactOccurrenceResult,
     BlackoutImpactResult,
+    ParticipantBookingDetailResult,
+    ParticipantSeriesDetailResult,
     PendingPaymentExpirySweepResult,
     PendingPaymentSeriesListResult,
     RecurringBookingConflictResult,
@@ -37,6 +41,8 @@ from portal.application.facility.results import (
 )
 from portal.application.system.setting_service import SettingService
 from portal.config import settings
+from portal.domain.content.constants import FILE_RESOURCE_KIND_FACILITY_ROOM
+from portal.domain.facility.cancellation_reason import InvalidMemberCancellationReason, normalize_member_cancellation_reason
 from portal.domain.facility.constants import (
     CHURCH_EMAIL_DOMAIN,
     PENDING_PAYMENT_HOLD_EXPIRED_REASON,
@@ -49,6 +55,7 @@ from portal.domain.facility.constants import (
     RecurringCancellationScope,
     RecurringConflictKind,
 )
+from portal.domain.facility.participant_detail import is_current_booking_participant
 from portal.domain.facility.recurring import (
     is_any_recurring_period_open,
     is_church_email,
@@ -138,6 +145,7 @@ class RecurringBookingService:
         override_log_repository: OverrideLogRepository,
         override_notifier: Optional[RecurringOverrideNotifierPort] = None,
         expiry_notifier: Optional[RecurringExpiryNotifierPort] = None,
+        file_service: Optional[FileService] = None,
         now_utc: Optional[Callable[[], datetime]] = None,
     ):
         self._series_repository = series_repository
@@ -150,6 +158,7 @@ class RecurringBookingService:
         self._override_log_repository = override_log_repository
         self._override_notifier = override_notifier or NullRecurringOverrideNotifier()
         self._expiry_notifier = expiry_notifier or NullRecurringExpiryNotifier()
+        self._file_service = file_service
         self._now_utc = now_utc or (lambda: datetime.now(timezone.utc))
         self._req_ctx: Optional[RequestContext] = get_request_context()
         self._user_ctx: Optional[UserContext] = get_user_context()
@@ -404,12 +413,38 @@ class RecurringBookingService:
     @distributed_trace()
     async def get_my_series(self, series_id: UUID) -> RecurringBookingSeriesResult:
         series = await self.get_series(series_id)
-        self._raise_if_not_owner(series)
+        await self._raise_if_not_participant(series)
         return series
+
+    @distributed_trace()
+    async def get_my_series_detail(self, series_id: UUID, now: Optional[datetime] = None) -> ParticipantSeriesDetailResult:
+        series = await self.get_my_series(series_id)
+        viewer_id = self._require_operator_id()
+        browse_now = now or self._now_utc()
+        facility_tz = await self._setting_service.get_facility_timezone()
+        occurrences: list[ParticipantBookingDetailResult] = []
+        photo_urls_by_room: dict[UUID, list[str]] = {}
+        details = []
+        for occurrence in series.occurrences:
+            row = await self._booking_repository.get_detail(occurrence.id, self._resolved_locale_id())
+            if row is None:
+                continue
+            details.append(row)
+        facility_ids = [line.facility_id for row in details for line in row.rooms]
+        if self._file_service and facility_ids:
+            photo_urls_by_room = await self._file_service.get_signed_urls_by_resource_ids(facility_ids, resource_name=FILE_RESOURCE_KIND_FACILITY_ROOM)
+        for row in details:
+            row = row.model_copy(update={"payment_hold_expires_at": row.payment_hold_expires_at or series.payment_hold_expires_at})
+            occurrences.append(
+                assemble_participant_booking_detail(row, viewer_id=viewer_id, now=browse_now, facility_tz=facility_tz, photo_urls_by_room=photo_urls_by_room)
+            )
+        return assemble_participant_series_detail(series, occurrences, viewer_id=viewer_id, now=browse_now, facility_tz=facility_tz)
 
     @distributed_trace()
     async def update_my_series_title(self, series_id: UUID, command: UpdateTitleCommand) -> RecurringBookingSeriesResult:
         series = await self.get_my_series(series_id)
+        if series.user_id != self._require_operator_id():
+            raise ForbiddenException(detail="Cannot update another user's Recurring Booking Series")
         await self._series_repository.update_series(series.id, dict(title=command.title))
         return await self.get_my_series(series_id)
 
@@ -422,7 +457,10 @@ class RecurringBookingService:
     @distributed_trace()
     async def cancel_my_series(self, series_id: UUID, command: CancelRecurringBookingSeriesCommand) -> RecurringBookingSeriesResult:
         series = await self.get_my_series(series_id)
-        return await self._apply_cancellation(series, command)
+        if series.user_id != self._require_operator_id():
+            raise ForbiddenException(detail="Cannot cancel another user's Recurring Booking Series")
+        cancel_reason = self._require_member_cancellation_reason(command.cancel_reason)
+        return await self._apply_cancellation(series, command.model_copy(update={"cancel_reason": cancel_reason}))
 
     @distributed_trace()
     async def preview_blackout_impact(self, blackout: RoomBlackoutResult) -> BlackoutImpactResult:
@@ -496,10 +534,21 @@ class RecurringBookingService:
             return "system"
         return self._user_ctx.username or self._user_ctx.email or "system"
 
-    def _raise_if_not_owner(self, series: RecurringBookingSeriesResult) -> None:
-        operator_id = self._require_operator_id()
-        if series.user_id != operator_id:
-            raise ForbiddenException(detail="Cannot access another user's Recurring Booking Series")
+    async def _raise_if_not_participant(self, series: RecurringBookingSeriesResult) -> None:
+        viewer_id = self._require_operator_id()
+        owned = await self._ministry_repository.list_owned_active(viewer_id, self._resolved_locale_id())
+        owned_ministry_ids = [item.id for item in owned]
+        if not is_current_booking_participant(
+            viewer_id=viewer_id, booker_id=series.user_id, ministry_id=series.ministry_id, owned_ministry_ids=owned_ministry_ids
+        ):
+            raise NotFoundException(detail="Recurring Booking Series not found", error_code=FacilityErrorCode.BOOKING_SERIES_NOT_FOUND.value)
+
+    @staticmethod
+    def _require_member_cancellation_reason(cancel_reason: Optional[str]) -> str:
+        try:
+            return normalize_member_cancellation_reason(cancel_reason or "")
+        except InvalidMemberCancellationReason as exc:
+            raise BadRequestException(detail=str(exc), error_code=FacilityErrorCode.BOOKING_CANCEL_REASON_INVALID.value) from exc
 
     async def _series_with_occurrences(self, series_id: UUID) -> RecurringBookingSeriesResult:
         series = await self._series_repository.get_by_id(series_id, self._resolved_locale_id())

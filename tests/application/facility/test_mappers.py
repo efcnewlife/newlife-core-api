@@ -6,6 +6,7 @@ from datetime import date, datetime, time, timezone
 from decimal import Decimal
 from inspect import getsource
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 import pytest
 from pydantic import ValidationError
@@ -44,6 +45,7 @@ from portal.application.facility.mappers import (
     room_detail_to_api,
     update_booking_to_command,
 )
+from portal.application.facility.participant_detail import assemble_participant_booking_detail
 from portal.application.facility.results import (
     BlackoutImpactOccurrenceResult,
     BlackoutImpactResult,
@@ -443,11 +445,12 @@ def test_member_preview_quote_rejects_empty_and_more_than_three_lines():
 def test_member_booking_detail_to_api_includes_quoted_amount():
     booking_id = uuid4()
     room_id = uuid4()
+    viewer_id = uuid4()
     start = datetime(2026, 8, 22, 14, 0, tzinfo=timezone.utc)
     end = datetime(2026, 8, 22, 18, 0, tzinfo=timezone.utc)
     result = BookingDetailResult(
         id=booking_id,
-        user_id=uuid4(),
+        user_id=viewer_id,
         booking_type="one_time",
         start_at=start,
         end_at=end,
@@ -456,7 +459,9 @@ def test_member_booking_detail_to_api_includes_quoted_amount():
         currency="CAD",
         rooms=[BookingRoomLineResult(id=uuid4(), facility_id=room_id, facility_name="Gym", start_at=start, end_at=end)],
     )
-    api = member_booking_detail_to_api(result)
+    api = member_booking_detail_to_api(
+        assemble_participant_booking_detail(result, viewer_id=viewer_id, now=start, facility_tz=ZoneInfo("America/Toronto"), photo_urls_by_room={})
+    )
     dumped = api.model_dump(by_alias=True)
     assert dumped["quotedAmount"] == Decimal("85")
     assert dumped["currency"] == "CAD"
