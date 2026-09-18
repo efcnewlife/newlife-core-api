@@ -479,11 +479,11 @@ Prerequisites: `.env` configured, Docker services running, and `alembic upgrade 
 # Bootstrap entrypoint: catalog/configuration upserts, then interactive superuser
 uv run python -m portal.cli.main init-all
 
-# Optional: demo ministries, slot templates/blackouts, and bookings (not part of init-all)
-uv run python -m portal.cli.main seed-local-demo
-
 # Optional: complete Mock Testing-account and Ministry inventory (dev/staging QA)
 uv run python -m portal.cli.main seed-mock-users
+
+# Optional: near-term Booking, Blackout, slot-template, and approval fixtures for that inventory
+uv run python -m portal.cli.main seed-mock-data
 ```
 
 `init-all` runs this fail-fast order and stops on the first error, so later steps (including superuser) do not run:
@@ -497,7 +497,7 @@ uv run python -m portal.cli.main seed-mock-users
 7. `seed-legal-documents`
 8. existing interactive `create-superuser`
 
-It does **not** seed Ministry Types, Mock users, Ministries, Bookings, or other business/demo data. Re-running uses the same catalog upsert semantics as the individual commands and never resets or deletes catalog rows.
+It does **not** seed Ministry Types, Mock users, Ministries, Bookings, or other business fixtures. Re-running uses the same catalog upsert semantics as the individual commands and never resets or deletes catalog rows.
 
 | Command                 | Purpose                                                                                                                                      |
 | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -507,22 +507,22 @@ It does **not** seed Ministry Types, Mock users, Ministries, Bookings, or other 
 | `seed-system-settings`  | Insert missing system settings; never overwrite existing values.                                                                             |
 | `create-superuser`      | Create an `AuthUser` with `is_admin` / `is_superuser` via interactive prompts.                                                               |
 | `seed-mock-users`       | **Mock QA data lifecycle.** Create five personal, three steward, one owner, and one inactive `@test.local` Testing accounts plus ten scheduled Mock Ministries, then archive an account/Ministry CSV pair locally and to SharePoint. Rejected while an active Mock snapshot exists. See [ADR 0025](docs/adr/0025-mock-qa-data-lifecycle.md), including its SharePoint archive-writer provisioning section. |
+| `seed-mock-data`        | Complete near-term Facility Booking fixtures for the current Mock inventory (slots, Blackouts, Bookings, owner assignment, pending Ministry Application). Does not create accounts or Ministries. |
+| `remove-mock-data`      | Delete every `@test.local` Mock user, derived QA data, and `mock:`-marked fixtures. `--include-legacy-demo` also removes exact known `seed.*@local.test` Demo accounts and `seed:` markers. Catalog data and CSV archives are preserved. |
 | `seed-positions`        | Upsert org positions and translations from `portal/cli/datas/position_seed_data.py`.                                                         |
 | `seed-ministry-types`   | Upsert ministry type catalog (`outreach`, `internal`, `worship`) and translations. Not part of `init-all`.                                   |
 | `seed-target-audiences` | Upsert target audience catalog (`children`, `youths`, `adults`, `family`, `all_ages`) and translations.                                      |
 | `seed-facility-rental`  | Upsert facility rooms, rates, discounts, and surcharges.                                                                                     |
 | `seed-legal-documents`  | Insert missing built-in Legal Documents (Product x Kind; empty bodies).                                                                      |
-| `seed-local-demo`       | Replace demo ministries, room slot templates, blackouts, and bookings (requires catalog rooms + ministry prerequisites).                     |
 | `reset-rbac`            | **Destructive:** delete all RBAC data and re-seed from `rbac_seed_data`.                                                                     |
 
 Notes:
 
 - Prefer `init-all` for a new environment. Individual catalog commands remain for targeted re-runs.
 - Run `init-locales` before `init-rbac` when invoking those commands separately; RBAC translations depend on locale rows.
-- `seed-positions`, `seed-ministry-types`, `seed-target-audiences`, `seed-facility-rental`, `seed-local-demo`, and `reset-rbac` are blocked when `ENV` is not `dev` unless `--force` is passed. `init-all` uses the existing upsert paths and does not apply those confirmation/`--force` gates.
-- `seed-mock-users` uses a stricter guard: it runs in `dev` freely, requires `--force` in `stg`, and is **never** allowed when `ENV=prod` even with `--force`.
-- Suggested empty-DB flow: `init-all` → optional `seed-ministry-types` → optional `seed-local-demo`.
-- `seed-local-demo` fails fast when rooms, locales, ministry types, audiences, or owning positions are missing. It creates demo stewards and personal Booker accounts if needed and never deletes those users on re-run (only demo-prefixed ministries / slots / blackouts / booking remarks are replaced).
+- `seed-positions`, `seed-ministry-types`, `seed-target-audiences`, `seed-facility-rental`, `seed-position-assignments`, and `reset-rbac` are blocked when `ENV` is not `dev` unless `--force` is passed. `init-all` uses the existing upsert paths and does not apply those confirmation/`--force` gates.
+- `seed-mock-users`, `seed-mock-data`, and `remove-mock-data` use a stricter guard: they run in `dev` freely, require `--force` in `stg`, and are **never** allowed when `ENV=prod` even with `--force`.
+- Suggested empty-DB flow: `init-all` → optional `seed-mock-users` → optional `seed-mock-data`. `seed-local-demo` is retired with no compatibility alias.
 - Seed logic lives in `portal/application/cli/*_seed_service.py`; `portal/cli/` provides thin Click entrypoints only.
 
 ## Run FastAPI server

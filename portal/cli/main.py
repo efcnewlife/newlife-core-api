@@ -10,7 +10,6 @@ from .rbac import init_rbac_process, reset_rbac_process
 from .remove_mock_data import remove_mock_data_process
 from .seed_facility_rental import seed_facility_rental_process
 from .seed_legal_documents import seed_legal_documents_process
-from .seed_local_demo import seed_local_demo_process
 from .seed_ministry_type import seed_ministry_types_process
 from .seed_mock_data import seed_mock_data_process
 from .seed_mock_users import seed_mock_users_process
@@ -124,13 +123,6 @@ def seed_mock_data_cmd(force: bool):
 def remove_mock_data_cmd(force: bool, include_legacy_demo: bool):
     """Delete every @test.local Mock user, derived QA data, and mock:-marked fixtures; catalog data is preserved."""
     remove_mock_data_process(force=force, include_legacy_demo=include_legacy_demo)
-
-
-@cli.command(name="seed-local-demo")
-@click.option("--force", is_flag=True, default=False, help="Skip confirmation and allow running when ENV is prod or stg.")
-def seed_local_demo_cmd(force: bool):
-    """Seed demo ministries, slots/blackouts, and bookings (catalog must already exist)."""
-    seed_local_demo_process(force=force)
 
 
 @cli.command(name="seed-system-settings")

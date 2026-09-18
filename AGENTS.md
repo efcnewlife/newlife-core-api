@@ -61,11 +61,12 @@ uv run pytest tests/application/rbac/test_permission_service.py -v
 # Catalog bootstrap (locales, RBAC, settings, positions, audiences, rooms/rates, Legal Documents, then interactive superuser)
 uv run python -m portal.cli.main init-all
 
-# Demo pack (after catalog bootstrap; optional)
-uv run python -m portal.cli.main seed-local-demo
-
-# Facility Booking mock-login testing account (dev/staging QA; email suffix @test.local)
-uv run python -m portal.cli.main create-mock-user
+# Mock QA lifecycle (dev/staging; email suffix @test.local). Staging requires --force.
+uv run python -m portal.cli.main seed-mock-users
+uv run python -m portal.cli.main seed-mock-data
+uv run python -m portal.cli.main remove-mock-data
+# Optional transition: exact known seed.*@local.test Demo accounts and seed: markers
+uv run python -m portal.cli.main remove-mock-data --include-legacy-demo
 
 # Format (layout, then import sort — I only)
 uv run ruff format
