@@ -12,6 +12,7 @@ from portal.application.facility.pricing_service import PricingService
 from portal.application.facility.recurring_booking_service import RecurringBookingService
 from portal.application.facility.recurring_expiry_mail_service import RecurringExpiryMailService
 from portal.application.facility.recurring_override_mail_service import RecurringOverrideMailService
+from portal.application.facility.recurring_series_draft_service import RecurringSeriesDraftService
 from portal.application.facility.rental_catalog_service import RentalCatalogService
 from portal.application.facility.rental_rate_service import RentalRateService
 from portal.application.facility.rental_rate_template_service import RentalRateTemplateService
@@ -23,6 +24,7 @@ from portal.infrastructure.persistence.repositories.facility.booking_draft_repos
 from portal.infrastructure.persistence.repositories.facility.booking_repository import BookingRepository
 from portal.infrastructure.persistence.repositories.facility.override_log_repository import OverrideLogRepository
 from portal.infrastructure.persistence.repositories.facility.recurring_booking_repository import RecurringBookingRepository
+from portal.infrastructure.persistence.repositories.facility.recurring_series_draft_repository import RecurringSeriesDraftRepository
 from portal.infrastructure.persistence.repositories.facility.rental_repository import RentalRepository
 from portal.infrastructure.persistence.repositories.facility.room_blackout_repository import RoomBlackoutRepository
 from portal.infrastructure.persistence.repositories.facility.room_repository import RoomRepository
@@ -49,6 +51,7 @@ class FacilityContainer(containers.DeclarativeContainer):
     booking_repository = providers.Factory(BookingRepository, session=core.request_session)
     recurring_booking_repository = providers.Factory(RecurringBookingRepository, session=core.request_session)
     booking_draft_repository = providers.Factory(BookingDraftRepository, session=core.request_session)
+    recurring_series_draft_repository = providers.Factory(RecurringSeriesDraftRepository, session=core.request_session)
     override_log_repository = providers.Factory(OverrideLogRepository, session=core.request_session)
 
     room_service = providers.Factory(RoomService, room_repository=room_repository, file_service=file_service)
@@ -112,6 +115,9 @@ class FacilityContainer(containers.DeclarativeContainer):
         override_notifier=recurring_override_mail_service,
         expiry_notifier=recurring_expiry_mail_service,
         file_service=file_service,
+    )
+    recurring_series_draft_service = providers.Factory(
+        RecurringSeriesDraftService, series_draft_repository=recurring_series_draft_repository, recurring_booking_service=recurring_booking_service
     )
     room_blackout_service = providers.Factory(
         RoomBlackoutService,

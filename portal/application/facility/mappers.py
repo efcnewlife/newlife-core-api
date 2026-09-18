@@ -12,6 +12,7 @@ from portal.application.facility.commands import (
     BulkIdsCommand,
     CreateBookingDraftCommand,
     CreateDiscountRuleCommand,
+    CreateRecurringSeriesDraftCommand,
     CreateRentalRateCommand,
     CreateRentalRateTemplateCommand,
     CreateRoomBlackoutCommand,
@@ -28,6 +29,7 @@ from portal.application.facility.commands import (
     PreviewQuoteRoomLineCommand,
     UpdateBookingDraftCommand,
     UpdateDiscountRuleCommand,
+    UpdateRecurringSeriesDraftCommand,
     UpdateRentalRateCommand,
     UpdateRentalRateTemplateCommand,
     UpdateRoomBlackoutCommand,
@@ -49,6 +51,7 @@ from portal.application.facility.results import (
     ParticipantBookingDetailResult,
     ParticipantSeriesDetailResult,
     PreviewQuoteResult,
+    RecurringSeriesDraftResult,
     RentalRateListResult,
     RentalRatePageResult,
     RentalRateResult,
@@ -136,6 +139,11 @@ from portal.serializers.apis.v1.facility import (
     MemberPreviewQuoteRequest,
     MemberPreviewQuoteResponse,
     MemberPreviewQuoteRoomLineResult,
+    MemberRecurringBookingConflict,
+    MemberRecurringSeriesDraftCreate,
+    MemberRecurringSeriesDraftDetail,
+    MemberRecurringSeriesDraftRoom,
+    MemberRecurringSeriesDraftUpdate,
     MemberRoomAvailabilityItem,
     MemberRoomAvailabilityList,
     MemberTimeSlot,
@@ -633,6 +641,44 @@ def booking_draft_result_to_api(result: BookingDraftResult) -> MemberBookingDraf
         surcharge_amount=result.surcharge_amount,
         quoted_amount=result.quoted_amount,
         currency=result.currency,
+    )
+
+
+def member_recurring_series_draft_create_to_command(model: MemberRecurringSeriesDraftCreate) -> CreateRecurringSeriesDraftCommand:
+    return CreateRecurringSeriesDraftCommand.model_validate(model.model_dump())
+
+
+def member_recurring_series_draft_update_to_command(model: MemberRecurringSeriesDraftUpdate) -> UpdateRecurringSeriesDraftCommand:
+    return UpdateRecurringSeriesDraftCommand.model_validate(model.model_dump())
+
+
+def recurring_series_draft_result_to_api(result: RecurringSeriesDraftResult) -> MemberRecurringSeriesDraftDetail:
+    return MemberRecurringSeriesDraftDetail(
+        id=result.id,
+        title=result.title,
+        ministry_id=result.ministry_id,
+        first_occurrence_date=result.first_occurrence_date,
+        last_occurrence_date=result.last_occurrence_date,
+        local_start_time=result.local_start_time,
+        local_end_time=result.local_end_time,
+        is_mission_aligned=result.is_mission_aligned,
+        remark=result.remark,
+        surcharge_codes=result.surcharge_codes,
+        excluded_dates=result.excluded_dates,
+        rooms=[MemberRecurringSeriesDraftRoom(facility_id=room.facility_id, sequence=room.sequence) for room in result.rooms],
+        conflicts=[MemberRecurringBookingConflict.model_validate(item.model_dump()) for item in result.conflicts],
+        is_confirmable=result.is_confirmable,
+        invalidity_code=result.invalidity_code,
+        invalidity_detail=result.invalidity_detail,
+        quoted_amount=result.quoted_amount,
+        subtotal_amount=result.subtotal_amount,
+        discount_percent=result.discount_percent,
+        discount_amount=result.discount_amount,
+        surcharge_amount=result.surcharge_amount,
+        currency=result.currency,
+        occurrence_count=result.occurrence_count,
+        pending_payment_hold_hours=result.pending_payment_hold_hours,
+        payment_hold_expires_at=result.payment_hold_expires_at,
     )
 
 

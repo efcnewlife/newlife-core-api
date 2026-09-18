@@ -10,7 +10,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from portal.domain.facility.booking_title import BookingTitle
+from portal.domain.facility.booking_title import BookingTitle, OptionalBookingTitle
 from portal.domain.facility.cancellation_reason import MemberCancellationReason
 from portal.domain.facility.constants import PREVIEW_QUOTE_MAX_LINES, MyBookingsSection
 from portal.serializers.mixins.base import PaginationBaseResponseModel
@@ -384,3 +384,50 @@ class MemberRecurringBookingWindowStatus(BaseModel):
 
     is_open: bool = Field(..., serialization_alias="isOpen")
     next_opening_date: Optional[DateType] = Field(default=None, serialization_alias="nextOpeningDate")
+
+
+class MemberRecurringSeriesDraftRoom(BaseModel):
+    """Room on a Recurring Series Draft; all rooms share the Draft time window."""
+
+    facility_id: UUID = Field(..., serialization_alias="facilityId")
+    sequence: int = Field(default=0)
+
+
+class MemberRecurringSeriesDraftCreate(MemberRecurringBookingSeriesProposal):
+    """Create a Recurring Series Draft from a preview-ready weekly proposal."""
+
+    title: OptionalBookingTitle = Field(default=None)
+    excluded_dates: list[DateType] = Field(default_factory=list)
+
+
+class MemberRecurringSeriesDraftUpdate(MemberRecurringSeriesDraftCreate):
+    """Replace a Recurring Series Draft proposal in place (PATCH; last-write-wins)."""
+
+
+class MemberRecurringSeriesDraftDetail(UUIDBaseModel):
+    """Recurring Series Draft with live revalidation, quote, and payment-hold information."""
+
+    title: Optional[str] = Field(default=None)
+    ministry_id: Optional[UUID] = Field(default=None, serialization_alias="ministryId")
+    first_occurrence_date: DateType = Field(..., serialization_alias="firstOccurrenceDate")
+    last_occurrence_date: DateType = Field(..., serialization_alias="lastOccurrenceDate")
+    local_start_time: time = Field(..., serialization_alias="localStartTime")
+    local_end_time: time = Field(..., serialization_alias="localEndTime")
+    is_mission_aligned: bool = Field(default=False, serialization_alias="isMissionAligned")
+    remark: Optional[str] = Field(default=None)
+    surcharge_codes: list[str] = Field(default_factory=list, serialization_alias="surchargeCodes")
+    excluded_dates: list[DateType] = Field(default_factory=list, serialization_alias="excludedDates")
+    rooms: list[MemberRecurringSeriesDraftRoom] = Field(default_factory=list)
+    conflicts: list[MemberRecurringBookingConflict] = Field(default_factory=list)
+    is_confirmable: bool = Field(..., serialization_alias="isConfirmable")
+    invalidity_code: Optional[str] = Field(default=None, serialization_alias="invalidityCode")
+    invalidity_detail: Optional[str] = Field(default=None, serialization_alias="invalidityDetail")
+    quoted_amount: Decimal = Field(..., serialization_alias="quotedAmount")
+    subtotal_amount: Decimal = Field(..., serialization_alias="subtotalAmount")
+    discount_percent: Decimal = Field(..., serialization_alias="discountPercent")
+    discount_amount: Decimal = Field(..., serialization_alias="discountAmount")
+    surcharge_amount: Decimal = Field(..., serialization_alias="surchargeAmount")
+    currency: str = Field(...)
+    occurrence_count: int = Field(..., serialization_alias="occurrenceCount")
+    pending_payment_hold_hours: int = Field(..., serialization_alias="pendingPaymentHoldHours")
+    payment_hold_expires_at: datetime = Field(..., serialization_alias="paymentHoldExpiresAt")

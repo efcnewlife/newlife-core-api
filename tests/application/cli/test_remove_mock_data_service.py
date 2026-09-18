@@ -25,6 +25,7 @@ _TABLE_ATTR = {
     "FacilityBooking": "bookings",
     "FacilityBookingSeries": "series",
     "FacilityBookingDraft": "drafts",
+    "FacilityBookingSeriesDraft": "series_drafts",
     "OrgMinistry": "ministries",
     "OrgMinistryTranslation": "translations",
     "OrgMinistryApproval": "approvals",
@@ -65,6 +66,7 @@ class FakeSession:
         bookings: list[dict] | None = None,
         series: list[dict] | None = None,
         drafts: list[dict] | None = None,
+        series_drafts: list[dict] | None = None,
         ministries: list[dict] | None = None,
         translations: list[dict] | None = None,
         approvals: list[dict] | None = None,
@@ -76,6 +78,7 @@ class FakeSession:
         self.bookings = list(bookings or [])
         self.series = list(series or [])
         self.drafts = list(drafts or [])
+        self.series_drafts = list(series_drafts or [])
         self.ministries = list(ministries or [])
         self.translations = list(translations or [])
         self.approvals = list(approvals or [])
@@ -193,6 +196,7 @@ async def test_remove_mock_data_never_deletes_models_outside_mock_scope():
         "FacilityBooking",
         "FacilityBookingSeries",
         "FacilityBookingDraft",
+        "FacilityBookingSeriesDraft",
         "OrgMinistry",
         "AuthUser",
         "FacilityRoomSlotTemplate",
