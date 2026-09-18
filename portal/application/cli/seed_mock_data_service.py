@@ -151,7 +151,9 @@ class SeedMockDataService:
             raise MockDataPrerequisiteError("No active position with can_own_ministry found. Run seed-positions first.")
         return _as_uuid(row["id"]), row["code"]
 
-    async def _insert_booking(self, *, user_id: UUID, ministry_id: Optional[UUID], room_id: UUID, start_at: datetime, end_at: datetime, remark: str) -> UUID:
+    async def _insert_booking(
+        self, *, user_id: UUID, ministry_id: Optional[UUID], room_id: UUID, start_at: datetime, end_at: datetime, remark: str, title: str
+    ) -> UUID:
         booking_id = uuid.uuid4()
         await (
             self._session.insert(FacilityBooking)
@@ -165,6 +167,7 @@ class SeedMockDataService:
                 end_at=end_at,
                 status=BookingStatus.CONFIRMED.value,
                 remark=remark,
+                title=title,
                 created_by_id=user_id,
             )
             .execute()
@@ -233,7 +236,13 @@ class SeedMockDataService:
         church_end = church_start + timedelta(hours=2)
 
         personal_booking_id = await self._insert_booking(
-            user_id=personal_id, ministry_id=None, room_id=room_id, start_at=personal_start, end_at=personal_end, remark="Mock QA: personal Rental Booking"
+            user_id=personal_id,
+            ministry_id=None,
+            room_id=room_id,
+            start_at=personal_start,
+            end_at=personal_end,
+            remark="Mock QA: personal Rental Booking",
+            title="Personal booking",
         )
 
         await (
@@ -263,6 +272,7 @@ class SeedMockDataService:
             start_at=church_start,
             end_at=church_end,
             remark="Mock QA: steward Church Activity Booking",
+            title="Church activity",
         )
 
         await PositionRepository(self._session).assign_incumbent(position_id=owner_position_id, user_id=owner_id)

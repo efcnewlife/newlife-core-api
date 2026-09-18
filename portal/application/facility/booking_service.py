@@ -25,6 +25,7 @@ from portal.application.facility.commands import (
     PreviewQuoteCommand,
     PreviewQuoteRoomLineCommand,
     UpdateBookingCommand,
+    UpdateTitleCommand,
 )
 from portal.application.facility.pricing_service import PricingService
 from portal.application.facility.results import BookingDetailResult, BookingListItemResult, BookingPageResult, BookingRangeResult, PreviewQuoteResult
@@ -266,6 +267,7 @@ class BookingService:
                 quoted_amount=quote.quoted_amount,
                 currency=quote.currency,
                 remark=command.remark,
+                title=command.title,
             )
         )
 
@@ -319,6 +321,19 @@ class BookingService:
         if not user_id:
             raise ForbiddenException(detail="Authenticated user required")
         return await self._repository.list_user_bookings(user_id, self._resolved_locale_id())
+
+    @distributed_trace()
+    async def update_my_booking_title(self, booking_id: UUID, command: UpdateTitleCommand) -> BookingDetailResult:
+        user_id = self._user_ctx.user_id if self._user_ctx else None
+        if not user_id:
+            raise ForbiddenException(detail="Authenticated user required")
+        owner_id = await self._repository.get_user_id_for_booking(booking_id)
+        if not owner_id:
+            raise NotFoundException(detail="Booking not found", error_code=FacilityErrorCode.BOOKING_NOT_FOUND.value, context={"booking_id": str(booking_id)})
+        if owner_id != user_id:
+            raise ForbiddenException(detail="Cannot update another user's booking")
+        await self._repository.update_booking_header(booking_id, dict(title=command.title))
+        return await self.get_my_booking_by_id(booking_id)
 
     @distributed_trace()
     async def cancel_my_booking(self, booking_id: UUID, command: CancelBookingCommand) -> None:

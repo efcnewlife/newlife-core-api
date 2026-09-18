@@ -52,6 +52,7 @@ def test_booking_plans_cover_bookers_multi_room_and_ministry_split():
         assert plan["end_hour"] > plan["start_hour"]
         assert isinstance(plan["day_offset"], int)
         assert plan["room_codes"]
+        assert 1 <= len(plan["title"]) <= 30
         if plan["ministry_english_name"] is not None:
             assert not plan["ministry_english_name"].startswith(MINISTRY_SEED_PREFIX)
 

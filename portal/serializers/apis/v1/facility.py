@@ -10,6 +10,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from portal.domain.facility.booking_title import BookingTitle
 from portal.domain.facility.constants import PREVIEW_QUOTE_MAX_LINES
 from portal.serializers.mixins.model_mixins import UUIDBaseModel
 
@@ -60,6 +61,7 @@ class MemberBookingRoomInput(BaseModel):
 class MemberBookingCreate(BaseModel):
     """Create booking request."""
 
+    title: BookingTitle = Field(...)
     start_at: datetime = Field(...)
     end_at: datetime = Field(...)
     is_mission_aligned: bool = Field(default=False)
@@ -77,9 +79,16 @@ class MemberBookingCancel(BaseModel):
     cancel_reason: Optional[str] = Field(default=None)
 
 
+class MemberBookingTitleUpdate(BaseModel):
+    """Booker-only Booking title update."""
+
+    title: BookingTitle = Field(...)
+
+
 class MemberBookingListItem(UUIDBaseModel):
     """Member booking list row."""
 
+    title: str = Field(default="")
     facility_id: Optional[UUID] = Field(default=None, serialization_alias="facilityId")
     facility_name: Optional[str] = Field(default=None, serialization_alias="facilityName")
     booking_type: str = Field(..., serialization_alias="bookingType")
@@ -107,6 +116,7 @@ class MemberBookingDetailRoom(BaseModel):
 class MemberBookingDetail(UUIDBaseModel):
     """Booker-scoped booking read for Payment."""
 
+    title: str = Field(default="")
     status: str = Field(...)
     start_at: datetime = Field(..., serialization_alias="startAt")
     end_at: datetime = Field(..., serialization_alias="endAt")
@@ -230,7 +240,14 @@ class MemberRecurringBookingSeriesProposal(BaseModel):
 class MemberRecurringBookingSeriesCreate(MemberRecurringBookingSeriesProposal):
     """Create a weekly Recurring Booking Series."""
 
+    title: BookingTitle = Field(...)
     excluded_dates: list[DateType] = Field(default_factory=list)
+
+
+class MemberRecurringBookingSeriesTitleUpdate(BaseModel):
+    """Booker-only Recurring Booking Series title update."""
+
+    title: BookingTitle = Field(...)
 
 
 class MemberRecurringBookingSeriesCancel(BaseModel):
@@ -244,6 +261,7 @@ class MemberRecurringBookingSeriesCancel(BaseModel):
 class MemberRecurringBookingOccurrence(UUIDBaseModel):
     """Materialized Booking Occurrence on a Recurring Booking Series."""
 
+    title: str = Field(default="")
     start_at: datetime = Field(..., serialization_alias="startAt")
     end_at: datetime = Field(..., serialization_alias="endAt")
     status: str = Field(...)
@@ -255,6 +273,7 @@ class MemberRecurringBookingOccurrence(UUIDBaseModel):
 class MemberRecurringBookingSeriesDetail(UUIDBaseModel):
     """Created Recurring Booking Series with occurrences."""
 
+    title: str = Field(default="")
     user_id: UUID = Field(..., serialization_alias="userId")
     ministry_id: Optional[UUID] = Field(default=None, serialization_alias="ministryId")
     first_occurrence_date: DateType = Field(..., serialization_alias="firstOccurrenceDate")

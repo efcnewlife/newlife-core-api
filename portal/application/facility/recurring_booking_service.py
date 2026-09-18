@@ -15,6 +15,7 @@ from portal.application.facility.commands import (
     CreateRecurringBookingSeriesCommand,
     PreviewQuoteCommand,
     PreviewQuoteRoomLineCommand,
+    UpdateTitleCommand,
 )
 from portal.application.facility.pricing_service import PricingService
 from portal.application.facility.recurring_override_mail_content import resolve_bilingual_activity_names
@@ -190,6 +191,8 @@ class RecurringBookingService:
 
     @distributed_trace()
     async def create_series(self, command: CreateRecurringBookingSeriesCommand) -> RecurringBookingSeriesResult:
+        if not command.title:
+            raise BadRequestException(detail="Title is required", error_code=FacilityErrorCode.BOOKING_TITLE_INVALID.value)
         prepared = await self._prepare_series(command)
         remaining, overridable_conflicts = await self._unexcluded_occurrences(command, prepared)
         booker_id = prepared.booker_id
@@ -253,6 +256,7 @@ class RecurringBookingService:
                 is_mission_aligned=command.is_mission_aligned,
                 is_priority=is_priority,
                 remark=command.remark,
+                title=command.title,
             )
         )
 
@@ -284,6 +288,7 @@ class RecurringBookingService:
                     quoted_amount=quote.quoted_amount,
                     currency=quote.currency,
                     remark=command.remark,
+                    title=command.title,
                 )
             )
             room_rows = []
@@ -323,6 +328,7 @@ class RecurringBookingService:
             occurrences.append(
                 RecurringBookingOccurrenceResult(
                     id=booking_id,
+                    title=command.title,
                     start_at=start_at,
                     end_at=end_at,
                     status=BookingStatus.PENDING_PAYMENT.value,
@@ -338,6 +344,7 @@ class RecurringBookingService:
 
         return RecurringBookingSeriesResult(
             id=series_id,
+            title=command.title,
             user_id=booker_id,
             ministry_id=command.ministry_id,
             first_occurrence_date=command.first_occurrence_date,
@@ -399,6 +406,12 @@ class RecurringBookingService:
         series = await self.get_series(series_id)
         self._raise_if_not_owner(series)
         return series
+
+    @distributed_trace()
+    async def update_my_series_title(self, series_id: UUID, command: UpdateTitleCommand) -> RecurringBookingSeriesResult:
+        series = await self.get_my_series(series_id)
+        await self._series_repository.update_series(series.id, dict(title=command.title))
+        return await self.get_my_series(series_id)
 
     @distributed_trace()
     async def cancel_series(self, series_id: UUID, command: CancelRecurringBookingSeriesCommand) -> RecurringBookingSeriesResult:

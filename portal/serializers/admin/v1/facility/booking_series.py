@@ -9,6 +9,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from portal.domain.facility.booking_title import BookingTitle
 from portal.serializers.mixins.model_mixins import UUIDBaseModel
 
 
@@ -37,6 +38,7 @@ class AdminRecurringBookingSeriesProposal(BaseModel):
 class AdminRecurringBookingSeriesCreate(AdminRecurringBookingSeriesProposal):
     """Admin create Recurring Booking Series on behalf of a Booker."""
 
+    title: BookingTitle = Field(...)
     excluded_dates: list[date] = Field(default_factory=list)
 
 
@@ -51,6 +53,7 @@ class AdminRecurringBookingSeriesCancel(BaseModel):
 class AdminRecurringBookingOccurrence(UUIDBaseModel):
     """Materialized Booking Occurrence on a Recurring Booking Series."""
 
+    title: str = Field(default="")
     start_at: datetime = Field(..., serialization_alias="startAt")
     end_at: datetime = Field(..., serialization_alias="endAt")
     status: str = Field(...)
@@ -62,6 +65,7 @@ class AdminRecurringBookingOccurrence(UUIDBaseModel):
 class AdminRecurringBookingSeriesDetail(UUIDBaseModel):
     """Created Recurring Booking Series with occurrences."""
 
+    title: str = Field(default="")
     user_id: UUID = Field(..., serialization_alias="userId")
     ministry_id: Optional[UUID] = Field(default=None, serialization_alias="ministryId")
     ministry_name: Optional[str] = Field(default=None, serialization_alias="ministryName")

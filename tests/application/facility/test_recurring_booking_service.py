@@ -57,6 +57,7 @@ def _command(**overrides) -> CreateRecurringBookingSeriesCommand:
     room_id = overrides.pop("facility_id", new_uuid())
     rooms = overrides.pop("rooms", [BookingRoomLineCommand(facility_id=room_id, sequence=0)])
     return CreateRecurringBookingSeriesCommand(
+        title=overrides.pop("title", "Weekly choir"),
         first_occurrence_date=overrides.pop("first_occurrence_date", FIRST_TUESDAY),
         last_occurrence_date=overrides.pop("last_occurrence_date", LAST_TUESDAY),
         local_start_time=overrides.pop("local_start_time", time(10, 0)),

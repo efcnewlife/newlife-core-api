@@ -132,6 +132,7 @@ async def run_facility_booking_seed(session: Session, *, personal_booker_rows: l
                 end_at=end_at,
                 status=BookingStatus.CONFIRMED.value,
                 remark=plan["remark"],
+                title=plan["title"],
                 created_by_id=booker_id,
             )
             .execute()

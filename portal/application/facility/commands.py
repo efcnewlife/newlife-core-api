@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 # Ministry commands live in org.
 from portal.application.org.commands import CreateMinistryCommand, MinistryMemberEntryCommand, ReplaceMinistryMembersCommand, UpdateMinistryCommand
 from portal.application.rbac.commands import BulkIdsCommand, DeleteCommand, PagesQueryCommand
+from portal.domain.facility.booking_title import BookingTitle, OptionalBookingTitle
 from portal.domain.facility.constants import PREVIEW_QUOTE_MAX_LINES, BookingType, RentalRateBillingUnit
 
 
@@ -287,6 +288,7 @@ class CancelBookingCommand(BaseModel):
 class CreateBookingCommand(BaseModel):
     """Create a one-time booking."""
 
+    title: BookingTitle = Field(...)
     start_at: datetime = Field(...)
     end_at: datetime = Field(...)
     is_mission_aligned: bool = Field(default=False)
@@ -309,6 +311,7 @@ class CancelRecurringBookingSeriesCommand(BaseModel):
 class CreateRecurringBookingSeriesCommand(BaseModel):
     """Create a weekly Recurring Booking Series."""
 
+    title: OptionalBookingTitle = Field(default=None)
     user_id: Optional[UUID] = Field(default=None, description="Booker; omit to use UserContext")
     ministry_id: Optional[UUID] = Field(default=None)
     first_occurrence_date: date = Field(...)
@@ -320,6 +323,12 @@ class CreateRecurringBookingSeriesCommand(BaseModel):
     surcharge_codes: list[str] = Field(default_factory=list)
     remark: Optional[str] = Field(default=None)
     excluded_dates: list[date] = Field(default_factory=list)
+
+
+class UpdateTitleCommand(BaseModel):
+    """Booker-only Booking or Recurring Booking Series title update."""
+
+    title: BookingTitle = Field(...)
 
 
 class RoomAvailabilityQueryCommand(BaseModel):
@@ -389,4 +398,5 @@ __all__ = [
     "UpdateRoomCommand",
     "UpdateRoomSlotTemplateCommand",
     "UpdateSurchargeCommand",
+    "UpdateTitleCommand",
 ]

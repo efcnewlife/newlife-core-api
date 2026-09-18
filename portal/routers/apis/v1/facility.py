@@ -27,6 +27,7 @@ from portal.application.facility.mappers import (
     recurring_booking_series_to_member_api,
     recurring_booking_window_status_to_api,
     room_availability_list_to_api,
+    update_title_to_command,
 )
 from portal.application.facility.recurring_booking_service import RecurringBookingService
 from portal.application.facility.results import BookingListItemResult
@@ -41,6 +42,7 @@ from portal.serializers.apis.v1.facility import (
     MemberBookingDraftUpdate,
     MemberBookingList,
     MemberBookingListItem,
+    MemberBookingTitleUpdate,
     MemberPreviewQuoteRequest,
     MemberPreviewQuoteResponse,
     MemberRecurringBookingPreview,
@@ -48,6 +50,7 @@ from portal.serializers.apis.v1.facility import (
     MemberRecurringBookingSeriesCreate,
     MemberRecurringBookingSeriesDetail,
     MemberRecurringBookingSeriesProposal,
+    MemberRecurringBookingSeriesTitleUpdate,
     MemberRecurringBookingWindowStatus,
     MemberRoomAvailabilityList,
 )
@@ -59,6 +62,7 @@ router: AuthRouter = AuthRouter()
 def _booking_list_item_to_api(item: BookingListItemResult) -> MemberBookingListItem:
     return MemberBookingListItem(
         id=item.id,
+        title=item.title,
         facility_id=item.facility_id,
         facility_name=item.facility_name,
         booking_type=item.booking_type,
@@ -103,6 +107,15 @@ async def get_my_booking(booking_id: UUID, booking_service: BookingService = Dep
     return member_booking_detail_to_api(result)
 
 
+@router.patch(path="/bookings/{booking_id}/title", status_code=status.HTTP_200_OK, response_model=MemberBookingDetail, response_model_by_alias=True)
+@inject
+async def update_my_booking_title(
+    booking_id: UUID, model: MemberBookingTitleUpdate, booking_service: BookingService = Depends(Provide[Container.booking_service])
+):
+    result = await booking_service.update_my_booking_title(booking_id, update_title_to_command(model))
+    return member_booking_detail_to_api(result)
+
+
 @router.post(path="/booking-series/preview", status_code=status.HTTP_200_OK, response_model=MemberRecurringBookingPreview, response_model_by_alias=True)
 @inject
 async def preview_booking_series(
@@ -140,6 +153,19 @@ async def get_my_booking_series(series_id: UUID, recurring_booking_service: Recu
     return recurring_booking_series_to_member_api(result)
 
 
+@router.patch(
+    path="/booking-series/{series_id}/title", status_code=status.HTTP_200_OK, response_model=MemberRecurringBookingSeriesDetail, response_model_by_alias=True
+)
+@inject
+async def update_my_booking_series_title(
+    series_id: UUID,
+    model: MemberRecurringBookingSeriesTitleUpdate,
+    recurring_booking_service: RecurringBookingService = Depends(Provide[Container.recurring_booking_service]),
+):
+    result = await recurring_booking_service.update_my_series_title(series_id, update_title_to_command(model))
+    return recurring_booking_series_to_member_api(result)
+
+
 @router.post(
     path="/booking-series/{series_id}/cancel", status_code=status.HTTP_200_OK, response_model=MemberRecurringBookingSeriesDetail, response_model_by_alias=True
 )
@@ -168,6 +194,7 @@ async def create_booking(model: MemberBookingCreate, booking_service: BookingSer
             surcharge_codes=model.surcharge_codes,
             remark=model.remark,
             booking_draft_id=model.booking_draft_id,
+            title=model.title,
         )
     )
     return create_id_result_to_api(result)
