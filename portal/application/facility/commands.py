@@ -14,6 +14,7 @@ from portal.application.org.commands import CreateMinistryCommand, MinistryMembe
 from portal.application.rbac.commands import BulkIdsCommand, DeleteCommand, PagesQueryCommand
 from portal.domain.facility.booking_title import BookingTitle, OptionalBookingTitle
 from portal.domain.facility.constants import PREVIEW_QUOTE_MAX_LINES, BookingType, MyBookingsSection, RentalRateBillingUnit
+from portal.domain.facility.discount_percent import DiscountPercent
 
 
 class FacilityTranslationCommand(BaseModel):
@@ -155,7 +156,7 @@ class CreateDiscountRuleCommand(BaseModel):
     """Create rental discount rule."""
 
     code: str = Field(...)
-    percent_off: Decimal = Field(...)
+    percent_off: DiscountPercent = Field(...)
     is_active: bool = Field(default=True)
     description: Optional[str] = Field(default=None)
 
@@ -164,9 +165,17 @@ class UpdateDiscountRuleCommand(BaseModel):
     """Update rental discount rule."""
 
     code: str = Field(...)
-    percent_off: Decimal = Field(...)
+    percent_off: DiscountPercent = Field(...)
     is_active: bool = Field(default=True)
     description: Optional[str] = Field(default=None)
+
+
+class EvaluateDiscountEligibilityCommand(BaseModel):
+    """Resolve the effective Booking Discount for a proposed booking."""
+
+    booking_type: BookingType = Field(...)
+    ministry_id: Optional[UUID] = Field(default=None)
+    booker_id: Optional[UUID] = Field(default=None, description="Booker; omit to use UserContext")
 
 
 class CreateSurchargeCommand(BaseModel):
@@ -411,6 +420,7 @@ __all__ = [
     "CreateRoomSlotTemplateCommand",
     "CreateSurchargeCommand",
     "DeleteCommand",
+    "EvaluateDiscountEligibilityCommand",
     "FacilityTranslationCommand",
     "OverrideLogPagesQueryCommand",
     "PagesQueryCommand",

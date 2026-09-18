@@ -7,6 +7,7 @@ from dependency_injector import containers, providers
 from portal.application.facility.availability_service import AvailabilityService
 from portal.application.facility.booking_draft_service import BookingDraftService
 from portal.application.facility.booking_service import BookingService
+from portal.application.facility.discount_eligibility_service import DiscountEligibilityService
 from portal.application.facility.override_log_service import OverrideLogService
 from portal.application.facility.pricing_service import PricingService
 from portal.application.facility.recurring_booking_service import RecurringBookingService
@@ -61,6 +62,7 @@ class FacilityContainer(containers.DeclarativeContainer):
     rental_rate_template_service = providers.Factory(RentalRateTemplateService, rental_repository=rental_repository)
     rental_rate_service = providers.Factory(RentalRateService, rental_repository=rental_repository, room_repository=room_repository)
     rental_catalog_service = providers.Factory(RentalCatalogService, rental_repository=rental_repository)
+    discount_eligibility_service = providers.Factory(DiscountEligibilityService, rental_repository=rental_repository, ministry_repository=ministry_repository)
     pricing_service = providers.Factory(PricingService, rental_repository=rental_repository, room_repository=room_repository)
     booking_service = providers.Factory(
         BookingService,

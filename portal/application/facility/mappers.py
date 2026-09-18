@@ -20,6 +20,7 @@ from portal.application.facility.commands import (
     CreateRoomSlotTemplateCommand,
     CreateSurchargeCommand,
     DeleteCommand,
+    EvaluateDiscountEligibilityCommand,
     FacilityTranslationCommand,
     MemberBrowseQueryCommand,
     MemberPreviewQuoteCommand,
@@ -43,6 +44,7 @@ from portal.application.facility.results import (
     BookingDraftResult,
     CreateIdResult,
     DayAvailabilityResult,
+    DiscountEligibilityResult,
     DiscountRuleListResult,
     DiscountRuleResult,
     MemberBrowseBookingResult,
@@ -942,3 +944,23 @@ def update_title_to_command(model) -> "UpdateTitleCommand":
     from portal.application.facility.commands import UpdateTitleCommand
 
     return UpdateTitleCommand(title=model.title)
+
+
+def member_discount_eligibility_to_command(model: "MemberDiscountEligibilityRequest") -> EvaluateDiscountEligibilityCommand:
+    return EvaluateDiscountEligibilityCommand(booking_type=model.booking_type, ministry_id=model.ministry_id)
+
+
+def admin_discount_eligibility_to_command(model: "AdminDiscountEligibilityRequest") -> EvaluateDiscountEligibilityCommand:
+    return EvaluateDiscountEligibilityCommand(booking_type=model.booking_type, ministry_id=model.ministry_id, booker_id=model.user_id)
+
+
+def discount_eligibility_to_member_api(result: DiscountEligibilityResult) -> "MemberDiscountEligibilityResponse":
+    from portal.serializers.apis.v1.facility import MemberDiscountEligibilityResponse
+
+    return MemberDiscountEligibilityResponse.model_validate(result.model_dump())
+
+
+def discount_eligibility_to_admin_api(result: DiscountEligibilityResult) -> "AdminDiscountEligibilityResponse":
+    from portal.serializers.admin.v1.facility.booking import AdminDiscountEligibilityResponse
+
+    return AdminDiscountEligibilityResponse.model_validate(result.model_dump())
