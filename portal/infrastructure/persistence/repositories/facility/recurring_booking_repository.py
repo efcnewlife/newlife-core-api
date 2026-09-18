@@ -39,6 +39,7 @@ class RecurringBookingRepository:
         row = await (
             self._session.select(
                 FacilityBookingSeries.id,
+                FacilityBookingSeries.title,
                 FacilityBookingSeries.user_id,
                 FacilityBookingSeries.ministry_id,
                 self._ministry_name_subquery(locale_id).label("ministry_name"),
@@ -74,6 +75,7 @@ class RecurringBookingRepository:
         rows = await (
             self._session.select(
                 FacilityBookingSeries.id,
+                FacilityBookingSeries.title,
                 FacilityBookingSeries.user_id,
                 FacilityBookingSeries.ministry_id,
                 FacilityBookingSeries.first_occurrence_date,
@@ -150,6 +152,7 @@ class RecurringBookingRepository:
         quoted_amount = data.get("quoted_amount")
         return RecurringBookingSeriesResult(
             id=data["id"],
+            title=data.get("title") or "",
             user_id=data["user_id"],
             ministry_id=data.get("ministry_id"),
             ministry_name=data.get("ministry_name"),

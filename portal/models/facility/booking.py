@@ -7,6 +7,7 @@ from sqlalchemy import Column
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 
+from portal.domain.facility.booking_title import BOOKING_TITLE_MAX_LENGTH, BOOKING_TITLE_MIN_LENGTH
 from portal.domain.facility.constants import BookingSlotStatus, BookingStatus
 from portal.libs.database.orm import ModelBase
 from portal.models.auth.user import AuthUser
@@ -25,9 +26,13 @@ class FacilityBooking(ModelBase, AuditMixin, RemarkMixin, DeletedMixin):
         sa.Index("ix_booking_user_id_status", "user_id", "status"),
         sa.Index("ix_booking_status_start_at", "status", "start_at"),
         sa.Index("ix_booking_series_id", "series_id"),
+        sa.CheckConstraint(
+            f"char_length(btrim(title)) >= {BOOKING_TITLE_MIN_LENGTH} AND char_length(title) <= {BOOKING_TITLE_MAX_LENGTH}", name="title_length"
+        ),
     )
 
     user_id = Column(UUID, sa.ForeignKey(AuthUser.id, ondelete="NO ACTION"), nullable=False, index=True, comment="Booker user ID")
+    title = Column(sa.String(BOOKING_TITLE_MAX_LENGTH), nullable=False, comment="Booker-owned plain-text label")
     series_id = Column(
         UUID,
         sa.ForeignKey(FacilityBookingSeries.id, ondelete="SET NULL"),

@@ -311,11 +311,13 @@ def make_create_booking_command(
     user_id: UUID | None = None,
     ministry_id: UUID | None = None,
     booking_draft_id: UUID | None = None,
+    title: str = "Choir practice",
 ) -> CreateBookingCommand:
     room_id = facility_id or new_uuid()
     start = start_at or datetime(2026, 5, 1, 10, 0, tzinfo=timezone.utc)
     end = end_at or datetime(2026, 5, 1, 14, 0, tzinfo=timezone.utc)
     return CreateBookingCommand(
+        title=title,
         start_at=start,
         end_at=end,
         user_id=user_id,

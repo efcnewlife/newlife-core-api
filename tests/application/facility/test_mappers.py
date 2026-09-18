@@ -464,6 +464,7 @@ def test_member_booking_detail_to_api_includes_quoted_amount():
 
 def test_create_recurring_booking_series_to_command_maps_excluded_dates():
     model = MemberRecurringBookingSeriesCreate(
+        title="Weekly choir",
         first_occurrence_date=date(2026, 1, 6),
         last_occurrence_date=date(2026, 2, 10),
         local_start_time=time(10, 0),

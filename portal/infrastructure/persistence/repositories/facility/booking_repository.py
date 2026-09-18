@@ -88,6 +88,7 @@ class BookingRepository:
         query = (
             self._session.select(
                 FacilityBooking.id,
+                FacilityBooking.title,
                 FacilityBooking.user_id,
                 AuthUser.email.label("user_email"),
                 self._display_name_expr().label("user_display_name"),
@@ -219,6 +220,7 @@ class BookingRepository:
         row = await (
             self._session.select(
                 FacilityBooking.id,
+                FacilityBooking.title,
                 FacilityBooking.user_id,
                 AuthUser.email.label("user_email"),
                 self._display_name_expr().label("user_display_name"),
@@ -475,6 +477,7 @@ class BookingRepository:
         rows = await (
             self._session.select(
                 FacilityBooking.id,
+                FacilityBooking.title,
                 FacilityBooking.start_at,
                 FacilityBooking.end_at,
                 FacilityBooking.status,
@@ -491,6 +494,7 @@ class BookingRepository:
         return [
             RecurringBookingOccurrenceResult(
                 id=row["id"],
+                title=row["title"] or "",
                 start_at=row["start_at"],
                 end_at=row["end_at"],
                 status=row["status"],

@@ -494,6 +494,7 @@ def room_availability_list_to_api(result: RoomAvailabilityListResult) -> MemberR
 def member_booking_detail_to_api(result: BookingDetailResult) -> MemberBookingDetail:
     return MemberBookingDetail(
         id=result.id,
+        title=result.title,
         status=result.status,
         start_at=result.start_at,
         end_at=result.end_at,
@@ -620,6 +621,7 @@ def create_booking_to_command(model) -> "CreateBookingCommand":
         raise TypeError("Expected AdminBookingCreate")
     return CreateBookingCommand(
         user_id=model.user_id,
+        title=model.title,
         start_at=model.start_at,
         end_at=model.end_at,
         is_mission_aligned=model.is_mission_aligned,
@@ -685,6 +687,7 @@ def create_recurring_booking_series_to_command(model) -> "CreateRecurringBooking
 
     return CreateRecurringBookingSeriesCommand(
         user_id=getattr(model, "user_id", None),
+        title=getattr(model, "title", None),
         ministry_id=model.ministry_id,
         first_occurrence_date=model.first_occurrence_date,
         last_occurrence_date=model.last_occurrence_date,
@@ -738,3 +741,9 @@ def cancel_recurring_booking_series_to_command(model) -> "CancelRecurringBooking
     from portal.application.facility.commands import CancelRecurringBookingSeriesCommand
 
     return CancelRecurringBookingSeriesCommand(scope=model.scope, occurrence_id=model.occurrence_id, cancel_reason=model.cancel_reason)
+
+
+def update_title_to_command(model) -> "UpdateTitleCommand":
+    from portal.application.facility.commands import UpdateTitleCommand
+
+    return UpdateTitleCommand(title=model.title)

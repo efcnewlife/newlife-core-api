@@ -332,6 +332,7 @@ class BookingSlotResult(UUIDBaseModel):
 class BookingListItemResult(UUIDBaseModel):
     """Booking list row."""
 
+    title: str = Field(default="")
     user_id: UUID = Field(...)
     user_email: Optional[str] = Field(default=None)
     user_display_name: Optional[str] = Field(default=None)
@@ -354,6 +355,7 @@ class BookingListItemResult(UUIDBaseModel):
 class BookingDetailResult(UUIDBaseModel):
     """Booking detail with rooms and slots."""
 
+    title: str = Field(default="")
     user_id: UUID = Field(...)
     user_email: Optional[str] = Field(default=None)
     user_display_name: Optional[str] = Field(default=None)
@@ -502,6 +504,7 @@ class BookingDraftResult(UUIDBaseModel):
 class RecurringBookingOccurrenceResult(UUIDBaseModel):
     """One materialized Booking Occurrence in a Recurring Booking Series."""
 
+    title: str = Field(default="")
     start_at: datetime = Field(...)
     end_at: datetime = Field(...)
     status: str = Field(...)
@@ -513,6 +516,7 @@ class RecurringBookingOccurrenceResult(UUIDBaseModel):
 class RecurringBookingSeriesResult(UUIDBaseModel):
     """Created Recurring Booking Series with materialized occurrences."""
 
+    title: str = Field(default="")
     user_id: UUID = Field(...)
     ministry_id: Optional[UUID] = Field(default=None)
     ministry_name: Optional[str] = Field(default=None)

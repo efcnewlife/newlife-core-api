@@ -7,6 +7,7 @@ from sqlalchemy import Column
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
+from portal.domain.facility.booking_title import BOOKING_TITLE_MAX_LENGTH, BOOKING_TITLE_MIN_LENGTH
 from portal.domain.facility.constants import BookingStatus
 from portal.libs.database.orm import ModelBase
 from portal.models.auth.user import AuthUser
@@ -21,9 +22,13 @@ class FacilityBookingSeries(ModelBase, AuditMixin, RemarkMixin, DeletedMixin):
         sa.CheckConstraint("local_end_time > local_start_time", name="end_after_start"),
         sa.Index("ix_booking_series_user_id_status", "user_id", "status"),
         sa.Index("ix_booking_series_payment_hold_expires_at", "payment_hold_expires_at"),
+        sa.CheckConstraint(
+            f"char_length(btrim(title)) >= {BOOKING_TITLE_MIN_LENGTH} AND char_length(title) <= {BOOKING_TITLE_MAX_LENGTH}", name="title_length"
+        ),
     )
 
     user_id = Column(UUID, sa.ForeignKey(AuthUser.id, ondelete="NO ACTION"), nullable=False, index=True, comment="Booker user ID")
+    title = Column(sa.String(BOOKING_TITLE_MAX_LENGTH), nullable=False, comment="Booker-owned plain-text label")
     ministry_id = Column(UUID, sa.ForeignKey("org.ministry.id", ondelete="SET NULL"), nullable=True, index=True, comment="Ministry reference (optional)")
     first_occurrence_date = Column(sa.Date, nullable=False, comment="First weekly occurrence date (facility local)")
     last_occurrence_date = Column(sa.Date, nullable=False, comment="Last weekly occurrence date (facility local)")

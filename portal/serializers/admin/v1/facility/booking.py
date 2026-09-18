@@ -9,6 +9,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from portal.domain.facility.booking_title import BookingTitle
 from portal.serializers.mixins.base import GenericQueryBaseModel, PaginationBaseResponseModel
 from portal.serializers.mixins.model_mixins import UUIDBaseModel
 
@@ -55,6 +56,7 @@ class AdminBookingSlot(UUIDBaseModel):
 class AdminBookingListItem(UUIDBaseModel):
     """Booking list row."""
 
+    title: str = Field(default="")
     user_id: UUID = Field(..., serialization_alias="userId")
     user_email: Optional[str] = Field(default=None, serialization_alias="userEmail")
     user_display_name: Optional[str] = Field(default=None, serialization_alias="userDisplayName")
@@ -129,6 +131,7 @@ class AdminBookingCreate(BaseModel):
     """Admin create booking on behalf of a Booker."""
 
     user_id: UUID = Field(..., description="Booker user id")
+    title: BookingTitle = Field(...)
     start_at: datetime = Field(...)
     end_at: datetime = Field(...)
     is_mission_aligned: bool = Field(default=False)

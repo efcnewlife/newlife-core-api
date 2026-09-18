@@ -320,6 +320,14 @@ class StubBookingRepository:
     async def insert_booking(self, payload: dict) -> None:
         self.insert_calls.append(payload)
 
+    async def list_user_bookings(self, user_id: UUID, locale_id=None) -> list[BookingListItemResult]:
+        return [item for item in self.range_items if item.user_id == user_id]
+
+    async def get_user_id_for_booking(self, booking_id: UUID) -> UUID | None:
+        if self.detail is not None and self.detail.id == booking_id:
+            return self.detail.user_id
+        return None
+
     async def list_rental_occurrence_starts(self, user_id: UUID, range_start: datetime, range_end: datetime) -> list[datetime]:
         return [start_at for start_at in self.rental_starts if range_start <= start_at < range_end]
 
@@ -347,6 +355,12 @@ class StubBookingRepository:
 
     async def update_booking_header(self, booking_id: UUID, values: dict) -> None:
         self.update_header_calls.append(values)
+        if self.detail is not None and self.detail.id == booking_id:
+            self.detail = self.detail.model_copy(update=values)
+        for occurrences in self.series_occurrences.values():
+            for index, occurrence in enumerate(occurrences):
+                if occurrence.id == booking_id:
+                    occurrences[index] = occurrence.model_copy(update={key: value for key, value in values.items() if hasattr(occurrence, key)})
 
     async def replace_booking_rooms(self, booking_id: UUID, rows: list) -> None:
         self.replace_rooms_calls.append(rows)

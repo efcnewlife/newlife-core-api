@@ -10,6 +10,7 @@ from typing import Any, Optional
 
 from portal.cli.datas.facility_slot_seed_data import CAMPUS_HOLIDAY_DEMO_DATE, SANCTUARY_MAINTENANCE_DEMO_DATE
 from portal.cli.datas.ministry_seed_data import DEMO_PRIMARY_USER_EMAIL, DEMO_SECONDARY_2_USER_EMAIL, DEMO_SECONDARY_USER_EMAIL
+from portal.domain.facility.booking_title import BOOKING_TITLE_MAX_LENGTH, normalize_booking_title
 
 BOOKING_SEED_REMARK_PREFIX = "seed:"
 
@@ -43,6 +44,7 @@ def _plan(
 ) -> dict[str, Any]:
     return {
         "remark": f"{BOOKING_SEED_REMARK_PREFIX}{remark_suffix}",
+        "title": normalize_booking_title(remark_suffix[:BOOKING_TITLE_MAX_LENGTH]),
         "booker_email": booker_email,
         "room_codes": list(room_codes),
         "day_offset": day_offset,
