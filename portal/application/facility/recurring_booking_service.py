@@ -35,6 +35,7 @@ from portal.application.facility.results import (
     RoomBlackoutResult,
 )
 from portal.application.system.setting_service import SettingService
+from portal.config import settings
 from portal.domain.facility.constants import (
     CHURCH_EMAIL_DOMAIN,
     PENDING_PAYMENT_HOLD_EXPIRED_REASON,
@@ -52,6 +53,7 @@ from portal.domain.facility.recurring import (
     is_church_email,
     is_first_occurrence_in_availability_window,
     is_pending_payment_hold_active,
+    is_test_booker_allowlisted,
     is_within_availability_window,
     localize_wall_time,
     next_recurring_opening_date,
@@ -173,11 +175,18 @@ class RecurringBookingService:
         local_tz = await self._setting_service.get_facility_timezone()
         now_local = self._now_utc().astimezone(local_tz)
         window = await self._setting_service.get_recurring_booking_availability_window()
+        override_open = await self._effective_test_window_override()
         if first_occurrence_date is not None:
-            is_open = is_first_occurrence_in_availability_window(now_local, first_occurrence_date, window.amount, window.unit)
+            is_open = override_open or is_first_occurrence_in_availability_window(now_local, first_occurrence_date, window.amount, window.unit)
         else:
-            is_open = is_any_recurring_period_open(now_local, window.amount, window.unit)
+            is_open = override_open or is_any_recurring_period_open(now_local, window.amount, window.unit)
         return RecurringBookingWindowStatusResult(is_open=is_open, next_opening_date=None if is_open else next_recurring_opening_date(now_local))
+
+    async def _effective_test_window_override(self) -> bool:
+        """Non-production only: True when the test-window override setting is enabled."""
+        if settings.is_prod:
+            return False
+        return await self._setting_service.get_recurring_booking_test_window_override()
 
     @distributed_trace()
     async def create_series(self, command: CreateRecurringBookingSeriesCommand) -> RecurringBookingSeriesResult:
@@ -572,7 +581,8 @@ class RecurringBookingService:
         now_local = now_utc.astimezone(local_tz)
         window = await self._setting_service.get_recurring_booking_availability_window()
         opening = opening_date_for_period(first_period, command.first_occurrence_date.year)
-        if not is_within_availability_window(now_local, opening, window.amount, window.unit):
+        override_open = await self._effective_test_window_override()
+        if not (override_open or is_within_availability_window(now_local, opening, window.amount, window.unit)):
             raise BadRequestException(
                 detail="Recurring Booking period is outside the availability window", error_code=FacilityErrorCode.RECURRING_AVAILABILITY_WINDOW.value
             )
@@ -788,8 +798,13 @@ class RecurringBookingService:
         if not email:
             user = await self._user_read_service.get_user_sensitive_by_id(booker_id)
             email = user.email if user else None
-        if not is_church_email(email, CHURCH_EMAIL_DOMAIN):
-            raise ForbiddenException(detail="Facility Booking requires a church-domain account", error_code=FacilityErrorCode.RECURRING_NOT_ELIGIBLE.value)
+        if is_church_email(email, CHURCH_EMAIL_DOMAIN):
+            return
+        if not settings.is_prod:
+            allowlist = await self._setting_service.get_recurring_booking_test_booker_allowlist()
+            if is_test_booker_allowlisted(email, allowlist.email_addresses, allowlist.email_suffixes):
+                return
+        raise ForbiddenException(detail="Facility Booking requires a church-domain account", error_code=FacilityErrorCode.RECURRING_NOT_ELIGIBLE.value)
 
     async def _validate_ministry_series(self, ministry_id: UUID, booker_id: UUID) -> tuple[bool, Optional[str]]:
         ministry = await self._ministry_repository.get_by_id(ministry_id, all_locales=True)

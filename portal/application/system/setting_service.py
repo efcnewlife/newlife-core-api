@@ -10,7 +10,13 @@ import ujson
 
 from portal.application.rbac.commands import BulkIdsCommand, DeleteCommand
 from portal.application.system.commands import CreateSettingCommand, UpdateSettingCommand
-from portal.application.system.results import CreateIdResult, RecurringBookingAvailabilityWindowResult, SettingListResult, SettingResult
+from portal.application.system.results import (
+    CreateIdResult,
+    RecurringBookingAvailabilityWindowResult,
+    RecurringBookingTestBookerAllowlistResult,
+    SettingListResult,
+    SettingResult,
+)
 from portal.domain.system.constants import FacilitySettingKey, RecurringAvailabilityUnit, SettingNamespace, SettingValueType, SystemErrorCode
 from portal.domain.system.entities import Setting
 from portal.exceptions.responses import BadRequestException, ConflictErrorException, NotFoundException
@@ -198,6 +204,22 @@ class SettingService:
             raise BadRequestException(detail="unit must be days, weeks, or months")
         return RecurringBookingAvailabilityWindowResult(amount=amount, unit=unit)
 
+    @staticmethod
+    def _parse_test_booker_allowlist(value: Any) -> RecurringBookingTestBookerAllowlistResult:
+        if not isinstance(value, dict):
+            raise BadRequestException(detail="facility.recurring_booking_test_booker_allowlist must be an object")
+        email_addresses = value.get("emailAddresses", [])
+        email_suffixes = value.get("emailSuffixes", [])
+        if not isinstance(email_addresses, list) or not all(isinstance(item, str) for item in email_addresses):
+            raise BadRequestException(detail="emailAddresses must be an array of strings")
+        if not isinstance(email_suffixes, list) or not all(isinstance(item, str) for item in email_suffixes):
+            raise BadRequestException(detail="emailSuffixes must be an array of strings")
+        normalized_addresses = [item.strip().lower() for item in email_addresses]
+        normalized_suffixes = [item.strip().lower() for item in email_suffixes]
+        if any(not suffix.startswith("@") or len(suffix) < 2 for suffix in normalized_suffixes):
+            raise BadRequestException(detail="emailSuffixes entries must begin with '@' and name a complete domain")
+        return RecurringBookingTestBookerAllowlistResult(email_addresses=normalized_addresses, email_suffixes=normalized_suffixes)
+
     @classmethod
     def _validate_facility_setting_value(cls, setting_key: str, value: Any) -> None:
         if setting_key == FacilitySettingKey.TIMEZONE.value:
@@ -208,6 +230,13 @@ class SettingService:
             return
         if setting_key in {FacilitySettingKey.MIN_RECURRING_BOOKING_WEEKS.value, FacilitySettingKey.PENDING_PAYMENT_HOLD_HOURS.value}:
             cls._parse_positive_int(value, field_name=setting_key)
+            return
+        if setting_key == FacilitySettingKey.RECURRING_BOOKING_TEST_WINDOW_OVERRIDE.value:
+            if not isinstance(value, bool):
+                raise BadRequestException(detail=f"{setting_key} must be a boolean")
+            return
+        if setting_key == FacilitySettingKey.RECURRING_BOOKING_TEST_BOOKER_ALLOWLIST.value:
+            cls._parse_test_booker_allowlist(value)
 
     async def _read_facility_setting(self, setting_key: str, expected_type: str) -> Any:
         namespace = SettingNamespace.FACILITY.value
@@ -223,6 +252,35 @@ class SettingService:
         value = self._coerce_jsonb_value(row.value)
         await self._cache.set_value(namespace, setting_key, value)
         return value
+
+    async def _read_facility_setting_lenient(self, setting_key: str, expected_type: str) -> Any:
+        """Read a test-control facility setting; None when missing/inactive/wrong-typed (fail closed, never raises)."""
+        namespace = SettingNamespace.FACILITY.value
+        cached = await self._cache.get_value(namespace, setting_key)
+        if cached is not None:
+            return self._coerce_jsonb_value(cached)
+
+        row = await self._repository.get_by_namespace_key(namespace, setting_key)
+        if not row or not row.is_active or row.value_type != expected_type:
+            return None
+        value = self._coerce_jsonb_value(row.value)
+        await self._cache.set_value(namespace, setting_key, value)
+        return value
+
+    @distributed_trace()
+    async def get_recurring_booking_test_window_override(self) -> bool:
+        value = await self._read_facility_setting_lenient(FacilitySettingKey.RECURRING_BOOKING_TEST_WINDOW_OVERRIDE.value, SettingValueType.BOOLEAN.value)
+        return value is True
+
+    @distributed_trace()
+    async def get_recurring_booking_test_booker_allowlist(self) -> RecurringBookingTestBookerAllowlistResult:
+        value = await self._read_facility_setting_lenient(FacilitySettingKey.RECURRING_BOOKING_TEST_BOOKER_ALLOWLIST.value, SettingValueType.OBJECT.value)
+        if value is None:
+            return RecurringBookingTestBookerAllowlistResult()
+        try:
+            return self._parse_test_booker_allowlist(value)
+        except BadRequestException:
+            return RecurringBookingTestBookerAllowlistResult()
 
     @distributed_trace()
     async def get_facility_timezone(self) -> ZoneInfo:

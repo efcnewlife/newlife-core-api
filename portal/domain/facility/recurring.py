@@ -111,6 +111,20 @@ def is_church_email(email: str | None, domain: str) -> bool:
     return email.rsplit("@", 1)[-1].lower() == domain.lower()
 
 
+def is_test_booker_allowlisted(email: str | None, email_addresses: list[str], email_suffixes: list[str]) -> bool:
+    """True when email exactly matches an allowlisted address or a complete domain suffix.
+
+    Callers must pass already-normalized (trimmed, lowercased) allowlist entries;
+    the candidate email is normalized here.
+    """
+    if not email:
+        return False
+    candidate = email.strip().lower()
+    if candidate in email_addresses:
+        return True
+    return any(candidate.endswith(suffix) for suffix in email_suffixes)
+
+
 def is_pending_payment_hold_active(payment_hold_expires_at: datetime | None, now: datetime) -> bool:
     """True when a Pending-payment hold still reserves occupancy at query time."""
     if payment_hold_expires_at is None:

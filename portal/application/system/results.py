@@ -35,3 +35,10 @@ class RecurringBookingAvailabilityWindowResult(BaseModel):
 
     amount: int = Field(...)
     unit: str = Field(...)
+
+
+class RecurringBookingTestBookerAllowlistResult(BaseModel):
+    """Parsed, normalized facility.recurring_booking_test_booker_allowlist value."""
+
+    email_addresses: list[str] = Field(default_factory=list)
+    email_suffixes: list[str] = Field(default_factory=list)

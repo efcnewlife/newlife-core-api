@@ -383,6 +383,146 @@ async def test_delete_built_in_blocked():
 
 
 @pytest.mark.asyncio
+async def test_get_recurring_booking_test_window_override_seed_value():
+    row = _setting(setting_key=FacilitySettingKey.RECURRING_BOOKING_TEST_WINDOW_OVERRIDE.value, value_type=SettingValueType.BOOLEAN.value, value=False)
+    service = SettingService(StubSettingRepository([row]), StubSettingCache())
+    assert await service.get_recurring_booking_test_window_override() is False
+
+
+@pytest.mark.asyncio
+async def test_get_recurring_booking_test_window_override_enabled():
+    row = _setting(setting_key=FacilitySettingKey.RECURRING_BOOKING_TEST_WINDOW_OVERRIDE.value, value_type=SettingValueType.BOOLEAN.value, value=True)
+    service = SettingService(StubSettingRepository([row]), StubSettingCache())
+    assert await service.get_recurring_booking_test_window_override() is True
+
+
+@pytest.mark.asyncio
+async def test_get_recurring_booking_test_window_override_missing_fails_closed():
+    service = SettingService(StubSettingRepository([]), StubSettingCache())
+    assert await service.get_recurring_booking_test_window_override() is False
+
+
+@pytest.mark.asyncio
+async def test_get_recurring_booking_test_window_override_inactive_fails_closed():
+    row = _setting(
+        setting_key=FacilitySettingKey.RECURRING_BOOKING_TEST_WINDOW_OVERRIDE.value, value_type=SettingValueType.BOOLEAN.value, value=True, is_active=False
+    )
+    service = SettingService(StubSettingRepository([row]), StubSettingCache())
+    assert await service.get_recurring_booking_test_window_override() is False
+
+
+@pytest.mark.asyncio
+async def test_get_recurring_booking_test_window_override_wrong_type_fails_closed():
+    row = _setting(setting_key=FacilitySettingKey.RECURRING_BOOKING_TEST_WINDOW_OVERRIDE.value, value_type=SettingValueType.STRING.value, value="true")
+    service = SettingService(StubSettingRepository([row]), StubSettingCache())
+    assert await service.get_recurring_booking_test_window_override() is False
+
+
+@pytest.mark.asyncio
+async def test_update_recurring_booking_test_window_override_rejects_non_boolean():
+    row = _setting(setting_key=FacilitySettingKey.RECURRING_BOOKING_TEST_WINDOW_OVERRIDE.value, value_type=SettingValueType.BOOLEAN.value, value=False)
+    service = SettingService(StubSettingRepository([row]), StubSettingCache())
+    with pytest.raises(BadRequestException, match="boolean"):
+        await service.update_setting(row.id, UpdateSettingCommand(value="yes"))
+
+
+@pytest.mark.asyncio
+async def test_get_recurring_booking_test_booker_allowlist_seed_value():
+    row = _setting(
+        setting_key=FacilitySettingKey.RECURRING_BOOKING_TEST_BOOKER_ALLOWLIST.value,
+        value_type=SettingValueType.OBJECT.value,
+        value={"emailAddresses": [], "emailSuffixes": []},
+    )
+    service = SettingService(StubSettingRepository([row]), StubSettingCache())
+    allowlist = await service.get_recurring_booking_test_booker_allowlist()
+    assert allowlist.email_addresses == []
+    assert allowlist.email_suffixes == []
+
+
+@pytest.mark.asyncio
+async def test_get_recurring_booking_test_booker_allowlist_normalizes_case_and_whitespace():
+    row = _setting(
+        setting_key=FacilitySettingKey.RECURRING_BOOKING_TEST_BOOKER_ALLOWLIST.value,
+        value_type=SettingValueType.OBJECT.value,
+        value={"emailAddresses": [" QA1@Test.Local "], "emailSuffixes": ["@QA.Test.Local"]},
+    )
+    service = SettingService(StubSettingRepository([row]), StubSettingCache())
+    allowlist = await service.get_recurring_booking_test_booker_allowlist()
+    assert allowlist.email_addresses == ["qa1@test.local"]
+    assert allowlist.email_suffixes == ["@qa.test.local"]
+
+
+@pytest.mark.asyncio
+async def test_get_recurring_booking_test_booker_allowlist_missing_fails_closed():
+    service = SettingService(StubSettingRepository([]), StubSettingCache())
+    allowlist = await service.get_recurring_booking_test_booker_allowlist()
+    assert allowlist.email_addresses == []
+    assert allowlist.email_suffixes == []
+
+
+@pytest.mark.asyncio
+async def test_get_recurring_booking_test_booker_allowlist_inactive_fails_closed():
+    row = _setting(
+        setting_key=FacilitySettingKey.RECURRING_BOOKING_TEST_BOOKER_ALLOWLIST.value,
+        value_type=SettingValueType.OBJECT.value,
+        value={"emailAddresses": ["qa1@test.local"], "emailSuffixes": []},
+        is_active=False,
+    )
+    service = SettingService(StubSettingRepository([row]), StubSettingCache())
+    allowlist = await service.get_recurring_booking_test_booker_allowlist()
+    assert allowlist.email_addresses == []
+
+
+@pytest.mark.asyncio
+async def test_get_recurring_booking_test_booker_allowlist_malformed_shape_fails_closed():
+    row = _setting(
+        setting_key=FacilitySettingKey.RECURRING_BOOKING_TEST_BOOKER_ALLOWLIST.value,
+        value_type=SettingValueType.OBJECT.value,
+        value={"emailAddresses": "qa1@test.local", "emailSuffixes": []},
+    )
+    service = SettingService(StubSettingRepository([row]), StubSettingCache())
+    allowlist = await service.get_recurring_booking_test_booker_allowlist()
+    assert allowlist.email_addresses == []
+    assert allowlist.email_suffixes == []
+
+
+@pytest.mark.asyncio
+async def test_get_recurring_booking_test_booker_allowlist_bad_suffix_fails_closed():
+    row = _setting(
+        setting_key=FacilitySettingKey.RECURRING_BOOKING_TEST_BOOKER_ALLOWLIST.value,
+        value_type=SettingValueType.OBJECT.value,
+        value={"emailAddresses": [], "emailSuffixes": ["test.local"]},
+    )
+    service = SettingService(StubSettingRepository([row]), StubSettingCache())
+    allowlist = await service.get_recurring_booking_test_booker_allowlist()
+    assert allowlist.email_suffixes == []
+
+
+@pytest.mark.asyncio
+async def test_update_recurring_booking_test_booker_allowlist_rejects_suffix_missing_at_sign():
+    row = _setting(
+        setting_key=FacilitySettingKey.RECURRING_BOOKING_TEST_BOOKER_ALLOWLIST.value,
+        value_type=SettingValueType.OBJECT.value,
+        value={"emailAddresses": [], "emailSuffixes": []},
+    )
+    service = SettingService(StubSettingRepository([row]), StubSettingCache())
+    with pytest.raises(BadRequestException, match="emailSuffixes"):
+        await service.update_setting(row.id, UpdateSettingCommand(value={"emailAddresses": [], "emailSuffixes": ["test.local"]}))
+
+
+@pytest.mark.asyncio
+async def test_update_recurring_booking_test_booker_allowlist_accepts_exact_and_suffix_entries():
+    row = _setting(
+        setting_key=FacilitySettingKey.RECURRING_BOOKING_TEST_BOOKER_ALLOWLIST.value,
+        value_type=SettingValueType.OBJECT.value,
+        value={"emailAddresses": [], "emailSuffixes": []},
+    )
+    service = SettingService(StubSettingRepository([row]), StubSettingCache())
+    result = await service.update_setting(row.id, UpdateSettingCommand(value={"emailAddresses": ["qa1@test.local"], "emailSuffixes": ["@qa.test.local"]}))
+    assert result.value == {"emailAddresses": ["qa1@test.local"], "emailSuffixes": ["@qa.test.local"]}
+
+
+@pytest.mark.asyncio
 async def test_delete_soft_and_restore():
     row = _setting(namespace="ops", setting_key="flag", is_built_in=False)
     repo = StubSettingRepository([row])

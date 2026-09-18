@@ -13,6 +13,7 @@ from portal.application.facility.commands import BookingRoomLineCommand, CreateR
 from portal.application.facility.recurring_booking_service import RecurringBookingService
 from portal.application.facility.results import RecurringBookingPreviewResult, RecurringBookingSeriesResult, RecurringOccupyingBookingResult
 from portal.application.org.results import MinistryMemberResult
+from portal.config import settings
 from portal.domain.facility.constants import BookingErrorCode, BookingSlotStatus, BookingStatus, BookingType, FacilityErrorCode, RecurringConflictKind
 from portal.domain.facility.recurring import localize_wall_time
 from portal.domain.org.constants import MinistryMemberRole, MinistryStatus
@@ -282,6 +283,93 @@ async def test_create_series_rejects_non_church_email(monkeypatch):
     with pytest.raises(ForbiddenException) as exc_info:
         await service.create_series(_command())
     assert exc_info.value.error_code == FacilityErrorCode.RECURRING_NOT_ELIGIBLE.value
+
+
+CLOSED_NOW = datetime(2025, 12, 29, 5, 0, tzinfo=timezone.utc)
+
+
+@pytest.mark.asyncio
+async def test_get_window_status_reflects_test_window_override_when_non_prod(monkeypatch):
+    setting_stub = StubSettingService(max_booking_lines=10, test_window_override=True)
+    service, *_ = _service(monkeypatch, setting_stub=setting_stub, now_utc=lambda: CLOSED_NOW)
+    result = await service.get_window_status()
+    assert result.is_open is True
+    assert result.next_opening_date is None
+
+
+@pytest.mark.asyncio
+async def test_get_window_status_ignores_test_window_override_in_production(monkeypatch):
+    monkeypatch.setattr(settings, "ENV", "prod")
+    setting_stub = StubSettingService(max_booking_lines=10, test_window_override=True)
+    service, *_ = _service(monkeypatch, setting_stub=setting_stub, now_utc=lambda: CLOSED_NOW)
+    result = await service.get_window_status()
+    assert result.is_open is False
+    assert result.next_opening_date == date(2026, 6, 1)
+
+
+@pytest.mark.asyncio
+async def test_create_series_succeeds_outside_window_when_test_override_enabled_non_prod(monkeypatch):
+    setting_stub = StubSettingService(max_booking_lines=10, test_window_override=True)
+    service, *_ = _service(monkeypatch, setting_stub=setting_stub, now_utc=lambda: CLOSED_NOW)
+    result = await service.create_series(_command())
+    assert result.occurrence_count == 4
+
+
+@pytest.mark.asyncio
+async def test_create_series_rejects_outside_window_when_test_override_enabled_in_production(monkeypatch):
+    monkeypatch.setattr(settings, "ENV", "prod")
+    setting_stub = StubSettingService(max_booking_lines=10, test_window_override=True)
+    service, *_ = _service(monkeypatch, setting_stub=setting_stub, now_utc=lambda: CLOSED_NOW)
+    with pytest.raises(BadRequestException) as exc_info:
+        await service.create_series(_command())
+    assert exc_info.value.error_code == FacilityErrorCode.RECURRING_AVAILABILITY_WINDOW.value
+
+
+@pytest.mark.asyncio
+async def test_create_series_allows_allowlisted_exact_email_non_church_booker(monkeypatch):
+    setting_stub = StubSettingService(max_booking_lines=10, test_booker_email_addresses=["qa1@test.local"])
+    service, *_ = _service(monkeypatch, email="qa1@test.local", setting_stub=setting_stub)
+    result = await service.create_series(_command())
+    assert result.occurrence_count == 4
+
+
+@pytest.mark.asyncio
+async def test_create_series_allows_allowlisted_domain_suffix_non_church_booker(monkeypatch):
+    setting_stub = StubSettingService(max_booking_lines=10, test_booker_email_suffixes=["@qa.test.local"])
+    service, *_ = _service(monkeypatch, email="anyone@qa.test.local", setting_stub=setting_stub)
+    result = await service.create_series(_command())
+    assert result.occurrence_count == 4
+
+
+@pytest.mark.asyncio
+async def test_create_series_rejects_unlisted_non_church_booker_even_with_allowlist_populated(monkeypatch):
+    setting_stub = StubSettingService(max_booking_lines=10, test_booker_email_addresses=["qa1@test.local"])
+    service, *_ = _service(monkeypatch, email="guest@gmail.com", setting_stub=setting_stub)
+    with pytest.raises(ForbiddenException) as exc_info:
+        await service.create_series(_command())
+    assert exc_info.value.error_code == FacilityErrorCode.RECURRING_NOT_ELIGIBLE.value
+
+
+@pytest.mark.asyncio
+async def test_create_series_ignores_test_booker_allowlist_in_production(monkeypatch):
+    monkeypatch.setattr(settings, "ENV", "prod")
+    setting_stub = StubSettingService(max_booking_lines=10, test_booker_email_addresses=["qa1@test.local"])
+    service, *_ = _service(monkeypatch, email="qa1@test.local", setting_stub=setting_stub)
+    with pytest.raises(ForbiddenException) as exc_info:
+        await service.create_series(_command())
+    assert exc_info.value.error_code == FacilityErrorCode.RECURRING_NOT_ELIGIBLE.value
+
+
+@pytest.mark.asyncio
+async def test_admin_on_behalf_allows_allowlisted_booker_via_repository_lookup(monkeypatch):
+    operator_id = uuid4()
+    booker_id = uuid4()
+    setting_stub = StubSettingService(max_booking_lines=10, test_booker_email_addresses=["qa1@test.local"])
+    service, *_ = _service(
+        monkeypatch, user_id=operator_id, email="operator@efcnewlife.org", setting_stub=setting_stub, user_read_stub=StubUserReadService(email="qa1@test.local")
+    )
+    result = await service.create_series(_command(user_id=booker_id))
+    assert result.user_id == booker_id
 
 
 @pytest.mark.asyncio
