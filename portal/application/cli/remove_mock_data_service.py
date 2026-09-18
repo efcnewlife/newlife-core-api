@@ -144,6 +144,8 @@ class RemoveMockDataService:
         if candidate_ministry_ids:
             await self._session.delete(OrgMinistry).where(OrgMinistry.id.in_(candidate_ministry_ids)).execute()
 
+        # Profiles, tokens, roles, and steward/position (OrgPositionAssignment) relationships are
+        # ondelete=CASCADE on user_id, so this one delete removes them too.
         await self._session.delete(AuthUser).where(AuthUser.id.in_(mock_user_ids)).execute()
         await self._session.commit()
 
