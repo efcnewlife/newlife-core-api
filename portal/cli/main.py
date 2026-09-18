@@ -7,6 +7,7 @@ import click
 from .init_all import init_all_process
 from .init_locale import init_locales_process
 from .rbac import init_rbac_process, reset_rbac_process
+from .remove_mock_data import remove_mock_data_process
 from .seed_facility_rental import seed_facility_rental_process
 from .seed_legal_documents import seed_legal_documents_process
 from .seed_local_demo import seed_local_demo_process
@@ -110,6 +111,13 @@ def seed_mock_users_cmd(force: bool):
 def seed_mock_data_cmd(force: bool):
     """Complete Facility Booking QA scenarios (Bookings, Owner assignment, Ministry Application) for the current Mock user inventory."""
     seed_mock_data_process(force=force)
+
+
+@cli.command(name="remove-mock-data")
+@click.option("--force", is_flag=True, default=False, help="Skip confirmation; required to run in staging. Never allowed in production.")
+def remove_mock_data_cmd(force: bool):
+    """Delete every @test.local Mock user and its derived QA data (Bookings, Drafts, Ministries); catalog data is preserved."""
+    remove_mock_data_process(force=force)
 
 
 @cli.command(name="seed-local-demo")
