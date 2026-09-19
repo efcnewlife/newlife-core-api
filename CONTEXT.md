@@ -171,8 +171,8 @@ The choice presented when creating a Rental Recurring Booking Series conflicts w
 _Avoid_: partial creation without user approval, silently overwriting an existing Church Activity Booking, treating a Blackout as overwritable occupancy, excluding a free date to shrink a Series
 
 **Pending-payment hold expiry**:
-The global duration for which an unpaid Pending-payment Booking reserves its room intervals before the system cancels it and releases its future occurrences. It is configured by `facility.pending_payment_hold_hours`, defaulting to 72 hours. A FastAPI lifecycle sweep runs at startup and every 15 minutes under a PostgreSQL advisory lock; availability queries treat an elapsed expiry as released even before the sweep records cancellation.
-_Avoid_: an indefinite payment hold, a non-blocking payment request, an in-process timer with no cross-worker lock, a per-room payment deadline
+The global payment deadline for an unpaid Pending-payment Booking, calculated from a configurable number of facility-local calendar days. A Booking created before noon expires at noon on the target day; one created at or after noon expires at the following midnight, while an existing stored deadline never changes. A FastAPI lifecycle sweep runs at startup and every 15 minutes under a PostgreSQL advisory lock; availability queries treat an elapsed expiry as released even before the sweep records cancellation.
+_Avoid_: an exact elapsed-hours hold, an indefinite payment hold, a non-blocking payment request, an in-process timer with no cross-worker lock, a per-room payment deadline
 
 **Payment-hold expiry email**:
 An email to the Booker when a Pending-payment Series expires, listing released occurrences and the former Series payment total and linking to start a new Booking. Failure to deliver it does not prevent expiry.
