@@ -434,7 +434,7 @@ class BookingRepository:
             .where(self._active_occupancy_clause())
             .where(FacilityBooking.start_at >= range_start)
             .where(FacilityBooking.start_at < range_end)
-            .fetchvals()
+            .fetchvals(raw=True)
         )
         return rows or []
 

@@ -276,7 +276,7 @@ class SessionMock(Session):
             return MagicMock(return_value=None)()
         return mock()
 
-    async def fetchvals(self, statement, *params, timeout: float = None):
+    async def fetchvals(self, statement, *params, timeout: float = None, raw: bool = False):
         key, output_params = self._to_key(statement, params)
         mock: Optional[MagicMock] = self._statement_mocks.get(key, None)
         if not mock:
