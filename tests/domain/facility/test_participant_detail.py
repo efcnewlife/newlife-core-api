@@ -85,6 +85,17 @@ def test_booker_action_eligibility_covers_title_cancel_payment_and_future_overri
     assert pending.can_view_payment_instructions is True
     assert pending.can_cancel is True
 
+    naive_pending = booker_action_eligibility(
+        is_booker=True,
+        status=BookingStatus.PENDING_PAYMENT.value,
+        start_at=future_start.replace(tzinfo=None),
+        payment_hold_expires_at=hold_expires.replace(tzinfo=None),
+        now=now,
+        facility_tz=tz,
+    )
+    assert naive_pending.can_view_payment_instructions is True
+    assert naive_pending.can_cancel is True
+
     expired_hold = booker_action_eligibility(
         is_booker=True, status=BookingStatus.PENDING_PAYMENT.value, start_at=future_start, payment_hold_expires_at=now, now=now, facility_tz=tz
     )

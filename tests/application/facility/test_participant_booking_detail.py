@@ -336,6 +336,22 @@ async def test_current_ministry_member_reads_complete_series_occurrences(monkeyp
 
 
 @pytest.mark.asyncio
+async def test_get_my_series_detail_accepts_naive_asyncpg_payment_hold(monkeypatch):
+    booker_id = uuid4()
+    naive_hold = datetime(2026, 3, 12, 17, 0)
+    series = _series(user_id=booker_id, status=BookingStatus.PENDING_PAYMENT.value, expires_at=naive_hold)
+    series_repo = StubRecurringBookingRepository()
+    booking_stub = StubBookingRepository()
+    _seed_series(series_repo, booking_stub, series)
+    service, *_ = _series_service(monkeypatch, operator_id=booker_id, series_stub=series_repo, booking_stub=booking_stub)
+
+    result = await service.get_my_series_detail(series.id)
+
+    assert result.actions.can_view_payment_instructions is True
+    assert result.payment_hold_expires_at == naive_hold
+
+
+@pytest.mark.asyncio
 async def test_unrelated_user_series_detail_is_not_found(monkeypatch):
     booker_id = uuid4()
     series = _series(user_id=booker_id)

@@ -18,6 +18,12 @@ def test_elapsed_hold_is_not_active():
     assert is_pending_payment_hold_active(NOW - timedelta(seconds=1), NOW) is False
 
 
+def test_naive_asyncpg_hold_compares_against_aware_now():
+    naive_hold = datetime(2026, 1, 10, 13, 0)
+    assert is_pending_payment_hold_active(naive_hold, NOW) is True
+    assert is_pending_payment_hold_active(datetime(2026, 1, 10, 11, 0), NOW) is False
+
+
 def test_missing_hold_deadline_stays_active():
     assert is_pending_payment_hold_active(None, NOW) is True
 

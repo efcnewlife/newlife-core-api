@@ -7,7 +7,7 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from portal.domain.facility.constants import PENDING_PAYMENT_HOLD_EXPIRED_REASON, BookingLifecycleEventKind, BookingStatus
-from portal.domain.facility.recurring import is_pending_payment_hold_active
+from portal.domain.facility.recurring import as_utc, is_pending_payment_hold_active
 
 _LIVE_STATUSES = {BookingStatus.CONFIRMED.value, BookingStatus.PENDING_PAYMENT.value}
 
@@ -82,8 +82,8 @@ def booker_action_eligibility(
         return _NO_ACTIONS
     hold_active = is_pending_payment_hold_active(payment_hold_expires_at, now)
     pending_expired = status == BookingStatus.PENDING_PAYMENT.value and not hold_active
-    local_start = start_at.astimezone(facility_tz)
-    local_now = now.astimezone(facility_tz)
+    local_start = as_utc(start_at).astimezone(facility_tz)
+    local_now = as_utc(now).astimezone(facility_tz)
     is_future = local_start > local_now
     can_cancel = (not pending_expired) and status in _LIVE_STATUSES and is_future
     can_view_payment_instructions = status == BookingStatus.PENDING_PAYMENT.value and hold_active

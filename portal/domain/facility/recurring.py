@@ -125,11 +125,18 @@ def is_test_booker_allowlisted(email: str | None, email_addresses: list[str], em
     return any(candidate.endswith(suffix) for suffix in email_suffixes)
 
 
+def as_utc(value: datetime) -> datetime:
+    """Treat naive datetimes as UTC (asyncpg timestamptz) then return UTC-aware."""
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
 def is_pending_payment_hold_active(payment_hold_expires_at: datetime | None, now: datetime) -> bool:
     """True when a Pending-payment hold still reserves occupancy at query time."""
     if payment_hold_expires_at is None:
         return True
-    return payment_hold_expires_at > now
+    return as_utc(payment_hold_expires_at) > as_utc(now)
 
 
 def is_logically_occupying(*, booking_status: str, payment_hold_expires_at: datetime | None, now: datetime) -> bool:
