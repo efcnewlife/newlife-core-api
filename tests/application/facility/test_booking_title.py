@@ -77,9 +77,15 @@ def test_member_create_allows_omitted_title_when_draft_backed_admin_still_requir
     room = MemberBookingRoomInput(facility_id=uuid4(), start_at=start, end_at=end)
     member = MemberBookingCreate(title="  Gym night  ", start_at=start, end_at=end, rooms=[room])
     assert member.title == "Gym night"
+    with pytest.raises(ValidationError):
+        MemberBookingCreate(start_at=start, end_at=end, rooms=[room])
+    with pytest.raises(ValidationError):
+        MemberBookingCreate(title="<b>Choir</b>", start_at=start, end_at=end, rooms=[room])
     draft_backed = MemberBookingCreate(start_at=start, end_at=end, rooms=[room], booking_draft_id=uuid4())
     assert draft_backed.title is None
-    assert draft_backed.booking_draft_id is not None
+    leftover = MemberBookingCreate(title="<b>Choir</b>", start_at=start, end_at=end, rooms=[room], booking_draft_id=uuid4())
+    assert leftover.title is None
+    assert leftover.booking_draft_id is not None
     with pytest.raises(ValidationError):
         AdminBookingCreate(user_id=uuid4(), start_at=start, end_at=end, rooms=[AdminBookingRoomInput(facility_id=uuid4())])
     with pytest.raises(ValidationError):

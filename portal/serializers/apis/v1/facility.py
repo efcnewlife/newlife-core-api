@@ -8,7 +8,7 @@ from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from portal.domain.facility.booking_title import BookingTitle, OptionalBookingTitle
 from portal.domain.facility.cancellation_reason import MemberCancellationReason
@@ -71,6 +71,21 @@ class MemberBookingCreate(BaseModel):
     surcharge_codes: list[str] = Field(default_factory=list)
     remark: Optional[str] = Field(default=None)
     booking_draft_id: Optional[UUID] = Field(default=None, description="Source Booking Draft; deleted on successful create")
+
+    @model_validator(mode="before")
+    @classmethod
+    def discard_leftover_title_when_draft_backed(cls, data):
+        if isinstance(data, dict) and data.get("booking_draft_id") is not None:
+            data = dict(data)
+            data["title"] = None
+            return data
+        return data
+
+    @model_validator(mode="after")
+    def require_title_without_draft(self):
+        if self.booking_draft_id is None and not self.title:
+            raise ValueError("Title is required")
+        return self
 
 
 class MemberBookingCancel(BaseModel):
