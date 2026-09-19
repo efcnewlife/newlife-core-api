@@ -63,7 +63,7 @@ class MemberBookingRoomInput(BaseModel):
 class MemberBookingCreate(BaseModel):
     """Create booking request."""
 
-    title: BookingTitle = Field(...)
+    title: OptionalBookingTitle = Field(default=None, description="Required unless an owned Booking Draft supplies Title")
     start_at: datetime = Field(...)
     end_at: datetime = Field(...)
     ministry_id: Optional[UUID] = Field(default=None)
@@ -263,6 +263,7 @@ class MemberBookingDraftLineInput(BaseModel):
 class MemberBookingDraftCreate(BaseModel):
     """Create Booking Draft request."""
 
+    title: BookingTitle = Field(...)
     ministry_id: Optional[UUID] = Field(default=None)
     lines: list[MemberBookingDraftLineInput] = Field(default_factory=list)
 
@@ -270,6 +271,7 @@ class MemberBookingDraftCreate(BaseModel):
 class MemberBookingDraftUpdate(BaseModel):
     """Replace a Booking Draft's lines in place (PATCH; last-write-wins)."""
 
+    title: BookingTitle = Field(...)
     ministry_id: Optional[UUID] = Field(default=None)
     lines: list[MemberBookingDraftLineInput] = Field(default_factory=list)
 
@@ -287,6 +289,7 @@ class MemberBookingDraftLine(BaseModel):
 class MemberBookingDraftDetail(UUIDBaseModel):
     """Booking Draft detail: lines plus freshly computed price and availability."""
 
+    title: str = Field(...)
     date: DateType = Field(...)
     ministry_id: Optional[UUID] = Field(default=None, serialization_alias="ministryId")
     lines: list[MemberBookingDraftLine] = Field(default_factory=list)

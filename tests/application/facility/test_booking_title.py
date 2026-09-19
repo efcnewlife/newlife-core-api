@@ -71,14 +71,15 @@ def test_create_recurring_series_command_normalizes_title_when_present():
         )
 
 
-def test_member_and_admin_create_serializers_require_title():
+def test_member_create_allows_omitted_title_when_draft_backed_admin_still_requires_it():
     start = datetime(2026, 5, 1, 10, 0, tzinfo=timezone.utc)
     end = datetime(2026, 5, 1, 14, 0, tzinfo=timezone.utc)
     room = MemberBookingRoomInput(facility_id=uuid4(), start_at=start, end_at=end)
-    with pytest.raises(ValidationError):
-        MemberBookingCreate(start_at=start, end_at=end, rooms=[room])
     member = MemberBookingCreate(title="  Gym night  ", start_at=start, end_at=end, rooms=[room])
     assert member.title == "Gym night"
+    draft_backed = MemberBookingCreate(start_at=start, end_at=end, rooms=[room], booking_draft_id=uuid4())
+    assert draft_backed.title is None
+    assert draft_backed.booking_draft_id is not None
     with pytest.raises(ValidationError):
         AdminBookingCreate(user_id=uuid4(), start_at=start, end_at=end, rooms=[AdminBookingRoomInput(facility_id=uuid4())])
     with pytest.raises(ValidationError):
@@ -115,6 +116,16 @@ async def test_create_booking_persists_title(monkeypatch):
     service = _booking_service(stub)
     await service.create_booking(make_create_booking_command(title="Choir practice"))
     assert stub.insert_calls[0]["title"] == "Choir practice"
+
+
+@pytest.mark.asyncio
+async def test_create_booking_without_draft_requires_title(monkeypatch):
+    _user_ctx(monkeypatch)
+    service = _booking_service(StubBookingRepository())
+    command = make_create_booking_command().model_copy(update={"title": None})
+    with pytest.raises(BadRequestException) as exc_info:
+        await service.create_booking(command)
+    assert exc_info.value.error_code == FacilityErrorCode.BOOKING_TITLE_INVALID.value
 
 
 @pytest.mark.asyncio

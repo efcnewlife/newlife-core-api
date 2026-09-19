@@ -610,6 +610,7 @@ def member_browse_page_to_api(result: MemberBrowsePageResult) -> MemberBookingBr
 
 def member_booking_draft_create_to_command(model: MemberBookingDraftCreate) -> CreateBookingDraftCommand:
     return CreateBookingDraftCommand(
+        title=model.title,
         ministry_id=model.ministry_id,
         lines=[
             BookingDraftLineCommand(facility_id=line.facility_id, start_at=line.start_at, end_at=line.end_at, sequence=line.sequence) for line in model.lines
@@ -619,6 +620,7 @@ def member_booking_draft_create_to_command(model: MemberBookingDraftCreate) -> C
 
 def member_booking_draft_update_to_command(model: MemberBookingDraftUpdate) -> UpdateBookingDraftCommand:
     return UpdateBookingDraftCommand(
+        title=model.title,
         ministry_id=model.ministry_id,
         lines=[
             BookingDraftLineCommand(facility_id=line.facility_id, start_at=line.start_at, end_at=line.end_at, sequence=line.sequence) for line in model.lines
@@ -629,6 +631,7 @@ def member_booking_draft_update_to_command(model: MemberBookingDraftUpdate) -> U
 def booking_draft_result_to_api(result: BookingDraftResult) -> MemberBookingDraftDetail:
     return MemberBookingDraftDetail(
         id=result.id,
+        title=result.title,
         date=result.date,
         ministry_id=result.ministry_id,
         lines=[

@@ -159,6 +159,15 @@ class BookingService:
 
         await self._validate_ministry_booking_gate(command.ministry_id, booker_id=booker_id)
 
+        draft = None
+        if command.booking_draft_id is not None:
+            draft = await self._booking_draft_repository.get_detail(command.booking_draft_id)
+        title = command.title
+        if draft and draft.user_id == booker_id and draft.title:
+            title = draft.title
+        if not title:
+            raise BadRequestException(detail="Title is required", error_code=FacilityErrorCode.BOOKING_TITLE_INVALID.value)
+
         await self._raise_if_too_many_booking_lines(command.rooms)
 
         local_tz = await self._setting_service.get_facility_timezone()
@@ -206,7 +215,7 @@ class BookingService:
                 quoted_amount=quote.quoted_amount,
                 currency=quote.currency,
                 remark=command.remark,
-                title=command.title,
+                title=title,
             )
         )
 
@@ -245,12 +254,10 @@ class BookingService:
         await self._repository.replace_booking_rooms(booking_id, room_rows)
         await self._repository.replace_booking_slots(booking_id, slot_rows)
 
-        if command.booking_draft_id is not None:
+        if command.booking_draft_id is not None and draft and draft.user_id == booker_id:
             # Ownership check guards against one booker deleting another member's Draft by id; a mismatch
             # or already-gone Draft is treated like any other abandoned Draft and left alone, not an error.
-            draft = await self._booking_draft_repository.get_detail(command.booking_draft_id)
-            if draft and draft.user_id == booker_id:
-                await self._booking_draft_repository.delete_draft(command.booking_draft_id)
+            await self._booking_draft_repository.delete_draft(command.booking_draft_id)
 
         return CreateIdResult(id=booking_id)
 

@@ -274,13 +274,56 @@ async def test_create_booking_from_draft_deletes_the_draft(monkeypatch):
     draft_id = uuid4()
     _user_ctx(monkeypatch, user_id=user_id)
     draft_stub = StubBookingDraftRepository(
-        draft_by_id={draft_id: BookingDraftDetailResult(id=draft_id, user_id=user_id, date=datetime(2026, 5, 1).date(), ministry_id=None, lines=[])}
+        draft_by_id={
+            draft_id: BookingDraftDetailResult(
+                id=draft_id, user_id=user_id, date=datetime(2026, 5, 1).date(), title="Choir practice", ministry_id=None, lines=[]
+            )
+        }
     )
     service = _booking_service(StubBookingRepository(), booking_draft_stub=draft_stub)
     result = await service.create_booking(make_create_booking_command(booking_draft_id=draft_id))
     assert result.id is not None
     assert draft_stub.delete_draft_calls == [draft_id]
     assert draft_id not in draft_stub.draft_by_id
+
+
+@pytest.mark.asyncio
+async def test_create_booking_from_draft_uses_draft_owned_title(monkeypatch):
+    user_id = uuid4()
+    draft_id = uuid4()
+    _user_ctx(monkeypatch, user_id=user_id)
+    stub = StubBookingRepository()
+    draft_stub = StubBookingDraftRepository(
+        draft_by_id={
+            draft_id: BookingDraftDetailResult(
+                id=draft_id, user_id=user_id, date=datetime(2026, 5, 1).date(), title="Choir practice", ministry_id=None, lines=[]
+            )
+        }
+    )
+    service = _booking_service(stub, booking_draft_stub=draft_stub)
+    result = await service.create_booking(make_create_booking_command(booking_draft_id=draft_id, title="Browser leftover"))
+    assert result.id is not None
+    assert stub.insert_calls[0]["title"] == "Choir practice"
+
+
+@pytest.mark.asyncio
+async def test_create_booking_from_draft_does_not_require_request_title(monkeypatch):
+    user_id = uuid4()
+    draft_id = uuid4()
+    _user_ctx(monkeypatch, user_id=user_id)
+    stub = StubBookingRepository()
+    draft_stub = StubBookingDraftRepository(
+        draft_by_id={
+            draft_id: BookingDraftDetailResult(
+                id=draft_id, user_id=user_id, date=datetime(2026, 5, 1).date(), title="Choir practice", ministry_id=None, lines=[]
+            )
+        }
+    )
+    service = _booking_service(stub, booking_draft_stub=draft_stub)
+    command = make_create_booking_command(booking_draft_id=draft_id).model_copy(update={"title": None})
+    result = await service.create_booking(command)
+    assert result.id is not None
+    assert stub.insert_calls[0]["title"] == "Choir practice"
 
 
 @pytest.mark.asyncio
@@ -299,7 +342,11 @@ async def test_create_booking_does_not_delete_another_users_draft(monkeypatch):
     draft_id = uuid4()
     _user_ctx(monkeypatch, user_id=booker_id)
     draft_stub = StubBookingDraftRepository(
-        draft_by_id={draft_id: BookingDraftDetailResult(id=draft_id, user_id=other_user_id, date=datetime(2026, 5, 1).date(), ministry_id=None, lines=[])}
+        draft_by_id={
+            draft_id: BookingDraftDetailResult(
+                id=draft_id, user_id=other_user_id, date=datetime(2026, 5, 1).date(), title="Choir practice", ministry_id=None, lines=[]
+            )
+        }
     )
     service = _booking_service(StubBookingRepository(), booking_draft_stub=draft_stub)
     result = await service.create_booking(make_create_booking_command(booking_draft_id=draft_id))

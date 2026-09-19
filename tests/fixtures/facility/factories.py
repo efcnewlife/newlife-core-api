@@ -329,12 +329,18 @@ def make_create_booking_command(
 
 
 def make_create_booking_draft_command(
-    facility_id: UUID | None = None, start_at: datetime | None = None, end_at: datetime | None = None, ministry_id: UUID | None = None
+    facility_id: UUID | None = None,
+    start_at: datetime | None = None,
+    end_at: datetime | None = None,
+    ministry_id: UUID | None = None,
+    title: str = "Choir practice",
 ) -> CreateBookingDraftCommand:
     room_id = facility_id or new_uuid()
     start = start_at or datetime(2026, 5, 1, 10, 0, tzinfo=timezone.utc)
     end = end_at or datetime(2026, 5, 1, 14, 0, tzinfo=timezone.utc)
-    return CreateBookingDraftCommand(ministry_id=ministry_id, lines=[BookingDraftLineCommand(facility_id=room_id, start_at=start, end_at=end, sequence=0)])
+    return CreateBookingDraftCommand(
+        title=title, ministry_id=ministry_id, lines=[BookingDraftLineCommand(facility_id=room_id, start_at=start, end_at=end, sequence=0)]
+    )
 
 
 def make_create_discount_command(code: str = "mission_aligned") -> CreateDiscountRuleCommand:

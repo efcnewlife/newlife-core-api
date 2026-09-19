@@ -533,6 +533,7 @@ class BookingDraftDetailResult(UUIDBaseModel):
     """Persisted Booking Draft header and lines, as read from the repository."""
 
     user_id: UUID = Field(...)
+    title: str = Field(...)
     date: DateType = Field(...)
     ministry_id: Optional[UUID] = Field(default=None)
     lines: list[BookingDraftStoredLineResult] = Field(default_factory=list)
@@ -551,6 +552,7 @@ class BookingDraftLineResult(BaseModel):
 class BookingDraftResult(UUIDBaseModel):
     """Booking Draft detail with live-computed price and availability (never cached)."""
 
+    title: str = Field(...)
     date: DateType = Field(...)
     ministry_id: Optional[UUID] = Field(default=None)
     lines: list[BookingDraftLineResult] = Field(default_factory=list)

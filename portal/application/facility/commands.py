@@ -301,7 +301,7 @@ class CancelBookingCommand(BaseModel):
 class CreateBookingCommand(BaseModel):
     """Create a one-time booking."""
 
-    title: BookingTitle = Field(...)
+    title: OptionalBookingTitle = Field(default=None, description="Required unless an owned Booking Draft supplies Title")
     start_at: datetime = Field(...)
     end_at: datetime = Field(...)
     ministry_id: Optional[UUID] = Field(default=None)
@@ -361,6 +361,7 @@ class BookingDraftLineCommand(BaseModel):
 class CreateBookingDraftCommand(BaseModel):
     """Create a Booking Draft from a proposed set of lines."""
 
+    title: BookingTitle = Field(...)
     ministry_id: Optional[UUID] = Field(default=None)
     lines: list[BookingDraftLineCommand] = Field(default_factory=list)
 
@@ -368,6 +369,7 @@ class CreateBookingDraftCommand(BaseModel):
 class UpdateBookingDraftCommand(BaseModel):
     """Replace a Booking Draft's lines in place (last-write-wins; no merge)."""
 
+    title: BookingTitle = Field(...)
     ministry_id: Optional[UUID] = Field(default=None)
     lines: list[BookingDraftLineCommand] = Field(default_factory=list)
 
