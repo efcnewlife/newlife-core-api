@@ -958,3 +958,30 @@ async def test_create_series_uses_configured_hold_day_count(monkeypatch):
     expires_at = datetime(2025, 12, 10, 17, 0, tzinfo=timezone.utc)
     assert result.payment_hold_expires_at == expires_at
     assert series_stub.insert_series_calls[0]["payment_hold_expires_at"] == expires_at
+
+
+@pytest.mark.asyncio
+async def test_create_series_does_not_rewrite_an_existing_series_hold(monkeypatch):
+    stored_expires_at = datetime(2026, 1, 9, 17, 0, tzinfo=timezone.utc)
+    existing_id = uuid4()
+    series_stub = StubRecurringBookingRepository(
+        series_by_id={
+            existing_id: RecurringBookingSeriesResult(
+                id=existing_id,
+                user_id=uuid4(),
+                first_occurrence_date=FIRST_TUESDAY,
+                last_occurrence_date=LAST_TUESDAY,
+                local_start_time=time(10, 0),
+                local_end_time=time(12, 0),
+                status=BookingStatus.PENDING_PAYMENT.value,
+                payment_hold_expires_at=stored_expires_at,
+                quoted_amount=Decimal("400"),
+                currency="CAD",
+                occurrence_count=4,
+            )
+        }
+    )
+    service, series_stub, *_ = _service(monkeypatch, series_stub=series_stub)
+    await service.create_series(_command())
+    assert series_stub.series_by_id[existing_id].payment_hold_expires_at == stored_expires_at
+    assert series_stub.update_series_calls == []
