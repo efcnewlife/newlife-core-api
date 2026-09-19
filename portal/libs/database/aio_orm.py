@@ -449,8 +449,8 @@ class _Select:
     async def fetchrow(self, as_model: Type[BaseModel] = None) -> T:
         return await self._session.fetchrow(self._select.statement, as_model=as_model)
 
-    async def fetchvals(self):
-        return await self._session.fetchvals(self._select.statement)
+    async def fetchvals(self, raw: bool = False):
+        return await self._session.fetchvals(self._select.statement, raw=raw)
 
     async def count(self):
         col = sa.func.count(sa.literal_column("*"))
@@ -796,10 +796,19 @@ class Session(ISession):
         """
         return await self._fetch(FetchMethod.FETCH_VAL, statement, params, timeout=timeout)
 
-    async def fetchvals(self, statement, *params, timeout: float = None):
+    async def fetchvals(self, statement, *params, timeout: float = None, raw: bool = False):
+        """
+        :param statement:
+        :param params:
+        :param timeout:
+        :param raw: skip Converter.format_value (e.g. datetime -> str) and return driver-native values
+        :return:
+        """
         sql, params = self._format_statement(statement, None, *params)
         await self._ensure_connection()
         rows = await self._conn.fetch(sql, *params, timeout=timeout)
+        if raw:
+            return [item[0] for item in rows]
         return [_format_value(item[0]) for item in rows]
 
     async def fetchdict(self, statement, *params, timeout: float = None, key: str, value: str = None, as_model: Type[BaseModel] = None) -> dict:
