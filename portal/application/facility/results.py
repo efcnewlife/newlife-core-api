@@ -748,7 +748,7 @@ class RecurringProposalEvaluationResult(BaseModel):
     surcharge_amount: Decimal = Field(...)
     currency: str = Field(...)
     occurrence_count: int = Field(...)
-    pending_payment_hold_hours: int = Field(...)
+    pending_payment_hold_days: int = Field(...)
     payment_hold_expires_at: datetime = Field(...)
     invalidity_code: Optional[str] = Field(default=None)
     invalidity_detail: Optional[str] = Field(default=None)
@@ -779,7 +779,7 @@ class RecurringSeriesDraftResult(UUIDBaseModel):
     surcharge_amount: Decimal = Field(...)
     currency: str = Field(...)
     occurrence_count: int = Field(...)
-    pending_payment_hold_hours: int = Field(...)
+    pending_payment_hold_days: int = Field(...)
     payment_hold_expires_at: datetime = Field(...)
 
 

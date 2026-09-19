@@ -679,7 +679,7 @@ def recurring_series_draft_result_to_api(result: RecurringSeriesDraftResult) -> 
         surcharge_amount=result.surcharge_amount,
         currency=result.currency,
         occurrence_count=result.occurrence_count,
-        pending_payment_hold_hours=result.pending_payment_hold_hours,
+        pending_payment_hold_days=result.pending_payment_hold_days,
         payment_hold_expires_at=result.payment_hold_expires_at,
     )
 

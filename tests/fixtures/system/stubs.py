@@ -17,7 +17,7 @@ class StubSettingService:
         availability_amount: int = 4,
         availability_unit: str = "weeks",
         min_recurring_booking_weeks: int = 4,
-        pending_payment_hold_hours: int = 72,
+        pending_payment_hold_days: int = 3,
         test_window_override: bool = False,
         test_booker_email_addresses: list[str] | None = None,
         test_booker_email_suffixes: list[str] | None = None,
@@ -27,7 +27,7 @@ class StubSettingService:
         self._availability_amount = availability_amount
         self._availability_unit = availability_unit
         self._min_recurring_booking_weeks = min_recurring_booking_weeks
-        self._pending_payment_hold_hours = pending_payment_hold_hours
+        self._pending_payment_hold_days = pending_payment_hold_days
         self._test_window_override = test_window_override
         self._test_booker_email_addresses = test_booker_email_addresses or []
         self._test_booker_email_suffixes = test_booker_email_suffixes or []
@@ -44,8 +44,8 @@ class StubSettingService:
     async def get_min_recurring_booking_weeks(self) -> int:
         return self._min_recurring_booking_weeks
 
-    async def get_pending_payment_hold_hours(self) -> int:
-        return self._pending_payment_hold_hours
+    async def get_pending_payment_hold_days(self) -> int:
+        return self._pending_payment_hold_days
 
     async def get_recurring_booking_test_window_override(self) -> bool:
         return self._test_window_override

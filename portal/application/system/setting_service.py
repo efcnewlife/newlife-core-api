@@ -228,7 +228,11 @@ class SettingService:
         if setting_key == FacilitySettingKey.RECURRING_BOOKING_AVAILABILITY_WINDOW.value:
             cls._parse_recurring_booking_availability_window(value)
             return
-        if setting_key in {FacilitySettingKey.MIN_RECURRING_BOOKING_WEEKS.value, FacilitySettingKey.PENDING_PAYMENT_HOLD_HOURS.value}:
+        if setting_key in {
+            FacilitySettingKey.MIN_RECURRING_BOOKING_WEEKS.value,
+            FacilitySettingKey.PENDING_PAYMENT_HOLD_HOURS.value,
+            FacilitySettingKey.PENDING_PAYMENT_HOLD_DAYS.value,
+        }:
             cls._parse_positive_int(value, field_name=setting_key)
             return
         if setting_key == FacilitySettingKey.RECURRING_BOOKING_TEST_WINDOW_OVERRIDE.value:
@@ -303,6 +307,21 @@ class SettingService:
         return self._parse_positive_int(value, field_name=FacilitySettingKey.MIN_RECURRING_BOOKING_WEEKS.value)
 
     @distributed_trace()
-    async def get_pending_payment_hold_hours(self) -> int:
-        value = await self._read_facility_setting(FacilitySettingKey.PENDING_PAYMENT_HOLD_HOURS.value, SettingValueType.NUMBER.value)
-        return self._parse_positive_int(value, field_name=FacilitySettingKey.PENDING_PAYMENT_HOLD_HOURS.value)
+    async def get_pending_payment_hold_days(self) -> int:
+        try:
+            value = await self._read_facility_setting(FacilitySettingKey.PENDING_PAYMENT_HOLD_DAYS.value, SettingValueType.NUMBER.value)
+        except NotFoundException:
+            return await self._hold_days_from_legacy_hours()
+        return self._parse_positive_int(value, field_name=FacilitySettingKey.PENDING_PAYMENT_HOLD_DAYS.value)
+
+    async def _hold_days_from_legacy_hours(self) -> int:
+        try:
+            hours_value = await self._read_facility_setting(FacilitySettingKey.PENDING_PAYMENT_HOLD_HOURS.value, SettingValueType.NUMBER.value)
+        except NotFoundException as error:
+            raise NotFoundException(detail="facility.pending_payment_hold_days setting is not configured") from error
+        hours = self._parse_positive_int(hours_value, field_name=FacilitySettingKey.PENDING_PAYMENT_HOLD_HOURS.value)
+        if hours % 24 != 0:
+            raise BadRequestException(
+                detail="facility.pending_payment_hold_days must be set explicitly because pending_payment_hold_hours is not a multiple of 24"
+            )
+        return hours // 24

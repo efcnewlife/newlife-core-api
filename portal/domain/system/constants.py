@@ -19,6 +19,7 @@ class FacilitySettingKey(str, Enum):
     RECURRING_BOOKING_AVAILABILITY_WINDOW = "recurring_booking_availability_window"
     MIN_RECURRING_BOOKING_WEEKS = "min_recurring_booking_weeks"
     PENDING_PAYMENT_HOLD_HOURS = "pending_payment_hold_hours"
+    PENDING_PAYMENT_HOLD_DAYS = "pending_payment_hold_days"
     RECURRING_BOOKING_TEST_WINDOW_OVERRIDE = "recurring_booking_test_window_override"
     RECURRING_BOOKING_TEST_BOOKER_ALLOWLIST = "recurring_booking_test_booker_allowlist"
 

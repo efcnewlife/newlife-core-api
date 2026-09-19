@@ -23,7 +23,7 @@ This ADR covers core-api#151.
 
 ### Hold duration
 
-- Keep `facility.pending_payment_hold_hours` as the source of the hold. The SettingService reader already defaults to 72 hours.
+- Superseded by ADR 0030. New Series use `facility.pending_payment_hold_days` and a facility-local noon/midnight cutoff. Existing persisted `payment_hold_expires_at` values remain unchanged.
 
 ### Query-time logical expiry
 

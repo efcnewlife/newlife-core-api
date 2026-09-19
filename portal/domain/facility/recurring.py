@@ -132,6 +132,21 @@ def as_utc(value: datetime) -> datetime:
     return value.astimezone(timezone.utc)
 
 
+def calendar_day_payment_hold_expires_at(now: datetime, hold_days: int, tz: ZoneInfo) -> datetime:
+    """Return the exclusive UTC deadline for a facility-local calendar-day payment hold.
+
+    Creation before local 12:00 expires at 12:00 on created_local_date + hold_days.
+    Creation at or after local 12:00 expires at 00:00 on the following date.
+    """
+    local = as_utc(now).astimezone(tz)
+    target_date = local.date() + timedelta(days=hold_days)
+    if local.time() < time(12, 0):
+        deadline_local = localize_wall_time(target_date, time(12, 0), tz)
+    else:
+        deadline_local = localize_wall_time(target_date + timedelta(days=1), time.min, tz)
+    return as_utc(deadline_local)
+
+
 def is_pending_payment_hold_active(payment_hold_expires_at: datetime | None, now: datetime) -> bool:
     """True when a Pending-payment hold still reserves occupancy at query time."""
     if payment_hold_expires_at is None:

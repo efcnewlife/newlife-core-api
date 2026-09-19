@@ -128,7 +128,7 @@ class RecurringSeriesDraftService:
             surcharge_amount=evaluation.surcharge_amount,
             currency=evaluation.currency,
             occurrence_count=evaluation.occurrence_count,
-            pending_payment_hold_hours=evaluation.pending_payment_hold_hours,
+            pending_payment_hold_days=evaluation.pending_payment_hold_days,
             payment_hold_expires_at=evaluation.payment_hold_expires_at,
         )
 

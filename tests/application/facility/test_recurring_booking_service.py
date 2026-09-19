@@ -127,7 +127,7 @@ async def test_create_personal_series_is_pending_payment_with_hold_and_total(mon
     assert result.occurrence_count == 4
     assert result.quoted_amount == Decimal("400")
     assert result.currency == "CAD"
-    assert result.payment_hold_expires_at == OPEN_WINDOW_NOW + timedelta(hours=72)
+    assert result.payment_hold_expires_at == datetime(2025, 12, 12, 5, 0, tzinfo=timezone.utc)
     assert result.ministry_id is None
     assert result.is_priority is False
     assert [item.start_at.date() for item in result.occurrences] == [date(2026, 1, 6), date(2026, 1, 13), date(2026, 1, 20), date(2026, 1, 27)]
@@ -894,3 +894,94 @@ async def test_evaluate_proposal_qualifying_ministry_applies_thirty_percent_not_
     assert evaluation.discount_percent == Decimal("30")
     assert evaluation.quoted_amount == Decimal("56.00")
     assert evaluation.discount_code == RentalDiscountCode.MISSION_ALIGNED.value
+
+
+@pytest.mark.asyncio
+async def test_evaluate_proposal_uses_pre_noon_calendar_day_deadline(monkeypatch):
+    pre_noon = datetime(2025, 12, 8, 16, 59, tzinfo=timezone.utc)
+    service, *_ = _service(monkeypatch, now_utc=lambda: pre_noon)
+    evaluation = await service.evaluate_proposal(_command())
+    assert evaluation.pending_payment_hold_days == 3
+    assert evaluation.payment_hold_expires_at == datetime(2025, 12, 11, 17, 0, tzinfo=timezone.utc)
+
+
+@pytest.mark.asyncio
+async def test_create_series_uses_noon_cutoff_as_following_midnight(monkeypatch):
+    service, series_stub, *_ = _service(monkeypatch)
+    result = await service.create_series(_command())
+    expires_at = datetime(2025, 12, 12, 5, 0, tzinfo=timezone.utc)
+    assert result.payment_hold_expires_at == expires_at
+    assert series_stub.insert_series_calls[0]["payment_hold_expires_at"] == expires_at
+
+
+@pytest.mark.asyncio
+async def test_create_series_post_noon_deadline_matches_proposal(monkeypatch):
+    post_noon = datetime(2025, 12, 8, 17, 1, tzinfo=timezone.utc)
+    service, series_stub, *_ = _service(monkeypatch, now_utc=lambda: post_noon)
+    command = _command()
+    evaluation = await service.evaluate_proposal(command)
+    result = await service.create_series(command)
+    expires_at = datetime(2025, 12, 12, 5, 0, tzinfo=timezone.utc)
+    assert evaluation.payment_hold_expires_at == expires_at
+    assert result.payment_hold_expires_at == expires_at
+    assert series_stub.insert_series_calls[0]["payment_hold_expires_at"] == expires_at
+
+
+@pytest.mark.asyncio
+async def test_create_series_deadline_follows_dst_spring_forward_local_cutoff(monkeypatch):
+    spring_morning = datetime(2026, 3, 8, 15, 0, tzinfo=timezone.utc)
+    setting_stub = StubSettingService(max_booking_lines=10, test_window_override=True)
+    service, series_stub, *_ = _service(monkeypatch, setting_stub=setting_stub, now_utc=lambda: spring_morning)
+    result = await service.create_series(_command())
+    expires_at = datetime(2026, 3, 11, 16, 0, tzinfo=timezone.utc)
+    assert result.payment_hold_expires_at == expires_at
+    assert series_stub.insert_series_calls[0]["payment_hold_expires_at"] == expires_at
+
+
+@pytest.mark.asyncio
+async def test_create_series_deadline_follows_dst_fall_back_local_cutoff(monkeypatch):
+    fall_morning = datetime(2026, 10, 29, 15, 0, tzinfo=timezone.utc)
+    setting_stub = StubSettingService(max_booking_lines=10, test_window_override=True)
+    service, series_stub, *_ = _service(monkeypatch, setting_stub=setting_stub, now_utc=lambda: fall_morning)
+    result = await service.create_series(_command())
+    expires_at = datetime(2026, 11, 1, 17, 0, tzinfo=timezone.utc)
+    assert result.payment_hold_expires_at == expires_at
+    assert series_stub.insert_series_calls[0]["payment_hold_expires_at"] == expires_at
+
+
+@pytest.mark.asyncio
+async def test_create_series_uses_configured_hold_day_count(monkeypatch):
+    pre_noon = datetime(2025, 12, 8, 16, 59, tzinfo=timezone.utc)
+    setting_stub = StubSettingService(max_booking_lines=10, pending_payment_hold_days=2)
+    service, series_stub, *_ = _service(monkeypatch, setting_stub=setting_stub, now_utc=lambda: pre_noon)
+    result = await service.create_series(_command())
+    expires_at = datetime(2025, 12, 10, 17, 0, tzinfo=timezone.utc)
+    assert result.payment_hold_expires_at == expires_at
+    assert series_stub.insert_series_calls[0]["payment_hold_expires_at"] == expires_at
+
+
+@pytest.mark.asyncio
+async def test_create_series_does_not_rewrite_an_existing_series_hold(monkeypatch):
+    stored_expires_at = datetime(2026, 1, 9, 17, 0, tzinfo=timezone.utc)
+    existing_id = uuid4()
+    series_stub = StubRecurringBookingRepository(
+        series_by_id={
+            existing_id: RecurringBookingSeriesResult(
+                id=existing_id,
+                user_id=uuid4(),
+                first_occurrence_date=FIRST_TUESDAY,
+                last_occurrence_date=LAST_TUESDAY,
+                local_start_time=time(10, 0),
+                local_end_time=time(12, 0),
+                status=BookingStatus.PENDING_PAYMENT.value,
+                payment_hold_expires_at=stored_expires_at,
+                quoted_amount=Decimal("400"),
+                currency="CAD",
+                occurrence_count=4,
+            )
+        }
+    )
+    service, series_stub, *_ = _service(monkeypatch, series_stub=series_stub)
+    await service.create_series(_command())
+    assert series_stub.series_by_id[existing_id].payment_hold_expires_at == stored_expires_at
+    assert series_stub.update_series_calls == []
