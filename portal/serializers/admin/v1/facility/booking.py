@@ -120,7 +120,7 @@ class AdminBookingDetail(AdminBookingListItem):
 
 
 class AdminBookingRoomInput(BaseModel):
-    """Room line for booking update/create."""
+    """Room line for booking create."""
 
     facility_id: UUID = Field(...)
     start_at: Optional[datetime] = Field(default=None)
@@ -142,12 +142,10 @@ class AdminBookingCreate(BaseModel):
 
 
 class AdminBookingUpdate(BaseModel):
-    """Update booking."""
+    """Constrained Admin Booking update: title, Ministry, and surcharge selection."""
 
-    start_at: datetime = Field(...)
-    end_at: datetime = Field(...)
+    title: BookingTitle = Field(...)
     ministry_id: Optional[UUID] = Field(default=None)
-    rooms: list[AdminBookingRoomInput] = Field(default_factory=list)
     surcharge_codes: list[str] = Field(default_factory=list)
 
 

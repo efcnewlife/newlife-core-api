@@ -307,16 +307,19 @@ def test_booking_and_member_mappers():
     assert booking_cmd.facility_id == facility_id
     assert booking_cmd.status == "confirmed"
 
-    start = datetime(2026, 5, 1, 10, 0, tzinfo=timezone.utc)
-    end = datetime(2026, 5, 1, 14, 0, tzinfo=timezone.utc)
-    from portal.serializers.admin.v1.facility.booking import AdminBookingRoomInput
-
-    update_model = AdminBookingUpdate(
-        start_at=start, end_at=end, rooms=[AdminBookingRoomInput(facility_id=facility_id, sequence=0)], surcharge_codes=["audio_system"]
-    )
+    ministry_id = uuid4()
+    update_model = AdminBookingUpdate(title="  Choir practice  ", ministry_id=ministry_id, surcharge_codes=["audio_system"])
+    assert set(AdminBookingUpdate.model_fields) == {"title", "ministry_id", "surcharge_codes"}
+    with pytest.raises(ValidationError):
+        AdminBookingUpdate(ministry_id=ministry_id, surcharge_codes=["audio_system"])
     update_cmd = update_booking_to_command(update_model)
+    assert update_cmd.title == "Choir practice"
+    assert update_cmd.ministry_id == ministry_id
+    assert update_cmd.surcharge_codes == ["audio_system"]
     assert not hasattr(update_cmd, "is_mission_aligned")
-    assert update_cmd.rooms[0].facility_id == facility_id
+    assert not hasattr(update_cmd, "start_at")
+    assert not hasattr(update_cmd, "end_at")
+    assert not hasattr(update_cmd, "rooms")
 
     cancel_cmd = cancel_booking_to_command(AdminBookingCancel(scope="series", cancel_reason="weather"))
     assert cancel_cmd.scope == "series"

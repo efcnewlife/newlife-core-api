@@ -14,6 +14,7 @@ from portal.application.facility.mappers import (
     create_recurring_booking_series_to_command,
     member_booking_detail_to_api,
     recurring_booking_series_to_member_api,
+    update_booking_to_command,
     update_title_to_command,
 )
 from portal.application.facility.participant_detail import assemble_participant_booking_detail
@@ -21,7 +22,7 @@ from portal.application.facility.results import BookingDetailResult, MemberBrows
 from portal.domain.facility.constants import BookingStatus, FacilityErrorCode, MyBookingsSection
 from portal.exceptions.responses import BadRequestException, NotFoundException
 from portal.routers.apis.v1.facility import router as member_facility_router
-from portal.serializers.admin.v1.facility.booking import AdminBookingCreate, AdminBookingRoomInput
+from portal.serializers.admin.v1.facility.booking import AdminBookingCreate, AdminBookingRoomInput, AdminBookingUpdate
 from portal.serializers.apis.v1.facility import (
     MemberBookingCreate,
     MemberBookingRoomInput,
@@ -284,6 +285,7 @@ def test_mappers_and_member_reads_expose_titles():
     end = datetime(2026, 5, 1, 14, 0, tzinfo=timezone.utc)
     admin = AdminBookingCreate(user_id=uuid4(), title="  Admin choir  ", start_at=start, end_at=end, rooms=[AdminBookingRoomInput(facility_id=uuid4())])
     assert create_booking_to_command(admin).title == "Admin choir"
+    assert update_booking_to_command(AdminBookingUpdate(title="  Admin edit  ")).title == "Admin edit"
     member_create = MemberRecurringBookingSeriesCreate(
         title="Weekly choir",
         first_occurrence_date=_command().first_occurrence_date,
