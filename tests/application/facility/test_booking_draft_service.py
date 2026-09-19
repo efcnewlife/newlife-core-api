@@ -7,18 +7,22 @@ from decimal import Decimal
 from uuid import uuid4
 
 import pytest
+from pydantic import ValidationError
 
 from portal.application.facility.booking_draft_service import BookingDraftService
 from portal.application.facility.commands import BookingDraftLineCommand, CreateBookingDraftCommand, UpdateBookingDraftCommand
 from portal.application.facility.results import BookingDraftDetailResult, BookingDraftStoredLineResult
 from portal.exceptions.responses import BadRequestException, ForbiddenException, NotFoundException
+from portal.serializers.apis.v1.facility import MemberBookingDraftCreate, MemberBookingDraftLineInput, MemberBookingDraftUpdate
 from tests.fixtures.facility.factories import make_create_booking_draft_command, make_preview_quote_result, new_uuid
 from tests.fixtures.facility.stubs import StubBookingDraftRepository, StubBookingRepository, StubPricingService, StubRoomBlackoutRepository
 from tests.fixtures.system.stubs import StubSettingService
 
 
-def _stored_draft(*, draft_id, user_id, date_, lines: list[BookingDraftStoredLineResult] | None = None) -> BookingDraftDetailResult:
-    return BookingDraftDetailResult(id=draft_id, user_id=user_id, date=date_, ministry_id=None, lines=lines or [])
+def _stored_draft(
+    *, draft_id, user_id, date_, title: str = "Choir practice", ministry_id=None, lines: list[BookingDraftStoredLineResult] | None = None
+) -> BookingDraftDetailResult:
+    return BookingDraftDetailResult(id=draft_id, user_id=user_id, date=date_, title=title, ministry_id=ministry_id, lines=lines or [])
 
 
 def _stored_line(*, facility_id, start_at, end_at, sequence: int = 0) -> BookingDraftStoredLineResult:
@@ -67,7 +71,7 @@ async def test_create_draft_rejects_zero_lines(monkeypatch):
     _user_ctx(monkeypatch)
     service = _service()
     with pytest.raises(BadRequestException) as exc_info:
-        await service.create_draft(CreateBookingDraftCommand(lines=[]))
+        await service.create_draft(CreateBookingDraftCommand(title="Choir practice", lines=[]))
     assert exc_info.value.error_code == "FACILITY_BOOKING_ROOMS_REQUIRED"
 
 
@@ -79,7 +83,8 @@ async def test_create_draft_rejects_lines_over_configured_cap(monkeypatch):
     start = datetime(2026, 5, 1, 10, 0, tzinfo=timezone.utc)
     end = datetime(2026, 5, 1, 11, 0, tzinfo=timezone.utc)
     command = CreateBookingDraftCommand(
-        lines=[BookingDraftLineCommand(facility_id=room_id, start_at=start, end_at=end, sequence=idx) for idx, room_id in enumerate(room_ids)]
+        title="Choir practice",
+        lines=[BookingDraftLineCommand(facility_id=room_id, start_at=start, end_at=end, sequence=idx) for idx, room_id in enumerate(room_ids)],
     )
     service = _service(setting_stub=StubSettingService(max_booking_lines=cap))
     with pytest.raises(BadRequestException) as exc_info:
@@ -96,7 +101,8 @@ async def test_create_draft_accepts_lines_up_to_configured_cap(monkeypatch):
     start = datetime(2026, 5, 1, 10, 0, tzinfo=timezone.utc)
     end = datetime(2026, 5, 1, 11, 0, tzinfo=timezone.utc)
     command = CreateBookingDraftCommand(
-        lines=[BookingDraftLineCommand(facility_id=room_id, start_at=start, end_at=end, sequence=idx) for idx, room_id in enumerate(room_ids)]
+        title="Choir practice",
+        lines=[BookingDraftLineCommand(facility_id=room_id, start_at=start, end_at=end, sequence=idx) for idx, room_id in enumerate(room_ids)],
     )
     stub = StubBookingDraftRepository()
     service = _service(draft_stub=stub, setting_stub=StubSettingService(max_booking_lines=cap))
@@ -110,6 +116,7 @@ async def test_create_draft_rejects_lines_spanning_more_than_one_day(monkeypatch
     _user_ctx(monkeypatch)
     room_id = new_uuid()
     command = CreateBookingDraftCommand(
+        title="Choir practice",
         lines=[
             BookingDraftLineCommand(
                 facility_id=room_id,
@@ -123,7 +130,7 @@ async def test_create_draft_rejects_lines_spanning_more_than_one_day(monkeypatch
                 end_at=datetime(2026, 5, 2, 12, 0, tzinfo=timezone.utc),
                 sequence=1,
             ),
-        ]
+        ],
     )
     service = _service()
     with pytest.raises(BadRequestException) as exc_info:
@@ -136,6 +143,7 @@ async def test_create_draft_rejects_cross_midnight_line(monkeypatch):
     _user_ctx(monkeypatch)
     room_id = new_uuid()
     command = CreateBookingDraftCommand(
+        title="Choir practice",
         lines=[
             BookingDraftLineCommand(
                 facility_id=room_id,
@@ -143,12 +151,45 @@ async def test_create_draft_rejects_cross_midnight_line(monkeypatch):
                 end_at=datetime(2026, 5, 2, 8, 0, tzinfo=timezone.utc),
                 sequence=0,
             )
-        ]
+        ],
     )
     service = _service()
     with pytest.raises(BadRequestException) as exc_info:
         await service.create_draft(command)
     assert exc_info.value.error_code == "FACILITY_BOOKING_LINE_CROSS_MIDNIGHT"
+
+
+def test_create_and_update_draft_commands_require_trimmed_plain_text_title():
+    start = datetime(2026, 5, 1, 10, 0, tzinfo=timezone.utc)
+    end = datetime(2026, 5, 1, 14, 0, tzinfo=timezone.utc)
+    line = BookingDraftLineCommand(facility_id=new_uuid(), start_at=start, end_at=end, sequence=0)
+    created = CreateBookingDraftCommand(title="  Choir practice  ", lines=[line])
+    assert created.title == "Choir practice"
+    updated = UpdateBookingDraftCommand(title="  Gym night  ", lines=[line])
+    assert updated.title == "Gym night"
+    for invalid_title in ("", "<b>Choir</b>", "a" * 31):
+        with pytest.raises(ValidationError):
+            CreateBookingDraftCommand(title=invalid_title, lines=[line])
+        with pytest.raises(ValidationError):
+            UpdateBookingDraftCommand(title=invalid_title, lines=[line])
+    with pytest.raises(ValidationError):
+        CreateBookingDraftCommand(lines=[line])
+    with pytest.raises(ValidationError):
+        UpdateBookingDraftCommand(lines=[line])
+
+
+def test_member_draft_serializers_require_plain_text_title():
+    start = datetime(2026, 5, 1, 10, 0, tzinfo=timezone.utc)
+    end = datetime(2026, 5, 1, 14, 0, tzinfo=timezone.utc)
+    line = MemberBookingDraftLineInput(facility_id=new_uuid(), start_at=start, end_at=end, sequence=0)
+    created = MemberBookingDraftCreate(title="  Choir practice  ", lines=[line])
+    assert created.title == "Choir practice"
+    updated = MemberBookingDraftUpdate(title="  Gym night  ", lines=[line])
+    assert updated.title == "Gym night"
+    with pytest.raises(ValidationError):
+        MemberBookingDraftCreate(lines=[line])
+    with pytest.raises(ValidationError):
+        MemberBookingDraftUpdate(title="<i>Choir</i>", lines=[line])
 
 
 @pytest.mark.asyncio
@@ -161,7 +202,34 @@ async def test_create_draft_returns_id_and_persists_lines(monkeypatch):
     assert result.id is not None
     assert stub.insert_draft_calls[0]["user_id"] == user_id
     assert stub.insert_draft_calls[0]["date"] == datetime(2026, 5, 1).date()
+    assert stub.insert_draft_calls[0]["title"] == "Choir practice"
     assert len(stub.insert_lines_calls[0]) == 1
+
+
+@pytest.mark.asyncio
+async def test_get_draft_returns_persisted_title(monkeypatch):
+    user_id = uuid4()
+    room_id = new_uuid()
+    draft_id = uuid4()
+    start = datetime(2026, 5, 1, 10, 0, tzinfo=timezone.utc)
+    end = datetime(2026, 5, 1, 12, 0, tzinfo=timezone.utc)
+    stub = StubBookingDraftRepository(
+        draft_by_id={
+            draft_id: _stored_draft(
+                draft_id=draft_id,
+                user_id=user_id,
+                date_=start.date(),
+                title="Choir practice",
+                lines=[_stored_line(facility_id=room_id, start_at=start, end_at=end)],
+            )
+        }
+    )
+    _user_ctx(monkeypatch, user_id=user_id)
+    service = _service(draft_stub=stub)
+
+    result = await service.get_draft(draft_id)
+
+    assert result.title == "Choir practice"
 
 
 @pytest.mark.asyncio
@@ -304,7 +372,7 @@ async def test_update_draft_requires_authenticated_user(monkeypatch):
     monkeypatch.setattr("portal.application.facility.booking_draft_service.get_user_context", lambda: None)
     service = _service()
     with pytest.raises(ForbiddenException, match="Authenticated user required"):
-        await service.update_draft(uuid4(), UpdateBookingDraftCommand(lines=[]))
+        await service.update_draft(uuid4(), UpdateBookingDraftCommand(title="Choir practice", lines=[]))
 
 
 @pytest.mark.asyncio
@@ -312,7 +380,7 @@ async def test_update_draft_nonexistent_id_not_found(monkeypatch):
     _user_ctx(monkeypatch)
     service = _service()
     with pytest.raises(NotFoundException) as exc_info:
-        await service.update_draft(uuid4(), UpdateBookingDraftCommand(lines=[]))
+        await service.update_draft(uuid4(), UpdateBookingDraftCommand(title="Choir practice", lines=[]))
     assert exc_info.value.error_code == "FACILITY_BOOKING_DRAFT_NOT_FOUND"
 
 
@@ -326,9 +394,9 @@ async def test_update_draft_another_members_draft_returns_same_not_found_respons
     service = _service(draft_stub=stub)
 
     with pytest.raises(NotFoundException) as own_exc:
-        await service.update_draft(uuid4(), UpdateBookingDraftCommand(lines=[]))
+        await service.update_draft(uuid4(), UpdateBookingDraftCommand(title="Choir practice", lines=[]))
     with pytest.raises(NotFoundException) as other_exc:
-        await service.update_draft(draft_id, UpdateBookingDraftCommand(lines=[]))
+        await service.update_draft(draft_id, UpdateBookingDraftCommand(title="Choir practice", lines=[]))
 
     assert own_exc.value.error_code == other_exc.value.error_code == "FACILITY_BOOKING_DRAFT_NOT_FOUND"
     assert own_exc.value.status_code == other_exc.value.status_code
@@ -342,7 +410,7 @@ async def test_update_draft_rejects_zero_lines(monkeypatch):
     _user_ctx(monkeypatch, user_id=user_id)
     service = _service(draft_stub=stub)
     with pytest.raises(BadRequestException) as exc_info:
-        await service.update_draft(draft_id, UpdateBookingDraftCommand(lines=[]))
+        await service.update_draft(draft_id, UpdateBookingDraftCommand(title="Choir practice", lines=[]))
     assert exc_info.value.error_code == "FACILITY_BOOKING_ROOMS_REQUIRED"
 
 
@@ -357,7 +425,8 @@ async def test_update_draft_rejects_lines_over_configured_cap(monkeypatch):
     start = datetime(2026, 5, 1, 10, 0, tzinfo=timezone.utc)
     end = datetime(2026, 5, 1, 11, 0, tzinfo=timezone.utc)
     command = UpdateBookingDraftCommand(
-        lines=[BookingDraftLineCommand(facility_id=room_id, start_at=start, end_at=end, sequence=idx) for idx, room_id in enumerate(room_ids)]
+        title="Choir practice",
+        lines=[BookingDraftLineCommand(facility_id=room_id, start_at=start, end_at=end, sequence=idx) for idx, room_id in enumerate(room_ids)],
     )
     service = _service(draft_stub=stub, setting_stub=StubSettingService(max_booking_lines=cap))
     with pytest.raises(BadRequestException) as exc_info:
@@ -373,6 +442,7 @@ async def test_update_draft_rejects_lines_spanning_more_than_one_day(monkeypatch
     stub = StubBookingDraftRepository(draft_by_id={draft_id: _stored_draft(draft_id=draft_id, user_id=user_id, date_=datetime(2026, 5, 1).date())})
     _user_ctx(monkeypatch, user_id=user_id)
     command = UpdateBookingDraftCommand(
+        title="Choir practice",
         lines=[
             BookingDraftLineCommand(
                 facility_id=room_id,
@@ -386,7 +456,7 @@ async def test_update_draft_rejects_lines_spanning_more_than_one_day(monkeypatch
                 end_at=datetime(2026, 5, 2, 12, 0, tzinfo=timezone.utc),
                 sequence=1,
             ),
-        ]
+        ],
     )
     service = _service(draft_stub=stub)
     with pytest.raises(BadRequestException) as exc_info:
@@ -402,6 +472,7 @@ async def test_update_draft_rejects_cross_midnight_line(monkeypatch):
     stub = StubBookingDraftRepository(draft_by_id={draft_id: _stored_draft(draft_id=draft_id, user_id=user_id, date_=datetime(2026, 5, 1).date())})
     _user_ctx(monkeypatch, user_id=user_id)
     command = UpdateBookingDraftCommand(
+        title="Choir practice",
         lines=[
             BookingDraftLineCommand(
                 facility_id=room_id,
@@ -409,7 +480,7 @@ async def test_update_draft_rejects_cross_midnight_line(monkeypatch):
                 end_at=datetime(2026, 5, 2, 8, 0, tzinfo=timezone.utc),
                 sequence=0,
             )
-        ]
+        ],
     )
     service = _service(draft_stub=stub)
     with pytest.raises(BadRequestException) as exc_info:
@@ -435,14 +506,21 @@ async def test_update_draft_keeps_id_unchanged_and_replaces_lines(monkeypatch):
     _user_ctx(monkeypatch, user_id=user_id)
     new_start = datetime(2026, 5, 1, 14, 0, tzinfo=timezone.utc)
     new_end = datetime(2026, 5, 1, 16, 0, tzinfo=timezone.utc)
-    command = UpdateBookingDraftCommand(lines=[BookingDraftLineCommand(facility_id=new_room_id, start_at=new_start, end_at=new_end, sequence=0)])
+    ministry_id = new_uuid()
+    command = UpdateBookingDraftCommand(
+        title="Updated choir", ministry_id=ministry_id, lines=[BookingDraftLineCommand(facility_id=new_room_id, start_at=new_start, end_at=new_end, sequence=0)]
+    )
     service = _service(draft_stub=stub)
 
     result = await service.update_draft(draft_id, command)
 
     assert result.id == draft_id
+    assert result.title == "Updated choir"
+    assert result.ministry_id == ministry_id
     assert len(result.lines) == 1
     assert result.lines[0].facility_id == new_room_id
+    assert stub.update_header_calls[0]["title"] == "Updated choir"
+    assert stub.update_header_calls[0]["ministry_id"] == ministry_id
     assert len(stub.replace_lines_calls[0]) == 1
     assert stub.replace_lines_calls[0][0]["facility_id"] == new_room_id
 
@@ -557,14 +635,17 @@ async def test_update_draft_two_sequential_patches_last_write_wins(monkeypatch):
     service = _service(draft_stub=stub)
 
     first_command = UpdateBookingDraftCommand(
+        title="Choir practice",
         lines=[
             BookingDraftLineCommand(facility_id=room_a, start_at=start, end_at=end, sequence=0),
             BookingDraftLineCommand(facility_id=room_b, start_at=start, end_at=end, sequence=1),
-        ]
+        ],
     )
     await service.update_draft(draft_id, first_command)
 
-    second_command = UpdateBookingDraftCommand(lines=[BookingDraftLineCommand(facility_id=room_c, start_at=start, end_at=end, sequence=0)])
+    second_command = UpdateBookingDraftCommand(
+        title="Choir practice", lines=[BookingDraftLineCommand(facility_id=room_c, start_at=start, end_at=end, sequence=0)]
+    )
     second_result = await service.update_draft(draft_id, second_command)
 
     assert len(second_result.lines) == 1

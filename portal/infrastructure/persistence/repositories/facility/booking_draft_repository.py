@@ -46,7 +46,9 @@ class BookingDraftRepository:
 
     async def get_detail(self, booking_draft_id: UUID) -> Optional[BookingDraftDetailResult]:
         row = await (
-            self._session.select(FacilityBookingDraft.id, FacilityBookingDraft.user_id, FacilityBookingDraft.date, FacilityBookingDraft.ministry_id)
+            self._session.select(
+                FacilityBookingDraft.id, FacilityBookingDraft.user_id, FacilityBookingDraft.title, FacilityBookingDraft.date, FacilityBookingDraft.ministry_id
+            )
             .where(FacilityBookingDraft.id == booking_draft_id)
             .fetchrow(as_model=BookingDraftDetailResult)
         )

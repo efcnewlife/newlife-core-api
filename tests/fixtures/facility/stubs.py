@@ -761,7 +761,7 @@ class StubBookingDraftRepository:
     async def insert_draft(self, payload: dict) -> None:
         self.insert_draft_calls.append(payload)
         self.draft_by_id[payload["id"]] = BookingDraftDetailResult(
-            id=payload["id"], user_id=payload["user_id"], date=payload["date"], ministry_id=payload.get("ministry_id"), lines=[]
+            id=payload["id"], user_id=payload["user_id"], title=payload["title"], date=payload["date"], ministry_id=payload.get("ministry_id"), lines=[]
         )
 
     async def insert_lines(self, line_rows: list[dict]) -> None:

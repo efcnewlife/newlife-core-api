@@ -1,4 +1,4 @@
-"""Booking and Recurring Booking Series title rules."""
+"""Booking, Booking Draft, and Recurring Booking Series title rules."""
 
 from __future__ import annotations
 

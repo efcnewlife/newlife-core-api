@@ -91,7 +91,7 @@ class BookingDraftService:
         resolved_lines, draft_date = await self._resolve_and_validate_lines(command.lines)
 
         draft_id = uuid4()
-        await self._repository.insert_draft(dict(id=draft_id, user_id=user_id, date=draft_date, ministry_id=command.ministry_id))
+        await self._repository.insert_draft(dict(id=draft_id, user_id=user_id, title=command.title, date=draft_date, ministry_id=command.ministry_id))
         line_rows = [
             dict(id=uuid4(), booking_draft_id=draft_id, facility_id=line.facility_id, start_at=line.start_at, end_at=line.end_at, sequence=line.sequence)
             for line in resolved_lines
@@ -107,7 +107,7 @@ class BookingDraftService:
 
         resolved_lines, draft_date = await self._resolve_and_validate_lines(command.lines)
 
-        await self._repository.update_header(booking_draft_id, dict(date=draft_date, ministry_id=command.ministry_id))
+        await self._repository.update_header(booking_draft_id, dict(title=command.title, date=draft_date, ministry_id=command.ministry_id))
         line_rows = [
             dict(
                 id=uuid4(), booking_draft_id=booking_draft_id, facility_id=line.facility_id, start_at=line.start_at, end_at=line.end_at, sequence=line.sequence
@@ -142,6 +142,7 @@ class BookingDraftService:
 
         return BookingDraftResult(
             id=booking_draft_id,
+            title=row.title,
             date=row.date,
             ministry_id=row.ministry_id,
             lines=line_results,
