@@ -43,12 +43,12 @@ seed_system_settings: list[dict] = [
     },
     {
         "namespace": SettingNamespace.FACILITY.value,
-        "setting_key": FacilitySettingKey.PENDING_PAYMENT_HOLD_HOURS.value,
+        "setting_key": FacilitySettingKey.PENDING_PAYMENT_HOLD_DAYS.value,
         "value_type": SettingValueType.NUMBER.value,
-        "value": 72,
+        "value": 3,
         "is_built_in": True,
         "is_active": True,
-        "remark": "Hours a Pending-payment Series reserves occupancy before expiry",
+        "remark": "Facility-local calendar days a Pending-payment Series reserves occupancy before expiry",
     },
     {
         "namespace": SettingNamespace.FACILITY.value,

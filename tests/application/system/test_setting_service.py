@@ -314,10 +314,45 @@ async def test_get_min_recurring_booking_weeks_default_seed_value():
 
 
 @pytest.mark.asyncio
-async def test_get_pending_payment_hold_hours_default_seed_value():
+async def test_get_pending_payment_hold_days_default_seed_value():
+    row = _setting(setting_key=FacilitySettingKey.PENDING_PAYMENT_HOLD_DAYS.value, value_type=SettingValueType.NUMBER.value, value=3)
+    service = SettingService(StubSettingRepository([row]), StubSettingCache())
+    assert await service.get_pending_payment_hold_days() == 3
+
+
+@pytest.mark.asyncio
+async def test_get_pending_payment_hold_days_converts_hours_multiple_of_24():
     row = _setting(setting_key=FacilitySettingKey.PENDING_PAYMENT_HOLD_HOURS.value, value_type=SettingValueType.NUMBER.value, value=72)
     service = SettingService(StubSettingRepository([row]), StubSettingCache())
-    assert await service.get_pending_payment_hold_hours() == 72
+    assert await service.get_pending_payment_hold_days() == 3
+
+
+@pytest.mark.asyncio
+async def test_get_pending_payment_hold_days_rejects_non_multiple_hours_without_guessing():
+    row = _setting(setting_key=FacilitySettingKey.PENDING_PAYMENT_HOLD_HOURS.value, value_type=SettingValueType.NUMBER.value, value=50)
+    service = SettingService(StubSettingRepository([row]), StubSettingCache())
+    with pytest.raises(BadRequestException, match="pending_payment_hold_days"):
+        await service.get_pending_payment_hold_days()
+
+
+@pytest.mark.asyncio
+async def test_get_pending_payment_hold_days_rejects_non_positive():
+    row = _setting(setting_key=FacilitySettingKey.PENDING_PAYMENT_HOLD_DAYS.value, value_type=SettingValueType.NUMBER.value, value=0)
+    service = SettingService(StubSettingRepository([row]), StubSettingCache())
+    with pytest.raises(BadRequestException, match="positive integer"):
+        await service.get_pending_payment_hold_days()
+    days = _setting(setting_key=FacilitySettingKey.PENDING_PAYMENT_HOLD_DAYS.value, value_type=SettingValueType.NUMBER.value, value=2)
+    hours = _setting(setting_key=FacilitySettingKey.PENDING_PAYMENT_HOLD_HOURS.value, value_type=SettingValueType.NUMBER.value, value=72)
+    service = SettingService(StubSettingRepository([days, hours]), StubSettingCache())
+    assert await service.get_pending_payment_hold_days() == 2
+
+
+@pytest.mark.asyncio
+async def test_update_pending_payment_hold_days_rejects_non_positive():
+    row = _setting(setting_key=FacilitySettingKey.PENDING_PAYMENT_HOLD_DAYS.value, value_type=SettingValueType.NUMBER.value, value=3)
+    service = SettingService(StubSettingRepository([row]), StubSettingCache())
+    with pytest.raises(BadRequestException, match="positive integer"):
+        await service.update_setting(row.id, UpdateSettingCommand(value=0))
 
 
 @pytest.mark.asyncio

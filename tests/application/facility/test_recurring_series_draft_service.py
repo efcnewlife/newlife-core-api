@@ -216,8 +216,8 @@ async def test_get_draft_returns_live_quote_conflicts_and_payment_hold(monkeypat
     assert result.quoted_amount == Decimal("400")
     assert result.occurrence_count == 4
     assert result.is_confirmable is True
-    assert result.pending_payment_hold_hours == 72
-    assert result.payment_hold_expires_at == OPEN_WINDOW_NOW + timedelta(hours=72)
+    assert result.pending_payment_hold_days == 3
+    assert result.payment_hold_expires_at == datetime(2025, 12, 12, 5, 0, tzinfo=timezone.utc)
     assert result.conflicts == []
 
 

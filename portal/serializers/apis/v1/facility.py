@@ -440,5 +440,5 @@ class MemberRecurringSeriesDraftDetail(UUIDBaseModel):
     surcharge_amount: Decimal = Field(..., serialization_alias="surchargeAmount")
     currency: str = Field(...)
     occurrence_count: int = Field(..., serialization_alias="occurrenceCount")
-    pending_payment_hold_hours: int = Field(..., serialization_alias="pendingPaymentHoldHours")
+    pending_payment_hold_days: int = Field(..., serialization_alias="pendingPaymentHoldDays")
     payment_hold_expires_at: datetime = Field(..., serialization_alias="paymentHoldExpiresAt")

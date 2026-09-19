@@ -59,6 +59,7 @@ from portal.domain.facility.constants import (
 )
 from portal.domain.facility.participant_detail import is_current_booking_participant
 from portal.domain.facility.recurring import (
+    calendar_day_payment_hold_expires_at,
     is_any_recurring_period_open,
     is_church_email,
     is_first_occurrence_in_availability_window,
@@ -176,6 +177,11 @@ class RecurringBookingService:
         hours = Decimal(str(delta.total_seconds())) / Decimal("3600")
         return hours.quantize(Decimal("0.01"))
 
+    async def _pending_payment_hold(self, now_utc: datetime) -> tuple[int, datetime]:
+        hold_days = await self._setting_service.get_pending_payment_hold_days()
+        local_tz = await self._setting_service.get_facility_timezone()
+        return hold_days, calendar_day_payment_hold_expires_at(now_utc, hold_days, local_tz)
+
     @distributed_trace()
     async def preview_conflicts(self, command: CreateRecurringBookingSeriesCommand) -> RecurringBookingPreviewResult:
         prepared = await self._prepare_series(command)
@@ -184,14 +190,13 @@ class RecurringBookingService:
 
     @distributed_trace()
     async def evaluate_proposal(self, command: CreateRecurringBookingSeriesCommand) -> RecurringProposalEvaluationResult:
-        hold_hours = await self._setting_service.get_pending_payment_hold_hours()
-        payment_hold_expires_at = self._now_utc() + timedelta(hours=hold_hours)
+        hold_days, payment_hold_expires_at = await self._pending_payment_hold(self._now_utc())
         try:
             prepared = await self._prepare_series(command)
         except ForbiddenException:
             raise
         except BadRequestException as error:
-            return self._unevaluable_proposal(error, hold_hours, payment_hold_expires_at)
+            return self._unevaluable_proposal(error, hold_days, payment_hold_expires_at)
 
         conflicts = await self._collect_conflicts(command, prepared)
         generated_dates = {item.occurrence_date for item in prepared.occurrences}
@@ -202,7 +207,7 @@ class RecurringBookingService:
                 BadRequestException(
                     detail="excluded_dates must be occurrence dates that currently conflict", error_code=FacilityErrorCode.RECURRING_INVALID_EXCLUSION.value
                 ),
-                hold_hours,
+                hold_days,
                 payment_hold_expires_at,
                 conflicts=conflicts,
             )
@@ -215,7 +220,7 @@ class RecurringBookingService:
                     detail=f"Recurring Booking Series requires at least {min_weeks} weekly occurrences",
                     error_code=FacilityErrorCode.RECURRING_MIN_OCCURRENCES.value,
                 ),
-                hold_hours,
+                hold_days,
                 payment_hold_expires_at,
                 conflicts=conflicts,
                 occurrence_count=len(remaining),
@@ -242,7 +247,7 @@ class RecurringBookingService:
             surcharge_amount=quote["surcharge_amount"],
             currency=quote["currency"],
             occurrence_count=len(remaining),
-            pending_payment_hold_hours=hold_hours,
+            pending_payment_hold_days=hold_days,
             payment_hold_expires_at=payment_hold_expires_at,
             invalidity_code=invalidity_code,
             invalidity_detail=invalidity_detail,
@@ -309,8 +314,7 @@ class RecurringBookingService:
             currency = quote.currency
             discount_percent = quote.discount_percent
 
-        hold_hours = await self._setting_service.get_pending_payment_hold_hours()
-        payment_hold_expires_at = now_utc + timedelta(hours=hold_hours)
+        _, payment_hold_expires_at = await self._pending_payment_hold(now_utc)
         series_id = uuid4()
         await self._series_repository.insert_series(
             dict(
@@ -786,7 +790,7 @@ class RecurringBookingService:
     @staticmethod
     def _unevaluable_proposal(
         error: BadRequestException,
-        hold_hours: int,
+        hold_days: int,
         payment_hold_expires_at: datetime,
         *,
         conflicts: Optional[list[RecurringBookingConflictResult]] = None,
@@ -802,7 +806,7 @@ class RecurringBookingService:
             surcharge_amount=Decimal("0"),
             currency="CAD",
             occurrence_count=occurrence_count,
-            pending_payment_hold_hours=hold_hours,
+            pending_payment_hold_days=hold_days,
             payment_hold_expires_at=payment_hold_expires_at,
             invalidity_code=error.error_code,
             invalidity_detail=error.detail,

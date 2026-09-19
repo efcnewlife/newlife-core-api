@@ -576,14 +576,16 @@ def test_recurring_series_draft_result_to_api_exposes_confirmability_without_wid
         surcharge_amount=Decimal("0"),
         currency="CAD",
         occurrence_count=4,
-        pending_payment_hold_hours=72,
+        pending_payment_hold_days=3,
         payment_hold_expires_at=datetime(2025, 12, 11, 17, 0, tzinfo=timezone.utc),
     )
     dumped = recurring_series_draft_result_to_api(result).model_dump(by_alias=True)
     assert dumped["id"] == str(draft_id)
     assert dumped["isConfirmable"] is True
     assert dumped["quotedAmount"] == Decimal("400")
-    assert dumped["pendingPaymentHoldHours"] == 72
+    assert dumped["pendingPaymentHoldDays"] == 3
+    assert dumped["paymentHoldExpiresAt"] == datetime(2025, 12, 11, 17, 0, tzinfo=timezone.utc)
+    assert "pendingPaymentHoldHours" not in dumped
     assert dumped["rooms"][0]["facilityId"] == room_id
     assert "lines" not in dumped
 
