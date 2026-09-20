@@ -453,6 +453,35 @@ async def test_create_series_rejects_first_blackout(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_preview_conflict_free_proposal_includes_series_estimated_total(monkeypatch):
+    service, series_stub, *_ = _service(monkeypatch)
+    result = await service.preview_conflicts(_command())
+
+    assert isinstance(result, RecurringBookingPreviewResult)
+    assert result.conflicts == []
+    assert result.quoted_amount == Decimal("400")
+    assert result.currency == "CAD"
+    assert series_stub.insert_series_calls == []
+
+
+@pytest.mark.asyncio
+async def test_preview_conflicting_proposal_quotes_full_range_before_exclusions(monkeypatch):
+    room_id = new_uuid()
+    occupied = _occurrence_start_utc(date(2026, 1, 13))
+    booking_stub = StubBookingRepository(overlapping_slots={(room_id, occupied)})
+    service, series_stub, *_ = _service(monkeypatch, booking_stub=booking_stub)
+    result = await service.preview_conflicts(_command(facility_id=room_id, last_occurrence_date=SIX_WEEK_LAST_TUESDAY))
+
+    assert isinstance(result, RecurringBookingPreviewResult)
+    assert [(item.occurrence_date, item.kind, item.facility_ids) for item in result.conflicts] == [
+        (date(2026, 1, 13), RecurringConflictKind.OCCUPANCY.value, [room_id])
+    ]
+    assert result.quoted_amount == Decimal("600")
+    assert result.currency == "CAD"
+    assert series_stub.insert_series_calls == []
+
+
+@pytest.mark.asyncio
 async def test_preview_lists_occupancy_conflicts_per_occurrence(monkeypatch):
     room_id = new_uuid()
     occupied = _occurrence_start_utc(date(2026, 1, 13))

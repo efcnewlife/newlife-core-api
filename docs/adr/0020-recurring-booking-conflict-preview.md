@@ -18,6 +18,7 @@ Priority Ministry override of Rental occupancy is a later ticket (core-api#150).
 - Member `POST /api/v1/facility/booking-series/preview` and admin `POST /admin/api/v1/facility/booking-series/preview` share that method.
 - The request shape matches create (minus `excluded_dates`). Preview does not persist a Series or reserve slots.
 - The result lists every conflicting occurrence, distinguished by kind: occupancy, Blackout, or Weekly Rental Booking quota. Occupancy and Blackout include the affected `facility_ids`. Quota conflicts have an empty room list. Ministry Series omit quota conflicts.
+- For a structurally valid weekly proposal, the same result also includes Series Estimated Total (`quoted_amount` + `currency`) for the full generated occurrence set before conflict exclusions, via `RecurringBookingService._quote_occurrences` (the quoting path Draft create/update evaluation already uses). Invalid proposals still fail as before; preview remains non-persisting.
 
 ### Exclusions on create
 

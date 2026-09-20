@@ -163,8 +163,8 @@ The target of a member or Operator cancellation: `occurrence` (one Booking Occur
 _Avoid_: an unexplained raw RRULE edit, a Series-only management screen, applying a one-occurrence cancellation to all occurrences, reusing one-time Booking cancel `single`/`series` tokens
 
 **Recurring Booking conflict preview**:
-A server-backed review of a proposed Recurring Booking Series that lists every unavailable occurrence and distinguishes occupancy, Blackout, and Weekly Rental Booking quota conflicts. It does not create a Series or reserve slots. Occupancy and Blackout conflicts name the affected rooms; quota conflicts are week-level.
-_Avoid_: treating preview as a reservation, collapsing occupancy and Blackout into one error, returning only the first conflict
+A server-backed review of a proposed Recurring Booking Series that lists every unavailable occurrence and distinguishes occupancy, Blackout, and Weekly Rental Booking quota conflicts. For a valid weekly proposal it also returns the Series Estimated Total (`quotedAmount` + `currency`) for the full generated occurrence set before conflict exclusions, using the same quoting path as Recurring Series Draft evaluation. It does not create a Series, Draft, or reserve slots. Occupancy and Blackout conflicts name the affected rooms; quota conflicts are week-level.
+_Avoid_: treating preview as a reservation, collapsing occupancy and Blackout into one error, returning only the first conflict, inventing a client-side Series total, excluding conflict dates from the preview quote
 
 **Recurring Booking conflict resolution**:
 The choice presented when creating a Rental Recurring Booking Series conflicts with existing occupancy or a Blackout: omit all conflicting occurrences and create the rest, or revise the requested rooms and time window. A Church Activity Booking may replace conflicting future Rental occurrences, but never another Church Activity Booking. Omissions must be dates the current preview reported as conflicts; the server rejects arbitrary exclusions and revalidates the remaining dates in the create transaction.

@@ -186,7 +186,8 @@ class RecurringBookingService:
     async def preview_conflicts(self, command: CreateRecurringBookingSeriesCommand) -> RecurringBookingPreviewResult:
         prepared = await self._prepare_series(command)
         conflicts = await self._collect_conflicts(command, prepared)
-        return RecurringBookingPreviewResult(conflicts=conflicts)
+        quote = await self._quote_occurrences(command, prepared.occurrences, booker_id=prepared.booker_id)
+        return RecurringBookingPreviewResult(conflicts=conflicts, quoted_amount=quote["quoted_amount"], currency=quote["currency"])
 
     @distributed_trace()
     async def evaluate_proposal(self, command: CreateRecurringBookingSeriesCommand) -> RecurringProposalEvaluationResult:
@@ -228,7 +229,7 @@ class RecurringBookingService:
 
         remaining_conflicts = [item for item in conflicts if item.occurrence_date not in excluded_dates]
         blocking = [item for item in remaining_conflicts if not item.is_overridable]
-        quote = await self._quote_remaining_occurrences(command, remaining, booker_id=prepared.booker_id)
+        quote = await self._quote_occurrences(command, remaining, booker_id=prepared.booker_id)
         invalidity_code = None
         invalidity_detail = None
         if blocking:
@@ -812,7 +813,7 @@ class RecurringBookingService:
             invalidity_detail=error.detail,
         )
 
-    async def _quote_remaining_occurrences(self, command: CreateRecurringBookingSeriesCommand, remaining: list[_PreparedOccurrence], booker_id: UUID) -> dict:
+    async def _quote_occurrences(self, command: CreateRecurringBookingSeriesCommand, occurrences: list[_PreparedOccurrence], booker_id: UUID) -> dict:
         series_quoted = Decimal("0")
         series_subtotal = Decimal("0")
         series_discount = Decimal("0")
@@ -820,7 +821,7 @@ class RecurringBookingService:
         currency = "CAD"
         discount_percent = Decimal("0")
         discount_code = None
-        for item in remaining:
+        for item in occurrences:
             billed_hours = self._billed_hours(item.start_at, item.end_at)
             quote_lines = [PreviewQuoteRoomLineCommand(facility_id=room.facility_id, billed_hours=billed_hours) for room in command.rooms]
             quote = await self._pricing_service.preview_quote(
