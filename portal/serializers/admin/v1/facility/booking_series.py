@@ -98,6 +98,8 @@ class AdminRecurringBookingPreview(BaseModel):
     """Recurring Booking conflict preview; does not persist a Series."""
 
     conflicts: list[AdminRecurringBookingConflict] = Field(default_factory=list)
+    quoted_amount: Decimal = Field(..., serialization_alias="quotedAmount")
+    currency: str = Field(...)
 
 
 class AdminPendingPaymentSeriesItem(UUIDBaseModel):

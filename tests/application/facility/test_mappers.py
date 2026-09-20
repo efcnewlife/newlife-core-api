@@ -593,7 +593,9 @@ def test_recurring_series_draft_result_to_api_exposes_confirmability_without_wid
 def test_recurring_booking_preview_to_member_api_uses_camel_case():
     room_id = uuid4()
     result = RecurringBookingPreviewResult(
-        conflicts=[RecurringBookingConflictResult(occurrence_date=date(2026, 1, 13), kind=RecurringConflictKind.OCCUPANCY.value, facility_ids=[room_id])]
+        conflicts=[RecurringBookingConflictResult(occurrence_date=date(2026, 1, 13), kind=RecurringConflictKind.OCCUPANCY.value, facility_ids=[room_id])],
+        quoted_amount=Decimal("600"),
+        currency="CAD",
     )
     api = recurring_booking_preview_to_member_api(result)
     dumped = api.model_dump(by_alias=True)
@@ -602,6 +604,8 @@ def test_recurring_booking_preview_to_member_api_uses_camel_case():
     assert dumped["conflicts"][0]["facilityIds"] == [room_id]
     assert dumped["conflicts"][0]["isOverridable"] is False
     assert dumped["conflicts"][0]["ministryStewardDisplayName"] is None
+    assert dumped["quotedAmount"] == Decimal("600")
+    assert dumped["currency"] == "CAD"
 
 
 def test_recurring_booking_preview_includes_ministry_steward_contact():
@@ -617,13 +621,17 @@ def test_recurring_booking_preview_includes_ministry_steward_contact():
                 ministry_steward_display_name="Primary Steward",
                 ministry_steward_email="steward@efcnewlife.org",
             )
-        ]
+        ],
+        quoted_amount=Decimal("600"),
+        currency="CAD",
     )
     dumped = recurring_booking_preview_to_member_api(result).model_dump(by_alias=True)
     assert dumped["conflicts"][0]["kind"] == "ministry"
     assert dumped["conflicts"][0]["ministryId"] == ministry_id
     assert dumped["conflicts"][0]["ministryStewardDisplayName"] == "Primary Steward"
     assert dumped["conflicts"][0]["ministryStewardEmail"] == "steward@efcnewlife.org"
+    assert dumped["quotedAmount"] == Decimal("600")
+    assert dumped["currency"] == "CAD"
 
 
 def test_pending_payment_series_list_to_admin_api_uses_camel_case():

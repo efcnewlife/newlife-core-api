@@ -186,7 +186,8 @@ class RecurringBookingService:
     async def preview_conflicts(self, command: CreateRecurringBookingSeriesCommand) -> RecurringBookingPreviewResult:
         prepared = await self._prepare_series(command)
         conflicts = await self._collect_conflicts(command, prepared)
-        return RecurringBookingPreviewResult(conflicts=conflicts)
+        quote = await self._quote_remaining_occurrences(command, prepared.occurrences, booker_id=prepared.booker_id)
+        return RecurringBookingPreviewResult(conflicts=conflicts, quoted_amount=quote["quoted_amount"], currency=quote["currency"])
 
     @distributed_trace()
     async def evaluate_proposal(self, command: CreateRecurringBookingSeriesCommand) -> RecurringProposalEvaluationResult:

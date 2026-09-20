@@ -789,6 +789,8 @@ class RecurringBookingPreviewResult(BaseModel):
     """Server-backed Recurring Booking conflict preview; does not persist a Series."""
 
     conflicts: list[RecurringBookingConflictResult] = Field(default_factory=list)
+    quoted_amount: Decimal = Field(...)
+    currency: str = Field(...)
 
 
 class RecurringBookingWindowStatusResult(BaseModel):
