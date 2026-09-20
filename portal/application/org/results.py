@@ -21,6 +21,9 @@ __all__ = [
     "MinistryListResult",
     "MinistryMemberResult",
     "MinistryPageResult",
+    "MinistryProfileOwnerPositionResult",
+    "MinistryProfileResult",
+    "MinistryProfileStewardResult",
     "StewardDirectoryPageResult",
     "MinistryScheduleResult",
     "MinistryTypeResult",
@@ -28,6 +31,7 @@ __all__ = [
     "TargetAudienceResult",
     "TargetAudienceListResult",
     "PositionDetailResult",
+    "PositionIncumbentContactResult",
     "PositionListItemResult",
     "PositionPageResult",
     "PositionTranslationItemResult",
@@ -164,6 +168,45 @@ class MinistryListResult(BaseModel):
     """Active ministries dropdown."""
 
     items: list[MinistryListItemResult] = Field(default_factory=list)
+
+
+class MinistryProfileStewardResult(BaseModel):
+    """Steward display row for member Ministry Profile (no internal user id)."""
+
+    member_role: str = Field(...)
+    display_name: Optional[str] = Field(default=None)
+    email: Optional[str] = Field(default=None)
+
+
+class MinistryProfileOwnerPositionResult(BaseModel):
+    """Localized Owner Position with live incumbent contact."""
+
+    name: Optional[str] = Field(default=None)
+    incumbent_display_name: Optional[str] = Field(default=None)
+    incumbent_email: Optional[str] = Field(default=None)
+
+
+class MinistryProfileResult(UUIDBaseModel):
+    """Member-facing Ministry Profile projection."""
+
+    name: Optional[str] = Field(default=None)
+    purpose: Optional[str] = Field(default=None)
+    status: str = Field(...)
+    has_priority_booking: bool = Field(default=False)
+    submitted_at: Optional[datetime] = Field(default=None)
+    approved_at: Optional[datetime] = Field(default=None)
+    rejected_at: Optional[datetime] = Field(default=None)
+    rejection_reason: Optional[str] = Field(default=None)
+    target_audiences: list[TargetAudienceResult] = Field(default_factory=list)
+    stewards: list[MinistryProfileStewardResult] = Field(default_factory=list)
+    owner_position: Optional[MinistryProfileOwnerPositionResult] = Field(default=None)
+
+
+class PositionIncumbentContactResult(BaseModel):
+    """Current Owner-position incumbent display contact resolved at read time."""
+
+    display_name: Optional[str] = Field(default=None)
+    email: Optional[str] = Field(default=None)
 
 
 class StewardDirectoryPageResult(BaseModel):

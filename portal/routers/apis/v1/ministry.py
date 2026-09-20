@@ -11,6 +11,7 @@ from portal.application.org.mappers import (
     create_id_result_to_api,
     ministry_application_to_command,
     ministry_list_to_api,
+    ministry_profile_to_api,
     ministry_type_list_to_api,
     target_audience_list_to_api,
     update_rejected_ministry_application_to_command,
@@ -22,7 +23,7 @@ from portal.container import Container
 from portal.routers.auth_router import AuthRouter
 from portal.serializers.admin.v1.ministry import AdminMinistryApplicationCreate, AdminMinistryList
 from portal.serializers.admin.v1.ministry_catalog import AdminMinistryTypeList, AdminTargetAudienceList
-from portal.serializers.apis.v1.ministry import ApiRejectedMinistryApplicationUpdate
+from portal.serializers.apis.v1.ministry import ApiMinistryProfile, ApiRejectedMinistryApplicationUpdate
 from portal.serializers.mixins.model_mixins import UUIDBaseModel
 
 from .ministry_approval import router as ministry_approval_router
@@ -39,6 +40,13 @@ async def get_owned_ministries(
 ):
     result = await ministry_service.list_owned_ministries(include_pending=include_pending)
     return ministry_list_to_api(result)
+
+
+@router.get(path="/ministries/mine/{ministry_id}", status_code=status.HTTP_200_OK, response_model=ApiMinistryProfile)
+@inject
+async def get_ministry_profile(ministry_id: uuid.UUID, approval_service: MinistryApprovalService = Depends(Provide[Container.org_ministry_approval_service])):
+    result = await approval_service.get_ministry_profile(ministry_id)
+    return ministry_profile_to_api(result)
 
 
 @router.post(path="/applications", status_code=status.HTTP_201_CREATED, response_model=UUIDBaseModel)

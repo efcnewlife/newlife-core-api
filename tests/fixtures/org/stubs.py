@@ -14,6 +14,8 @@ from portal.application.org.results import (
     MinistryMemberResult,
     MinistryTypeResult,
     OrgUserSearchItemResult,
+    PositionDetailResult,
+    PositionIncumbentContactResult,
     TargetAudienceResult,
 )
 from portal.application.org.steward_directory_query import matches_steward_directory_q
@@ -84,11 +86,13 @@ class StubMinistryRepository:
         members_by_ministry: dict[UUID, list[MinistryMemberResult]] | None = None,
         directory_rows: list[StubStewardDirectoryRow] | None = None,
         target_audiences_by_ministry_locale: dict[tuple[UUID, UUID | None], list[TargetAudienceResult]] | None = None,
+        default_locale_id: UUID | None = None,
     ):
         self.ministry_by_id = ministry_by_id or {}
         self.members_by_ministry = members_by_ministry or {}
         self.directory_rows = directory_rows or []
         self.target_audiences_by_ministry_locale = target_audiences_by_ministry_locale or {}
+        self.default_locale_id = default_locale_id
         self.insert_calls: list[dict] = []
         self.update_calls: list[dict] = []
         self.upsert_translation_calls: list[list] = []
@@ -100,6 +104,9 @@ class StubMinistryRepository:
 
     async def get_by_id(self, ministry_id: UUID, locale_id: Optional[UUID] = None, all_locales: bool = False) -> MinistryDetailResult | None:
         return self.ministry_by_id.get(ministry_id)
+
+    async def fetch_default_locale_id(self) -> UUID | None:
+        return self.default_locale_id
 
     async def insert_ministry(self, payload: dict) -> None:
         self.insert_calls.append(payload)
@@ -249,15 +256,31 @@ class StubMinistryRepository:
 class StubPositionRepository:
     """In-memory position incumbent stub."""
 
-    def __init__(self, incumbents: dict[UUID, UUID] | None = None, incumbents_by_code: dict[str, UUID] | None = None):
+    def __init__(
+        self,
+        incumbents: dict[UUID, UUID] | None = None,
+        incumbents_by_code: dict[str, UUID] | None = None,
+        position_by_id: dict[UUID, PositionDetailResult] | None = None,
+        incumbent_contacts: dict[UUID, PositionIncumbentContactResult] | None = None,
+    ):
         self.incumbents = incumbents or {}
         self.incumbents_by_code = incumbents_by_code or {}
+        self.position_by_id = position_by_id or {}
+        self.incumbent_contacts = incumbent_contacts or {}
+
+    async def get_by_id(self, position_id: UUID, locale_id: Optional[UUID] = None, all_locales: bool = False) -> PositionDetailResult | None:
+        return self.position_by_id.get(position_id)
 
     async def get_current_incumbent_user_id(self, position_id: UUID) -> UUID | None:
         return self.incumbents.get(position_id)
 
     async def get_current_incumbent_user_id_by_code(self, position_code: str) -> UUID | None:
         return self.incumbents_by_code.get(position_code)
+
+    async def get_current_incumbent_contact(self, position_id: UUID) -> PositionIncumbentContactResult | None:
+        if position_id not in self.incumbents:
+            return None
+        return self.incumbent_contacts.get(position_id, PositionIncumbentContactResult())
 
 
 class StubUserRepository:

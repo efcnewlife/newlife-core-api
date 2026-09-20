@@ -2,12 +2,14 @@
 Member-facing ministry approval API serializers.
 """
 
+from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
 
 from portal.serializers.admin.v1.ministry import AdminMinistryApprove, AdminMinistryMemberInput, AdminMinistryReject
+from portal.serializers.admin.v1.ministry_catalog import AdminTargetAudienceItem
 from portal.serializers.admin.v1.org.translation import AdminOrgTranslationInput, validate_unique_org_locale_ids
 from portal.serializers.mixins.model_mixins import UUIDBaseModel
 
@@ -41,6 +43,40 @@ class ApiMinistryApprovalPendingList(BaseModel):
     """Pending approvals for the current incumbent."""
 
     items: list[ApiMinistryApprovalPendingItem] = Field(default_factory=list, description="Items")
+
+
+class ApiMinistryProfileSteward(BaseModel):
+    """Steward display row on member Ministry Profile."""
+
+    member_role: str = Field(..., serialization_alias="memberRole", description="Steward role")
+    display_name: Optional[str] = Field(None, serialization_alias="displayName", description="Steward display name")
+    email: Optional[str] = Field(None, description="Steward contact email")
+
+
+class ApiMinistryProfileOwnerPosition(BaseModel):
+    """Localized Owner Position with live incumbent contact."""
+
+    name: Optional[str] = Field(None, description="Localized Owner Position name")
+    incumbent_display_name: Optional[str] = Field(None, serialization_alias="incumbentDisplayName", description="Current incumbent display name")
+    incumbent_email: Optional[str] = Field(None, serialization_alias="incumbentEmail", description="Current incumbent email")
+
+
+class ApiMinistryProfile(UUIDBaseModel):
+    """Member-facing Ministry Profile projection."""
+
+    name: Optional[str] = Field(None, description="Localized Ministry name")
+    purpose: Optional[str] = Field(None, description="Localized Ministry purpose")
+    status: str = Field(..., description="Lifecycle status")
+    has_priority_booking: bool = Field(False, serialization_alias="hasPriorityBooking", description="Priority booking flag")
+    submitted_at: Optional[datetime] = Field(None, serialization_alias="submittedAt", description="Submitted at")
+    approved_at: Optional[datetime] = Field(None, serialization_alias="approvedAt", description="Approved at")
+    rejected_at: Optional[datetime] = Field(None, serialization_alias="rejectedAt", description="Rejected at")
+    rejection_reason: Optional[str] = Field(None, serialization_alias="rejectionReason", description="Rejection reason")
+    target_audiences: list[AdminTargetAudienceItem] = Field(default_factory=list, serialization_alias="targetAudiences", description="Target audiences")
+    stewards: list[ApiMinistryProfileSteward] = Field(default_factory=list, description="Steward roster")
+    owner_position: Optional[ApiMinistryProfileOwnerPosition] = Field(
+        None, serialization_alias="ownerPosition", description="Owner Position with live incumbent contact"
+    )
 
 
 ApiMinistryApprove = AdminMinistryApprove

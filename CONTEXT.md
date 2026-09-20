@@ -324,6 +324,10 @@ _Avoid_: treating Approval as the Application itself, using Approval status as t
 A person who may approve or reject a Ministry Application: the current incumbent of that Ministry's Owner position, or a user granted ministry approval authority in the admin portal.
 _Avoid_: incumbent-only as the sole rule, RBAC-only as the sole rule
 
+**Ministry Profile**:
+A read-only member projection of one Ministry for its applicant, Ministry member, or current Owner-position incumbent. It returns localized name and Purpose with system-default fallback, lifecycle fields, Target Audiences, Priority Booking, Steward display information, and live Owner Position contact. It is not the approval decision resource.
+_Avoid_: reusing approval detail as a general Profile, exposing all translations or admin audit identifiers, retaining a former Owner incumbent as current contact
+
 **Application notification email**:
 An Outlook message sent from a fixed system mailbox to the Owner-position incumbent when a member submits a Ministry Application. It deep-links into the facility-booking approval detail page after Microsoft sign-in. Body is bilingual: English first, then Chinese.
 _Avoid_: applicant confirmation as the same email, using the incumbent's personal mailbox as the sender

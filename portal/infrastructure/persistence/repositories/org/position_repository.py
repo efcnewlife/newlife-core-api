@@ -10,7 +10,13 @@ import sqlalchemy as sa
 import ujson
 from asyncpg import UniqueViolationError
 
-from portal.application.org.results import AssignablePositionResult, PositionDetailResult, PositionListItemResult, PositionTranslationItemResult
+from portal.application.org.results import (
+    AssignablePositionResult,
+    PositionDetailResult,
+    PositionIncumbentContactResult,
+    PositionListItemResult,
+    PositionTranslationItemResult,
+)
 from portal.application.rbac.commands import PagesQueryCommand
 from portal.infrastructure.persistence.repositories.shared.translation_queries import locale_scoped_max, position_name_fallback, position_translations_agg
 from portal.libs.database import Session
@@ -199,6 +205,20 @@ class PositionRepository:
     async def get_current_incumbent_user_id(self, position_id: UUID) -> Optional[UUID]:
         incumbent = await self._current_incumbent(position_id)
         return incumbent[0] if incumbent else None
+
+    async def get_current_incumbent_contact(self, position_id: UUID) -> Optional[PositionIncumbentContactResult]:
+        display_name = sa.func.coalesce(AuthUserProfile.preferred_name, AuthUser.email)
+        return await (
+            self._session.select(display_name.label("display_name"), AuthUser.email)
+            .select_from(OrgPositionAssignment)
+            .outerjoin(AuthUser, AuthUser.id == OrgPositionAssignment.user_id)
+            .outerjoin(AuthUserProfile, AuthUserProfile.user_id == AuthUser.id)
+            .where(OrgPositionAssignment.position_id == position_id)
+            .where(OrgPositionAssignment.end_at.is_(None))
+            .order_by(OrgPositionAssignment.start_at.desc())
+            .limit(1)
+            .fetchrow(as_model=PositionIncumbentContactResult)
+        )
 
     async def get_current_incumbent_user_id_by_code(self, position_code: str) -> Optional[UUID]:
         position_id = await self._session.select(OrgPosition.id).where(OrgPosition.code == position_code).where(OrgPosition.is_deleted == False).fetchval()

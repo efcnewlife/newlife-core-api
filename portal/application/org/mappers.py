@@ -37,6 +37,7 @@ from portal.application.org.results import (
     MinistryListResult,
     MinistryMemberResult,
     MinistryPageResult,
+    MinistryProfileResult,
     MinistryScheduleResult,
     MinistryTypeListResult,
     MinistryTypeResult,
@@ -94,7 +95,14 @@ from portal.serializers.admin.v1.org.translation import (
     AdminPositionTranslationInput,
     AdminPositionTranslationItem,
 )
-from portal.serializers.apis.v1.ministry import ApiMinistryApprovalPendingItem, ApiMinistryApprovalPendingList, ApiRejectedMinistryApplicationUpdate
+from portal.serializers.apis.v1.ministry import (
+    ApiMinistryApprovalPendingItem,
+    ApiMinistryApprovalPendingList,
+    ApiMinistryProfile,
+    ApiMinistryProfileOwnerPosition,
+    ApiMinistryProfileSteward,
+    ApiRejectedMinistryApplicationUpdate,
+)
 from portal.serializers.apis.v1.org import ApiOrgUserSearchItem, ApiOrgUserSearchList
 from portal.serializers.mixins import DeleteBaseModel, GenericQueryBaseModel
 
@@ -450,6 +458,30 @@ def pending_approvals_for_incumbent_to_api(result: MinistryListResult) -> ApiMin
             ApiMinistryApprovalPendingItem(id=item.id, name=item.name, status=item.status, has_priority_booking=item.has_priority_booking)
             for item in result.items
         ]
+    )
+
+
+def ministry_profile_to_api(result: MinistryProfileResult) -> ApiMinistryProfile:
+    owner_position = None
+    if result.owner_position is not None:
+        owner_position = ApiMinistryProfileOwnerPosition(
+            name=result.owner_position.name,
+            incumbent_display_name=result.owner_position.incumbent_display_name,
+            incumbent_email=result.owner_position.incumbent_email,
+        )
+    return ApiMinistryProfile(
+        id=result.id,
+        name=result.name,
+        purpose=result.purpose,
+        status=result.status,
+        has_priority_booking=result.has_priority_booking,
+        submitted_at=result.submitted_at,
+        approved_at=result.approved_at,
+        rejected_at=result.rejected_at,
+        rejection_reason=result.rejection_reason,
+        target_audiences=_target_audiences_to_api(result.target_audiences),
+        stewards=[ApiMinistryProfileSteward(member_role=item.member_role, display_name=item.display_name, email=item.email) for item in result.stewards],
+        owner_position=owner_position,
     )
 
 
