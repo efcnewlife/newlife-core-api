@@ -59,6 +59,7 @@ from portal.domain.facility.constants import (
 )
 from portal.domain.facility.participant_detail import is_current_booking_participant
 from portal.domain.facility.recurring import (
+    as_utc,
     calendar_day_payment_hold_expires_at,
     is_any_recurring_period_open,
     is_church_email,
@@ -632,7 +633,7 @@ class RecurringBookingService:
 
     @staticmethod
     def _is_cancellable(occurrence: RecurringBookingOccurrenceResult, now: datetime) -> bool:
-        return occurrence.status in _LIVE_OCCURRENCE_STATUSES and occurrence.start_at > now
+        return occurrence.status in _LIVE_OCCURRENCE_STATUSES and as_utc(occurrence.start_at) > as_utc(now)
 
     def _require_occurrence(self, occurrences: list[RecurringBookingOccurrenceResult], occurrence_id: Optional[UUID]) -> RecurringBookingOccurrenceResult:
         if occurrence_id is None:
@@ -647,16 +648,18 @@ class RecurringBookingService:
     def _cancellation_targets(
         self, occurrences: list[RecurringBookingOccurrenceResult], command: CancelRecurringBookingSeriesCommand, now: datetime
     ) -> list[RecurringBookingOccurrenceResult]:
+        now_utc = as_utc(now)
         if command.scope == RecurringCancellationScope.OCCURRENCE.value:
             occurrence = self._require_occurrence(occurrences, command.occurrence_id)
-            if occurrence.start_at <= now:
+            if as_utc(occurrence.start_at) <= now_utc:
                 raise BadRequestException(
                     detail="Historical Booking Occurrences cannot be cancelled", error_code=FacilityErrorCode.RECURRING_HISTORICAL_OCCURRENCE.value
                 )
             return [occurrence] if self._is_cancellable(occurrence, now) else []
         if command.scope == RecurringCancellationScope.THIS_AND_FUTURE.value:
             pivot = self._require_occurrence(occurrences, command.occurrence_id)
-            return [item for item in occurrences if item.start_at >= pivot.start_at and self._is_cancellable(item, now)]
+            pivot_start = as_utc(pivot.start_at)
+            return [item for item in occurrences if as_utc(item.start_at) >= pivot_start and self._is_cancellable(item, now)]
         return [item for item in occurrences if self._is_cancellable(item, now)]
 
     async def _apply_cancellation(self, series: RecurringBookingSeriesResult, command: CancelRecurringBookingSeriesCommand) -> RecurringBookingSeriesResult:
