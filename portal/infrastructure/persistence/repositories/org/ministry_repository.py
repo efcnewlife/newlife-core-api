@@ -393,6 +393,9 @@ class MinistryRepository:
         )
         return set(active_locale_ids)
 
+    async def fetch_default_locale_id(self) -> Optional[UUID]:
+        return await self._session.select(SystemLocale.id).where(SystemLocale.is_default == True).where(SystemLocale.is_deleted == False).limit(1).fetchval()
+
     async def insert_ministry(self, payload: dict[str, Any]) -> None:
         await self._session.insert(OrgMinistry).values(payload).execute()
 

@@ -8,7 +8,7 @@ from uuid import UUID, uuid4
 import pytest
 from pydantic import ValidationError
 
-from portal.application.auth.results import UserDetail, UserSensitive
+from portal.application.auth.results import HeaderInfo, UserDetail, UserSensitive
 from portal.application.org.commands import (
     ApproveMinistryCommand,
     CreateMinistryCommand,
@@ -26,7 +26,7 @@ from portal.application.org.commands import (
     UpdateRejectedMinistryApplicationCommand,
 )
 from portal.application.org.mappers import approve_ministry_to_command, reject_ministry_to_command
-from portal.application.org.ministry_application_mail_content import EN_LOCALE_ID
+from portal.application.org.ministry_application_mail_content import EN_LOCALE_ID, ZH_TW_LOCALE_ID
 from portal.application.org.ministry_application_mail_service import MinistryApplicationMailService
 from portal.application.org.ministry_approval_service import MinistryApprovalService
 from portal.application.org.ministry_schedule import validate_ministry_schedules
@@ -36,7 +36,11 @@ from portal.application.org.results import (
     MinistryDetailResult,
     MinistryListItemResult,
     MinistryMemberResult,
+    MinistryProfileResult,
     OrgUserSearchItemResult,
+    PositionDetailResult,
+    PositionIncumbentContactResult,
+    PositionTranslationItemResult,
     TargetAudienceResult,
     TranslationItemResult,
 )
@@ -46,6 +50,7 @@ from portal.domain.facility.days_of_week_mask import days_to_mask, mask_to_days
 from portal.domain.org.catalog_codes import TARGET_AUDIENCE_ADULTS, TARGET_AUDIENCE_ALL_AGES
 from portal.domain.org.constants import MinistryMemberRole, MinistryStatus
 from portal.exceptions.responses import BadRequestException, ForbiddenException, NotFoundException
+from portal.libs.contexts.request_context import RequestContext
 from portal.libs.contexts.user_context import UserContext
 from portal.providers.template_render_provider import TemplateRenderProvider
 from portal.serializers.admin.v1.ministry import AdminMinistryApprove, AdminMinistryReject
@@ -1036,3 +1041,283 @@ async def test_approve_ministry_as_incumbent_persists_when_mail_fails():
     await approval_service.approve_ministry_as_incumbent(ministry_id, ApproveMinistryCommand())
 
     assert stub.update_calls[-1]["values"]["status"] == MinistryStatus.ACTIVE.value
+
+
+def _profile_ministry(
+    *,
+    ministry_id,
+    owner_position_id,
+    submitted_by_id,
+    status=MinistryStatus.ACTIVE.value,
+    translations=None,
+    members=None,
+    target_audiences=None,
+    rejection_reason=None,
+) -> MinistryDetailResult:
+    return MinistryDetailResult(
+        id=ministry_id,
+        name="Youth EN",
+        status=status,
+        owner_position_id=owner_position_id,
+        submitted_by_id=submitted_by_id,
+        has_priority_booking=True,
+        is_active=True,
+        submitted_at=None,
+        approved_at=None,
+        rejected_at=None,
+        rejection_reason=rejection_reason,
+        translations=translations
+        or [
+            TranslationItemResult(locale_id=EN_LOCALE_ID, name="Youth EN", description="Purpose EN"),
+            TranslationItemResult(locale_id=ZH_TW_LOCALE_ID, name="Youth ZH", description="Purpose ZH"),
+        ],
+        members=members or [],
+        target_audiences=target_audiences or [],
+        created_by="admin-audit",
+        updated_by="admin-audit",
+        approved_by_id=uuid4(),
+        rejected_by_id=None,
+    )
+
+
+@pytest.mark.asyncio
+async def test_get_ministry_profile_allows_applicant():
+    ministry_id = uuid4()
+    owner_position_id = uuid4()
+    applicant_user_id = uuid4()
+    ministry = _profile_ministry(ministry_id=ministry_id, owner_position_id=owner_position_id, submitted_by_id=applicant_user_id)
+    stub = StubMinistryRepository(ministry_by_id={ministry_id: ministry}, default_locale_id=EN_LOCALE_ID)
+    approval_service = make_approval_service(stub, position_stub=StubPositionRepository(incumbents={owner_position_id: uuid4()}))
+    approval_service._user_ctx = UserContext(user_id=applicant_user_id, email="applicant@example.com", is_admin=False, is_superuser=False)
+    approval_service._req_ctx = RequestContext(headers=HeaderInfo(), resolved_locale_id=EN_LOCALE_ID)
+
+    result = await approval_service.get_ministry_profile(ministry_id)
+
+    assert isinstance(result, MinistryProfileResult)
+    assert result.id == ministry_id
+    assert result.name == "Youth EN"
+    assert result.purpose == "Purpose EN"
+
+
+@pytest.mark.asyncio
+async def test_get_ministry_profile_allows_ministry_member():
+    ministry_id = uuid4()
+    owner_position_id = uuid4()
+    steward_user_id = uuid4()
+    ministry = _profile_ministry(
+        ministry_id=ministry_id,
+        owner_position_id=owner_position_id,
+        submitted_by_id=uuid4(),
+        members=[
+            MinistryMemberResult(
+                user_id=steward_user_id, member_role=MinistryMemberRole.PRIMARY.value, display_name="Primary Steward", email="primary@example.com"
+            )
+        ],
+    )
+    stub = StubMinistryRepository(
+        ministry_by_id={ministry_id: ministry},
+        members_by_ministry={
+            ministry_id: [
+                MinistryMemberResult(
+                    user_id=steward_user_id, member_role=MinistryMemberRole.PRIMARY.value, display_name="Primary Steward", email="primary@example.com"
+                )
+            ]
+        },
+        default_locale_id=EN_LOCALE_ID,
+    )
+    approval_service = make_approval_service(stub)
+    approval_service._user_ctx = UserContext(user_id=steward_user_id, email="primary@example.com", is_admin=False, is_superuser=False)
+    approval_service._req_ctx = RequestContext(headers=HeaderInfo(), resolved_locale_id=EN_LOCALE_ID)
+
+    result = await approval_service.get_ministry_profile(ministry_id)
+
+    assert result.id == ministry_id
+    assert result.stewards[0].display_name == "Primary Steward"
+    assert "user_id" not in result.stewards[0].model_dump()
+
+
+@pytest.mark.asyncio
+async def test_get_ministry_profile_allows_owner_position_incumbent():
+    ministry_id = uuid4()
+    owner_position_id = uuid4()
+    incumbent_user_id = uuid4()
+    ministry = _profile_ministry(ministry_id=ministry_id, owner_position_id=owner_position_id, submitted_by_id=uuid4())
+    stub = StubMinistryRepository(ministry_by_id={ministry_id: ministry}, default_locale_id=EN_LOCALE_ID)
+    approval_service = make_approval_service(stub, position_stub=StubPositionRepository(incumbents={owner_position_id: incumbent_user_id}))
+    approval_service._user_ctx = UserContext(user_id=incumbent_user_id, email="incumbent@example.com", is_admin=False, is_superuser=False)
+    approval_service._req_ctx = RequestContext(headers=HeaderInfo(), resolved_locale_id=EN_LOCALE_ID)
+
+    result = await approval_service.get_ministry_profile(ministry_id)
+
+    assert result.id == ministry_id
+
+
+@pytest.mark.asyncio
+async def test_get_ministry_profile_forbidden_without_access():
+    ministry_id = uuid4()
+    ministry = _profile_ministry(ministry_id=ministry_id, owner_position_id=uuid4(), submitted_by_id=uuid4())
+    stub = StubMinistryRepository(ministry_by_id={ministry_id: ministry}, default_locale_id=EN_LOCALE_ID)
+    approval_service = make_approval_service(stub)
+    approval_service._user_ctx = UserContext(user_id=uuid4(), email="stranger@example.com", is_admin=False, is_superuser=False)
+
+    with pytest.raises(ForbiddenException) as exc_info:
+        await approval_service.get_ministry_profile(ministry_id)
+    assert exc_info.value.error_code == "ORG_MINISTRY_ACCESS_FORBIDDEN"
+
+
+@pytest.mark.asyncio
+async def test_get_ministry_profile_falls_back_to_default_locale():
+    ministry_id = uuid4()
+    owner_position_id = uuid4()
+    applicant_user_id = uuid4()
+    zh_cn_locale_id = UUID("019dd0c8-7c12-727f-878f-16807adf39e8")
+    ministry = _profile_ministry(
+        ministry_id=ministry_id,
+        owner_position_id=owner_position_id,
+        submitted_by_id=applicant_user_id,
+        translations=[TranslationItemResult(locale_id=EN_LOCALE_ID, name="Youth EN", description="Purpose EN")],
+    )
+    stub = StubMinistryRepository(ministry_by_id={ministry_id: ministry}, default_locale_id=EN_LOCALE_ID)
+    approval_service = make_approval_service(stub, position_stub=StubPositionRepository(incumbents={owner_position_id: uuid4()}))
+    approval_service._user_ctx = UserContext(user_id=applicant_user_id, email="applicant@example.com", is_admin=False, is_superuser=False)
+    approval_service._req_ctx = RequestContext(headers=HeaderInfo(), resolved_locale_id=zh_cn_locale_id)
+
+    result = await approval_service.get_ministry_profile(ministry_id)
+
+    assert result.name == "Youth EN"
+    assert result.purpose == "Purpose EN"
+
+
+@pytest.mark.asyncio
+async def test_get_ministry_profile_includes_rejected_lifecycle_fields():
+    ministry_id = uuid4()
+    owner_position_id = uuid4()
+    applicant_user_id = uuid4()
+    ministry = _profile_ministry(
+        ministry_id=ministry_id,
+        owner_position_id=owner_position_id,
+        submitted_by_id=applicant_user_id,
+        status=MinistryStatus.REJECTED.value,
+        rejection_reason="Need clearer purpose",
+    )
+    stub = StubMinistryRepository(ministry_by_id={ministry_id: ministry}, default_locale_id=EN_LOCALE_ID)
+    approval_service = make_approval_service(stub)
+    approval_service._user_ctx = UserContext(user_id=applicant_user_id, email="applicant@example.com", is_admin=False, is_superuser=False)
+    approval_service._req_ctx = RequestContext(headers=HeaderInfo(), resolved_locale_id=EN_LOCALE_ID)
+
+    result = await approval_service.get_ministry_profile(ministry_id)
+
+    assert result.status == MinistryStatus.REJECTED.value
+    assert result.rejection_reason == "Need clearer purpose"
+    assert result.has_priority_booking is True
+    dumped = result.model_dump()
+    assert "translations" not in dumped
+    assert "created_by" not in dumped
+    assert "approved_by_id" not in dumped
+    assert "submitted_by_id" not in dumped
+
+
+@pytest.mark.asyncio
+async def test_get_ministry_profile_includes_pending_lifecycle_status():
+    ministry_id = uuid4()
+    owner_position_id = uuid4()
+    applicant_user_id = uuid4()
+    ministry = _profile_ministry(
+        ministry_id=ministry_id, owner_position_id=owner_position_id, submitted_by_id=applicant_user_id, status=MinistryStatus.PENDING_APPROVAL.value
+    )
+    stub = StubMinistryRepository(ministry_by_id={ministry_id: ministry}, default_locale_id=EN_LOCALE_ID)
+    approval_service = make_approval_service(stub)
+    approval_service._user_ctx = UserContext(user_id=applicant_user_id, email="applicant@example.com", is_admin=False, is_superuser=False)
+    approval_service._req_ctx = RequestContext(headers=HeaderInfo(), resolved_locale_id=EN_LOCALE_ID)
+
+    result = await approval_service.get_ministry_profile(ministry_id)
+
+    assert result.status == MinistryStatus.PENDING_APPROVAL.value
+    assert result.rejection_reason is None
+
+
+@pytest.mark.asyncio
+async def test_get_ministry_profile_resolves_live_owner_contact():
+    ministry_id = uuid4()
+    owner_position_id = uuid4()
+    applicant_user_id = uuid4()
+    incumbent_user_id = uuid4()
+    ministry = _profile_ministry(
+        ministry_id=ministry_id,
+        owner_position_id=owner_position_id,
+        submitted_by_id=applicant_user_id,
+        target_audiences=[TargetAudienceResult(id=uuid4(), code="adults", name="Adults")],
+        members=[
+            MinistryMemberResult(
+                user_id=uuid4(),
+                member_role=MinistryMemberRole.SECONDARY.value,
+                display_name="Secondary Steward",
+                contact_email="steward-contact@example.com",
+                email="steward-login@example.com",
+            )
+        ],
+    )
+    stub = StubMinistryRepository(ministry_by_id={ministry_id: ministry}, default_locale_id=EN_LOCALE_ID)
+    position_stub = StubPositionRepository(
+        incumbents={owner_position_id: incumbent_user_id},
+        position_by_id={
+            owner_position_id: PositionDetailResult(
+                id=owner_position_id,
+                code="PASTOR",
+                name="Pastor EN",
+                can_own_ministry=True,
+                is_active=True,
+                translations=[
+                    PositionTranslationItemResult(locale_id=EN_LOCALE_ID, name="Pastor EN"),
+                    PositionTranslationItemResult(locale_id=ZH_TW_LOCALE_ID, name="Pastor ZH"),
+                ],
+            )
+        },
+        incumbent_contacts={owner_position_id: PositionIncumbentContactResult(display_name="Current Owner", email="owner@example.com")},
+    )
+    approval_service = make_approval_service(stub, position_stub=position_stub)
+    approval_service._user_ctx = UserContext(user_id=applicant_user_id, email="applicant@example.com", is_admin=False, is_superuser=False)
+    approval_service._req_ctx = RequestContext(headers=HeaderInfo(), resolved_locale_id=EN_LOCALE_ID)
+
+    result = await approval_service.get_ministry_profile(ministry_id)
+
+    assert result.owner_position is not None
+    assert result.owner_position.name == "Pastor EN"
+    assert result.owner_position.incumbent_display_name == "Current Owner"
+    assert result.owner_position.incumbent_email == "owner@example.com"
+    assert result.target_audiences[0].code == "adults"
+    assert result.stewards[0].email == "steward-contact@example.com"
+    assert "user_id" not in result.stewards[0].model_dump()
+
+
+@pytest.mark.asyncio
+async def test_get_ministry_profile_vacant_owner_has_no_incumbent_contact():
+    ministry_id = uuid4()
+    owner_position_id = uuid4()
+    applicant_user_id = uuid4()
+    ministry = _profile_ministry(ministry_id=ministry_id, owner_position_id=owner_position_id, submitted_by_id=applicant_user_id)
+    stub = StubMinistryRepository(ministry_by_id={ministry_id: ministry}, default_locale_id=EN_LOCALE_ID)
+    position_stub = StubPositionRepository(
+        incumbents={},
+        position_by_id={
+            owner_position_id: PositionDetailResult(
+                id=owner_position_id,
+                code="PASTOR",
+                name="Pastor EN",
+                can_own_ministry=True,
+                is_active=True,
+                translations=[PositionTranslationItemResult(locale_id=EN_LOCALE_ID, name="Pastor EN")],
+            )
+        },
+        incumbent_contacts={owner_position_id: PositionIncumbentContactResult(display_name="Former Owner", email="former@example.com")},
+    )
+    approval_service = make_approval_service(stub, position_stub=position_stub)
+    approval_service._user_ctx = UserContext(user_id=applicant_user_id, email="applicant@example.com", is_admin=False, is_superuser=False)
+    approval_service._req_ctx = RequestContext(headers=HeaderInfo(), resolved_locale_id=EN_LOCALE_ID)
+
+    result = await approval_service.get_ministry_profile(ministry_id)
+
+    assert result.owner_position is not None
+    assert result.owner_position.name == "Pastor EN"
+    assert result.owner_position.incumbent_display_name is None
+    assert result.owner_position.incumbent_email is None

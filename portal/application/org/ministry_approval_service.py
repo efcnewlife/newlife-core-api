@@ -20,7 +20,19 @@ from portal.application.org.commands import (
 )
 from portal.application.org.ministry_application_mail_service import MinistryApplicationMailService
 from portal.application.org.ministry_service import MinistryService
-from portal.application.org.results import CreateIdResult, MinistryApprovalResult, MinistryDetailResult, MinistryListResult, MinistryPageResult
+from portal.application.org.results import (
+    CreateIdResult,
+    MinistryApprovalResult,
+    MinistryDetailResult,
+    MinistryListResult,
+    MinistryPageResult,
+    MinistryProfileOwnerPositionResult,
+    MinistryProfileResult,
+    MinistryProfileStewardResult,
+    PositionIncumbentContactResult,
+    PositionTranslationItemResult,
+    TranslationItemResult,
+)
 from portal.domain.org.constants import MinistryApprovalStatus, MinistryDecisionChannel, MinistryStatus, OrgErrorCode
 from portal.exceptions.responses import BadRequestException, ForbiddenException, NotFoundException
 from portal.infrastructure.persistence.repositories.org.ministry_repository import MinistryRepository
@@ -253,6 +265,91 @@ class MinistryApprovalService:
             raise self._ministry_not_found(ministry_id)
         await self._require_ministry_access(ministry)
         return ministry
+
+    @staticmethod
+    def _non_empty_text(value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        stripped = value.strip()
+        return stripped or None
+
+    def _pick_localized_field(
+        self,
+        translations: list[TranslationItemResult] | list[PositionTranslationItemResult],
+        *,
+        field_name: str,
+        resolved_locale_id: Optional[UUID],
+        default_locale_id: Optional[UUID],
+    ) -> Optional[str]:
+        def value_for(locale_id: Optional[UUID]) -> Optional[str]:
+            if not locale_id:
+                return None
+            for item in translations:
+                if item.locale_id == locale_id:
+                    return self._non_empty_text(getattr(item, field_name, None))
+            return None
+
+        return value_for(resolved_locale_id) or value_for(default_locale_id)
+
+    def _steward_email(self, member) -> Optional[str]:
+        return self._non_empty_text(member.contact_email) or self._non_empty_text(member.email)
+
+    async def _build_owner_position(
+        self, owner_position_id: Optional[UUID], *, resolved_locale_id: Optional[UUID], default_locale_id: Optional[UUID]
+    ) -> Optional[MinistryProfileOwnerPositionResult]:
+        if not owner_position_id:
+            return None
+        position = await self._position_repository.get_by_id(owner_position_id, resolved_locale_id, all_locales=True)
+        position_name = None
+        if position:
+            position_name = self._pick_localized_field(
+                position.translations, field_name="name", resolved_locale_id=resolved_locale_id, default_locale_id=default_locale_id
+            ) or self._non_empty_text(position.name)
+        contact: Optional[PositionIncumbentContactResult] = await self._position_repository.get_current_incumbent_contact(owner_position_id)
+        return MinistryProfileOwnerPositionResult(
+            name=position_name,
+            incumbent_display_name=self._non_empty_text(contact.display_name) if contact else None,
+            incumbent_email=self._non_empty_text(contact.email) if contact else None,
+        )
+
+    @distributed_trace()
+    async def get_ministry_profile(self, ministry_id: UUID) -> MinistryProfileResult:
+        ministry = await self._repository.get_by_id(ministry_id, self._resolved_locale_id(), all_locales=True)
+        if not ministry:
+            raise self._ministry_not_found(ministry_id)
+        await self._require_ministry_access(ministry)
+
+        resolved_locale_id = self._resolved_locale_id()
+        default_locale_id = await self._repository.fetch_default_locale_id()
+        name = self._pick_localized_field(
+            ministry.translations, field_name="name", resolved_locale_id=resolved_locale_id, default_locale_id=default_locale_id
+        ) or self._non_empty_text(ministry.name)
+        purpose = self._pick_localized_field(
+            ministry.translations, field_name="description", resolved_locale_id=resolved_locale_id, default_locale_id=default_locale_id
+        )
+        stewards = [
+            MinistryProfileStewardResult(
+                member_role=member.member_role, display_name=self._non_empty_text(member.display_name), email=self._steward_email(member)
+            )
+            for member in ministry.members
+        ]
+        owner_position = await self._build_owner_position(
+            ministry.owner_position_id, resolved_locale_id=resolved_locale_id, default_locale_id=default_locale_id
+        )
+        return MinistryProfileResult(
+            id=ministry.id,
+            name=name,
+            purpose=purpose,
+            status=ministry.status,
+            has_priority_booking=ministry.has_priority_booking,
+            submitted_at=ministry.submitted_at,
+            approved_at=ministry.approved_at,
+            rejected_at=ministry.rejected_at,
+            rejection_reason=ministry.rejection_reason,
+            target_audiences=ministry.target_audiences,
+            stewards=stewards,
+            owner_position=owner_position,
+        )
 
     @distributed_trace()
     async def approve_ministry_as_incumbent(self, ministry_id: UUID, command: ApproveMinistryCommand) -> None:
