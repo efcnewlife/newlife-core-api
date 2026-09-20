@@ -202,6 +202,64 @@ async def test_cancel_this_and_future_keeps_earlier_future_occurrence(monkeypatc
 
 
 @pytest.mark.asyncio
+async def test_cancel_entire_series_tolerates_naive_utc_occurrence_start_at(monkeypatch):
+    """asyncpg often returns timestamptz as naive UTC; cancel must not TypeError vs aware now."""
+    booker_id = uuid4()
+    historical = _occurrence(start_at=datetime(2026, 2, 17, 15, 0))
+    future = _occurrence(start_at=datetime(2026, 3, 17, 15, 0))
+    later = _occurrence(start_at=datetime(2026, 3, 24, 15, 0))
+    assert historical.start_at.tzinfo is None
+    assert future.start_at.tzinfo is None
+    series = _series(user_id=booker_id, occurrences=[historical, future, later])
+    series_stub = StubRecurringBookingRepository()
+    booking_stub = StubBookingRepository()
+    _seed_series(series_stub, booking_stub, series)
+    service, series_stub, booking_stub, _ = _service(monkeypatch, operator_id=booker_id, series_stub=series_stub, booking_stub=booking_stub)
+
+    result = await service.cancel_my_series(
+        series.id, CancelRecurringBookingSeriesCommand(scope=RecurringCancellationScope.ENTIRE_SERIES.value, cancel_reason="No needed")
+    )
+
+    assert result.status == BookingStatus.CANCELLED.value
+    assert {item.id: item.status for item in result.occurrences} == {
+        historical.id: BookingStatus.CONFIRMED.value,
+        future.id: BookingStatus.CANCELLED.value,
+        later.id: BookingStatus.CANCELLED.value,
+    }
+    assert {call["booking_id"] for call in booking_stub.cancel_calls} == {future.id, later.id}
+
+
+@pytest.mark.asyncio
+async def test_cancel_occurrence_and_this_and_future_tolerate_naive_utc_start_at(monkeypatch):
+    historical = _occurrence(start_at=datetime(2026, 2, 17, 15, 0))
+    selected = _occurrence(start_at=datetime(2026, 3, 17, 15, 0))
+    later = _occurrence(start_at=datetime(2026, 3, 24, 15, 0))
+    series = _series(occurrences=[historical, selected, later])
+    series_stub = StubRecurringBookingRepository()
+    booking_stub = StubBookingRepository()
+    _seed_series(series_stub, booking_stub, series)
+    service, series_stub, booking_stub, _ = _service(monkeypatch, series_stub=series_stub, booking_stub=booking_stub)
+
+    with pytest.raises(BadRequestException) as exc_info:
+        await service.cancel_series(
+            series.id, CancelRecurringBookingSeriesCommand(scope=RecurringCancellationScope.OCCURRENCE.value, occurrence_id=historical.id)
+        )
+    assert exc_info.value.error_code == FacilityErrorCode.RECURRING_HISTORICAL_OCCURRENCE.value
+
+    occurrence_result = await service.cancel_series(
+        series.id, CancelRecurringBookingSeriesCommand(scope=RecurringCancellationScope.OCCURRENCE.value, occurrence_id=selected.id, cancel_reason="one week")
+    )
+    assert {item.id: item.status for item in occurrence_result.occurrences}[selected.id] == BookingStatus.CANCELLED.value
+
+    booking_stub.cancel_calls.clear()
+    this_and_future = await service.cancel_series(
+        series.id, CancelRecurringBookingSeriesCommand(scope=RecurringCancellationScope.THIS_AND_FUTURE.value, occurrence_id=later.id)
+    )
+    assert {call["booking_id"] for call in booking_stub.cancel_calls} == {later.id}
+    assert this_and_future.status == BookingStatus.CANCELLED.value
+
+
+@pytest.mark.asyncio
 async def test_cancel_entire_series_keeps_historical_and_overridden_rows(monkeypatch):
     overridden = _occurrence(status=BookingStatus.OVERRIDDEN.value, start_at=datetime(2026, 3, 3, 15, 0, tzinfo=timezone.utc))
     historical = _occurrence(start_at=datetime(2026, 2, 17, 15, 0, tzinfo=timezone.utc))
