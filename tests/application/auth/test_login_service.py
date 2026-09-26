@@ -2,6 +2,7 @@
 Tests for LoginService.
 """
 
+from contextlib import contextmanager
 from uuid import uuid4
 
 import pytest
@@ -106,6 +107,15 @@ def _build_login_service(repo: StubUserRepository) -> LoginService:
     )
 
 
+@contextmanager
+def _authenticated_as(user_id):
+    token = set_user_context(UserContext(user_id=user_id))
+    try:
+        yield
+    finally:
+        reset_user_context(token)
+
+
 @pytest.mark.asyncio
 async def test_update_current_user_preferred_locale_requires_authentication():
     service = _build_login_service(StubUserRepository())
@@ -118,12 +128,9 @@ async def test_update_current_user_preferred_locale_rejects_invalid_locale():
     user_id = uuid4()
     repo = StubUserRepository(existing_locale_ids=set())
     service = _build_login_service(repo)
-    token = set_user_context(UserContext(user_id=user_id))
-    try:
+    with _authenticated_as(user_id):
         with pytest.raises(BadRequestException):
             await service.update_current_user_preferred_locale(uuid4())
-    finally:
-        reset_user_context(token)
     assert repo.preferred_locale_updates == []
 
 
@@ -133,9 +140,6 @@ async def test_update_current_user_preferred_locale_persists_only_current_user()
     locale_id = uuid4()
     repo = StubUserRepository(existing_locale_ids={locale_id})
     service = _build_login_service(repo)
-    token = set_user_context(UserContext(user_id=user_id))
-    try:
+    with _authenticated_as(user_id):
         await service.update_current_user_preferred_locale(locale_id)
-    finally:
-        reset_user_context(token)
     assert repo.preferred_locale_updates == [(user_id, locale_id)]
