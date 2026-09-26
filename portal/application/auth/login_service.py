@@ -13,7 +13,7 @@ from portal.application.rbac.permission_service import PermissionService
 from portal.application.rbac.role_service import RoleService
 from portal.config import settings
 from portal.domain.auth.ports import UserRepositoryPort
-from portal.exceptions.responses import UnauthorizedException
+from portal.exceptions.responses import BadRequestException, UnauthorizedException
 from portal.libs.consts.enums import AccessTokenAudType
 from portal.libs.contexts.user_context import UserContext, get_user_context
 from portal.libs.tracing.distributed_trace import distributed_trace
@@ -137,6 +137,15 @@ class LoginService:
             preferred_locale_id=user.preferred_locale_id,
             last_login_at=user.last_login_at,
         )
+
+    @distributed_trace()
+    async def update_current_user_preferred_locale(self, preferred_locale_id: UUID) -> None:
+        ctx: Optional[UserContext] = get_user_context()
+        if not ctx or not ctx.user_id:
+            raise UnauthorizedException(detail="Unauthorized")
+        if not await self._repository.locale_exists(preferred_locale_id):
+            raise BadRequestException(detail="Preferred language is invalid")
+        await self._repository.update_preferred_locale(user_id=ctx.user_id, preferred_locale_id=preferred_locale_id)
 
     @distributed_trace()
     async def admin_profile(self) -> AdminProfileResult:

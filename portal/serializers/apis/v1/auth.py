@@ -30,6 +30,12 @@ class MemberLoginResponse(LoginResponse):
     member: MemberInfo = Field(..., description="Member info")
 
 
+class MemberPreferredLanguageUpdate(BaseModel):
+    """Update the current member's preferred language."""
+
+    preferred_locale_id: UUID = Field(..., description="Preferred locale id")
+
+
 class MicrosoftIdTokenRequest(BaseModel):
     """Microsoft Entra ID token exchange body."""
 
