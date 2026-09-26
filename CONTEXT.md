@@ -6,6 +6,10 @@ Portal backend for church admin operations: auth/RBAC, facility booking, org/min
 
 ### Facility booking
 
+**Booking account language preference**:
+The signed-in Booker's selected system locale, persisted on that user's profile and authoritative when the account returns to the Booking application. It is distinct from an unauthenticated visitor's browser-local language selection.
+_Avoid_: an Admin-only preference, an Accept-Language header, a Room or Booking translation
+
 **Mock user**:
 A randomly generated QA member identity used to exercise Facility Booking with real Mock login authorization and business relationships. A Mock user is neither a production member nor a privilege bypass.
 _Avoid_: demo user, production account, superuser, fake frontend session
