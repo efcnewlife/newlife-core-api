@@ -13,7 +13,7 @@ from portal.application.auth.mock_login_auth_service import MockLoginAuthService
 from portal.application.auth.refresh_token_service import RefreshTokenService
 from portal.container import Container
 from portal.routers.auth_router import AuthRouter
-from portal.serializers.apis.v1.auth import MemberInfo, MemberLoginResponse, MicrosoftIdTokenRequest, MockLoginRequest
+from portal.serializers.apis.v1.auth import MemberInfo, MemberLoginResponse, MemberPreferredLanguageUpdate, MicrosoftIdTokenRequest, MockLoginRequest
 from portal.serializers.mixins import LogoutRequest, LogoutResponse, RefreshTokenRequest, TokenResponse
 
 router: AuthRouter = AuthRouter()
@@ -69,3 +69,9 @@ async def member_logout(body: LogoutRequest, refresh_token_service: RefreshToken
 async def member_me(login_service: LoginService = Depends(Provide[Container.login_service])) -> MemberInfo:
     result = await login_service.member_profile()
     return member_profile_result_to_api(result)
+
+
+@router.put("/me/preferred-language", status_code=status.HTTP_204_NO_CONTENT)
+@inject
+async def member_update_preferred_locale(body: MemberPreferredLanguageUpdate, login_service: LoginService = Depends(Provide[Container.login_service])):
+    await login_service.update_current_user_preferred_locale(body.preferred_locale_id)
