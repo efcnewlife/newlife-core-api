@@ -481,11 +481,11 @@ When given a task, first classify it:
 
 ### Issue tracker
 
-Issues live in this repo's GitHub Issues (via `gh`). See `docs/agents/issue-tracker.md`.
+Issues are created in the owning GitHub repository via `gh`. After synchronization, use Linear for reading, updating, commenting, managing dependencies, and closing issues. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
-Default triage roles map 1:1 to label strings (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+Default label names: needs-triage, needs-info, ready-for-agent, ready-for-human, wontfix. See `docs/agents/triage-labels.md`.
 
 ### Domain docs
 
