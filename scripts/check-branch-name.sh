@@ -25,7 +25,9 @@ if [[ "${branch}" =~ ^spike/${slug}$ ]]; then
   exit 0
 fi
 
-if [[ "${branch}" =~ ^(${topic_types})/[0-9]+-${slug}$ ]]; then
+# Issue number is a Linear id: optional lowercase team key + digits
+# (e.g. efc-39) or a bare number (legacy).
+if [[ "${branch}" =~ ^(${topic_types})/([a-z]+-)?[0-9]+-${slug}$ ]]; then
   exit 0
 fi
 
@@ -37,9 +39,10 @@ Expected one of:
   develop
   release/<major>.<minor>.<patch>          e.g. release/1.4.0
   spike/<short-description>                e.g. spike/explore-calendar
-  <type>/<issue-number>-<short-description> e.g. feat/69-enforce-branch-names
+  <type>/<issue-number>-<short-description> e.g. feat/efc-39-booking-grid
 
 Types: feat fix hotfix refactor perf test docs chore build ci
+Issue number: Linear id (efc-39) or bare digits (39)
 Short description: lowercase a-z, 0-9, single hyphens only
 EOF
 exit 1
