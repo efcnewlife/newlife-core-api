@@ -345,7 +345,7 @@ uv sync
 ./scripts/install-git-hooks.sh
 ```
 
-Branch names must follow `{type}/{issue-number}-{short-description}` (see `AGENTS.md`). PRs run `.github/workflows/branch-name.yml`.
+Branch names must follow `{type}/{issue-number}-{short-description}`, where `{issue-number}` is a Linear id such as `efc-39` or bare digits (see `AGENTS.md`). PRs run `.github/workflows/branch-name.yml`.
 
 ### Environment Setup
 

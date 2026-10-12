@@ -75,7 +75,7 @@ uv run ruff check --fix
 
 ### Branch names
 
-Topic branches: `{type}/{issue-number}-{short-description}` (types: `feat` `fix` `hotfix` `refactor` `perf` `test` `docs` `chore` `build` `ci`). Exceptions: `release/x.y.z`, `spike/{short-description}`, plus `main` / `develop`. Enforced by `.githooks/pre-push` (after install) and `.github/workflows/branch-name.yml` on PRs. Emergency local bypass: `git push --no-verify`. Consider marking the `Branch name` check required in GitHub branch protection.
+Topic branches: `{type}/{issue-number}-{short-description}` (types: `feat` `fix` `hotfix` `refactor` `perf` `test` `docs` `chore` `build` `ci`). For Linear tickets, `{issue-number}` is the lowercase Linear id (`efc-39`), e.g. `feat/efc-39-booking-grid`; bare digits are still accepted. Exceptions: `release/x.y.z`, `spike/{short-description}`, plus `main` / `develop`. Enforced by `.githooks/pre-push` (after install) and `.github/workflows/branch-name.yml` on PRs. Emergency local bypass: `git push --no-verify`. Consider marking the `Branch name` check required in GitHub branch protection.
 
 ### Commit format hook
 
