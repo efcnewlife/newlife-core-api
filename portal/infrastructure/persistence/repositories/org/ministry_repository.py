@@ -61,12 +61,22 @@ class MinistryRepository:
             )
         return name_expr
 
+    @staticmethod
+    def _ministry_name_subquery(locale_id: Optional[UUID]):
+        return (
+            sa.select(ministry_name_fallback(locale_id))
+            .select_from(OrgMinistryTranslation)
+            .where(OrgMinistryTranslation.ministry_id == OrgMinistry.id)
+            .correlate(OrgMinistry)
+            .scalar_subquery()
+        )
+
     def _detail_select(self, locale_id: Optional[UUID] = None):
         ministry_type_name = self._ministry_type_name_expr(locale_id)
         return (
             self._session.select(
                 OrgMinistry.id,
-                ministry_name_fallback(locale_id).label("name"),
+                self._ministry_name_subquery(locale_id).label("name"),
                 OrgMinistry.status,
                 OrgMinistry.owner_position_id,
                 OrgMinistry.ministry_type_id,
@@ -206,7 +216,11 @@ class MinistryRepository:
         )
         query = (
             self._session.select(
-                OrgMinistry.id, ministry_name_fallback(locale_id).label("name"), OrgMinistry.status, OrgMinistry.has_priority_booking, OrgMinistry.is_active
+                OrgMinistry.id,
+                self._ministry_name_subquery(locale_id).label("name"),
+                OrgMinistry.status,
+                OrgMinistry.has_priority_booking,
+                OrgMinistry.is_active,
             )
             .select_from(OrgMinistry)
             .join(current_incumbent, current_incumbent.c.position_id == OrgMinistry.owner_position_id)
@@ -214,12 +228,6 @@ class MinistryRepository:
             .where(OrgMinistry.status == MinistryStatus.PENDING_APPROVAL.value)
             .where(current_incumbent.c.user_id == user_id)
         )
-        if locale_id:
-            query = query.outerjoin(
-                OrgMinistryTranslation, sa.and_(OrgMinistryTranslation.ministry_id == OrgMinistry.id, OrgMinistryTranslation.locale_id == locale_id)
-            )
-        else:
-            query = query.outerjoin(OrgMinistryTranslation, sa.false())
         items: list[MinistryListItemResult] = await (
             query.group_by(OrgMinistry.id).order_by(OrgMinistry.submitted_at.desc().nullslast()).fetch(as_model=MinistryListItemResult)
         )
@@ -227,14 +235,8 @@ class MinistryRepository:
 
     async def list_active(self, locale_id: Optional[UUID]) -> list[MinistryListItemResult]:
         query = self._session.select(
-            OrgMinistry.id, ministry_name_fallback(locale_id).label("name"), OrgMinistry.status, OrgMinistry.has_priority_booking, OrgMinistry.is_active
+            OrgMinistry.id, self._ministry_name_subquery(locale_id).label("name"), OrgMinistry.status, OrgMinistry.has_priority_booking, OrgMinistry.is_active
         ).select_from(OrgMinistry)
-        if locale_id:
-            query = query.outerjoin(
-                OrgMinistryTranslation, sa.and_(OrgMinistryTranslation.ministry_id == OrgMinistry.id, OrgMinistryTranslation.locale_id == locale_id)
-            )
-        else:
-            query = query.outerjoin(OrgMinistryTranslation, sa.false())
         items: list[MinistryListItemResult] = await (
             query.where(OrgMinistry.is_deleted == False)
             .where(OrgMinistry.is_active == True)
@@ -267,7 +269,7 @@ class MinistryRepository:
     async def fetch_steward_directory(self, model: StewardDirectoryQueryCommand, locale_id: Optional[UUID]) -> tuple[list[MinistryListItemResult], int]:
         query = self._session.select(
             OrgMinistry.id,
-            ministry_name_fallback(locale_id).label("name"),
+            self._ministry_name_subquery(locale_id).label("name"),
             OrgMinistry.status,
             OrgMinistry.has_priority_booking,
             OrgMinistry.is_active,
@@ -361,17 +363,15 @@ class MinistryRepository:
 
         query = (
             self._session.select(
-                OrgMinistry.id, ministry_name_fallback(locale_id).label("name"), OrgMinistry.status, OrgMinistry.has_priority_booking, OrgMinistry.is_active
+                OrgMinistry.id,
+                self._ministry_name_subquery(locale_id).label("name"),
+                OrgMinistry.status,
+                OrgMinistry.has_priority_booking,
+                OrgMinistry.is_active,
             )
             .select_from(OrgMinistry)
             .join(OrgMinistryMember, OrgMinistryMember.ministry_id == OrgMinistry.id)
         )
-        if locale_id:
-            query = query.outerjoin(
-                OrgMinistryTranslation, sa.and_(OrgMinistryTranslation.ministry_id == OrgMinistry.id, OrgMinistryTranslation.locale_id == locale_id)
-            )
-        else:
-            query = query.outerjoin(OrgMinistryTranslation, sa.false())
         items: list[MinistryListItemResult] = await (
             query.where(OrgMinistryMember.user_id == user_id)
             .where(OrgMinistryMember.member_role.in_([MinistryMemberRole.PRIMARY.value, MinistryMemberRole.SECONDARY.value]))
