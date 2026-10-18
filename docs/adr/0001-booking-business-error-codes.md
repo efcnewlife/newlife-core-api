@@ -13,6 +13,6 @@ Clients cannot tell a Scheduling Conflict or Blackout from a generic 400 by read
 ## Consequences
 
 - Exception JSON stays snake_case (`detail`, `error_code`, `context`), matching `debug_detail`.
-- Codes: `FACILITY_BOOKING_SCHEDULING_CONFLICT` (409) and `FACILITY_BOOKING_ROOM_BLACKOUT` (400).
+- Codes: `FACILITY_BOOKING_SCHEDULING_CONFLICT` (409), `FACILITY_BOOKING_ROOM_BLACKOUT` (400), and `FACILITY_BOOKING_OUTSIDE_OPENING_HOURS` (400; member template coverage / minimum duration; see ADR 0034).
 - `detail` remains human English for logs and unknown clients; the admin SPA must map `error_code` to i18n and must not parse `detail`.
 - Frontend `ApiError.code` remains the HTTP status; the business token is a separate field (`error_code`).

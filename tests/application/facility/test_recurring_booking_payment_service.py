@@ -33,6 +33,7 @@ from tests.fixtures.facility.stubs import (
     StubRecurringExpiryNotifier,
     StubRecurringOverrideNotifier,
     StubRoomBlackoutRepository,
+    StubRoomSlotTemplateRepository,
     StubUserReadService,
 )
 from tests.fixtures.system.stubs import StubSettingService
@@ -121,6 +122,7 @@ def _service(monkeypatch, *, operator_id=None, series_stub=None, booking_stub=No
         override_notifier=StubRecurringOverrideNotifier(),
         expiry_notifier=expiry_notifier,
         now_utc=now_utc or (lambda: NOW),
+        room_slot_template_repository=StubRoomSlotTemplateRepository(),
     )
     return service, series_stub, booking_stub, expiry_notifier, operator_id
 
@@ -236,6 +238,7 @@ async def test_confirm_payment_requires_authenticated_operator(monkeypatch):
         user_read_service=StubUserReadService(),
         override_log_repository=StubOverrideLogRepository(),
         now_utc=lambda: NOW,
+        room_slot_template_repository=StubRoomSlotTemplateRepository(),
     )
     with pytest.raises(ForbiddenException):
         await service.confirm_payment(uuid4())

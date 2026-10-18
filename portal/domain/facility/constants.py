@@ -141,6 +141,7 @@ class BookingErrorCode(str, Enum):
 
     SCHEDULING_CONFLICT = "FACILITY_BOOKING_SCHEDULING_CONFLICT"
     ROOM_BLACKOUT = "FACILITY_BOOKING_ROOM_BLACKOUT"
+    OUTSIDE_OPENING_HOURS = "FACILITY_BOOKING_OUTSIDE_OPENING_HOURS"
 
 
 class FacilityErrorCode(str, Enum):
@@ -204,6 +205,7 @@ class RecurringConflictKind(str, Enum):
 
     OCCUPANCY = "occupancy"
     BLACKOUT = "blackout"
+    OPENING_HOURS = "opening_hours"
     WEEKLY_QUOTA = "weekly_quota"
     MINISTRY = "ministry"
 

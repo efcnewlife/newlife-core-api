@@ -19,6 +19,7 @@ from portal.application.facility.commands import (
     UpdateTitleCommand,
 )
 from portal.application.facility.discount_eligibility_service import is_mission_aligned_discount
+from portal.application.facility.opening_hours import member_interval_within_opening_hours
 from portal.application.facility.participant_detail import assemble_participant_booking_detail, assemble_participant_series_detail
 from portal.application.facility.pricing_service import PricingService
 from portal.application.facility.recurring_override_mail_content import resolve_bilingual_activity_names
@@ -81,6 +82,7 @@ from portal.infrastructure.persistence.repositories.facility.booking_repository 
 from portal.infrastructure.persistence.repositories.facility.override_log_repository import OverrideLogRepository
 from portal.infrastructure.persistence.repositories.facility.recurring_booking_repository import RecurringBookingRepository
 from portal.infrastructure.persistence.repositories.facility.room_blackout_repository import RoomBlackoutRepository
+from portal.infrastructure.persistence.repositories.facility.room_slot_template_repository import RoomSlotTemplateRepository
 from portal.infrastructure.persistence.repositories.org.ministry_repository import MinistryRepository
 from portal.libs.contexts.request_context import RequestContext, get_request_context
 from portal.libs.contexts.user_context import UserContext, get_user_context
@@ -148,6 +150,7 @@ class RecurringBookingService:
         setting_service: SettingService,
         user_read_service: UserReadService,
         override_log_repository: OverrideLogRepository,
+        room_slot_template_repository: RoomSlotTemplateRepository,
         override_notifier: Optional[RecurringOverrideNotifierPort] = None,
         expiry_notifier: Optional[RecurringExpiryNotifierPort] = None,
         file_service: Optional[FileService] = None,
@@ -161,6 +164,7 @@ class RecurringBookingService:
         self._setting_service = setting_service
         self._user_read_service = user_read_service
         self._override_log_repository = override_log_repository
+        self._slot_template_repository = room_slot_template_repository
         self._override_notifier = override_notifier or NullRecurringOverrideNotifier()
         self._expiry_notifier = expiry_notifier or NullRecurringExpiryNotifier()
         self._file_service = file_service
@@ -865,6 +869,8 @@ class RecurringBookingService:
             return BookingErrorCode.SCHEDULING_CONFLICT.value, f"Room {facility_id} has a scheduling conflict"
         if conflict.kind == RecurringConflictKind.BLACKOUT.value:
             return BookingErrorCode.ROOM_BLACKOUT.value, f"Room {facility_id} is closed for the selected time"
+        if conflict.kind == RecurringConflictKind.OPENING_HOURS.value:
+            return BookingErrorCode.OUTSIDE_OPENING_HOURS.value, f"Room {facility_id} is outside opening hours for the selected time"
         return FacilityErrorCode.RECURRING_WEEKLY_QUOTA.value, "Booker already has a Rental Booking in that facility-local week"
 
     @staticmethod
@@ -891,6 +897,12 @@ class RecurringBookingService:
             raise BadRequestException(
                 detail=f"Room {facility_id} is closed for the selected time",
                 error_code=BookingErrorCode.ROOM_BLACKOUT.value,
+                context={"facility_id": str(facility_id)} if facility_id else None,
+            )
+        if conflict.kind == RecurringConflictKind.OPENING_HOURS.value:
+            raise BadRequestException(
+                detail=f"Room {facility_id} is outside opening hours for the selected time",
+                error_code=BookingErrorCode.OUTSIDE_OPENING_HOURS.value,
                 context={"facility_id": str(facility_id)} if facility_id else None,
             )
         raise BadRequestException(
@@ -984,11 +996,26 @@ class RecurringBookingService:
                         occurrence_date=occurrence.occurrence_date, kind=RecurringConflictKind.BLACKOUT.value, facility_ids=blackout_ids
                     )
                 )
+            if command.enforce_opening_hours:
+                opening_hours_ids: list[UUID] = []
+                for room in command.rooms:
+                    if room.facility_id in blackout_ids:
+                        continue
+                    templates = await self._slot_template_repository.list_active_for_day(room.facility_id, occurrence.occurrence_date.weekday())
+                    if not member_interval_within_opening_hours(occurrence.start_at, occurrence.end_at, templates, prepared.local_tz):
+                        opening_hours_ids.append(room.facility_id)
+                if opening_hours_ids:
+                    conflicts.append(
+                        RecurringBookingConflictResult(
+                            occurrence_date=occurrence.occurrence_date, kind=RecurringConflictKind.OPENING_HOURS.value, facility_ids=opening_hours_ids
+                        )
+                    )
         kind_order = {
             RecurringConflictKind.OCCUPANCY.value: 0,
             RecurringConflictKind.MINISTRY.value: 1,
             RecurringConflictKind.BLACKOUT.value: 2,
-            RecurringConflictKind.WEEKLY_QUOTA.value: 3,
+            RecurringConflictKind.OPENING_HOURS.value: 3,
+            RecurringConflictKind.WEEKLY_QUOTA.value: 4,
         }
         conflicts.sort(key=lambda item: (item.occurrence_date, kind_order[item.kind], 0 if item.is_overridable else 1))
         return conflicts

@@ -31,6 +31,7 @@ from portal.application.facility.commands import (
 )
 from portal.application.facility.discount_eligibility_service import is_mission_aligned_discount
 from portal.application.facility.my_bookings import card_primary_facility_id, paginate_my_bookings_cards, project_my_bookings_cards
+from portal.application.facility.opening_hours import raise_if_outside_opening_hours
 from portal.application.facility.participant_detail import assemble_participant_booking_detail
 from portal.application.facility.pricing_service import PricingService
 from portal.application.facility.results import (
@@ -61,6 +62,7 @@ from portal.exceptions.responses import BadRequestException, ConflictErrorExcept
 from portal.infrastructure.persistence.repositories.facility.booking_draft_repository import BookingDraftRepository
 from portal.infrastructure.persistence.repositories.facility.booking_repository import BookingRepository
 from portal.infrastructure.persistence.repositories.facility.room_blackout_repository import RoomBlackoutRepository
+from portal.infrastructure.persistence.repositories.facility.room_slot_template_repository import RoomSlotTemplateRepository
 from portal.infrastructure.persistence.repositories.org.ministry_repository import MinistryRepository
 from portal.libs.contexts.request_context import RequestContext, get_request_context
 from portal.libs.contexts.user_context import UserContext, get_user_context
@@ -79,6 +81,7 @@ class BookingService:
         setting_service: SettingService,
         booking_draft_repository: BookingDraftRepository,
         file_service: FileService,
+        room_slot_template_repository: RoomSlotTemplateRepository,
     ):
         self._repository = booking_repository
         self._pricing_service = pricing_service
@@ -87,6 +90,7 @@ class BookingService:
         self._setting_service = setting_service
         self._booking_draft_repository = booking_draft_repository
         self._file_service = file_service
+        self._slot_template_repository = room_slot_template_repository
         self._req_ctx: Optional[RequestContext] = get_request_context()
         self._user_ctx: Optional[UserContext] = get_user_context()
 
@@ -176,7 +180,9 @@ class BookingService:
         header_start, header_end = envelope_interval(resolved_lines)
 
         for line in resolved_lines:
-            await self._raise_if_room_unavailable(facility_id=line.facility_id, start_at=line.start_at, end_at=line.end_at, local_tz=local_tz)
+            await self._raise_if_room_unavailable(
+                facility_id=line.facility_id, start_at=line.start_at, end_at=line.end_at, local_tz=local_tz, enforce_opening_hours=command.enforce_opening_hours
+            )
 
         quote_lines = [
             PreviewQuoteRoomLineCommand(facility_id=line.facility_id, billed_hours=self._billed_hours(line.start_at, line.end_at)) for line in resolved_lines
@@ -367,7 +373,14 @@ class BookingService:
         )
 
     async def _raise_if_room_unavailable(
-        self, facility_id: UUID, start_at: datetime, end_at: datetime, local_tz: ZoneInfo, exclude_booking_id: Optional[UUID] = None
+        self,
+        facility_id: UUID,
+        start_at: datetime,
+        end_at: datetime,
+        local_tz: ZoneInfo,
+        exclude_booking_id: Optional[UUID] = None,
+        *,
+        enforce_opening_hours: bool = True,
     ) -> None:
         if await self._repository.has_confirmed_slot_overlap(facility_id=facility_id, start_at=start_at, end_at=end_at, exclude_booking_id=exclude_booking_id):
             raise ConflictErrorException(
@@ -381,6 +394,10 @@ class BookingService:
                 error_code=BookingErrorCode.ROOM_BLACKOUT.value,
                 context={"facility_id": str(facility_id)},
             )
+        if enforce_opening_hours:
+            day = start_at.astimezone(local_tz).date()
+            templates = await self._slot_template_repository.list_active_for_day(facility_id, day.weekday())
+            raise_if_outside_opening_hours(facility_id=facility_id, start_at=start_at, end_at=end_at, templates=templates, local_tz=local_tz)
 
     async def _validate_ministry_booking_gate(self, ministry_id: Optional[UUID], booker_id: Optional[UUID] = None) -> None:
         if ministry_id is None:

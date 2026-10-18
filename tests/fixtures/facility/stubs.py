@@ -406,13 +406,20 @@ class StubRoomSlotTemplateRepository:
     """In-memory slot template stub."""
 
     def __init__(
-        self, candidates: list[RoomSlotTemplateResult] | None = None, template_by_id: dict[UUID, RoomSlotTemplateResult] | None = None, update_affected: int = 1
+        self,
+        candidates: list[RoomSlotTemplateResult] | None = None,
+        template_by_id: dict[UUID, RoomSlotTemplateResult] | None = None,
+        update_affected: int = 1,
+        *,
+        permissive_default: bool = True,
     ):
         self.candidates = candidates or []
         self.template_by_id = template_by_id or {}
         self.update_affected = update_affected
+        self.permissive_default = permissive_default
         self.insert_calls: list[dict] = []
         self.list_candidates_calls = 0
+        self.list_for_day_calls: list[tuple[UUID, int]] = []
 
     @staticmethod
     def effective_dates_overlap(left_from, left_to, right_from, right_to) -> bool:
@@ -425,6 +432,30 @@ class StubRoomSlotTemplateRepository:
         from portal.infrastructure.persistence.repositories.facility.room_slot_template_repository import RoomSlotTemplateRepository
 
         return RoomSlotTemplateRepository.time_ranges_overlap(left_start, left_end, right_start, right_end)
+
+    def _permissive_template(self, facility_id: UUID) -> RoomSlotTemplateResult:
+        from datetime import time
+
+        return RoomSlotTemplateResult(
+            id=uuid4(),
+            facility_id=facility_id,
+            name="Permissive test template",
+            days_of_week_mask=127,
+            start_time=time(0, 0),
+            end_time=time(23, 59),
+            slot_duration_minutes=1,
+            is_active=True,
+        )
+
+    async def list_active_for_day(self, facility_id: UUID, day_of_week: int) -> list[RoomSlotTemplateResult]:
+        self.list_for_day_calls.append((facility_id, day_of_week))
+        day_bit = 1 << day_of_week
+        matched = [item for item in self.candidates if item.facility_id == facility_id and (item.days_of_week_mask & day_bit) != 0]
+        if matched:
+            return matched
+        if self.candidates or not self.permissive_default:
+            return []
+        return [self._permissive_template(facility_id)]
 
     async def list_active_overlapping_candidates(
         self, facility_id: UUID, days_of_week_mask: int, exclude_template_id: UUID | None = None
