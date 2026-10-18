@@ -210,6 +210,10 @@ _Avoid_: List `pages` with a large page size, silent truncation as acceptable Ca
 A booking create or update rejected because a requested room interval overlaps a confirmed booking slot. Distinct from uniqueness conflicts (duplicate codes) and from Blackout overlap.
 _Avoid_: generic "conflict", treating Blackout as the same failure, parsing the English detail string as the contract
 
+**Room Slot Template**:
+The opening interval during which a Room accepts Booking requests on an applicable day. Time outside an applicable template is Closed and cannot be booked.
+_Avoid_: a display-only availability hint, treating unoccupied time outside opening intervals as bookable
+
 **Blackout**:
 A room-closed interval that makes the room unbookable, including for Church Activity Bookings. Creating a Blackout that overlaps a future occurrence cancels that occurrence after operator confirmation. Refund handling for that cancellation is deferred. Overlap with a Blackout is a distinct rejection from a Scheduling Conflict; the client must show a different prompt.
 _Avoid_: scheduling conflict, "closed" without naming the Blackout rule, leaving an active Booking inside a Blackout
