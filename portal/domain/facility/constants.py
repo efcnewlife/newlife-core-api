@@ -208,6 +208,27 @@ class RecurringConflictKind(str, Enum):
     MINISTRY = "ministry"
 
 
+class TimetableCellState(str, Enum):
+    """Authoritative half-hour Timetable cell states for member availability."""
+
+    AVAILABLE = "available"
+    UNAVAILABLE = "unavailable"
+    OVERRIDE = "override"
+    CLOSED = "closed"
+
+
+class TimetableOccupancyKind(str, Enum):
+    """Occupancy kind on Ministry-context Timetable events (never on Personal)."""
+
+    MINISTRY = "ministry"
+    RENTAL = "rental"
+
+
+# Full-day Timetable axis: 00:00-24:00 in 30-minute cells.
+TIMETABLE_CELL_MINUTES = 30
+TIMETABLE_CELLS_PER_DAY = 48
+
+
 CHURCH_EMAIL_DOMAIN = "efcnewlife.org"
 
 

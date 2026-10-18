@@ -711,6 +711,60 @@ async def test_preview_ministry_conflict_includes_primary_steward_contact(monkey
 
 
 @pytest.mark.asyncio
+async def test_personal_preview_redacts_ministry_occupancy_to_generic_conflict(monkeypatch):
+    room_id = new_uuid()
+    other_ministry_id = new_uuid()
+    occupying_start = _occurrence_start_utc(date(2026, 1, 13))
+    booking_stub = StubBookingRepository(
+        occupying_bookings=[
+            RecurringOccupyingBookingResult(
+                booking_id=new_uuid(),
+                user_id=uuid4(),
+                ministry_id=other_ministry_id,
+                facility_ids=[room_id],
+                start_at=occupying_start,
+                end_at=occupying_start + timedelta(hours=2),
+            )
+        ]
+    )
+    service, *_ = _service(monkeypatch, booking_stub=booking_stub)
+
+    result = await service.preview_conflicts(_command(facility_id=room_id, last_occurrence_date=SIX_WEEK_LAST_TUESDAY))
+
+    assert len(result.conflicts) == 1
+    conflict = result.conflicts[0]
+    assert conflict.kind == RecurringConflictKind.OCCUPANCY.value
+    assert conflict.ministry_id is None
+    assert conflict.ministry_steward_display_name is None
+    assert conflict.ministry_steward_email is None
+    assert conflict.booker_display_name is None
+    assert conflict.booker_email is None
+
+
+@pytest.mark.asyncio
+async def test_non_priority_preview_includes_rental_booker_contact(monkeypatch):
+    user_id = uuid4()
+    room_id = new_uuid()
+    ministry_id = new_uuid()
+    ministry = make_ministry_detail(ministry_id)
+    ministry.status = MinistryStatus.ACTIVE.value
+    ministry.has_priority_booking = False
+    ministry_stub = StubMinistryRepository(ministry_by_id={ministry_id: ministry}, booking_member_user_ids={user_id})
+    rental = _occupying_rental(facility_id=room_id, occurrence_date=date(2026, 1, 13))
+    rental = rental.model_copy(update={"booker_display_name": "Jane Booker", "booker_email": "jane@example.com"})
+    booking_stub = StubBookingRepository(occupying_bookings=[rental])
+    service, *_ = _service(monkeypatch, user_id=user_id, booking_stub=booking_stub, ministry_stub=ministry_stub)
+
+    result = await service.preview_conflicts(_command(facility_id=room_id, ministry_id=ministry_id, last_occurrence_date=SIX_WEEK_LAST_TUESDAY))
+
+    conflict = result.conflicts[0]
+    assert conflict.kind == RecurringConflictKind.OCCUPANCY.value
+    assert conflict.is_overridable is False
+    assert conflict.booker_display_name == "Jane Booker"
+    assert conflict.booker_email == "jane@example.com"
+
+
+@pytest.mark.asyncio
 async def test_priority_preview_marks_future_rental_occupancy_overridable(monkeypatch):
     user_id = uuid4()
     room_id = new_uuid()

@@ -494,10 +494,39 @@ class TimeSlotResult(BaseModel):
 
 
 class DayAvailabilityResult(BaseModel):
-    """AM/PM availability buckets."""
+    """AM/PM availability buckets (compatibility freelist; cells are authoritative)."""
 
     am: list[TimeSlotResult] = Field(default_factory=list)
     pm: list[TimeSlotResult] = Field(default_factory=list)
+
+
+class RoomAvailabilityTemplateResult(BaseModel):
+    """Applicable Room Slot Template window for the requested date."""
+
+    start: str = Field(..., description="HH:MM local")
+    end: str = Field(..., description="HH:MM local")
+    slot_duration_minutes: int = Field(...)
+
+
+class RoomAvailabilityCellResult(BaseModel):
+    """One half-hour Timetable cell."""
+
+    start: str = Field(..., description="HH:MM local")
+    end: str = Field(..., description="HH:MM local")
+    state: str = Field(...)
+    event_indices: list[int] = Field(default_factory=list)
+
+
+class RoomAvailabilityEventResult(BaseModel):
+    """Ministry-context occupancy event clipped to open non-Blackout time."""
+
+    start: str = Field(..., description="HH:MM local")
+    end: str = Field(..., description="HH:MM local")
+    occupancy_kind: str = Field(...)
+    is_overridable: bool = Field(default=False)
+    ministry_name: Optional[str] = Field(default=None)
+    contact_display_name: Optional[str] = Field(default=None)
+    contact_email: Optional[str] = Field(default=None)
 
 
 class RoomAvailabilityResult(UUIDBaseModel):
@@ -509,6 +538,9 @@ class RoomAvailabilityResult(UUIDBaseModel):
     capacity: Optional[int] = Field(default=None)
     is_active: bool = Field(default=True)
     photo_urls: list[str] = Field(default_factory=list)
+    templates: list[RoomAvailabilityTemplateResult] = Field(default_factory=list)
+    cells: list[RoomAvailabilityCellResult] = Field(default_factory=list)
+    events: list[RoomAvailabilityEventResult] = Field(default_factory=list)
     availability: DayAvailabilityResult = Field(default_factory=DayAvailabilityResult)
 
 
@@ -516,6 +548,7 @@ class RoomAvailabilityListResult(BaseModel):
     """Rooms available on a date."""
 
     date: DateType = Field(...)
+    facility_timezone: str = Field(...)
     items: list[RoomAvailabilityResult] = Field(default_factory=list)
     max_booking_lines: int = Field(...)
 
@@ -719,9 +752,12 @@ class RecurringOccupyingBookingResult(BaseModel):
     booking_id: UUID = Field(...)
     user_id: UUID = Field(...)
     ministry_id: Optional[UUID] = Field(default=None)
+    ministry_name: Optional[str] = Field(default=None)
     facility_ids: list[UUID] = Field(default_factory=list)
     start_at: datetime = Field(...)
     end_at: datetime = Field(...)
+    booker_display_name: Optional[str] = Field(default=None)
+    booker_email: Optional[str] = Field(default=None)
 
 
 class RecurringBookingConflictResult(BaseModel):
@@ -735,6 +771,8 @@ class RecurringBookingConflictResult(BaseModel):
     ministry_id: Optional[UUID] = Field(default=None)
     ministry_steward_display_name: Optional[str] = Field(default=None)
     ministry_steward_email: Optional[str] = Field(default=None)
+    booker_display_name: Optional[str] = Field(default=None)
+    booker_email: Optional[str] = Field(default=None)
 
 
 class RecurringProposalEvaluationResult(BaseModel):

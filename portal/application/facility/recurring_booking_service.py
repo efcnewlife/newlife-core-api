@@ -41,6 +41,7 @@ from portal.application.facility.results import (
     RecurringProposalEvaluationResult,
     RoomBlackoutResult,
 )
+from portal.application.facility.timetable_projection import redact_conflict_for_personal
 from portal.application.system.setting_service import SettingService
 from portal.config import settings
 from portal.domain.content.constants import FILE_RESOURCE_KIND_FACILITY_ROOM
@@ -927,28 +928,50 @@ class RecurringBookingService:
                     )
                 )
             if rental_blocked:
+                booker_display_name = None
+                booker_email = None
+                if command.ministry_id is not None and not prepared.is_priority and rental_blocked:
+                    first_rental = rental_blocked[0]
+                    booker_display_name = first_rental.booker_display_name
+                    booker_email = first_rental.booker_email
                 conflicts.append(
                     RecurringBookingConflictResult(
                         occurrence_date=occurrence.occurrence_date,
                         kind=RecurringConflictKind.OCCUPANCY.value,
                         facility_ids=self._unique_facility_ids(rental_blocked),
                         occupying_bookings=rental_blocked,
+                        booker_display_name=booker_display_name,
+                        booker_email=booker_email,
                     )
                 )
             if ministry_items:
                 first = ministry_items[0]
-                steward_name, steward_email = await self._primary_steward_contact(first.ministry_id)
-                conflicts.append(
-                    RecurringBookingConflictResult(
-                        occurrence_date=occurrence.occurrence_date,
-                        kind=RecurringConflictKind.MINISTRY.value,
-                        facility_ids=self._unique_facility_ids(ministry_items),
-                        occupying_bookings=ministry_items,
-                        ministry_id=first.ministry_id,
-                        ministry_steward_display_name=steward_name,
-                        ministry_steward_email=steward_email,
+                if command.ministry_id is None:
+                    kind, ministry_id, steward_name, steward_email = redact_conflict_for_personal(RecurringConflictKind.MINISTRY.value, first.ministry_id)
+                    conflicts.append(
+                        RecurringBookingConflictResult(
+                            occurrence_date=occurrence.occurrence_date,
+                            kind=kind,
+                            facility_ids=self._unique_facility_ids(ministry_items),
+                            occupying_bookings=ministry_items,
+                            ministry_id=ministry_id,
+                            ministry_steward_display_name=steward_name,
+                            ministry_steward_email=steward_email,
+                        )
                     )
-                )
+                else:
+                    steward_name, steward_email = await self._primary_steward_contact(first.ministry_id)
+                    conflicts.append(
+                        RecurringBookingConflictResult(
+                            occurrence_date=occurrence.occurrence_date,
+                            kind=RecurringConflictKind.MINISTRY.value,
+                            facility_ids=self._unique_facility_ids(ministry_items),
+                            occupying_bookings=ministry_items,
+                            ministry_id=first.ministry_id,
+                            ministry_steward_display_name=steward_name,
+                            ministry_steward_email=steward_email,
+                        )
+                    )
             blackout_ids: list[UUID] = []
             for room in command.rooms:
                 if await self._blackout_repository.has_blackout_overlap(
