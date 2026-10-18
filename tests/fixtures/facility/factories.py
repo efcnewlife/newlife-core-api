@@ -232,6 +232,7 @@ def make_slot_template_result(
     end_time: time = time(12, 0),
     effective_from: date | None = None,
     effective_to: date | None = None,
+    slot_duration_minutes: int = 60,
 ) -> RoomSlotTemplateResult:
     return RoomSlotTemplateResult(
         id=new_uuid(),
@@ -240,7 +241,7 @@ def make_slot_template_result(
         days_of_week_mask=days_of_week_mask,
         start_time=start_time,
         end_time=end_time,
-        slot_duration_minutes=60,
+        slot_duration_minutes=slot_duration_minutes,
         is_active=True,
         effective_from=effective_from,
         effective_to=effective_to,

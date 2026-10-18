@@ -578,6 +578,7 @@ def test_create_recurring_booking_series_to_command_maps_excluded_dates():
     )
     command = create_recurring_booking_series_to_command(model)
     assert command.excluded_dates == [date(2026, 1, 13)]
+    assert command.enforce_opening_hours is True
 
 
 def test_create_recurring_booking_series_to_command_preview_proposal_has_no_exclusions():
@@ -590,6 +591,38 @@ def test_create_recurring_booking_series_to_command_preview_proposal_has_no_excl
     )
     command = create_recurring_booking_series_to_command(model)
     assert command.excluded_dates == []
+    assert command.enforce_opening_hours is True
+
+
+def test_admin_create_booking_disables_opening_hours_enforcement():
+    from portal.application.facility.mappers import create_booking_to_command
+    from portal.serializers.admin.v1.facility.booking import AdminBookingCreate, AdminBookingRoomInput
+
+    model = AdminBookingCreate(
+        title="Choir practice",
+        user_id=uuid4(),
+        start_at=datetime(2026, 5, 1, 10, 0, tzinfo=timezone.utc),
+        end_at=datetime(2026, 5, 1, 14, 0, tzinfo=timezone.utc),
+        rooms=[AdminBookingRoomInput(facility_id=uuid4(), sequence=0)],
+    )
+    command = create_booking_to_command(model)
+    assert command.enforce_opening_hours is False
+
+
+def test_admin_create_recurring_series_disables_opening_hours_enforcement():
+    from portal.serializers.admin.v1.facility.booking_series import AdminRecurringBookingSeriesCreate, AdminRecurringBookingSeriesRoomInput
+
+    model = AdminRecurringBookingSeriesCreate(
+        title="Weekly choir",
+        user_id=uuid4(),
+        first_occurrence_date=date(2026, 1, 6),
+        last_occurrence_date=date(2026, 1, 27),
+        local_start_time=time(10, 0),
+        local_end_time=time(12, 0),
+        rooms=[AdminRecurringBookingSeriesRoomInput(facility_id=uuid4(), sequence=0)],
+    )
+    command = create_recurring_booking_series_to_command(model)
+    assert command.enforce_opening_hours is False
 
 
 def test_member_recurring_series_draft_create_to_command_keeps_title_optional_and_exclusions():

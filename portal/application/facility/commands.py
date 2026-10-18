@@ -310,6 +310,7 @@ class CreateBookingCommand(BaseModel):
     surcharge_codes: list[str] = Field(default_factory=list)
     remark: Optional[str] = Field(default=None)
     booking_draft_id: Optional[UUID] = Field(default=None, description="Source Booking Draft; deleted on successful create")
+    enforce_opening_hours: bool = Field(default=True, description="Member paths enforce Room Slot Template windows; admin create sets False")
 
 
 class CancelRecurringBookingSeriesCommand(BaseModel):
@@ -334,6 +335,7 @@ class CreateRecurringBookingSeriesCommand(BaseModel):
     surcharge_codes: list[str] = Field(default_factory=list)
     remark: Optional[str] = Field(default=None)
     excluded_dates: list[date] = Field(default_factory=list)
+    enforce_opening_hours: bool = Field(default=True, description="Member paths enforce Room Slot Template windows; admin create sets False")
 
 
 class UpdateTitleCommand(BaseModel):

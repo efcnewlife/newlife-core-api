@@ -28,7 +28,14 @@ from portal.domain.facility.constants import (
 from portal.domain.facility.recurring import localize_wall_time
 from portal.domain.org.constants import MinistryMemberRole, MinistryStatus
 from portal.exceptions.responses import BadRequestException, ConflictErrorException, ForbiddenException
-from tests.fixtures.facility.factories import make_discount_rule, make_hourly_and_daily_rates, make_ministry_detail, make_preview_quote_result, new_uuid
+from tests.fixtures.facility.factories import (
+    make_discount_rule,
+    make_hourly_and_daily_rates,
+    make_ministry_detail,
+    make_preview_quote_result,
+    make_slot_template_result,
+    new_uuid,
+)
 from tests.fixtures.facility.stubs import (
     StubBookingRepository,
     StubMinistryRepository,
@@ -39,6 +46,7 @@ from tests.fixtures.facility.stubs import (
     StubRentalRepository,
     StubRoomBlackoutRepository,
     StubRoomRepository,
+    StubRoomSlotTemplateRepository,
     StubUserReadService,
 )
 from tests.fixtures.system.stubs import StubSettingService
@@ -92,6 +100,7 @@ def _service(
     user_read_stub=None,
     override_log_stub=None,
     override_notifier=None,
+    slot_template_stub=None,
     now_utc=None,
 ):
     user_id = user_id or uuid4()
@@ -112,6 +121,7 @@ def _service(
         override_log_repository=override_log_stub,
         override_notifier=override_notifier,
         now_utc=now_utc or (lambda: OPEN_WINDOW_NOW),
+        room_slot_template_repository=slot_template_stub or StubRoomSlotTemplateRepository(),
     )
     return service, series_stub, booking_stub, user_id
 
@@ -506,6 +516,44 @@ async def test_preview_lists_blackout_conflicts_per_occurrence(monkeypatch):
     assert [(item.occurrence_date, item.kind, item.facility_ids) for item in result.conflicts] == [
         (date(2026, 1, 20), RecurringConflictKind.BLACKOUT.value, [room_id])
     ]
+
+
+@pytest.mark.asyncio
+async def test_preview_lists_opening_hours_conflicts_per_occurrence(monkeypatch):
+    room_id = new_uuid()
+    template = make_slot_template_result(room_id, days_of_week_mask=127, start_time=time(13, 0), end_time=time(17, 0))
+    slot_stub = StubRoomSlotTemplateRepository(candidates=[template], permissive_default=False)
+    service, *_ = _service(monkeypatch, slot_template_stub=slot_stub)
+    result = await service.preview_conflicts(
+        _command(facility_id=room_id, local_start_time=time(10, 0), local_end_time=time(12, 0), last_occurrence_date=LAST_TUESDAY)
+    )
+
+    assert all(item.kind == RecurringConflictKind.OPENING_HOURS.value for item in result.conflicts)
+    assert all(item.facility_ids == [room_id] for item in result.conflicts)
+    assert len(result.conflicts) == 4
+
+
+@pytest.mark.asyncio
+async def test_create_series_rejects_outside_opening_hours(monkeypatch):
+    room_id = new_uuid()
+    template = make_slot_template_result(room_id, days_of_week_mask=127, start_time=time(13, 0), end_time=time(17, 0))
+    slot_stub = StubRoomSlotTemplateRepository(candidates=[template], permissive_default=False)
+    service, *_ = _service(monkeypatch, slot_template_stub=slot_stub)
+    with pytest.raises(BadRequestException) as exc_info:
+        await service.create_series(_command(facility_id=room_id, local_start_time=time(10, 0), local_end_time=time(12, 0), last_occurrence_date=LAST_TUESDAY))
+    assert exc_info.value.error_code == BookingErrorCode.OUTSIDE_OPENING_HOURS.value
+
+
+@pytest.mark.asyncio
+async def test_admin_create_series_may_book_outside_opening_hours(monkeypatch):
+    room_id = new_uuid()
+    template = make_slot_template_result(room_id, days_of_week_mask=127, start_time=time(13, 0), end_time=time(17, 0))
+    slot_stub = StubRoomSlotTemplateRepository(candidates=[template], permissive_default=False)
+    service, *_ = _service(monkeypatch, slot_template_stub=slot_stub)
+    result = await service.create_series(
+        _command(facility_id=room_id, local_start_time=time(10, 0), local_end_time=time(12, 0), last_occurrence_date=LAST_TUESDAY, enforce_opening_hours=False)
+    )
+    assert result.occurrence_count == 4
 
 
 @pytest.mark.asyncio

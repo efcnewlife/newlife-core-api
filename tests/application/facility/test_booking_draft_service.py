@@ -2,9 +2,10 @@
 BookingDraftService unit tests (ADR 0018).
 """
 
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timezone
 from decimal import Decimal
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 import pytest
 from pydantic import ValidationError
@@ -14,8 +15,14 @@ from portal.application.facility.commands import BookingDraftLineCommand, Create
 from portal.application.facility.results import BookingDraftDetailResult, BookingDraftStoredLineResult
 from portal.exceptions.responses import BadRequestException, ForbiddenException, NotFoundException
 from portal.serializers.apis.v1.facility import MemberBookingDraftCreate, MemberBookingDraftLineInput, MemberBookingDraftUpdate
-from tests.fixtures.facility.factories import make_create_booking_draft_command, make_preview_quote_result, new_uuid
-from tests.fixtures.facility.stubs import StubBookingDraftRepository, StubBookingRepository, StubPricingService, StubRoomBlackoutRepository
+from tests.fixtures.facility.factories import make_create_booking_draft_command, make_preview_quote_result, make_slot_template_result, new_uuid
+from tests.fixtures.facility.stubs import (
+    StubBookingDraftRepository,
+    StubBookingRepository,
+    StubPricingService,
+    StubRoomBlackoutRepository,
+    StubRoomSlotTemplateRepository,
+)
 from tests.fixtures.system.stubs import StubSettingService
 
 
@@ -47,6 +54,7 @@ def _service(
     blackout_stub: StubRoomBlackoutRepository | None = None,
     pricing_stub: StubPricingService | None = None,
     setting_stub: StubSettingService | None = None,
+    slot_template_stub: StubRoomSlotTemplateRepository | None = None,
 ) -> BookingDraftService:
     quote = make_preview_quote_result(quoted_amount=Decimal("150"))
     return BookingDraftService(
@@ -55,6 +63,7 @@ def _service(
         blackout_stub or StubRoomBlackoutRepository(),
         pricing_stub or StubPricingService(quote),
         setting_stub or StubSettingService(),
+        slot_template_stub or StubRoomSlotTemplateRepository(),
     )
 
 
@@ -362,6 +371,28 @@ async def test_get_draft_line_unavailable_on_blackout(monkeypatch):
     )
     _user_ctx(monkeypatch, user_id=user_id)
     service = _service(draft_stub=stub, blackout_stub=StubRoomBlackoutRepository(has_overlap=True))
+
+    result = await service.get_draft(draft_id)
+    assert result.lines[0].is_available is False
+
+
+@pytest.mark.asyncio
+async def test_get_draft_line_unavailable_outside_opening_hours(monkeypatch):
+    user_id = uuid4()
+    room_id = new_uuid()
+    draft_id = uuid4()
+    day = date(2026, 7, 20)
+    tz = ZoneInfo("America/Toronto")
+    start = datetime.combine(day, time(6, 0), tzinfo=tz).astimezone(timezone.utc)
+    end = datetime.combine(day, time(7, 0), tzinfo=tz).astimezone(timezone.utc)
+    template = make_slot_template_result(room_id, days_of_week_mask=127, start_time=time(9, 0), end_time=time(12, 0))
+    stub = StubBookingDraftRepository(
+        draft_by_id={
+            draft_id: _stored_draft(draft_id=draft_id, user_id=user_id, date_=day, lines=[_stored_line(facility_id=room_id, start_at=start, end_at=end)])
+        }
+    )
+    _user_ctx(monkeypatch, user_id=user_id)
+    service = _service(draft_stub=stub, slot_template_stub=StubRoomSlotTemplateRepository(candidates=[template], permissive_default=False))
 
     result = await service.get_draft(draft_id)
     assert result.lines[0].is_available is False

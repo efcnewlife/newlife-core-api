@@ -798,6 +798,7 @@ def create_booking_to_command(model) -> "CreateBookingCommand":
         ],
         surcharge_codes=model.surcharge_codes,
         remark=model.remark,
+        enforce_opening_hours=False,
     )
 
 
@@ -841,7 +842,9 @@ def override_log_page_to_api(result) -> "AdminOverrideLogPages":
 
 def create_recurring_booking_series_to_command(model) -> "CreateRecurringBookingSeriesCommand":
     from portal.application.facility.commands import BookingRoomLineCommand, CreateRecurringBookingSeriesCommand
+    from portal.serializers.admin.v1.facility.booking_series import AdminRecurringBookingSeriesProposal
 
+    is_admin = isinstance(model, AdminRecurringBookingSeriesProposal)
     return CreateRecurringBookingSeriesCommand(
         user_id=getattr(model, "user_id", None),
         title=getattr(model, "title", None),
@@ -854,6 +857,7 @@ def create_recurring_booking_series_to_command(model) -> "CreateRecurringBooking
         surcharge_codes=model.surcharge_codes,
         remark=model.remark,
         excluded_dates=list(getattr(model, "excluded_dates", []) or []),
+        enforce_opening_hours=not is_admin,
     )
 
 

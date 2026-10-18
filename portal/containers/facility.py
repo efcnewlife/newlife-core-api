@@ -75,6 +75,7 @@ class FacilityContainer(containers.DeclarativeContainer):
         setting_service=setting_service,
         booking_draft_repository=booking_draft_repository,
         file_service=file_service,
+        room_slot_template_repository=room_slot_template_repository,
     )
     booking_draft_service = providers.Factory(
         BookingDraftService,
@@ -83,6 +84,7 @@ class FacilityContainer(containers.DeclarativeContainer):
         room_blackout_repository=room_blackout_repository,
         pricing_service=pricing_service,
         setting_service=setting_service,
+        room_slot_template_repository=room_slot_template_repository,
     )
     recurring_override_mail_service = providers.Factory(
         RecurringOverrideMailService,
@@ -119,6 +121,7 @@ class FacilityContainer(containers.DeclarativeContainer):
         override_notifier=recurring_override_mail_service,
         expiry_notifier=recurring_expiry_mail_service,
         file_service=file_service,
+        room_slot_template_repository=room_slot_template_repository,
     )
     recurring_series_draft_service = providers.Factory(
         RecurringSeriesDraftService, series_draft_repository=recurring_series_draft_repository, recurring_booking_service=recurring_booking_service

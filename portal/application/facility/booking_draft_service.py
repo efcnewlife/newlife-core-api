@@ -16,6 +16,7 @@ from portal.application.facility.commands import (
     PreviewQuoteRoomLineCommand,
     UpdateBookingDraftCommand,
 )
+from portal.application.facility.opening_hours import member_interval_within_opening_hours
 from portal.application.facility.pricing_service import PricingService
 from portal.application.facility.results import BookingDraftDetailResult, BookingDraftLineResult, BookingDraftResult
 from portal.application.org.results import CreateIdResult
@@ -25,6 +26,7 @@ from portal.exceptions.responses import BadRequestException, ForbiddenException,
 from portal.infrastructure.persistence.repositories.facility.booking_draft_repository import BookingDraftRepository
 from portal.infrastructure.persistence.repositories.facility.booking_repository import BookingRepository
 from portal.infrastructure.persistence.repositories.facility.room_blackout_repository import RoomBlackoutRepository
+from portal.infrastructure.persistence.repositories.facility.room_slot_template_repository import RoomSlotTemplateRepository
 from portal.libs.contexts.user_context import UserContext, get_user_context
 from portal.libs.tracing.distributed_trace import distributed_trace
 
@@ -39,12 +41,14 @@ class BookingDraftService:
         room_blackout_repository: RoomBlackoutRepository,
         pricing_service: PricingService,
         setting_service: SettingService,
+        room_slot_template_repository: RoomSlotTemplateRepository,
     ):
         self._repository = booking_draft_repository
         self._booking_repository = booking_repository
         self._blackout_repository = room_blackout_repository
         self._pricing_service = pricing_service
         self._setting_service = setting_service
+        self._slot_template_repository = room_slot_template_repository
         self._user_ctx: Optional[UserContext] = get_user_context()
 
     @staticmethod
@@ -126,9 +130,14 @@ class BookingDraftService:
         line_results: list[BookingDraftLineResult] = []
         quote_lines: list[PreviewQuoteRoomLineCommand] = []
         for line in row.lines:
-            is_unavailable = await self._booking_repository.has_confirmed_slot_overlap(
-                facility_id=line.facility_id, start_at=line.start_at, end_at=line.end_at
-            ) or await self._blackout_repository.has_blackout_overlap(facility_id=line.facility_id, start_at=line.start_at, end_at=line.end_at, tz=local_tz)
+            day = line.start_at.astimezone(local_tz).date()
+            templates = await self._slot_template_repository.list_active_for_day(line.facility_id, day.weekday())
+            outside_opening = not member_interval_within_opening_hours(line.start_at, line.end_at, templates, local_tz)
+            is_unavailable = (
+                await self._booking_repository.has_confirmed_slot_overlap(facility_id=line.facility_id, start_at=line.start_at, end_at=line.end_at)
+                or await self._blackout_repository.has_blackout_overlap(facility_id=line.facility_id, start_at=line.start_at, end_at=line.end_at, tz=local_tz)
+                or outside_opening
+            )
             line_results.append(
                 BookingDraftLineResult(
                     facility_id=line.facility_id, start_at=line.start_at, end_at=line.end_at, sequence=line.sequence, is_available=not is_unavailable

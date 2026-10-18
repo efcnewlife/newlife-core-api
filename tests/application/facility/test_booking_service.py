@@ -2,9 +2,10 @@
 BookingService unit tests.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -21,7 +22,7 @@ from portal.application.facility.commands import (
 from portal.application.facility.discount_eligibility_service import DiscountEligibilityService
 from portal.application.facility.pricing_service import PricingService
 from portal.application.facility.results import BookingDetailResult, BookingDraftDetailResult, BookingRoomLineResult, PreviewQuoteRoomLineResult
-from portal.domain.facility.constants import BookingStatus, BookingType, RentalDiscountCode
+from portal.domain.facility.constants import BookingErrorCode, BookingStatus, BookingType, RentalDiscountCode
 from portal.exceptions.responses import BadRequestException, ConflictErrorException, ForbiddenException, NotFoundException
 from tests.fixtures.facility.factories import (
     make_booking_list_item,
@@ -30,6 +31,7 @@ from tests.fixtures.facility.factories import (
     make_hourly_and_daily_rates,
     make_ministry_detail,
     make_preview_quote_result,
+    make_slot_template_result,
     make_update_booking_command,
     new_uuid,
 )
@@ -42,6 +44,7 @@ from tests.fixtures.facility.stubs import (
     StubRentalRepository,
     StubRoomBlackoutRepository,
     StubRoomRepository,
+    StubRoomSlotTemplateRepository,
 )
 from tests.fixtures.system.stubs import StubSettingService
 
@@ -66,6 +69,7 @@ def _booking_service(
     setting_stub: StubSettingService | None = None,
     booking_draft_stub: StubBookingDraftRepository | None = None,
     file_service: StubFileService | None = None,
+    slot_template_stub: StubRoomSlotTemplateRepository | None = None,
 ) -> BookingService:
     quote = make_preview_quote_result(quoted_amount=Decimal("150"), discount_percent=Decimal("10"))
     return BookingService(
@@ -76,6 +80,7 @@ def _booking_service(
         setting_stub or StubSettingService(),
         booking_draft_stub or StubBookingDraftRepository(),
         file_service or StubFileService(),
+        slot_template_stub or StubRoomSlotTemplateRepository(),
     )
 
 
@@ -406,6 +411,73 @@ async def test_create_booking_blackout_conflict(monkeypatch):
     assert exc.error_code == "FACILITY_BOOKING_ROOM_BLACKOUT"
     assert exc.context == {"facility_id": str(room_id)}
     assert "closed for the selected time" in str(exc.detail)
+
+
+def _toronto_utc(day: date, hour: int, minute: int = 0) -> datetime:
+    return datetime.combine(day, time(hour, minute), tzinfo=ZoneInfo("America/Toronto")).astimezone(timezone.utc)
+
+
+@pytest.mark.asyncio
+async def test_create_booking_rejects_member_outside_opening_hours(monkeypatch):
+    _user_ctx(monkeypatch)
+    room_id = new_uuid()
+    day = date(2026, 7, 20)
+    template = make_slot_template_result(room_id, days_of_week_mask=127, start_time=time(9, 0), end_time=time(12, 0))
+    service = _booking_service(
+        StubBookingRepository(has_overlap=False), slot_template_stub=StubRoomSlotTemplateRepository(candidates=[template], permissive_default=False)
+    )
+    command = make_create_booking_command(facility_id=room_id, start_at=_toronto_utc(day, 6, 0), end_at=_toronto_utc(day, 7, 0))
+    with pytest.raises(BadRequestException) as exc_info:
+        await service.create_booking(command)
+    assert exc_info.value.error_code == BookingErrorCode.OUTSIDE_OPENING_HOURS.value
+    assert exc_info.value.context == {"facility_id": str(room_id)}
+
+
+@pytest.mark.asyncio
+async def test_create_booking_admin_may_book_outside_opening_hours(monkeypatch):
+    _user_ctx(monkeypatch)
+    room_id = new_uuid()
+    day = date(2026, 7, 20)
+    template = make_slot_template_result(room_id, days_of_week_mask=127, start_time=time(9, 0), end_time=time(12, 0))
+    service = _booking_service(
+        StubBookingRepository(has_overlap=False), slot_template_stub=StubRoomSlotTemplateRepository(candidates=[template], permissive_default=False)
+    )
+    command = make_create_booking_command(facility_id=room_id, start_at=_toronto_utc(day, 6, 0), end_at=_toronto_utc(day, 7, 0)).model_copy(
+        update={"enforce_opening_hours": False}
+    )
+    result = await service.create_booking(command)
+    assert result.id is not None
+
+
+@pytest.mark.asyncio
+async def test_create_booking_blackout_keeps_identity_over_opening_hours(monkeypatch):
+    _user_ctx(monkeypatch)
+    room_id = new_uuid()
+    day = date(2026, 7, 20)
+    template = make_slot_template_result(room_id, days_of_week_mask=127, start_time=time(9, 0), end_time=time(12, 0))
+    service = _booking_service(
+        StubBookingRepository(has_overlap=False),
+        blackout_stub=StubRoomBlackoutRepository(has_overlap=True),
+        slot_template_stub=StubRoomSlotTemplateRepository(candidates=[template], permissive_default=False),
+    )
+    command = make_create_booking_command(facility_id=room_id, start_at=_toronto_utc(day, 6, 0), end_at=_toronto_utc(day, 7, 0))
+    with pytest.raises(BadRequestException) as exc_info:
+        await service.create_booking(command)
+    assert exc_info.value.error_code == BookingErrorCode.ROOM_BLACKOUT.value
+
+
+@pytest.mark.asyncio
+async def test_create_booking_accepts_member_inside_opening_hours(monkeypatch):
+    _user_ctx(monkeypatch)
+    room_id = new_uuid()
+    day = date(2026, 7, 20)
+    template = make_slot_template_result(room_id, days_of_week_mask=127, start_time=time(9, 0), end_time=time(17, 0))
+    service = _booking_service(
+        StubBookingRepository(has_overlap=False), slot_template_stub=StubRoomSlotTemplateRepository(candidates=[template], permissive_default=False)
+    )
+    command = make_create_booking_command(facility_id=room_id, start_at=_toronto_utc(day, 10, 0), end_at=_toronto_utc(day, 11, 0))
+    result = await service.create_booking(command)
+    assert result.id is not None
 
 
 @pytest.mark.asyncio
@@ -759,7 +831,14 @@ async def test_preview_quote_for_member_same_room_different_subtotals(monkeypatc
     ministry_stub = StubMinistryRepository()
     pricing = PricingService(rental, StubRoomRepository(existing_ids={room_id}), DiscountEligibilityService(rental, ministry_stub))
     service = BookingService(
-        StubBookingRepository(), pricing, ministry_stub, StubRoomBlackoutRepository(), StubSettingService(), StubBookingDraftRepository(), StubFileService()
+        StubBookingRepository(),
+        pricing,
+        ministry_stub,
+        StubRoomBlackoutRepository(),
+        StubSettingService(),
+        StubBookingDraftRepository(),
+        StubFileService(),
+        StubRoomSlotTemplateRepository(),
     )
     command = MemberPreviewQuoteCommand(
         lines=[
@@ -813,7 +892,14 @@ async def test_preview_quote_for_member_rejects_non_steward(monkeypatch):
 def _real_pricing_booking_service(*, room_id, ministry_stub, rental):
     pricing = PricingService(rental, StubRoomRepository(existing_ids={room_id}), DiscountEligibilityService(rental, ministry_stub))
     return BookingService(
-        StubBookingRepository(), pricing, ministry_stub, StubRoomBlackoutRepository(), StubSettingService(), StubBookingDraftRepository(), StubFileService()
+        StubBookingRepository(),
+        pricing,
+        ministry_stub,
+        StubRoomBlackoutRepository(),
+        StubSettingService(),
+        StubBookingDraftRepository(),
+        StubFileService(),
+        StubRoomSlotTemplateRepository(),
     )
 
 

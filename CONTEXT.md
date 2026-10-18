@@ -211,8 +211,8 @@ A booking create or update rejected because a requested room interval overlaps a
 _Avoid_: generic "conflict", treating Blackout as the same failure, parsing the English detail string as the contract
 
 **Room Slot Template**:
-The opening interval during which a Room accepts Booking requests on an applicable day. Time outside an applicable template is Closed and cannot be booked.
-_Avoid_: a display-only availability hint, treating unoccupied time outside opening intervals as bookable
+The opening interval during which a Room accepts Booking requests on an applicable day. Time outside an applicable template is Closed and cannot be booked. Member create, Draft evaluation, and Recurring preview/confirmation enforce full-interval coverage and the start-cell template minimum duration (`FACILITY_BOOKING_OUTSIDE_OPENING_HOURS`). Administrator create may place Bookings outside those windows without a caller-controlled member bypass.
+_Avoid_: a display-only availability hint, treating unoccupied time outside opening intervals as bookable, conflating Outside Opening Hours with Blackout or Scheduling Conflict
 
 **Timetable cell state**:
 One of four authoritative half-hour states on the member Timetable: Available (free open time), Unavailable (protected occupancy), Override (future Rental occupancy eligible for an authorized Active Priority Ministry), or Closed (Blackout or outside an applicable Room Slot Template). Explicit cells and templates override AM/PM freelist inference; Override time is never advertised as free.

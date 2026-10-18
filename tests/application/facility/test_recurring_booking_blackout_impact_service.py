@@ -26,6 +26,7 @@ from tests.fixtures.facility.stubs import (
     StubRecurringExpiryNotifier,
     StubRecurringOverrideNotifier,
     StubRoomBlackoutRepository,
+    StubRoomSlotTemplateRepository,
     StubUserReadService,
 )
 from tests.fixtures.system.stubs import StubSettingService
@@ -123,6 +124,7 @@ def _service(monkeypatch, *, booking_stub=None, series_stub=None, override_stub=
         override_notifier=StubRecurringOverrideNotifier(),
         expiry_notifier=StubRecurringExpiryNotifier(),
         now_utc=lambda: NOW,
+        room_slot_template_repository=StubRoomSlotTemplateRepository(),
     )
     return service, booking_stub, series_stub, override_stub, operator_id
 
