@@ -457,6 +457,57 @@ def test_room_availability_item_to_api_includes_photo_urls():
     api = room_availability_item_to_api(item)
     dumped = api.model_dump(by_alias=True)
     assert dumped["photoUrls"] == ["https://cdn.example/a.jpg"]
+    assert dumped["templates"] == []
+    assert dumped["cells"] == []
+    assert dumped["events"] == []
+
+
+def test_room_availability_list_to_api_includes_facility_timezone_and_cells():
+    from portal.application.facility.mappers import room_availability_list_to_api
+    from portal.application.facility.results import (
+        RoomAvailabilityCellResult,
+        RoomAvailabilityEventResult,
+        RoomAvailabilityListResult,
+        RoomAvailabilityTemplateResult,
+    )
+    from portal.domain.facility.constants import TimetableCellState, TimetableOccupancyKind
+
+    room_id = uuid4()
+    result = RoomAvailabilityListResult(
+        date=date(2026, 7, 20),
+        facility_timezone="America/Toronto",
+        max_booking_lines=10,
+        items=[
+            RoomAvailabilityResult(
+                id=room_id,
+                code="gym",
+                name="Gym",
+                templates=[RoomAvailabilityTemplateResult(start="09:00", end="12:00", slot_duration_minutes=60)],
+                cells=[
+                    RoomAvailabilityCellResult(start="09:00", end="09:30", state=TimetableCellState.AVAILABLE.value),
+                    RoomAvailabilityCellResult(start="10:00", end="10:30", state=TimetableCellState.OVERRIDE.value, event_indices=[0]),
+                ],
+                events=[
+                    RoomAvailabilityEventResult(
+                        start="10:00",
+                        end="11:00",
+                        occupancy_kind=TimetableOccupancyKind.RENTAL.value,
+                        is_overridable=True,
+                        contact_display_name="Jane Booker",
+                        contact_email="jane@example.com",
+                    )
+                ],
+            )
+        ],
+    )
+    dumped = room_availability_list_to_api(result).model_dump(by_alias=True)
+    assert dumped["facilityTimezone"] == "America/Toronto"
+    assert dumped["maxBookingLines"] == 10
+    assert dumped["items"][0]["templates"][0] == {"start": "09:00", "end": "12:00", "slotDurationMinutes": 60}
+    assert dumped["items"][0]["cells"][1]["state"] == "override"
+    assert dumped["items"][0]["cells"][1]["eventIndices"] == [0]
+    assert dumped["items"][0]["events"][0]["occupancyKind"] == "rental"
+    assert dumped["items"][0]["events"][0]["contactDisplayName"] == "Jane Booker"
 
 
 def test_member_preview_quote_maps_three_lines_with_distinct_intervals():

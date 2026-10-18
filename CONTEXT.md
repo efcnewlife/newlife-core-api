@@ -214,6 +214,14 @@ _Avoid_: generic "conflict", treating Blackout as the same failure, parsing the 
 The opening interval during which a Room accepts Booking requests on an applicable day. Time outside an applicable template is Closed and cannot be booked.
 _Avoid_: a display-only availability hint, treating unoccupied time outside opening intervals as bookable
 
+**Timetable cell state**:
+One of four authoritative half-hour states on the member Timetable: Available (free open time), Unavailable (protected occupancy), Override (future Rental occupancy eligible for an authorized Active Priority Ministry), or Closed (Blackout or outside an applicable Room Slot Template). Explicit cells and templates override AM/PM freelist inference; Override time is never advertised as free.
+_Avoid_: inferring opening hours from remaining free slots, treating Override as Available, disclosing occupancy kind on Personal projections
+
+**Authorized conflict contact**:
+Contact fields returned only in an authorized Ministry proposal context. Ministry occupancy projects the Ministry's localized name plus the current primary steward's display name and church login email. Non-priority Ministry viewing Rental occupancy projects the Booker's display name and email. Personal projections omit occupant identifiers, Ministry kind/name, steward, Booker, and contact fields.
+_Avoid_: historical Booker as Ministry contact, phone numbers, Booking Title in contact dialogs, Personal opaque Ministry references
+
 **Blackout**:
 A room-closed interval that makes the room unbookable, including for Church Activity Bookings. Creating a Blackout that overlaps a future occurrence cancels that occurrence after operator confirmation. Refund handling for that cancellation is deferred. Overlap with a Blackout is a distinct rejection from a Scheduling Conflict; the client must show a different prompt.
 _Avoid_: scheduling conflict, "closed" without naming the Blackout rule, leaving an active Booking inside a Blackout

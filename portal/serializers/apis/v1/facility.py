@@ -25,10 +25,39 @@ class MemberTimeSlot(BaseModel):
 
 
 class MemberDayAvailability(BaseModel):
-    """AM/PM availability."""
+    """AM/PM compatibility freelist; cells and templates are authoritative."""
 
     am: list[MemberTimeSlot] = Field(default_factory=list)
     pm: list[MemberTimeSlot] = Field(default_factory=list)
+
+
+class MemberRoomAvailabilityTemplate(BaseModel):
+    """Applicable Room Slot Template window for the requested date."""
+
+    start: str = Field(..., description="HH:MM")
+    end: str = Field(..., description="HH:MM")
+    slot_duration_minutes: int = Field(..., serialization_alias="slotDurationMinutes")
+
+
+class MemberRoomAvailabilityCell(BaseModel):
+    """One half-hour Timetable cell."""
+
+    start: str = Field(..., description="HH:MM")
+    end: str = Field(..., description="HH:MM")
+    state: str = Field(...)
+    event_indices: list[int] = Field(default_factory=list, serialization_alias="eventIndices")
+
+
+class MemberRoomAvailabilityEvent(BaseModel):
+    """Ministry-context occupancy event; omitted on Personal projections."""
+
+    start: str = Field(..., description="HH:MM")
+    end: str = Field(..., description="HH:MM")
+    occupancy_kind: str = Field(..., serialization_alias="occupancyKind")
+    is_overridable: bool = Field(default=False, serialization_alias="isOverridable")
+    ministry_name: Optional[str] = Field(default=None, serialization_alias="ministryName")
+    contact_display_name: Optional[str] = Field(default=None, serialization_alias="contactDisplayName")
+    contact_email: Optional[str] = Field(default=None, serialization_alias="contactEmail")
 
 
 class MemberRoomAvailabilityItem(UUIDBaseModel):
@@ -40,6 +69,9 @@ class MemberRoomAvailabilityItem(UUIDBaseModel):
     capacity: Optional[int] = Field(default=None)
     is_active: bool = Field(default=True, serialization_alias="isActive")
     photo_urls: list[str] = Field(default_factory=list, serialization_alias="photoUrls")
+    templates: list[MemberRoomAvailabilityTemplate] = Field(default_factory=list)
+    cells: list[MemberRoomAvailabilityCell] = Field(default_factory=list)
+    events: list[MemberRoomAvailabilityEvent] = Field(default_factory=list)
     availability: MemberDayAvailability = Field(default_factory=MemberDayAvailability)
 
 
@@ -47,6 +79,7 @@ class MemberRoomAvailabilityList(BaseModel):
     """Availability response."""
 
     date: DateType = Field(...)
+    facility_timezone: str = Field(..., serialization_alias="facilityTimezone")
     items: list[MemberRoomAvailabilityItem] = Field(default_factory=list)
     max_booking_lines: int = Field(..., serialization_alias="maxBookingLines")
 
@@ -400,6 +433,8 @@ class MemberRecurringBookingConflict(BaseModel):
     ministry_id: Optional[UUID] = Field(default=None, serialization_alias="ministryId")
     ministry_steward_display_name: Optional[str] = Field(default=None, serialization_alias="ministryStewardDisplayName")
     ministry_steward_email: Optional[str] = Field(default=None, serialization_alias="ministryStewardEmail")
+    booker_display_name: Optional[str] = Field(default=None, serialization_alias="bookerDisplayName")
+    booker_email: Optional[str] = Field(default=None, serialization_alias="bookerEmail")
 
 
 class MemberRecurringBookingPreview(BaseModel):

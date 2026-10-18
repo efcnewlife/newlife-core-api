@@ -339,18 +339,25 @@ class BookingRepository:
         count = await query.fetchval()
         return bool(count and count > 0)
 
-    async def list_occupying_slots(self, facility_id: UUID, start_at: datetime, end_at: datetime) -> list[RecurringOccupyingBookingResult]:
+    async def list_occupying_slots(
+        self, facility_id: UUID, start_at: datetime, end_at: datetime, locale_id: Optional[UUID] = None
+    ) -> list[RecurringOccupyingBookingResult]:
         rows = await (
             self._session.select(
                 FacilityBooking.id,
                 FacilityBooking.user_id,
                 FacilityBooking.ministry_id,
+                self._ministry_name_subquery(locale_id).label("ministry_name"),
                 FacilityBookingSlot.facility_id,
                 FacilityBooking.start_at,
                 FacilityBooking.end_at,
+                AuthUser.email.label("booker_email"),
+                self._display_name_expr().label("booker_display_name"),
             )
             .select_from(FacilityBookingSlot)
             .join(FacilityBooking, FacilityBooking.id == FacilityBookingSlot.facility_booking_id)
+            .join(AuthUser, AuthUser.id == FacilityBooking.user_id)
+            .outerjoin(AuthUserProfile, AuthUserProfile.user_id == AuthUser.id)
             .outerjoin(FacilityBookingSeries, FacilityBookingSeries.id == FacilityBooking.series_id)
             .where(FacilityBookingSlot.facility_id == facility_id)
             .where(FacilityBookingSlot.status == BookingSlotStatus.CONFIRMED.value)
@@ -367,9 +374,12 @@ class BookingRepository:
                     booking_id=row["id"],
                     user_id=row["user_id"],
                     ministry_id=row["ministry_id"],
+                    ministry_name=row["ministry_name"],
                     facility_ids=[row["facility_id"]],
                     start_at=row["start_at"],
                     end_at=row["end_at"],
+                    booker_display_name=row["booker_display_name"],
+                    booker_email=row["booker_email"],
                 )
             )
         return occupying

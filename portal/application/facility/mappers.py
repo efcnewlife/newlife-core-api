@@ -146,8 +146,11 @@ from portal.serializers.apis.v1.facility import (
     MemberRecurringSeriesDraftDetail,
     MemberRecurringSeriesDraftRoom,
     MemberRecurringSeriesDraftUpdate,
+    MemberRoomAvailabilityCell,
+    MemberRoomAvailabilityEvent,
     MemberRoomAvailabilityItem,
     MemberRoomAvailabilityList,
+    MemberRoomAvailabilityTemplate,
     MemberTimeSlot,
 )
 from portal.serializers.mixins import DeleteBaseModel, GenericQueryBaseModel
@@ -503,13 +506,33 @@ def room_availability_item_to_api(item: RoomAvailabilityResult) -> MemberRoomAva
         capacity=item.capacity,
         is_active=item.is_active,
         photo_urls=item.photo_urls,
+        templates=[
+            MemberRoomAvailabilityTemplate(start=template.start, end=template.end, slot_duration_minutes=template.slot_duration_minutes)
+            for template in item.templates
+        ],
+        cells=[MemberRoomAvailabilityCell(start=cell.start, end=cell.end, state=cell.state, event_indices=cell.event_indices) for cell in item.cells],
+        events=[
+            MemberRoomAvailabilityEvent(
+                start=event.start,
+                end=event.end,
+                occupancy_kind=event.occupancy_kind,
+                is_overridable=event.is_overridable,
+                ministry_name=event.ministry_name,
+                contact_display_name=event.contact_display_name,
+                contact_email=event.contact_email,
+            )
+            for event in item.events
+        ],
         availability=day_to_api(item.availability),
     )
 
 
 def room_availability_list_to_api(result: RoomAvailabilityListResult) -> MemberRoomAvailabilityList:
     return MemberRoomAvailabilityList(
-        date=result.date, items=[room_availability_item_to_api(item) for item in result.items], max_booking_lines=result.max_booking_lines
+        date=result.date,
+        facility_timezone=result.facility_timezone,
+        items=[room_availability_item_to_api(item) for item in result.items],
+        max_booking_lines=result.max_booking_lines,
     )
 
 

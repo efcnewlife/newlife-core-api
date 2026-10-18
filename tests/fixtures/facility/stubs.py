@@ -314,7 +314,9 @@ class StubBookingRepository:
         occupying = await self.list_occupying_slots(facility_id, start_at, end_at)
         return any(item.booking_id != exclude_booking_id for item in occupying)
 
-    async def list_occupying_slots(self, facility_id: UUID, start_at: datetime, end_at: datetime) -> list[RecurringOccupyingBookingResult]:
+    async def list_occupying_slots(
+        self, facility_id: UUID, start_at: datetime, end_at: datetime, locale_id: UUID | None = None
+    ) -> list[RecurringOccupyingBookingResult]:
         matches = [item for item in self.occupying_bookings if facility_id in item.facility_ids and item.start_at < end_at and item.end_at > start_at]
         if matches:
             return matches
