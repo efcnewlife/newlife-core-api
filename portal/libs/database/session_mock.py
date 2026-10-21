@@ -210,7 +210,7 @@ class SessionMock(Session):
     def mock_execute(self, statement: Any, *params, return_value: Any = None):
         return self.mock_fetch(statement, params, return_value)
 
-    async def fetch(self, statement, *params, timeout: float = None, as_model: Type[BaseModel] = None) -> Any:
+    async def fetch(self, statement, *params, timeout: float = None, as_model: Type[BaseModel] = None, raw: bool = False) -> Any:
         key, output_params = self._to_key(statement, params)
         mock: Optional[MagicMock] = self._statement_mocks.get(key, None)
         if not mock:
