@@ -18,6 +18,7 @@ from portal.application.cli.seed_mock_data_service import MockDataPrerequisiteEr
 from portal.cli.datas.facility_rental_seed_data import facility_room_seed_rows
 from portal.domain.facility.constants import BookingStatus, BookingType, RoomBlackoutKind
 from portal.domain.org.constants import MinistryApprovalStatus, MinistryStatus
+from portal.libs.database.aio_orm import _format_dict
 
 RUN_IDENTITY = "dev-2026-09-17_1405"
 MINISTRY_TZ = ZoneInfo("America/Toronto")
@@ -114,17 +115,20 @@ class FakeSession:
                 result[key] = value
         return result
 
-    async def fetch(self):
+    async def fetch(self, as_model=None):
         model_name, keys = self._select_key()
         if model_name == "SystemLocale":
-            return self._locale_rows
-        if model_name == "FacilityRoom" and keys == ("id", "code"):
-            return [{"id": room_id, "code": code} for code, room_id in self._rooms.items()]
-        if model_name == "FacilityBookingSlot":
-            return list(self._occupying_slots)
-        if model_name == "FacilityRoomBlackout":
-            return list(self._existing_blackouts)
-        return []
+            rows = self._locale_rows
+        elif model_name == "FacilityRoom" and keys == ("id", "code"):
+            rows = [{"id": room_id, "code": code} for code, room_id in self._rooms.items()]
+        elif model_name == "FacilityBookingSlot":
+            rows = self._occupying_slots
+        elif model_name == "FacilityRoomBlackout":
+            rows = self._existing_blackouts
+        else:
+            rows = []
+        # Mirror the real ORM: without as_model, datetime/date values come back as strings.
+        return [_format_dict(row, as_model=as_model) for row in rows]
 
     async def fetchval(self):
         model_name, keys = self._select_key()
@@ -384,6 +388,39 @@ async def test_seed_mock_data_skips_existing_blackouts_within_the_30_day_window(
     campus = next(row for row in session.inserted["FacilityRoomBlackout"] if row["facility_id"] is None)
     assert campus["blackout_date"] == date(2026, 9, 18)
     assert all(_local_day(row["start_at"]) == date(2026, 9, 20) for row in session.inserted["FacilityBooking"])
+
+
+@pytest.mark.asyncio
+async def test_seed_mock_data_moves_campus_blackout_past_an_existing_one_off_blackout(tmp_path: Path):
+    _write_inventory(tmp_path)
+    existing = {
+        "facility_id": ROOM_IDS["classroom-105"],
+        "kind": RoomBlackoutKind.ONE_OFF.value,
+        "blackout_date": date(2026, 9, 18),
+        "days_of_week_mask": None,
+        "start_time": time(9, 0),
+        "end_time": time(10, 0),
+        "effective_from": None,
+        "effective_to": None,
+    }
+    service, session = _service(tmp_path, session=FakeSession(existing_blackouts=[existing]))
+
+    await service.run()
+
+    campus = next(row for row in session.inserted["FacilityRoomBlackout"] if row["facility_id"] is None)
+    assert campus["blackout_date"] == date(2026, 9, 19)
+
+
+@pytest.mark.asyncio
+async def test_seed_mock_data_moves_campus_blackout_past_an_existing_confirmed_slot(tmp_path: Path):
+    _write_inventory(tmp_path)
+    occupied = _occupying_slot("classroom-105", date(2026, 9, 18), 10, 11)
+    service, session = _service(tmp_path, session=FakeSession(occupying_slots=[occupied]))
+
+    await service.run()
+
+    campus = next(row for row in session.inserted["FacilityRoomBlackout"] if row["facility_id"] is None)
+    assert campus["blackout_date"] == date(2026, 9, 19)
 
 
 @pytest.mark.asyncio
