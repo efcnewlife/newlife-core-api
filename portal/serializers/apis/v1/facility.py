@@ -104,6 +104,9 @@ class MemberBookingCreate(BaseModel):
     surcharge_codes: list[str] = Field(default_factory=list)
     remark: Optional[str] = Field(default=None)
     booking_draft_id: Optional[UUID] = Field(default=None, description="Source Booking Draft; deleted on successful create")
+    override_review_token: Optional[str] = Field(
+        default=None, max_length=4096, description="overrideReviewToken from the reviewed Draft; required when the proposal displaces Bookings"
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -334,6 +337,36 @@ class MemberBookingDraftLine(BaseModel):
     is_available: bool = Field(..., serialization_alias="isAvailable")
 
 
+class MemberBookingConflict(BaseModel):
+    """Blocking conflict on a Draft line; Ministry name and contact appear only for an authorized Ministry proposal."""
+
+    facility_id: UUID = Field(..., serialization_alias="facilityId")
+    start_at: datetime = Field(..., serialization_alias="startAt")
+    end_at: datetime = Field(..., serialization_alias="endAt")
+    kind: str = Field(...)
+    ministry_name: Optional[str] = Field(default=None, serialization_alias="ministryName")
+    contact_display_name: Optional[str] = Field(default=None, serialization_alias="contactDisplayName")
+    contact_email: Optional[str] = Field(default=None, serialization_alias="contactEmail")
+
+
+class MemberOverrideReleasedInterval(BaseModel):
+    """Room interval released when the target Booking is overridden."""
+
+    facility_id: UUID = Field(..., serialization_alias="facilityId")
+    start_at: datetime = Field(..., serialization_alias="startAt")
+    end_at: datetime = Field(..., serialization_alias="endAt")
+
+
+class MemberOverrideImpact(BaseModel):
+    """Whole Booking (or one Series occurrence) a Priority Ministry confirmation would displace."""
+
+    booking_id: UUID = Field(..., serialization_alias="bookingId")
+    is_series_occurrence: bool = Field(default=False, serialization_alias="isSeriesOccurrence")
+    start_at: datetime = Field(..., serialization_alias="startAt")
+    end_at: datetime = Field(..., serialization_alias="endAt")
+    released_intervals: list[MemberOverrideReleasedInterval] = Field(default_factory=list, serialization_alias="releasedIntervals")
+
+
 class MemberBookingDraftDetail(UUIDBaseModel):
     """Booking Draft detail: lines plus freshly computed price and availability."""
 
@@ -347,6 +380,12 @@ class MemberBookingDraftDetail(UUIDBaseModel):
     surcharge_amount: Decimal = Field(..., serialization_alias="surchargeAmount")
     quoted_amount: Decimal = Field(..., serialization_alias="quotedAmount")
     currency: str = Field(...)
+    is_confirmable: bool = Field(default=True, serialization_alias="isConfirmable")
+    conflicts: list[MemberBookingConflict] = Field(default_factory=list)
+    override_impacts: list[MemberOverrideImpact] = Field(default_factory=list, serialization_alias="overrideImpacts")
+    override_review_token: Optional[str] = Field(
+        default=None, serialization_alias="overrideReviewToken", description="Send as override_review_token on final create to confirm this reviewed impact"
+    )
 
 
 class MemberRecurringBookingSeriesRoomInput(BaseModel):

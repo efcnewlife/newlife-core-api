@@ -222,3 +222,32 @@ async def test_notify_priority_override_skips_when_disabled():
     await service.notify_priority_override(_notification(booker_id=booker_id, facility_id=uuid4()))
 
     assert mail_port.calls == []
+
+
+@pytest.mark.asyncio
+async def test_each_booker_gets_own_booking_link_and_staff_get_one_mail():
+    first_booker, second_booker = uuid4(), uuid4()
+    first_booking, second_booking = uuid4(), uuid4()
+    mail_port = StubMailSendPort()
+    service = _mail_service(
+        mail_port,
+        StubMailUserRepository({first_booker: _user(first_booker, "first@x.org"), second_booker: _user(second_booker, "second@x.org")}),
+        StubPermissionRepository(["operator@efcnewlife.org", "first@x.org"]),
+        StubPositionRepository(),
+        StubRoomRepository(),
+    )
+    notification = _notification(booker_id=first_booker, facility_id=uuid4(), booking_id=first_booking)
+    notification.items.append(
+        RecurringOverrideNotificationItem(
+            booking_id=second_booking, booker_id=second_booker, occurrence_date=date(2026, 1, 13), facility_ids=[uuid4()], church_activity_booking_id=uuid4()
+        )
+    )
+
+    await service.notify_priority_override(notification)
+
+    by_recipient = {call["to_email"]: call["body_html"] for call in mail_port.calls}
+    assert sorted(by_recipient) == ["first@x.org", "operator@efcnewlife.org", "second@x.org"]
+    assert len(mail_port.calls) == 3
+    assert f"/my-bookings/{first_booking}" in by_recipient["first@x.org"]
+    assert f"/my-bookings/{second_booking}" in by_recipient["second@x.org"]
+    assert f"/my-bookings/{first_booking}" not in by_recipient["second@x.org"]

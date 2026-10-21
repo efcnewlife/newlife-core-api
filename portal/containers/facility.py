@@ -31,6 +31,7 @@ from portal.infrastructure.persistence.repositories.facility.room_blackout_repos
 from portal.infrastructure.persistence.repositories.facility.room_repository import RoomRepository
 from portal.infrastructure.persistence.repositories.facility.room_slot_template_repository import RoomSlotTemplateRepository
 from portal.infrastructure.persistence.repositories.org.ministry_repository import MinistryRepository
+from portal.infrastructure.persistence.transaction_hooks import SessionTransactionHooks
 
 
 class FacilityContainer(containers.DeclarativeContainer):
@@ -54,6 +55,7 @@ class FacilityContainer(containers.DeclarativeContainer):
     booking_draft_repository = providers.Factory(BookingDraftRepository, session=core.request_session)
     recurring_series_draft_repository = providers.Factory(RecurringSeriesDraftRepository, session=core.request_session)
     override_log_repository = providers.Factory(OverrideLogRepository, session=core.request_session)
+    transaction_hooks = providers.Factory(SessionTransactionHooks, session=core.request_session)
 
     room_service = providers.Factory(RoomService, room_repository=room_repository, file_service=file_service)
     room_slot_template_service = providers.Factory(
@@ -66,17 +68,6 @@ class FacilityContainer(containers.DeclarativeContainer):
     pricing_service = providers.Factory(
         PricingService, rental_repository=rental_repository, room_repository=room_repository, discount_eligibility_service=discount_eligibility_service
     )
-    booking_service = providers.Factory(
-        BookingService,
-        booking_repository=booking_repository,
-        pricing_service=pricing_service,
-        ministry_repository=ministry_repository,
-        room_blackout_repository=room_blackout_repository,
-        setting_service=setting_service,
-        booking_draft_repository=booking_draft_repository,
-        file_service=file_service,
-        room_slot_template_repository=room_slot_template_repository,
-    )
     booking_draft_service = providers.Factory(
         BookingDraftService,
         booking_draft_repository=booking_draft_repository,
@@ -85,6 +76,7 @@ class FacilityContainer(containers.DeclarativeContainer):
         pricing_service=pricing_service,
         setting_service=setting_service,
         room_slot_template_repository=room_slot_template_repository,
+        ministry_repository=ministry_repository,
     )
     recurring_override_mail_service = providers.Factory(
         RecurringOverrideMailService,
@@ -97,6 +89,20 @@ class FacilityContainer(containers.DeclarativeContainer):
         facility_booking_base_url=app_settings.FACILITY_BOOKING_BASE_URL,
         enabled=app_settings.GRAPH_MAIL_SEND_ENABLED,
         override_recipients=app_settings.graph_mail_override_recipients(),
+    )
+    booking_service = providers.Factory(
+        BookingService,
+        booking_repository=booking_repository,
+        pricing_service=pricing_service,
+        ministry_repository=ministry_repository,
+        room_blackout_repository=room_blackout_repository,
+        setting_service=setting_service,
+        booking_draft_repository=booking_draft_repository,
+        file_service=file_service,
+        room_slot_template_repository=room_slot_template_repository,
+        override_log_repository=override_log_repository,
+        transaction_hooks=transaction_hooks,
+        override_notifier=recurring_override_mail_service,
     )
     recurring_expiry_mail_service = providers.Factory(
         RecurringExpiryMailService,

@@ -311,6 +311,8 @@ class CreateBookingCommand(BaseModel):
     remark: Optional[str] = Field(default=None)
     booking_draft_id: Optional[UUID] = Field(default=None, description="Source Booking Draft; deleted on successful create")
     enforce_opening_hours: bool = Field(default=True, description="Member paths enforce Room Slot Template windows; admin create sets False")
+    allow_priority_override: bool = Field(default=False, description="Member path: an Active Priority Ministry may displace reviewed future Rental Bookings")
+    override_review_token: Optional[str] = Field(default=None, description="Server-issued acknowledgement of the reviewed override impact")
 
 
 class CancelRecurringBookingSeriesCommand(BaseModel):

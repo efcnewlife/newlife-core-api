@@ -203,6 +203,14 @@ async def test_create_series_allows_calendar_month_window_after_four_weeks(monke
 
 
 @pytest.mark.asyncio
+async def test_create_series_locks_proposed_rooms_before_writing(monkeypatch):
+    service, _, booking_stub, _ = _service(monkeypatch)
+    command = _command()
+    await service.create_series(command)
+    assert booking_stub.lock_rooms_calls == [[room.facility_id for room in command.rooms]]
+
+
+@pytest.mark.asyncio
 async def test_create_series_rejects_fewer_than_minimum_weeks(monkeypatch):
     service, *_ = _service(monkeypatch)
     with pytest.raises(BadRequestException) as exc_info:

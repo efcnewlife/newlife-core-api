@@ -17,7 +17,7 @@ from portal.application.facility.recurring_override_mail_content import (
     format_override_date_zh,
     room_name_for_locale,
 )
-from portal.application.facility.results import RecurringOverrideNotification
+from portal.application.facility.results import RecurringOverrideNotification, RecurringOverrideNotificationItem
 from portal.application.org.ministry_application_mail_delivery import resolve_mail_delivery_targets
 from portal.domain.email.ports import EmailTemplateRenderPort
 from portal.domain.facility.constants import BOOKING_PAYMENT_RESOURCE_CODE
@@ -59,29 +59,41 @@ class RecurringOverrideMailService:
 
     @distributed_trace()
     async def notify_priority_override(self, notification: RecurringOverrideNotification) -> None:
+        """Each displaced Booker gets one mail linking their own Booking; staff get one mail covering every item."""
         if not self._enabled:
             return
         try:
-            intended_emails = await self.list_intended_recipient_emails(notification)
-            if not intended_emails:
-                return
-            body_html = await self._render_body(notification)
-            for intended_recipient in intended_emails:
-                recipients, subject_prefix = resolve_mail_delivery_targets(intended_recipient=intended_recipient, override_recipients=self._override_recipients)
-                if not recipients:
-                    continue
-                delivery_subject = f"{subject_prefix}{OVERRIDE_SUBJECT}"
-                for to_email in recipients:
-                    await self._mail_send_port.send_html_mail(to_email=to_email, subject=delivery_subject, body_html=body_html)
+            booker_emails: dict[UUID, str] = {}
+            for booker_id in notification.affected_booker_ids:
+                email = await self._active_user_email(booker_id)
+                if email and email.lower() not in {value.lower() for value in booker_emails.values()}:
+                    booker_emails[booker_id] = email
+            for booker_id, email in booker_emails.items():
+                booker_items = [item for item in notification.items if item.booker_id == booker_id]
+                await self._deliver(email, await self._render_body(notification, booker_items))
+            already_sent = {email.lower() for email in booker_emails.values()}
+            staff_emails = [email for email in await self._list_staff_emails() if email.lower() not in already_sent]
+            if staff_emails:
+                body_html = await self._render_body(notification, notification.items)
+                for email in staff_emails:
+                    await self._deliver(email, body_html)
         except Exception:
             logger.exception("Failed to send Priority Ministry override emails for series %s", notification.series_id)
+
+    async def _deliver(self, intended_recipient: str, body_html: str) -> None:
+        recipients, subject_prefix = resolve_mail_delivery_targets(intended_recipient=intended_recipient, override_recipients=self._override_recipients)
+        for to_email in recipients:
+            await self._mail_send_port.send_html_mail(to_email=to_email, subject=f"{subject_prefix}{OVERRIDE_SUBJECT}", body_html=body_html)
 
     async def list_intended_recipient_emails(self, notification: RecurringOverrideNotification) -> list[str]:
         emails: list[str | None] = []
         for booker_id in notification.affected_booker_ids:
             emails.append(await self._active_user_email(booker_id))
-        operator_emails = await self._permission_repository.list_active_emails_for_resource_code(BOOKING_PAYMENT_RESOURCE_CODE)
-        emails.extend(operator_emails)
+        emails.extend(await self._list_staff_emails())
+        return dedupe_emails(emails)
+
+    async def _list_staff_emails(self) -> list[str]:
+        emails: list[str | None] = list(await self._permission_repository.list_active_emails_for_resource_code(BOOKING_PAYMENT_RESOURCE_CODE))
         deacon_user_id = await self._position_repository.get_current_incumbent_user_id_by_code(FACILITY_DEACON_POSITION_CODE)
         if deacon_user_id:
             emails.append(await self._active_user_email(deacon_user_id))
@@ -93,9 +105,9 @@ class RecurringOverrideMailService:
             return None
         return user.email
 
-    async def _render_body(self, notification: RecurringOverrideNotification) -> str:
+    async def _render_body(self, notification: RecurringOverrideNotification, items: list[RecurringOverrideNotificationItem]) -> str:
         facility_ids: list[UUID] = []
-        for item in notification.items:
+        for item in items:
             for facility_id in item.facility_ids:
                 if facility_id not in facility_ids:
                     facility_ids.append(facility_id)
@@ -104,7 +116,7 @@ class RecurringOverrideMailService:
             rooms_by_id[facility_id] = await self._room_repository.get_by_id(facility_id, locale_id=None, all_locales=True)
 
         dates_to_facilities: dict[date, list[UUID]] = defaultdict(list)
-        for item in notification.items:
+        for item in items:
             for facility_id in item.facility_ids:
                 if facility_id not in dates_to_facilities[item.occurrence_date]:
                     dates_to_facilities[item.occurrence_date].append(facility_id)
@@ -121,7 +133,7 @@ class RecurringOverrideMailService:
             occurrence_lines_en.append(f"{format_override_date_en(occurrence_date)} — {', '.join(en_rooms)}")
             occurrence_lines_zh.append(f"{format_override_date_zh(occurrence_date)} — {', '.join(zh_rooms)}")
 
-        detail_booking_id = notification.items[0].booking_id if notification.items else None
+        detail_booking_id = items[0].booking_id if items else None
         my_bookings_url = f"{self._facility_booking_base_url}/my-bookings"
         if detail_booking_id:
             my_bookings_url = f"{my_bookings_url}/{detail_booking_id}"

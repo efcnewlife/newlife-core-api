@@ -118,6 +118,14 @@ _Avoid_: Ministry rental, assuming every Church Activity Booking has priority, p
 An Active Ministry whose `has_priority_booking` is true and whose current primary or secondary steward may create a Church Activity Booking that replaces conflicting future Rental occurrences. Removing priority does not rewrite existing Series or override audit, but blocks future overrides.
 _Avoid_: every Active Ministry, a Ministry with a priority member, a Ministry that may replace another Church Activity Booking, retroactively changing existing overrides
 
+**Override impact**:
+The whole future Rental Booking (or, for a Series target, only that Booking Occurrence) that a Priority Ministry proposal would displace, listed with every room interval it would release, not just the intersecting ones. Draft read/update reports it without reserving, displacing, or notifying. It omits the Rental Booker's identity and Booking Title.
+_Avoid_: listing only overlapping lines, partial-line displacement, cancelling the target's whole Series, showing the displaced Booker's name in the impact list
+
+**Override review token**:
+An opaque, server-signed acknowledgement returned with a confirmable Draft's Override impact, bound to the authenticated Booker, the current Ministry context, the room/time proposal, and each reviewed target's released intervals. Final confirmation must present it whenever an Override impact exists (`FACILITY_BOOKING_OVERRIDE_REVIEW_REQUIRED`); a new or changed target, or another Booker/Ministry/proposal, makes it stale (`FACILITY_BOOKING_OVERRIDE_REVIEW_STALE`). A shrunk subset of unchanged reviewed targets may proceed. It grants no reservation or override authority by itself; current priority, stewardship, and occupancy are always re-evaluated under the room lock.
+_Avoid_: a stored Draft column, a token that authorizes override without re-evaluation, skipping review when no Draft id is sent
+
 **Non-priority Ministry Series**:
 A Recurring Booking Series made for an Active Ministry by its current steward when that Ministry is not a Priority Ministry. It may be created but does not replace conflicting Rental occurrences and follows the Rental conflict-resolution flow.
 _Avoid_: blocking all non-priority Ministry Series, treating it as a Priority Ministry Series, silently overriding a Rental occurrence
@@ -191,7 +199,7 @@ The server-computed total for all unexcluded occurrences in a Recurring Booking 
 _Avoid_: one payment per occurrence, a client-computed total, confirming a partly paid Series
 
 **Booking override email**:
-An English-first, Traditional-Chinese-second email notifying an affected Rental Booker, active Booking Payment Confirmation Operators, and the current incumbent of the `DEACON_FACILITY` position that a Church Activity Booking has overridden specified future Rental occurrences. It identifies the affected dates and rooms and directs recipients to the authorized booking detail for the audit context. Recipients are resolved when sending and deduplicated.
+An English-first, Traditional-Chinese-second email notifying an affected Rental Booker, active Booking Payment Confirmation Operators, and the current incumbent of the `DEACON_FACILITY` position that a Church Activity Booking has overridden specified future Rental occurrences. It identifies the affected dates and rooms and directs recipients to the authorized booking detail for the audit context. Recipients are resolved when sending and deduplicated. One-time overrides send it only after the override transaction commits. Each displaced Booker receives one email linking their own affected Booking; staff recipients receive one email covering every affected Booking.
 _Avoid_: a generic cancellation email with no override reason, a seed email as the Facility Deacon, exposing Ministry steward private contact information to unapproved recipients, rolling back a successful override because email delivery fails
 
 **Booking header interval**:

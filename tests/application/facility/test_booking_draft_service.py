@@ -19,6 +19,7 @@ from tests.fixtures.facility.factories import make_create_booking_draft_command,
 from tests.fixtures.facility.stubs import (
     StubBookingDraftRepository,
     StubBookingRepository,
+    StubMinistryRepository,
     StubPricingService,
     StubRoomBlackoutRepository,
     StubRoomSlotTemplateRepository,
@@ -55,6 +56,7 @@ def _service(
     pricing_stub: StubPricingService | None = None,
     setting_stub: StubSettingService | None = None,
     slot_template_stub: StubRoomSlotTemplateRepository | None = None,
+    ministry_stub: StubMinistryRepository | None = None,
 ) -> BookingDraftService:
     quote = make_preview_quote_result(quoted_amount=Decimal("150"))
     return BookingDraftService(
@@ -64,6 +66,7 @@ def _service(
         pricing_stub or StubPricingService(quote),
         setting_stub or StubSettingService(),
         slot_template_stub or StubRoomSlotTemplateRepository(),
+        ministry_stub or StubMinistryRepository(),
     )
 
 

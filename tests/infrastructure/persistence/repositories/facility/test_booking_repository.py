@@ -78,6 +78,7 @@ async def test_list_occupying_slots_returns_tz_aware_utc_datetimes():
         "end_at": end_at,
         "booker_email": "booker@example.com",
         "booker_display_name": "Booker",
+        "series_id": None,
     }
     session = _make_session([row])
     repository = BookingRepository(session)
@@ -89,3 +90,27 @@ async def test_list_occupying_slots_returns_tz_aware_utc_datetimes():
     assert occupying[0].end_at.tzinfo is not None
     assert occupying[0].start_at == start_at
     assert occupying[0].end_at == end_at
+
+
+@pytest.mark.asyncio
+async def test_list_live_slot_intervals_groups_whole_booking_room_intervals():
+    booking_id = uuid4()
+    room_a, room_b = uuid4(), uuid4()
+    start_at = datetime(2026, 10, 23, 14, 0, 0, tzinfo=timezone.utc)
+    end_at = datetime(2026, 10, 23, 15, 0, 0, tzinfo=timezone.utc)
+    rows = [
+        {"facility_booking_id": booking_id, "facility_id": room_a, "start_at": start_at, "end_at": end_at},
+        {"facility_booking_id": booking_id, "facility_id": room_b, "start_at": start_at, "end_at": end_at},
+    ]
+    repository = BookingRepository(_make_session(rows))
+
+    intervals = await repository.list_live_slot_intervals([booking_id])
+
+    assert [item.facility_id for item in intervals[booking_id]] == [room_a, room_b]
+    assert intervals[booking_id][0].start_at.tzinfo is not None
+
+
+@pytest.mark.asyncio
+async def test_list_live_slot_intervals_skips_query_without_ids():
+    repository = BookingRepository(_make_session([]))
+    assert await repository.list_live_slot_intervals([]) == {}

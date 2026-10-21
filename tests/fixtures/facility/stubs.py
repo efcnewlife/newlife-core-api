@@ -22,6 +22,7 @@ from portal.application.facility.results import (
     MinistryDetailResult,
     MinistryListItemResult,
     OverrideLogResult,
+    OverrideReleasedIntervalResult,
     PendingPaymentSeriesListItemResult,
     RecurringOccupyingBookingResult,
     RecurringSeriesDraftDetailResult,
@@ -288,6 +289,8 @@ class StubBookingRepository:
         self.series_occurrences: dict[UUID, list[Any]] = {}
         self.confirm_series_calls: list[dict] = []
         self.live_future_series_occurrences: list[Any] = []
+        self.lock_rooms_calls: list[list[UUID]] = []
+        self.live_slot_intervals: dict[UUID, list[OverrideReleasedIntervalResult]] = {}
 
     async def exists_by_id(self, booking_id: UUID) -> bool:
         return self.exists
@@ -335,6 +338,22 @@ class StubBookingRepository:
 
     async def insert_booking(self, payload: dict) -> None:
         self.insert_calls.append(payload)
+
+    async def lock_rooms(self, facility_ids: list[UUID]) -> None:
+        self.lock_rooms_calls.append(list(facility_ids))
+
+    async def list_live_slot_intervals(self, booking_ids: list[UUID]) -> dict[UUID, list[OverrideReleasedIntervalResult]]:
+        intervals: dict[UUID, list[OverrideReleasedIntervalResult]] = {}
+        for booking_id in booking_ids:
+            if booking_id in self.live_slot_intervals:
+                intervals[booking_id] = list(self.live_slot_intervals[booking_id])
+                continue
+            for item in self.occupying_bookings:
+                if item.booking_id == booking_id:
+                    intervals[booking_id] = [
+                        OverrideReleasedIntervalResult(facility_id=facility_id, start_at=item.start_at, end_at=item.end_at) for facility_id in item.facility_ids
+                    ]
+        return intervals
 
     async def list_participant_bookings(self, user_id: UUID, ministry_ids: list[UUID], locale_id=None):
         ministry_id_set = set(ministry_ids)
@@ -724,6 +743,24 @@ class StubRecurringBookingRepository:
 
     async def release_sweep_lock(self) -> None:
         self.lock_release_calls += 1
+
+
+class StubTransactionHooks:
+    """Collects after-commit callbacks; ``commit()`` runs them, ``rollback()`` drops them."""
+
+    def __init__(self):
+        self.callbacks: list = []
+
+    def after_commit(self, callback) -> None:
+        self.callbacks.append(callback)
+
+    async def commit(self) -> None:
+        callbacks, self.callbacks = self.callbacks, []
+        for callback in callbacks:
+            await callback()
+
+    def rollback(self) -> None:
+        self.callbacks = []
 
 
 class StubRecurringOverrideNotifier:
