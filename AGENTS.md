@@ -55,6 +55,7 @@ uv run uvicorn portal.main:app --reload
 # Tests
 uv run pytest
 uv run pytest tests/application/rbac/test_permission_service.py -v
+PORTAL_DB_INTEGRATION=1 uv run pytest tests/integration -v   # opt-in; needs migrated local DB with seed data
 ./scripts/check-branch-name.test.sh
 ./scripts/format-staged.test.sh
 

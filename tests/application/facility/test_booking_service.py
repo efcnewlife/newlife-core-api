@@ -40,11 +40,14 @@ from tests.fixtures.facility.stubs import (
     StubBookingRepository,
     StubFileService,
     StubMinistryRepository,
+    StubOverrideLogRepository,
     StubPricingService,
+    StubRecurringOverrideNotifier,
     StubRentalRepository,
     StubRoomBlackoutRepository,
     StubRoomRepository,
     StubRoomSlotTemplateRepository,
+    StubTransactionHooks,
 )
 from tests.fixtures.system.stubs import StubSettingService
 
@@ -70,6 +73,10 @@ def _booking_service(
     booking_draft_stub: StubBookingDraftRepository | None = None,
     file_service: StubFileService | None = None,
     slot_template_stub: StubRoomSlotTemplateRepository | None = None,
+    override_log_stub: StubOverrideLogRepository | None = None,
+    transaction_hooks: StubTransactionHooks | None = None,
+    override_notifier: StubRecurringOverrideNotifier | None = None,
+    now_utc=None,
 ) -> BookingService:
     quote = make_preview_quote_result(quoted_amount=Decimal("150"), discount_percent=Decimal("10"))
     return BookingService(
@@ -81,6 +88,10 @@ def _booking_service(
         booking_draft_stub or StubBookingDraftRepository(),
         file_service or StubFileService(),
         slot_template_stub or StubRoomSlotTemplateRepository(),
+        override_log_stub or StubOverrideLogRepository(),
+        transaction_hooks or StubTransactionHooks(),
+        override_notifier,
+        now_utc=now_utc,
     )
 
 
@@ -395,7 +406,10 @@ async def test_create_booking_slot_overlap_conflict(monkeypatch):
     exc = exc_info.value
     assert exc.status_code == 409
     assert exc.error_code == "FACILITY_BOOKING_SCHEDULING_CONFLICT"
-    assert exc.context == {"facility_id": str(room_id)}
+    assert exc.context["facility_id"] == str(room_id)
+    assert exc.context["conflicts"] == [
+        {"facility_id": str(room_id), "start_at": "2026-05-01T10:00:00Z", "end_at": "2026-05-01T14:00:00Z", "kind": "occupancy"}
+    ]
     assert "scheduling conflict" in str(exc.detail)
 
 
@@ -621,16 +635,13 @@ async def test_create_booking_scheduling_conflict_is_first_fail(monkeypatch):
     first_room_id = new_uuid()
     second_room_id = new_uuid()
 
-    class FirstRoomOverlapRepository(StubBookingRepository):
-        async def has_confirmed_slot_overlap(self, facility_id, start_at, end_at, exclude_booking_id=None):
-            return facility_id == first_room_id
-
     command = make_create_booking_command(facility_id=first_room_id)
     command.rooms = [BookingRoomLineCommand(facility_id=first_room_id, sequence=0), BookingRoomLineCommand(facility_id=second_room_id, sequence=1)]
-    service = _booking_service(FirstRoomOverlapRepository())
+    service = _booking_service(StubBookingRepository(overlapping_slots={(first_room_id, command.start_at)}))
     with pytest.raises(ConflictErrorException) as exc_info:
         await service.create_booking(command)
-    assert exc_info.value.context == {"facility_id": str(first_room_id)}
+    assert exc_info.value.context["facility_id"] == str(first_room_id)
+    assert [item["facility_id"] for item in exc_info.value.context["conflicts"]] == [str(first_room_id)]
     assert exc_info.value.error_code == "FACILITY_BOOKING_SCHEDULING_CONFLICT"
 
 
@@ -839,6 +850,8 @@ async def test_preview_quote_for_member_same_room_different_subtotals(monkeypatc
         StubBookingDraftRepository(),
         StubFileService(),
         StubRoomSlotTemplateRepository(),
+        StubOverrideLogRepository(),
+        StubTransactionHooks(),
     )
     command = MemberPreviewQuoteCommand(
         lines=[
@@ -900,6 +913,8 @@ def _real_pricing_booking_service(*, room_id, ministry_stub, rental):
         StubBookingDraftRepository(),
         StubFileService(),
         StubRoomSlotTemplateRepository(),
+        StubOverrideLogRepository(),
+        StubTransactionHooks(),
     )
 
 

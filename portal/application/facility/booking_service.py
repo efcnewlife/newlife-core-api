@@ -4,7 +4,7 @@ Facility booking admin application service.
 
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from typing import Optional
+from typing import Callable, Optional
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
@@ -31,10 +31,20 @@ from portal.application.facility.commands import (
 )
 from portal.application.facility.discount_eligibility_service import is_mission_aligned_discount
 from portal.application.facility.my_bookings import card_primary_facility_id, paginate_my_bookings_cards, project_my_bookings_cards
+from portal.application.facility.one_time_override import evaluate_one_time_occupancy, load_ministry_proposal_context, one_time_proposal
 from portal.application.facility.opening_hours import raise_if_outside_opening_hours
 from portal.application.facility.participant_detail import assemble_participant_booking_detail
 from portal.application.facility.pricing_service import PricingService
+from portal.application.facility.priority_override import (
+    NullOverrideNotifier,
+    OverrideNotifierPort,
+    apply_whole_booking_overrides,
+    notify_displaced_bookers_after_commit,
+    override_review_secret,
+    require_reviewed_override,
+)
 from portal.application.facility.results import (
+    BookingConflictResult,
     BookingDetailResult,
     BookingPageResult,
     BookingRangeResult,
@@ -45,6 +55,7 @@ from portal.application.facility.results import (
 )
 from portal.application.org.results import CreateIdResult
 from portal.application.system.setting_service import SettingService
+from portal.domain.common.ports import TransactionHooksPort
 from portal.domain.content.constants import FILE_RESOURCE_KIND_FACILITY_ROOM
 from portal.domain.facility.cancellation_reason import InvalidMemberCancellationReason, normalize_member_cancellation_reason
 from portal.domain.facility.constants import (
@@ -61,6 +72,7 @@ from portal.domain.org.constants import MinistryStatus
 from portal.exceptions.responses import BadRequestException, ConflictErrorException, ForbiddenException, NotFoundException
 from portal.infrastructure.persistence.repositories.facility.booking_draft_repository import BookingDraftRepository
 from portal.infrastructure.persistence.repositories.facility.booking_repository import BookingRepository
+from portal.infrastructure.persistence.repositories.facility.override_log_repository import OverrideLogRepository
 from portal.infrastructure.persistence.repositories.facility.room_blackout_repository import RoomBlackoutRepository
 from portal.infrastructure.persistence.repositories.facility.room_slot_template_repository import RoomSlotTemplateRepository
 from portal.infrastructure.persistence.repositories.org.ministry_repository import MinistryRepository
@@ -82,6 +94,11 @@ class BookingService:
         booking_draft_repository: BookingDraftRepository,
         file_service: FileService,
         room_slot_template_repository: RoomSlotTemplateRepository,
+        override_log_repository: OverrideLogRepository,
+        transaction_hooks: TransactionHooksPort,
+        override_notifier: Optional[OverrideNotifierPort] = None,
+        now_utc: Optional[Callable[[], datetime]] = None,
+        review_secret: Optional[bytes] = None,
     ):
         self._repository = booking_repository
         self._pricing_service = pricing_service
@@ -91,6 +108,11 @@ class BookingService:
         self._booking_draft_repository = booking_draft_repository
         self._file_service = file_service
         self._slot_template_repository = room_slot_template_repository
+        self._override_log_repository = override_log_repository
+        self._transaction_hooks = transaction_hooks
+        self._override_notifier = override_notifier or NullOverrideNotifier()
+        self._now_utc = now_utc or (lambda: datetime.now(timezone.utc))
+        self._review_secret = review_secret or override_review_secret()
         self._req_ctx: Optional[RequestContext] = get_request_context()
         self._user_ctx: Optional[UserContext] = get_user_context()
 
@@ -179,10 +201,34 @@ class BookingService:
         validate_booking_lines(resolved_lines, local_tz)
         header_start, header_end = envelope_interval(resolved_lines)
 
+        # Held until commit/rollback so no competing create can occupy these rooms between validation and writes.
+        await self._repository.lock_rooms([line.facility_id for line in resolved_lines])
+        now_utc = self._now_utc()
+        context = await load_ministry_proposal_context(self._ministry_repository, command.ministry_id, booker_id) if command.ministry_id else None
+        evaluation = await evaluate_one_time_occupancy(
+            lines=resolved_lines,
+            context=context,
+            now_utc=now_utc,
+            local_tz=local_tz,
+            booking_repository=self._repository,
+            ministry_repository=self._ministry_repository,
+            allow_override=command.allow_priority_override,
+            locale_id=self._resolved_locale_id(),
+        )
+        if evaluation.conflicts:
+            self._raise_scheduling_conflict(evaluation.conflicts)
         for line in resolved_lines:
-            await self._raise_if_room_unavailable(
+            await self._raise_if_room_closed(
                 facility_id=line.facility_id, start_at=line.start_at, end_at=line.end_at, local_tz=local_tz, enforce_opening_hours=command.enforce_opening_hours
             )
+        require_reviewed_override(
+            token=command.override_review_token,
+            booker_id=booker_id,
+            ministry_id=command.ministry_id,
+            proposal=one_time_proposal(resolved_lines),
+            impacts=evaluation.impacts,
+            secret=self._review_secret,
+        )
 
         quote_lines = [
             PreviewQuoteRoomLineCommand(facility_id=line.facility_id, billed_hours=self._billed_hours(line.start_at, line.end_at)) for line in resolved_lines
@@ -259,6 +305,23 @@ class BookingService:
             )
         await self._repository.replace_booking_rooms(booking_id, room_rows)
         await self._repository.replace_booking_slots(booking_id, slot_rows)
+
+        if evaluation.targets and context is not None:
+            items = await apply_whole_booking_overrides(
+                booking_repository=self._repository,
+                override_log_repository=self._override_log_repository,
+                replacements=[(booking_id, target) for target in evaluation.targets],
+                operator_id=operator_id,
+            )
+            notify_displaced_bookers_after_commit(
+                transaction_hooks=self._transaction_hooks,
+                notifier=self._override_notifier,
+                items=items,
+                ministry_id=context.ministry_id,
+                church_activity_name=context.name_en,
+                church_activity_name_zh=context.name_zh,
+                actor_id=operator_id,
+            )
 
         if command.booking_draft_id is not None and draft and draft.user_id == booker_id:
             # Ownership check guards against one booker deleting another member's Draft by id; a mismatch
@@ -372,22 +435,16 @@ class BookingService:
             )
         )
 
-    async def _raise_if_room_unavailable(
-        self,
-        facility_id: UUID,
-        start_at: datetime,
-        end_at: datetime,
-        local_tz: ZoneInfo,
-        exclude_booking_id: Optional[UUID] = None,
-        *,
-        enforce_opening_hours: bool = True,
-    ) -> None:
-        if await self._repository.has_confirmed_slot_overlap(facility_id=facility_id, start_at=start_at, end_at=end_at, exclude_booking_id=exclude_booking_id):
-            raise ConflictErrorException(
-                detail=f"Room {facility_id} has a scheduling conflict",
-                error_code=BookingErrorCode.SCHEDULING_CONFLICT.value,
-                context={"facility_id": str(facility_id)},
-            )
+    @staticmethod
+    def _raise_scheduling_conflict(conflicts: list[BookingConflictResult]) -> None:
+        first = conflicts[0]
+        raise ConflictErrorException(
+            detail=f"Room {first.facility_id} has a scheduling conflict",
+            error_code=BookingErrorCode.SCHEDULING_CONFLICT.value,
+            context={"facility_id": str(first.facility_id), "conflicts": [item.model_dump(mode="json", exclude_none=True) for item in conflicts]},
+        )
+
+    async def _raise_if_room_closed(self, facility_id: UUID, start_at: datetime, end_at: datetime, local_tz: ZoneInfo, *, enforce_opening_hours: bool) -> None:
         if await self._blackout_repository.has_blackout_overlap(facility_id=facility_id, start_at=start_at, end_at=end_at, tz=local_tz):
             raise BadRequestException(
                 detail=f"Room {facility_id} is closed for the selected time",

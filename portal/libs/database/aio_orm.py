@@ -4,7 +4,7 @@ import re
 import uuid
 from datetime import date, datetime
 from enum import Enum, StrEnum
-from typing import Any, Callable, List, Optional, Tuple, Type, TypeVar, Union, overload
+from typing import Any, Awaitable, Callable, List, Optional, Tuple, Type, TypeVar, Union, overload
 
 import asyncpg
 import sqlalchemy as sa
@@ -631,6 +631,7 @@ class Session(ISession):
         self._retry_count = 0
         self._isolation = "read_committed"
         self._postgres_connection: PostgresConnection = postgres_connection or PostgresConnection()
+        self._after_commit_callbacks: list[Callable[[], Awaitable[None]]] = []
 
     def set_isolation(self, isolation: str):
         """
@@ -873,16 +874,28 @@ class Session(ISession):
         await self._ensure_connection()
         return await self._conn.copy_records_to_table(table_name, records=records, columns=columns, schema_name=schema_name, timeout=timeout)
 
+    def add_after_commit(self, callback: Callable[[], Awaitable[None]]) -> None:
+        """Run callback once the current transaction commits; dropped if it rolls back instead."""
+        self._after_commit_callbacks.append(callback)
+
     async def commit(self):
         async with self._locker:
             if self._tx is not None:
                 if self._tx._state != TransactionState.STARTED:  # noqa
+                    self._after_commit_callbacks = []
                     return
                 await self._tx.commit()
                 self._tx = None
+        callbacks, self._after_commit_callbacks = self._after_commit_callbacks, []
+        for callback in callbacks:
+            try:
+                await callback()
+            except Exception:
+                logger.exception("After-commit callback failed")
 
     async def rollback(self, lock: bool = True):
         lock and await self._locker.acquire()
+        self._after_commit_callbacks = []
         try:
             if self._tx is not None:
                 if self._tx._state == TransactionState.STARTED:  # noqa

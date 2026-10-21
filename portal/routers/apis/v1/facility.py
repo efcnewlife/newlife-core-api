@@ -203,6 +203,8 @@ async def create_booking(model: MemberBookingCreate, booking_service: BookingSer
             remark=model.remark,
             booking_draft_id=model.booking_draft_id,
             title=model.title,
+            allow_priority_override=True,
+            override_review_token=model.override_review_token,
         )
     )
     return create_id_result_to_api(result)

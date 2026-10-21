@@ -22,6 +22,7 @@ from portal.application.facility.discount_eligibility_service import is_mission_
 from portal.application.facility.opening_hours import member_interval_within_opening_hours
 from portal.application.facility.participant_detail import assemble_participant_booking_detail, assemble_participant_series_detail
 from portal.application.facility.pricing_service import PricingService
+from portal.application.facility.priority_override import NullOverrideNotifier, OverrideNotifierPort
 from portal.application.facility.recurring_override_mail_content import resolve_bilingual_activity_names
 from portal.application.facility.results import (
     BlackoutImpactOccurrenceResult,
@@ -107,23 +108,10 @@ class _PreparedSeries(NamedTuple):
     ministry_name_zh: Optional[str]
 
 
-class RecurringOverrideNotifierPort(Protocol):
-    """Send Priority Ministry override notifications after Series create."""
-
-    async def notify_priority_override(self, notification: RecurringOverrideNotification) -> None: ...
-
-
 class RecurringExpiryNotifierPort(Protocol):
     """Send Pending-payment hold expiry mail to the Booker."""
 
     async def notify_payment_hold_expired(self, notification: RecurringPaymentHoldExpiryNotification) -> None: ...
-
-
-class NullRecurringOverrideNotifier:
-    """No-op notifier used when mail is not wired."""
-
-    async def notify_priority_override(self, notification: RecurringOverrideNotification) -> None:
-        return None
 
 
 class NullRecurringExpiryNotifier:
@@ -151,7 +139,7 @@ class RecurringBookingService:
         user_read_service: UserReadService,
         override_log_repository: OverrideLogRepository,
         room_slot_template_repository: RoomSlotTemplateRepository,
-        override_notifier: Optional[RecurringOverrideNotifierPort] = None,
+        override_notifier: Optional[OverrideNotifierPort] = None,
         expiry_notifier: Optional[RecurringExpiryNotifierPort] = None,
         file_service: Optional[FileService] = None,
         now_utc: Optional[Callable[[], datetime]] = None,
@@ -165,7 +153,7 @@ class RecurringBookingService:
         self._user_read_service = user_read_service
         self._override_log_repository = override_log_repository
         self._slot_template_repository = room_slot_template_repository
-        self._override_notifier = override_notifier or NullRecurringOverrideNotifier()
+        self._override_notifier = override_notifier or NullOverrideNotifier()
         self._expiry_notifier = expiry_notifier or NullRecurringExpiryNotifier()
         self._file_service = file_service
         self._now_utc = now_utc or (lambda: datetime.now(timezone.utc))
@@ -283,6 +271,7 @@ class RecurringBookingService:
         if not command.title:
             raise BadRequestException(detail="Title is required", error_code=FacilityErrorCode.BOOKING_TITLE_INVALID.value)
         prepared = await self._prepare_series(command)
+        await self._booking_repository.lock_rooms([room.facility_id for room in command.rooms])
         remaining, overridable_conflicts = await self._unexcluded_occurrences(command, prepared)
         booker_id = prepared.booker_id
         now_utc = prepared.now_utc

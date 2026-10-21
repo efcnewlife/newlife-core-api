@@ -128,6 +128,7 @@ from portal.serializers.apis.v1.facility import (
     MemberBookingBrowseCard,
     MemberBookingBrowsePage,
     MemberBookingBrowseQuery,
+    MemberBookingConflict,
     MemberBookingDetail,
     MemberBookingDetailRoom,
     MemberBookingDraftCreate,
@@ -137,6 +138,7 @@ from portal.serializers.apis.v1.facility import (
     MemberBookingListItem,
     MemberBookingTimelineEvent,
     MemberDayAvailability,
+    MemberOverrideImpact,
     MemberPreviewQuoteLineInput,
     MemberPreviewQuoteRequest,
     MemberPreviewQuoteResponse,
@@ -669,6 +671,10 @@ def booking_draft_result_to_api(result: BookingDraftResult) -> MemberBookingDraf
         surcharge_amount=result.surcharge_amount,
         quoted_amount=result.quoted_amount,
         currency=result.currency,
+        is_confirmable=result.is_confirmable,
+        conflicts=[MemberBookingConflict.model_validate(item.model_dump()) for item in result.conflicts],
+        override_impacts=[MemberOverrideImpact.model_validate(item.model_dump()) for item in result.override_impacts],
+        override_review_token=result.override_review_token,
     )
 
 

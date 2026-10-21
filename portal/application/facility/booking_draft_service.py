@@ -3,9 +3,9 @@ Booking Draft application service (ADR 0018).
 """
 
 from datetime import date as DateType
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Optional
+from typing import Callable, Optional
 from uuid import UUID, uuid4
 
 from portal.application.facility.booking_line_validation import ResolvedBookingLine, validate_booking_lines
@@ -16,17 +16,21 @@ from portal.application.facility.commands import (
     PreviewQuoteRoomLineCommand,
     UpdateBookingDraftCommand,
 )
+from portal.application.facility.one_time_override import evaluate_one_time_occupancy, load_ministry_proposal_context, one_time_proposal
 from portal.application.facility.opening_hours import member_interval_within_opening_hours
 from portal.application.facility.pricing_service import PricingService
-from portal.application.facility.results import BookingDraftDetailResult, BookingDraftLineResult, BookingDraftResult
+from portal.application.facility.priority_override import issue_override_review_token, override_review_secret
+from portal.application.facility.results import BookingConflictResult, BookingDraftDetailResult, BookingDraftLineResult, BookingDraftResult
 from portal.application.org.results import CreateIdResult
 from portal.application.system.setting_service import SettingService
-from portal.domain.facility.constants import BookingType, FacilityErrorCode
+from portal.domain.facility.constants import BookingType, FacilityErrorCode, RecurringConflictKind
 from portal.exceptions.responses import BadRequestException, ForbiddenException, NotFoundException
 from portal.infrastructure.persistence.repositories.facility.booking_draft_repository import BookingDraftRepository
 from portal.infrastructure.persistence.repositories.facility.booking_repository import BookingRepository
 from portal.infrastructure.persistence.repositories.facility.room_blackout_repository import RoomBlackoutRepository
 from portal.infrastructure.persistence.repositories.facility.room_slot_template_repository import RoomSlotTemplateRepository
+from portal.infrastructure.persistence.repositories.org.ministry_repository import MinistryRepository
+from portal.libs.contexts.request_context import RequestContext, get_request_context
 from portal.libs.contexts.user_context import UserContext, get_user_context
 from portal.libs.tracing.distributed_trace import distributed_trace
 
@@ -42,6 +46,9 @@ class BookingDraftService:
         pricing_service: PricingService,
         setting_service: SettingService,
         room_slot_template_repository: RoomSlotTemplateRepository,
+        ministry_repository: MinistryRepository,
+        now_utc: Optional[Callable[[], datetime]] = None,
+        review_secret: Optional[bytes] = None,
     ):
         self._repository = booking_draft_repository
         self._booking_repository = booking_repository
@@ -49,6 +56,10 @@ class BookingDraftService:
         self._pricing_service = pricing_service
         self._setting_service = setting_service
         self._slot_template_repository = room_slot_template_repository
+        self._ministry_repository = ministry_repository
+        self._now_utc = now_utc or (lambda: datetime.now(timezone.utc))
+        self._review_secret = review_secret or override_review_secret()
+        self._req_ctx: Optional[RequestContext] = get_request_context()
         self._user_ctx: Optional[UserContext] = get_user_context()
 
     @staticmethod
@@ -123,24 +134,46 @@ class BookingDraftService:
 
     @distributed_trace()
     async def get_draft(self, booking_draft_id: UUID) -> BookingDraftResult:
+        """Evaluate the owned Draft live; never reserves, displaces, or notifies."""
         user_id = self._authenticated_user_id()
         row = await self._get_owned_draft_or_404(booking_draft_id, user_id)
 
         local_tz = await self._setting_service.get_facility_timezone()
+        resolved_lines = [
+            ResolvedBookingLine(facility_id=line.facility_id, start_at=line.start_at, end_at=line.end_at, sequence=line.sequence) for line in row.lines
+        ]
+        context = await load_ministry_proposal_context(self._ministry_repository, row.ministry_id, user_id) if row.ministry_id else None
+        evaluation = await evaluate_one_time_occupancy(
+            lines=resolved_lines,
+            context=context,
+            now_utc=self._now_utc(),
+            local_tz=local_tz,
+            booking_repository=self._booking_repository,
+            ministry_repository=self._ministry_repository,
+            allow_override=True,
+            locale_id=self._req_ctx.resolved_locale_id if self._req_ctx else None,
+        )
+        conflicts = list(evaluation.conflicts)
         line_results: list[BookingDraftLineResult] = []
         quote_lines: list[PreviewQuoteRoomLineCommand] = []
         for line in row.lines:
             day = line.start_at.astimezone(local_tz).date()
             templates = await self._slot_template_repository.list_active_for_day(line.facility_id, day.weekday())
             outside_opening = not member_interval_within_opening_hours(line.start_at, line.end_at, templates, local_tz)
-            is_unavailable = (
-                await self._booking_repository.has_confirmed_slot_overlap(facility_id=line.facility_id, start_at=line.start_at, end_at=line.end_at)
-                or await self._blackout_repository.has_blackout_overlap(facility_id=line.facility_id, start_at=line.start_at, end_at=line.end_at, tz=local_tz)
-                or outside_opening
+            is_blackout = await self._blackout_repository.has_blackout_overlap(
+                facility_id=line.facility_id, start_at=line.start_at, end_at=line.end_at, tz=local_tz
             )
+            is_occupied = await self._booking_repository.has_confirmed_slot_overlap(facility_id=line.facility_id, start_at=line.start_at, end_at=line.end_at)
+            for is_closed, kind in ((is_blackout, RecurringConflictKind.BLACKOUT), (outside_opening, RecurringConflictKind.OPENING_HOURS)):
+                if is_closed:
+                    conflicts.append(BookingConflictResult(facility_id=line.facility_id, start_at=line.start_at, end_at=line.end_at, kind=kind.value))
             line_results.append(
                 BookingDraftLineResult(
-                    facility_id=line.facility_id, start_at=line.start_at, end_at=line.end_at, sequence=line.sequence, is_available=not is_unavailable
+                    facility_id=line.facility_id,
+                    start_at=line.start_at,
+                    end_at=line.end_at,
+                    sequence=line.sequence,
+                    is_available=not (is_occupied or is_blackout or outside_opening),
                 )
             )
             quote_lines.append(PreviewQuoteRoomLineCommand(facility_id=line.facility_id, billed_hours=self._billed_hours(line.start_at, line.end_at)))
@@ -148,6 +181,17 @@ class BookingDraftService:
         quote = await self._pricing_service.preview_quote(
             PreviewQuoteCommand(booking_type=BookingType.ONE_TIME, currency="CAD", room_lines=quote_lines, ministry_id=row.ministry_id, booker_id=user_id)
         )
+
+        is_confirmable = bool(resolved_lines) and not conflicts and (row.ministry_id is None or context is not None)
+        override_review_token = None
+        if is_confirmable and evaluation.impacts:
+            override_review_token = issue_override_review_token(
+                booker_id=user_id,
+                ministry_id=row.ministry_id,
+                proposal=one_time_proposal(resolved_lines),
+                impacts=evaluation.impacts,
+                secret=self._review_secret,
+            )
 
         return BookingDraftResult(
             id=booking_draft_id,
@@ -161,6 +205,10 @@ class BookingDraftService:
             surcharge_amount=quote.surcharge_amount,
             quoted_amount=quote.quoted_amount,
             currency=quote.currency,
+            is_confirmable=is_confirmable,
+            conflicts=conflicts,
+            override_impacts=evaluation.impacts,
+            override_review_token=override_review_token,
         )
 
     @distributed_trace()

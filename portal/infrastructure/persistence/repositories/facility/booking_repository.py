@@ -19,6 +19,7 @@ from portal.application.facility.results import (
     BookingSlotResult,
     BookingTypeAndFlagsResult,
     MemberBrowseBookingResult,
+    OverrideReleasedIntervalResult,
     RecurringBookingOccurrenceResult,
     RecurringOccupyingBookingResult,
 )
@@ -38,6 +39,8 @@ from portal.models import (
     OrgMinistryTranslation,
 )
 from portal.models.mixins.context import apply_audit_fields_to_rows
+
+ROOM_OCCUPANCY_LOCK_PREFIX = "facility.room.occupancy:"
 
 
 class BookingRepository:
@@ -353,6 +356,7 @@ class BookingRepository:
                 FacilityBooking.end_at,
                 AuthUser.email.label("booker_email"),
                 self._display_name_expr().label("booker_display_name"),
+                FacilityBooking.series_id,
             )
             .select_from(FacilityBookingSlot)
             .join(FacilityBooking, FacilityBooking.id == FacilityBookingSlot.facility_booking_id)
@@ -380,9 +384,35 @@ class BookingRepository:
                     end_at=row["end_at"],
                     booker_display_name=row["booker_display_name"],
                     booker_email=row["booker_email"],
+                    series_id=row["series_id"],
                 )
             )
         return occupying
+
+    async def lock_rooms(self, facility_ids: list[UUID]) -> None:
+        """Serialize occupancy writes per room until the current transaction ends (sorted to avoid deadlock)."""
+        for facility_id in sorted(set(facility_ids), key=str):
+            await self._session.execute("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", f"{ROOM_OCCUPANCY_LOCK_PREFIX}{facility_id}")
+
+    async def list_live_slot_intervals(self, booking_ids: list[UUID]) -> dict[UUID, list[OverrideReleasedIntervalResult]]:
+        """Every still-occupying room interval of each Booking, i.e. what a whole-Booking override releases."""
+        if not booking_ids:
+            return {}
+        rows = await (
+            self._session.select(
+                FacilityBookingSlot.facility_booking_id, FacilityBookingSlot.facility_id, FacilityBookingSlot.start_at, FacilityBookingSlot.end_at
+            )
+            .where(FacilityBookingSlot.facility_booking_id.in_(booking_ids))
+            .where(FacilityBookingSlot.status == BookingSlotStatus.CONFIRMED.value)
+            .order_by(FacilityBookingSlot.start_at.asc(), FacilityBookingSlot.facility_id.asc())
+            .fetch(raw=True)
+        )
+        intervals: dict[UUID, list[OverrideReleasedIntervalResult]] = {}
+        for row in rows or []:
+            intervals.setdefault(row["facility_booking_id"], []).append(
+                OverrideReleasedIntervalResult(facility_id=row["facility_id"], start_at=row["start_at"], end_at=row["end_at"])
+            )
+        return intervals
 
     async def override_booking(self, booking_id: UUID, overridden_by_id: Optional[UUID], reason: Optional[str]) -> None:
         now = datetime.now(timezone.utc)

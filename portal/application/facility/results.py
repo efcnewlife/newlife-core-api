@@ -582,6 +582,36 @@ class BookingDraftLineResult(BaseModel):
     is_available: bool = Field(...)
 
 
+class OverrideReleasedIntervalResult(BaseModel):
+    """One room interval a whole-Booking Priority override would release."""
+
+    facility_id: UUID = Field(...)
+    start_at: datetime = Field(...)
+    end_at: datetime = Field(...)
+
+
+class OverrideImpactResult(BaseModel):
+    """A future Rental Booking (or one Series occurrence) displaced as a whole by a Priority Ministry proposal."""
+
+    booking_id: UUID = Field(...)
+    is_series_occurrence: bool = Field(default=False)
+    start_at: datetime = Field(...)
+    end_at: datetime = Field(...)
+    released_intervals: list[OverrideReleasedIntervalResult] = Field(default_factory=list)
+
+
+class BookingConflictResult(BaseModel):
+    """One blocking conflict on a proposed One-time line; contact fields only for an authorized Ministry context."""
+
+    facility_id: UUID = Field(...)
+    start_at: datetime = Field(...)
+    end_at: datetime = Field(...)
+    kind: str = Field(...)
+    ministry_name: Optional[str] = Field(default=None)
+    contact_display_name: Optional[str] = Field(default=None)
+    contact_email: Optional[str] = Field(default=None)
+
+
 class BookingDraftResult(UUIDBaseModel):
     """Booking Draft detail with live-computed price and availability (never cached)."""
 
@@ -595,6 +625,10 @@ class BookingDraftResult(UUIDBaseModel):
     surcharge_amount: Decimal = Field(...)
     quoted_amount: Decimal = Field(...)
     currency: str = Field(...)
+    is_confirmable: bool = Field(default=True)
+    conflicts: list[BookingConflictResult] = Field(default_factory=list)
+    override_impacts: list[OverrideImpactResult] = Field(default_factory=list)
+    override_review_token: Optional[str] = Field(default=None)
 
 
 class RecurringSeriesDraftStoredRoomResult(BaseModel):
@@ -758,6 +792,7 @@ class RecurringOccupyingBookingResult(BaseModel):
     end_at: datetime = Field(...)
     booker_display_name: Optional[str] = Field(default=None)
     booker_email: Optional[str] = Field(default=None)
+    series_id: Optional[UUID] = Field(default=None)
 
 
 class RecurringBookingConflictResult(BaseModel):
@@ -849,9 +884,9 @@ class RecurringOverrideNotificationItem(BaseModel):
 
 
 class RecurringOverrideNotification(BaseModel):
-    """Payload for bilingual Priority Ministry override mail."""
+    """Payload for bilingual Priority Ministry override mail; One-time overrides carry no Series."""
 
-    series_id: UUID = Field(...)
+    series_id: Optional[UUID] = Field(default=None)
     ministry_id: UUID = Field(...)
     church_activity_name: str = Field(...)
     church_activity_name_zh: str = Field(default="")
