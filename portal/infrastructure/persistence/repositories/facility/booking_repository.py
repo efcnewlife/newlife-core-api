@@ -365,7 +365,7 @@ class BookingRepository:
             .where(FacilityBookingSlot.end_at > start_at)
             .where(FacilityBooking.is_deleted == False)
             .where(self._active_occupancy_clause())
-            .fetch()
+            .fetch(raw=True)
         )
         occupying: list[RecurringOccupyingBookingResult] = []
         for row in rows or []:

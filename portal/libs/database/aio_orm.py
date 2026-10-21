@@ -404,8 +404,8 @@ class _Select:
         """
         return self._select.cte(name, recursive=recursive)
 
-    async def fetch(self, as_model: Type[BaseModel] = None) -> List[T]:
-        return await self._session.fetch(self._select.statement, as_model=as_model)
+    async def fetch(self, as_model: Type[BaseModel] = None, raw: bool = False) -> List[T]:
+        return await self._session.fetch(self._select.statement, as_model=as_model, raw=raw)
 
     async def fetchgroup(self, groupby: str, as_model: Type[BaseModel] = None):
         """
@@ -757,15 +757,17 @@ class Session(ISession):
                 filtered_columns.append(column)
         return _Select(filtered_columns, table, self)
 
-    async def fetch(self, statement, *params, timeout: float = None, as_model: Type[BaseModel] = None) -> List[T]:
+    async def fetch(self, statement, *params, timeout: float = None, as_model: Type[BaseModel] = None, raw: bool = False) -> List[T]:
         """
         :param statement:
         :param params:
         :param timeout:
         :param as_model:
+        :param raw: skip Converter.format_value (e.g. datetime -> str) and return driver-native values;
+            no effect with as_model, which already validates driver-native values
         :return:
         """
-        return await self._fetch(FetchMethod.FETCH, statement, params, timeout=timeout, as_model=as_model)
+        return await self._fetch(FetchMethod.FETCH, statement, params, timeout=timeout, as_model=as_model, raw=raw)
 
     async def fetchgroup(self, statement, *params, timeout: float = None, groupby: str, as_model: Type[BaseModel] = None):
         """
@@ -833,7 +835,7 @@ class Session(ISession):
         return results
 
     async def _fetch(
-        self, method: FetchMethod, statement, params, append_statement: str = None, timeout: float = None, as_model: Type[BaseModel] = None
+        self, method: FetchMethod, statement, params, append_statement: str = None, timeout: float = None, as_model: Type[BaseModel] = None, raw: bool = False
     ) -> Union[List[T], T, dict, str, int]:
         try:
             await self._locker.acquire()
@@ -848,6 +850,8 @@ class Session(ISession):
                     return _format_dict(item=value, as_model=as_model)
                 case FetchMethod.FETCH:
                     rows = await self._conn.fetch(sql, *params, timeout=timeout) or []
+                    if raw and not as_model:
+                        return [dict(item) for item in rows]
                     return [_format_dict(item=item, as_model=as_model) for item in rows]
                 case _:
                     raise NotImplementedError()
