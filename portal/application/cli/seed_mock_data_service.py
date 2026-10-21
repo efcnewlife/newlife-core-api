@@ -8,13 +8,14 @@ an Owner-position incumbent, and a pending Ministry Application.
 import uuid
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import datetime, time, timezone
+from datetime import date, datetime, time, timezone
 from pathlib import Path
 from typing import Callable, Optional
 from uuid import UUID
 
 import click
 from asyncpg import NotNullViolationError
+from pydantic import AwareDatetime, BaseModel
 
 from portal.application.cli.mock_account_archive import MockSeedInventoryError, find_local_archive_pair, parse_mock_run_identity, read_csv_rows
 from portal.application.cli.mock_fixture_plans import (
@@ -115,6 +116,23 @@ def _row_value(row: object, key: str):
     return getattr(row, key)
 
 
+class _OccupancyRow(BaseModel):
+    facility_id: UUID
+    start_at: AwareDatetime
+    end_at: AwareDatetime
+
+
+class _BlackoutRow(BaseModel):
+    facility_id: Optional[UUID]
+    kind: str
+    blackout_date: Optional[date]
+    days_of_week_mask: Optional[int]
+    start_time: time
+    end_time: time
+    effective_from: Optional[date]
+    effective_to: Optional[date]
+
+
 class SeedMockDataService:
     """Complete the near-term Facility Booking QA fixture suite for the current Mock inventory."""
 
@@ -162,14 +180,9 @@ class SeedMockDataService:
         rows = await (
             self._session.select(FacilityBookingSlot.facility_id, FacilityBookingSlot.start_at, FacilityBookingSlot.end_at)
             .where(FacilityBookingSlot.status == BookingSlotStatus.CONFIRMED.value)
-            .fetch()
+            .fetch(as_model=_OccupancyRow)
         )
-        occupancy: list[OccupyingInterval] = []
-        for row in rows or []:
-            occupancy.append(
-                OccupyingInterval(facility_id=_as_uuid(_row_value(row, "facility_id")), start_at=_row_value(row, "start_at"), end_at=_row_value(row, "end_at"))
-            )
-        return occupancy
+        return [OccupyingInterval(facility_id=row.facility_id, start_at=row.start_at, end_at=row.end_at) for row in rows or []]
 
     async def _load_blackouts(self) -> list[ExistingBlackout]:
         rows = await (
@@ -185,24 +198,9 @@ class SeedMockDataService:
             )
             .where(FacilityRoomBlackout.is_active == True)
             .where(FacilityRoomBlackout.is_deleted == False)
-            .fetch()
+            .fetch(as_model=_BlackoutRow)
         )
-        blackouts: list[ExistingBlackout] = []
-        for row in rows or []:
-            facility_id = _row_value(row, "facility_id")
-            blackouts.append(
-                ExistingBlackout(
-                    facility_id=_as_uuid(facility_id) if facility_id is not None else None,
-                    kind=str(_row_value(row, "kind")),
-                    blackout_date=_row_value(row, "blackout_date"),
-                    days_of_week_mask=_row_value(row, "days_of_week_mask"),
-                    start_time=_row_value(row, "start_time"),
-                    end_time=_row_value(row, "end_time"),
-                    effective_from=_row_value(row, "effective_from"),
-                    effective_to=_row_value(row, "effective_to"),
-                )
-            )
-        return blackouts
+        return [ExistingBlackout(**row.model_dump()) for row in rows or []]
 
     async def _insert_slot_templates(self, *, rooms: dict[str, UUID], run_identity: str) -> int:
         name = mock_fixture_name(SLOT_TEMPLATE_LABEL, run_identity)
