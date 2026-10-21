@@ -338,6 +338,8 @@ class CreateRecurringBookingSeriesCommand(BaseModel):
     remark: Optional[str] = Field(default=None)
     excluded_dates: list[date] = Field(default_factory=list)
     enforce_opening_hours: bool = Field(default=True, description="Member paths enforce Room Slot Template windows; admin create sets False")
+    require_override_review: bool = Field(default=True, description="Member paths must acknowledge the reviewed override impact; admin create sets False")
+    override_review_token: Optional[str] = Field(default=None, description="Server-issued acknowledgement of the reviewed override impact")
 
 
 class UpdateTitleCommand(BaseModel):

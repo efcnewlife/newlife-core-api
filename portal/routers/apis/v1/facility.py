@@ -7,7 +7,7 @@ from typing import Annotated, Optional
 from uuid import UUID
 
 from dependency_injector.wiring import Provide, inject
-from fastapi import Depends, Query, status
+from fastapi import Body, Depends, Query, status
 
 from portal.application.facility.availability_service import AvailabilityService
 from portal.application.facility.booking_draft_service import BookingDraftService
@@ -63,6 +63,7 @@ from portal.serializers.apis.v1.facility import (
     MemberRecurringBookingSeriesProposal,
     MemberRecurringBookingSeriesTitleUpdate,
     MemberRecurringBookingWindowStatus,
+    MemberRecurringSeriesDraftConfirm,
     MemberRecurringSeriesDraftCreate,
     MemberRecurringSeriesDraftDetail,
     MemberRecurringSeriesDraftUpdate,
@@ -301,7 +302,9 @@ async def update_booking_series_draft(
 )
 @inject
 async def confirm_booking_series_draft(
-    series_draft_id: UUID, recurring_series_draft_service: RecurringSeriesDraftService = Depends(Provide[Container.recurring_series_draft_service])
+    series_draft_id: UUID,
+    model: Optional[MemberRecurringSeriesDraftConfirm] = Body(default=None),
+    recurring_series_draft_service: RecurringSeriesDraftService = Depends(Provide[Container.recurring_series_draft_service]),
 ):
-    result = await recurring_series_draft_service.confirm_draft(series_draft_id)
+    result = await recurring_series_draft_service.confirm_draft(series_draft_id, override_review_token=model.override_review_token if model else None)
     return recurring_booking_series_to_member_api(result)

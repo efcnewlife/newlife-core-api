@@ -27,6 +27,7 @@ from tests.fixtures.facility.stubs import (
     StubRecurringOverrideNotifier,
     StubRoomBlackoutRepository,
     StubRoomSlotTemplateRepository,
+    StubTransactionHooks,
     StubUserReadService,
 )
 from tests.fixtures.system.stubs import StubSettingService
@@ -102,6 +103,7 @@ def _service(monkeypatch, *, operator_id=None, series_stub=None, booking_stub=No
         expiry_notifier=StubRecurringExpiryNotifier(),
         now_utc=lambda: NOW,
         room_slot_template_repository=StubRoomSlotTemplateRepository(),
+        transaction_hooks=StubTransactionHooks(),
     )
     return service, series_stub, booking_stub, operator_id
 
@@ -489,6 +491,7 @@ async def test_cancel_and_get_require_authenticated_operator(monkeypatch):
         override_log_repository=StubOverrideLogRepository(),
         now_utc=lambda: NOW,
         room_slot_template_repository=StubRoomSlotTemplateRepository(),
+        transaction_hooks=StubTransactionHooks(),
     )
     with pytest.raises(ForbiddenException):
         await service.get_series(uuid4())

@@ -22,11 +22,22 @@ from portal.application.facility.discount_eligibility_service import is_mission_
 from portal.application.facility.opening_hours import member_interval_within_opening_hours
 from portal.application.facility.participant_detail import assemble_participant_booking_detail, assemble_participant_series_detail
 from portal.application.facility.pricing_service import PricingService
-from portal.application.facility.priority_override import NullOverrideNotifier, OverrideNotifierPort
+from portal.application.facility.priority_override import (
+    NullOverrideNotifier,
+    OverrideNotifierPort,
+    OverrideTarget,
+    apply_whole_booking_overrides,
+    issue_override_review_token,
+    notify_displaced_bookers_after_commit,
+    override_review_secret,
+    require_reviewed_override,
+    room_interval_key,
+)
 from portal.application.facility.recurring_override_mail_content import resolve_bilingual_activity_names
 from portal.application.facility.results import (
     BlackoutImpactOccurrenceResult,
     BlackoutImpactResult,
+    OverrideImpactResult,
     ParticipantBookingDetailResult,
     ParticipantSeriesDetailResult,
     PendingPaymentExpirySweepResult,
@@ -37,15 +48,14 @@ from portal.application.facility.results import (
     RecurringBookingSeriesResult,
     RecurringBookingWindowStatusResult,
     RecurringOccupyingBookingResult,
-    RecurringOverrideNotification,
-    RecurringOverrideNotificationItem,
     RecurringPaymentHoldExpiryNotification,
     RecurringProposalEvaluationResult,
     RoomBlackoutResult,
 )
-from portal.application.facility.timetable_projection import redact_conflict_for_personal
+from portal.application.facility.timetable_projection import member_safe_conflicts, redact_conflict_for_personal
 from portal.application.system.setting_service import SettingService
 from portal.config import settings
+from portal.domain.common.ports import TransactionHooksPort
 from portal.domain.content.constants import FILE_RESOURCE_KIND_FACILITY_ROOM
 from portal.domain.facility.cancellation_reason import InvalidMemberCancellationReason, normalize_member_cancellation_reason
 from portal.domain.facility.constants import (
@@ -56,7 +66,6 @@ from portal.domain.facility.constants import (
     BookingStatus,
     BookingType,
     FacilityErrorCode,
-    OverrideOutcome,
     RecurringCancellationScope,
     RecurringConflictKind,
 )
@@ -123,6 +132,7 @@ class NullRecurringExpiryNotifier:
 
 _LIVE_OCCURRENCE_STATUSES = {BookingStatus.PENDING_PAYMENT.value, BookingStatus.CONFIRMED.value}
 _CANCELLATION_SCOPES = {scope.value for scope in RecurringCancellationScope}
+_RECURRING_PROPOSAL_MARKER = "recurring-series"
 
 
 class RecurringBookingService:
@@ -139,10 +149,12 @@ class RecurringBookingService:
         user_read_service: UserReadService,
         override_log_repository: OverrideLogRepository,
         room_slot_template_repository: RoomSlotTemplateRepository,
+        transaction_hooks: TransactionHooksPort,
         override_notifier: Optional[OverrideNotifierPort] = None,
         expiry_notifier: Optional[RecurringExpiryNotifierPort] = None,
         file_service: Optional[FileService] = None,
         now_utc: Optional[Callable[[], datetime]] = None,
+        review_secret: Optional[bytes] = None,
     ):
         self._series_repository = series_repository
         self._booking_repository = booking_repository
@@ -153,10 +165,12 @@ class RecurringBookingService:
         self._user_read_service = user_read_service
         self._override_log_repository = override_log_repository
         self._slot_template_repository = room_slot_template_repository
+        self._transaction_hooks = transaction_hooks
         self._override_notifier = override_notifier or NullOverrideNotifier()
         self._expiry_notifier = expiry_notifier or NullRecurringExpiryNotifier()
         self._file_service = file_service
         self._now_utc = now_utc or (lambda: datetime.now(timezone.utc))
+        self._review_secret = review_secret or override_review_secret()
         self._req_ctx: Optional[RequestContext] = get_request_context()
         self._user_ctx: Optional[UserContext] = get_user_context()
 
@@ -178,10 +192,27 @@ class RecurringBookingService:
 
     @distributed_trace()
     async def preview_conflicts(self, command: CreateRecurringBookingSeriesCommand) -> RecurringBookingPreviewResult:
+        """Never reserves, displaces, or notifies; the review token covers the schedule minus ``excluded_dates``."""
         prepared = await self._prepare_series(command)
         conflicts = await self._collect_conflicts(command, prepared)
         quote = await self._quote_occurrences(command, prepared.occurrences, booker_id=prepared.booker_id)
-        return RecurringBookingPreviewResult(conflicts=conflicts, quoted_amount=quote["quoted_amount"], currency=quote["currency"])
+        excluded_dates = set(command.excluded_dates)
+        remaining = [item for item in prepared.occurrences if item.occurrence_date not in excluded_dates]
+        remaining_conflicts = [item for item in conflicts if item.occurrence_date not in excluded_dates]
+        impacts = self._unique_impacts(await self._override_targets([item for item in remaining_conflicts if item.is_overridable], prepared.local_tz))
+        min_weeks = await self._setting_service.get_min_recurring_booking_weeks()
+        is_reviewable = (
+            excluded_dates <= {item.occurrence_date for item in conflicts}
+            and len(remaining) >= min_weeks
+            and all(item.is_overridable for item in remaining_conflicts)
+        )
+        return RecurringBookingPreviewResult(
+            conflicts=conflicts,
+            quoted_amount=quote["quoted_amount"],
+            currency=quote["currency"],
+            override_impacts=impacts,
+            override_review_token=self._issue_review_token(command, prepared, remaining, impacts) if is_reviewable else None,
+        )
 
     @distributed_trace()
     async def evaluate_proposal(self, command: CreateRecurringBookingSeriesCommand) -> RecurringProposalEvaluationResult:
@@ -223,6 +254,7 @@ class RecurringBookingService:
 
         remaining_conflicts = [item for item in conflicts if item.occurrence_date not in excluded_dates]
         blocking = [item for item in remaining_conflicts if not item.is_overridable]
+        impacts = self._unique_impacts(await self._override_targets([item for item in remaining_conflicts if item.is_overridable], prepared.local_tz))
         quote = await self._quote_occurrences(command, remaining, booker_id=prepared.booker_id)
         invalidity_code = None
         invalidity_detail = None
@@ -231,8 +263,9 @@ class RecurringBookingService:
         elif not command.title:
             invalidity_code = FacilityErrorCode.BOOKING_TITLE_INVALID.value
             invalidity_detail = "Title is required"
+        is_confirmable = invalidity_code is None
         return RecurringProposalEvaluationResult(
-            is_confirmable=invalidity_code is None,
+            is_confirmable=is_confirmable,
             conflicts=conflicts,
             quoted_amount=quote["quoted_amount"],
             subtotal_amount=quote["subtotal_amount"],
@@ -246,6 +279,8 @@ class RecurringBookingService:
             payment_hold_expires_at=payment_hold_expires_at,
             invalidity_code=invalidity_code,
             invalidity_detail=invalidity_detail,
+            override_impacts=impacts,
+            override_review_token=self._issue_review_token(command, prepared, remaining, impacts) if is_confirmable else None,
         )
 
     @distributed_trace()
@@ -273,6 +308,16 @@ class RecurringBookingService:
         prepared = await self._prepare_series(command)
         await self._booking_repository.lock_rooms([room.facility_id for room in command.rooms])
         remaining, overridable_conflicts = await self._unexcluded_occurrences(command, prepared)
+        targets = await self._override_targets(overridable_conflicts, prepared.local_tz)
+        if command.require_override_review:
+            require_reviewed_override(
+                token=command.override_review_token,
+                booker_id=prepared.booker_id,
+                ministry_id=command.ministry_id,
+                proposal=self._series_proposal(command, remaining),
+                impacts=self._unique_impacts(targets),
+                secret=self._review_secret,
+            )
         booker_id = prepared.booker_id
         now_utc = prepared.now_utc
         is_priority = prepared.is_priority
@@ -415,9 +460,24 @@ class RecurringBookingService:
                 )
             )
 
-        await self._apply_priority_overrides(
-            command=command, prepared=prepared, series_id=series_id, occurrences=occurrences, remaining=remaining, overridable_conflicts=overridable_conflicts
-        )
+        if targets and command.ministry_id is not None:
+            occurrence_id_by_date = {item.occurrence_date: occurrence.id for item, occurrence in zip(remaining, occurrences, strict=True)}
+            items = await apply_whole_booking_overrides(
+                booking_repository=self._booking_repository,
+                override_log_repository=self._override_log_repository,
+                replacements=[(occurrence_id_by_date[occurrence_date], target) for occurrence_date, target in targets],
+                operator_id=prepared.operator_id,
+            )
+            notify_displaced_bookers_after_commit(
+                transaction_hooks=self._transaction_hooks,
+                notifier=self._override_notifier,
+                items=items,
+                ministry_id=command.ministry_id,
+                church_activity_name=prepared.ministry_name or "Church Activity",
+                church_activity_name_zh=prepared.ministry_name_zh or prepared.ministry_name or "Church Activity",
+                actor_id=prepared.operator_id,
+                series_id=series_id,
+            )
 
         return RecurringBookingSeriesResult(
             id=series_id,
@@ -781,7 +841,7 @@ class RecurringBookingService:
         remaining_conflicts = [item for item in conflicts if item.occurrence_date not in excluded_dates]
         blocking = [item for item in remaining_conflicts if not item.is_overridable]
         if blocking:
-            self._raise_remaining_conflict(blocking[0])
+            self._raise_remaining_conflict(blocking)
         overridable = [item for item in remaining_conflicts if item.is_overridable]
         return remaining, overridable
 
@@ -863,7 +923,8 @@ class RecurringBookingService:
         return FacilityErrorCode.RECURRING_WEEKLY_QUOTA.value, "Booker already has a Rental Booking in that facility-local week"
 
     @staticmethod
-    def _raise_remaining_conflict(conflict: RecurringBookingConflictResult) -> None:
+    def _raise_remaining_conflict(blocking: list[RecurringBookingConflictResult]) -> None:
+        conflict = blocking[0]
         facility_id = conflict.facility_ids[0] if conflict.facility_ids else None
         if conflict.kind == RecurringConflictKind.MINISTRY.value:
             raise ConflictErrorException(
@@ -874,13 +935,14 @@ class RecurringBookingService:
                     "ministry_id": str(conflict.ministry_id) if conflict.ministry_id else None,
                     "ministry_steward_display_name": conflict.ministry_steward_display_name,
                     "ministry_steward_email": conflict.ministry_steward_email,
+                    "conflicts": member_safe_conflicts(blocking),
                 },
             )
         if conflict.kind == RecurringConflictKind.OCCUPANCY.value:
             raise ConflictErrorException(
                 detail=f"Room {facility_id} has a scheduling conflict",
                 error_code=BookingErrorCode.SCHEDULING_CONFLICT.value,
-                context={"facility_id": str(facility_id)} if facility_id else None,
+                context={"facility_id": str(facility_id) if facility_id else None, "conflicts": member_safe_conflicts(blocking)},
             )
         if conflict.kind == RecurringConflictKind.BLACKOUT.value:
             raise BadRequestException(
@@ -1083,62 +1145,55 @@ class RecurringBookingService:
         display_name = primary.display_name or primary.email
         return display_name, primary.email
 
-    async def _apply_priority_overrides(
-        self,
-        *,
-        command: CreateRecurringBookingSeriesCommand,
-        prepared: _PreparedSeries,
-        series_id: UUID,
-        occurrences: list[RecurringBookingOccurrenceResult],
-        remaining: list[_PreparedOccurrence],
-        overridable_conflicts: list[RecurringBookingConflictResult],
-    ) -> None:
-        if not overridable_conflicts:
-            return
-        occurrence_id_by_date = {item.occurrence_date: occurrence.id for item, occurrence in zip(remaining, occurrences, strict=True)}
-        log_rows: list[dict] = []
-        notification_items: list[RecurringOverrideNotificationItem] = []
-        overridden_ids: set[UUID] = set()
-        for conflict in overridable_conflicts:
-            church_activity_booking_id = occurrence_id_by_date[conflict.occurrence_date]
-            for occupying in conflict.occupying_bookings:
-                if occupying.booking_id not in overridden_ids:
-                    await self._booking_repository.override_booking(occupying.booking_id, prepared.operator_id, "Priority Ministry override")
-                    overridden_ids.add(occupying.booking_id)
-                for facility_id in occupying.facility_ids:
-                    log_rows.append(
-                        dict(
-                            id=uuid4(),
-                            facility_booking_id=church_activity_booking_id,
-                            overridden_booking_id=occupying.booking_id,
-                            overridden_by_id=prepared.operator_id,
-                            facility_id=facility_id,
-                            outcome=OverrideOutcome.OVERRIDE_APPLIED.value,
-                            reason="Priority Ministry override",
-                        )
-                    )
-                notification_items.append(
-                    RecurringOverrideNotificationItem(
-                        booking_id=occupying.booking_id,
-                        booker_id=occupying.user_id,
-                        occurrence_date=conflict.occurrence_date,
-                        facility_ids=occupying.facility_ids,
-                        church_activity_booking_id=church_activity_booking_id,
-                    )
-                )
-        if log_rows:
-            await self._override_log_repository.insert_logs(log_rows)
-        if not notification_items or command.ministry_id is None:
-            return
-        notification = RecurringOverrideNotification(
-            series_id=series_id,
+    @staticmethod
+    def _series_proposal(command: CreateRecurringBookingSeriesCommand, remaining: list[_PreparedOccurrence]) -> list[str]:
+        """Canonical shared schedule, rooms, and explicit exclusions the override review is bound to."""
+        keys = [_RECURRING_PROPOSAL_MARKER]
+        keys.extend(room_interval_key(room.facility_id, item.start_at, item.end_at) for item in remaining for room in command.rooms)
+        keys.extend(f"excluded|{excluded.isoformat()}" for excluded in sorted(set(command.excluded_dates)))
+        return keys
+
+    async def _override_targets(self, overridable_conflicts: list[RecurringBookingConflictResult], local_tz: ZoneInfo) -> list[tuple[date, OverrideTarget]]:
+        """Whole-Booking targets keyed by the remaining occurrence that displaces them; a Series target is only its overlapping occurrence."""
+        occupying = [(conflict.occurrence_date, item) for conflict in overridable_conflicts for item in conflict.occupying_bookings]
+        if not occupying:
+            return []
+        released = await self._booking_repository.list_live_slot_intervals(list(dict.fromkeys(item.booking_id for _, item in occupying)))
+        return [
+            (
+                occurrence_date,
+                OverrideTarget(
+                    impact=OverrideImpactResult(
+                        booking_id=item.booking_id,
+                        is_series_occurrence=item.series_id is not None,
+                        start_at=item.start_at,
+                        end_at=item.end_at,
+                        released_intervals=released.get(item.booking_id, []),
+                    ),
+                    booker_id=item.user_id,
+                    occurrence_date=item.start_at.astimezone(local_tz).date(),
+                    overlapping_facility_ids=list(item.facility_ids),
+                ),
+            )
+            for occurrence_date, item in occupying
+        ]
+
+    @staticmethod
+    def _unique_impacts(targets: list[tuple[date, OverrideTarget]]) -> list[OverrideImpactResult]:
+        impacts: dict[UUID, OverrideImpactResult] = {}
+        for _, target in targets:
+            impacts.setdefault(target.impact.booking_id, target.impact)
+        return list(impacts.values())
+
+    def _issue_review_token(
+        self, command: CreateRecurringBookingSeriesCommand, prepared: _PreparedSeries, remaining: list[_PreparedOccurrence], impacts: list[OverrideImpactResult]
+    ) -> Optional[str]:
+        if not impacts:
+            return None
+        return issue_override_review_token(
+            booker_id=prepared.booker_id,
             ministry_id=command.ministry_id,
-            church_activity_name=prepared.ministry_name or "Church Activity",
-            church_activity_name_zh=prepared.ministry_name_zh or prepared.ministry_name or "Church Activity",
-            actor_id=prepared.operator_id,
-            items=notification_items,
+            proposal=self._series_proposal(command, remaining),
+            impacts=impacts,
+            secret=self._review_secret,
         )
-        try:
-            await self._override_notifier.notify_priority_override(notification)
-        except Exception:
-            logger.exception("Priority Ministry override email failed for series %s", series_id)

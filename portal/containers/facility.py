@@ -128,6 +128,7 @@ class FacilityContainer(containers.DeclarativeContainer):
         expiry_notifier=recurring_expiry_mail_service,
         file_service=file_service,
         room_slot_template_repository=room_slot_template_repository,
+        transaction_hooks=transaction_hooks,
     )
     recurring_series_draft_service = providers.Factory(
         RecurringSeriesDraftService, series_draft_repository=recurring_series_draft_repository, recurring_booking_service=recurring_booking_service

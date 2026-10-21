@@ -827,6 +827,8 @@ class RecurringProposalEvaluationResult(BaseModel):
     payment_hold_expires_at: datetime = Field(...)
     invalidity_code: Optional[str] = Field(default=None)
     invalidity_detail: Optional[str] = Field(default=None)
+    override_impacts: list[OverrideImpactResult] = Field(default_factory=list)
+    override_review_token: Optional[str] = Field(default=None)
 
 
 class RecurringSeriesDraftResult(UUIDBaseModel):
@@ -856,6 +858,8 @@ class RecurringSeriesDraftResult(UUIDBaseModel):
     occurrence_count: int = Field(...)
     pending_payment_hold_days: int = Field(...)
     payment_hold_expires_at: datetime = Field(...)
+    override_impacts: list[OverrideImpactResult] = Field(default_factory=list)
+    override_review_token: Optional[str] = Field(default=None)
 
 
 class RecurringBookingPreviewResult(BaseModel):
@@ -864,6 +868,8 @@ class RecurringBookingPreviewResult(BaseModel):
     conflicts: list[RecurringBookingConflictResult] = Field(default_factory=list)
     quoted_amount: Decimal = Field(...)
     currency: str = Field(...)
+    override_impacts: list[OverrideImpactResult] = Field(default_factory=list)
+    override_review_token: Optional[str] = Field(default=None)
 
 
 class RecurringBookingWindowStatusResult(BaseModel):
