@@ -47,6 +47,7 @@ from tests.fixtures.facility.stubs import (
     StubRoomBlackoutRepository,
     StubRoomRepository,
     StubRoomSlotTemplateRepository,
+    StubTransactionHooks,
     StubUserReadService,
 )
 from tests.fixtures.system.stubs import StubSettingService
@@ -101,6 +102,7 @@ def _service(
     override_log_stub=None,
     override_notifier=None,
     slot_template_stub=None,
+    transaction_hooks=None,
     now_utc=None,
 ):
     user_id = user_id or uuid4()
@@ -122,6 +124,7 @@ def _service(
         override_notifier=override_notifier,
         now_utc=now_utc or (lambda: OPEN_WINDOW_NOW),
         room_slot_template_repository=slot_template_stub or StubRoomSlotTemplateRepository(),
+        transaction_hooks=transaction_hooks or StubTransactionHooks(),
     )
     return service, series_stub, booking_stub, user_id
 
@@ -847,11 +850,21 @@ async def test_priority_create_overrides_future_rental_and_writes_audit(monkeypa
     booking_stub = StubBookingRepository(occupying_bookings=[rental])
     override_log_stub = StubOverrideLogRepository()
     notifier = StubRecurringOverrideNotifier()
+    hooks = StubTransactionHooks()
     service, series_stub, *_rest = _service(
-        monkeypatch, user_id=user_id, booking_stub=booking_stub, ministry_stub=ministry_stub, override_log_stub=override_log_stub, override_notifier=notifier
+        monkeypatch,
+        user_id=user_id,
+        booking_stub=booking_stub,
+        ministry_stub=ministry_stub,
+        override_log_stub=override_log_stub,
+        override_notifier=notifier,
+        transaction_hooks=hooks,
     )
 
-    result = await service.create_series(_command(facility_id=room_id, ministry_id=ministry_id, last_occurrence_date=SIX_WEEK_LAST_TUESDAY))
+    result = await service.create_series(
+        _command(facility_id=room_id, ministry_id=ministry_id, last_occurrence_date=SIX_WEEK_LAST_TUESDAY, require_override_review=False)
+    )
+    await hooks.commit()
 
     assert result.occurrence_count == 6
     assert result.is_priority is True
@@ -963,10 +976,16 @@ async def test_priority_override_mail_failure_does_not_block_create(monkeypatch)
     rental = _occupying_rental(facility_id=room_id, occurrence_date=date(2026, 1, 13))
     booking_stub = StubBookingRepository(occupying_bookings=[rental])
     notifier = StubRecurringOverrideNotifier(raise_error=RuntimeError("graph down"))
-    service, *_ = _service(monkeypatch, user_id=user_id, booking_stub=booking_stub, ministry_stub=ministry_stub, override_notifier=notifier)
-    result = await service.create_series(_command(facility_id=room_id, ministry_id=ministry_id, last_occurrence_date=SIX_WEEK_LAST_TUESDAY))
+    hooks = StubTransactionHooks()
+    service, *_ = _service(
+        monkeypatch, user_id=user_id, booking_stub=booking_stub, ministry_stub=ministry_stub, override_notifier=notifier, transaction_hooks=hooks
+    )
+    result = await service.create_series(
+        _command(facility_id=room_id, ministry_id=ministry_id, last_occurrence_date=SIX_WEEK_LAST_TUESDAY, require_override_review=False)
+    )
     assert result.occurrence_count == 6
-    assert len(notifier.calls) == 1
+    assert notifier.calls == []
+    assert len(hooks.callbacks) == 1
 
 
 def _real_pricing_for_room(room_id, ministry_stub):

@@ -9,9 +9,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 from uuid import UUID
 from zoneinfo import ZoneInfo
+
+if TYPE_CHECKING:
+    from portal.application.facility.results import RecurringBookingConflictResult
 
 from portal.domain.facility.constants import TIMETABLE_CELL_MINUTES, TIMETABLE_CELLS_PER_DAY, RecurringConflictKind, TimetableCellState, TimetableOccupancyKind
 
@@ -177,3 +180,8 @@ def redact_conflict_for_personal(conflict_kind: str, ministry_id: Optional[UUID]
 
 def format_local_hm(dt: datetime, tz: ZoneInfo) -> str:
     return dt.astimezone(tz).strftime("%H:%M")
+
+
+def member_safe_conflicts(conflicts: list[RecurringBookingConflictResult]) -> list[dict]:
+    """Conflicts for member error contexts: never the raw occupying Bookings (Booker identity, Booking ids)."""
+    return [item.model_dump(mode="json", exclude={"occupying_bookings"}, exclude_none=True) for item in conflicts]

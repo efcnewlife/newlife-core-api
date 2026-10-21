@@ -19,6 +19,7 @@ from portal.application.facility.results import (
     RecurringSeriesDraftResult,
     RecurringSeriesDraftStoredRoomResult,
 )
+from portal.application.facility.timetable_projection import member_safe_conflicts
 from portal.application.org.results import CreateIdResult
 from portal.domain.facility.constants import FacilityErrorCode
 from portal.exceptions.responses import ConflictErrorException, ForbiddenException, NotFoundException
@@ -130,6 +131,8 @@ class RecurringSeriesDraftService:
             occurrence_count=evaluation.occurrence_count,
             pending_payment_hold_days=evaluation.pending_payment_hold_days,
             payment_hold_expires_at=evaluation.payment_hold_expires_at,
+            override_impacts=evaluation.override_impacts,
+            override_review_token=evaluation.override_review_token,
         )
 
     @distributed_trace()
@@ -160,10 +163,11 @@ class RecurringSeriesDraftService:
         return await self._to_draft_result(row)
 
     @distributed_trace()
-    async def confirm_draft(self, series_draft_id: UUID) -> RecurringBookingSeriesResult:
+    async def confirm_draft(self, series_draft_id: UUID, override_review_token: Optional[str] = None) -> RecurringBookingSeriesResult:
+        """Create the remaining Series, displace reviewed targets, and consume the Draft in the caller's one transaction."""
         user_id = self._authenticated_user_id()
         row = await self._get_owned_draft_or_404(series_draft_id, user_id)
-        command = self._stored_to_series_command(row)
+        command = self._stored_to_series_command(row).model_copy(update={"override_review_token": override_review_token})
         evaluation = await self._recurring_booking_service.evaluate_proposal(command)
         if not evaluation.is_confirmable:
             raise ConflictErrorException(
@@ -172,7 +176,7 @@ class RecurringSeriesDraftService:
                 context={
                     "series_draft_id": str(series_draft_id),
                     "invalidity_code": evaluation.invalidity_code,
-                    "conflicts": [item.model_dump(mode="json") for item in evaluation.conflicts],
+                    "conflicts": member_safe_conflicts(evaluation.conflicts),
                 },
             )
         result = await self._recurring_booking_service.create_series(command)

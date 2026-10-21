@@ -27,6 +27,7 @@ from tests.fixtures.facility.stubs import (
     StubRecurringSeriesDraftRepository,
     StubRoomBlackoutRepository,
     StubRoomSlotTemplateRepository,
+    StubTransactionHooks,
     StubUserReadService,
 )
 from tests.fixtures.system.stubs import StubSettingService
@@ -115,6 +116,7 @@ def _service(
         override_notifier=StubRecurringOverrideNotifier(),
         now_utc=now_utc or (lambda: OPEN_WINDOW_NOW),
         room_slot_template_repository=StubRoomSlotTemplateRepository(),
+        transaction_hooks=StubTransactionHooks(),
     )
     service = RecurringSeriesDraftService(draft_stub, recurring)
     return service, draft_stub, series_stub, booking_stub, user_id
@@ -136,6 +138,7 @@ async def test_create_draft_requires_authenticated_user(monkeypatch):
             override_log_repository=StubOverrideLogRepository(),
             now_utc=lambda: OPEN_WINDOW_NOW,
             room_slot_template_repository=StubRoomSlotTemplateRepository(),
+            transaction_hooks=StubTransactionHooks(),
         ),
     )
     with pytest.raises(ForbiddenException, match="Authenticated user required"):

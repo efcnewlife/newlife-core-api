@@ -2,7 +2,7 @@
 Facility mapper tests (serializer <-> command/result).
 """
 
-from datetime import date, datetime, time, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 from inspect import getsource
 from uuid import uuid4
@@ -1062,3 +1062,76 @@ def test_series_get_by_id_selects_ministry_name():
     source = getsource(RecurringBookingRepository.get_by_id)
     assert "_ministry_name_subquery" in source
     assert "ministry_name" in source
+
+
+def test_member_create_recurring_series_requires_override_review_and_maps_token():
+    model = MemberRecurringBookingSeriesCreate(
+        title="Weekly choir",
+        first_occurrence_date=date(2026, 1, 6),
+        last_occurrence_date=date(2026, 2, 10),
+        local_start_time=time(10, 0),
+        local_end_time=time(12, 0),
+        rooms=[MemberRecurringBookingSeriesRoomInput(facility_id=uuid4(), sequence=0)],
+        override_review_token="opaque",
+    )
+    command = create_recurring_booking_series_to_command(model)
+    assert command.require_override_review is True
+    assert command.override_review_token == "opaque"
+
+
+def test_admin_create_recurring_series_keeps_unreviewed_override():
+    from portal.serializers.admin.v1.facility.booking_series import AdminRecurringBookingSeriesCreate, AdminRecurringBookingSeriesRoomInput
+
+    model = AdminRecurringBookingSeriesCreate(
+        title="Weekly choir",
+        user_id=uuid4(),
+        first_occurrence_date=date(2026, 1, 6),
+        last_occurrence_date=date(2026, 1, 27),
+        local_start_time=time(10, 0),
+        local_end_time=time(12, 0),
+        rooms=[AdminRecurringBookingSeriesRoomInput(facility_id=uuid4(), sequence=0)],
+    )
+    command = create_recurring_booking_series_to_command(model)
+    assert command.require_override_review is False
+    assert command.override_review_token is None
+
+
+def test_recurring_preview_and_series_draft_expose_override_review_in_camel_case():
+    from portal.application.facility.results import OverrideImpactResult, OverrideReleasedIntervalResult
+
+    room_id, booking_id = uuid4(), uuid4()
+    start = datetime(2026, 1, 13, 15, 0, tzinfo=timezone.utc)
+    impact = OverrideImpactResult(
+        booking_id=booking_id,
+        start_at=start,
+        end_at=start + timedelta(hours=2),
+        released_intervals=[OverrideReleasedIntervalResult(facility_id=room_id, start_at=start, end_at=start + timedelta(hours=2))],
+    )
+    preview = RecurringBookingPreviewResult(quoted_amount=Decimal("600"), currency="CAD", override_impacts=[impact], override_review_token="opaque")
+    dumped = recurring_booking_preview_to_member_api(preview).model_dump(by_alias=True)
+    assert dumped["overrideImpacts"][0]["bookingId"] == booking_id
+    assert dumped["overrideImpacts"][0]["releasedIntervals"][0]["facilityId"] == room_id
+    assert dumped["overrideReviewToken"] == "opaque"
+
+    draft = RecurringSeriesDraftResult(
+        id=uuid4(),
+        first_occurrence_date=date(2026, 1, 6),
+        last_occurrence_date=date(2026, 1, 27),
+        local_start_time=time(10, 0),
+        local_end_time=time(12, 0),
+        is_confirmable=True,
+        quoted_amount=Decimal("400"),
+        subtotal_amount=Decimal("400"),
+        discount_percent=Decimal("0"),
+        discount_amount=Decimal("0"),
+        surcharge_amount=Decimal("0"),
+        currency="CAD",
+        occurrence_count=4,
+        pending_payment_hold_days=3,
+        payment_hold_expires_at=datetime(2025, 12, 11, 17, 0, tzinfo=timezone.utc),
+        override_impacts=[impact],
+        override_review_token="opaque",
+    )
+    dumped = recurring_series_draft_result_to_api(draft).model_dump(by_alias=True)
+    assert dumped["overrideImpacts"][0]["bookingId"] == booking_id
+    assert dumped["overrideReviewToken"] == "opaque"

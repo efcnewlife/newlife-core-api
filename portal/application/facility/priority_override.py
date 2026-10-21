@@ -183,12 +183,18 @@ def notify_displaced_bookers_after_commit(
     church_activity_name: str,
     church_activity_name_zh: str,
     actor_id: UUID,
+    series_id: Optional[UUID] = None,
 ) -> None:
     """Queue the override notification until commit; nothing is sent on rollback and delivery failure never undoes the commit."""
     if not items:
         return
     notification = RecurringOverrideNotification(
-        ministry_id=ministry_id, church_activity_name=church_activity_name, church_activity_name_zh=church_activity_name_zh, actor_id=actor_id, items=items
+        series_id=series_id,
+        ministry_id=ministry_id,
+        church_activity_name=church_activity_name,
+        church_activity_name_zh=church_activity_name_zh,
+        actor_id=actor_id,
+        items=items,
     )
 
     async def _send() -> None:
