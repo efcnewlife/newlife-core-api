@@ -2,7 +2,7 @@
 AvailabilityService unit tests (Timetable cells, visibility, contacts).
 """
 
-from datetime import date, datetime, time, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
@@ -19,9 +19,9 @@ from portal.application.facility.results import (
     RoomSlotTemplateResult,
 )
 from portal.application.org.results import MinistryDetailResult, MinistryMemberResult
-from portal.domain.facility.constants import TIMETABLE_CELLS_PER_DAY, RoomBlackoutKind, TimetableCellState, TimetableOccupancyKind
+from portal.domain.facility.constants import TIMETABLE_CELLS_PER_DAY, FacilityErrorCode, RoomBlackoutKind, TimetableCellState, TimetableOccupancyKind
 from portal.domain.org.constants import MinistryMemberRole, MinistryStatus
-from portal.exceptions.responses import ForbiddenException
+from portal.exceptions.responses import BadRequestException, ForbiddenException
 from portal.libs.contexts.user_context import UserContext, set_user_context
 from tests.fixtures.facility.stubs import (
     StubBookingRepository,
@@ -35,6 +35,7 @@ from tests.fixtures.system.stubs import StubSettingService
 
 DAY = date(2026, 7, 20)  # Monday
 TZ = ZoneInfo("America/Toronto")
+NOW = datetime.combine(DAY, time(23, 30), tzinfo=TZ).astimezone(timezone.utc)
 
 
 def _utc(hour: int, minute: int = 0) -> datetime:
@@ -71,7 +72,9 @@ def _room_and_template(room_id=None, start=time(9, 0), end=time(12, 0), duration
     return room_id, rooms, [_template(room_id, start, end, duration)]
 
 
-def _make_availability_service(rooms, templates, blackouts=None, file_service=None, setting_service=None, booking_repository=None, ministry_repository=None):
+def _make_availability_service(
+    rooms, templates, blackouts=None, file_service=None, setting_service=None, booking_repository=None, ministry_repository=None, now_utc=None
+):
     return AvailabilityService(
         _StubRoomRepository(rooms),
         _StubSlotTemplateRepository(templates),
@@ -80,6 +83,7 @@ def _make_availability_service(rooms, templates, blackouts=None, file_service=No
         StubRoomBlackoutRepository(for_room_day=blackouts or []),
         setting_service or StubSettingService(),
         file_service or StubFileService(),
+        now_utc=now_utc or (lambda: NOW),
     )
 
 
@@ -354,3 +358,63 @@ async def test_blackout_splits_merged_window_and_crossing_event():
     assert by_start["12:00"] == TimetableCellState.CLOSED.value
     assert by_start["11:00"] == TimetableCellState.UNAVAILABLE.value
     assert by_start["13:00"] == TimetableCellState.UNAVAILABLE.value
+
+
+class _RoomWorkForbiddenRepository(_StubRoomRepository):
+    async def list_active(self, locale_id):
+        raise AssertionError("room work must not run for a past date")
+
+
+@pytest.mark.asyncio
+async def test_past_date_is_rejected_before_room_work():
+    _, rooms, templates = _room_and_template()
+    service = _make_availability_service(rooms, templates)
+    service._room_repository = _RoomWorkForbiddenRepository(rooms)
+    with pytest.raises(BadRequestException) as exc_info:
+        await service.get_rooms_availability(RoomAvailabilityQueryCommand(target_date=DAY - timedelta(days=1)))
+    assert exc_info.value.error_code == FacilityErrorCode.AVAILABILITY_DATE_IN_PAST.value
+
+
+@pytest.mark.asyncio
+async def test_today_and_future_dates_return_timetable():
+    _, rooms, templates = _room_and_template()
+    service = _make_availability_service(rooms, templates)
+    today = await service.get_rooms_availability(RoomAvailabilityQueryCommand(target_date=DAY))
+    future = await service.get_rooms_availability(RoomAvailabilityQueryCommand(target_date=DAY + timedelta(days=7)))
+    assert len(today.items) == 1
+    assert len(future.items) == 1
+
+
+@pytest.mark.asyncio
+async def test_today_follows_facility_timezone_not_utc():
+    _, rooms, templates = _room_and_template()
+    just_after_midnight_toronto = datetime.combine(DAY, time(0, 5), tzinfo=TZ).astimezone(timezone.utc)
+    service = _make_availability_service(rooms, templates, now_utc=lambda: just_after_midnight_toronto)
+    result = await service.get_rooms_availability(RoomAvailabilityQueryCommand(target_date=DAY))
+    assert len(result.items) == 1
+    with pytest.raises(BadRequestException):
+        await service.get_rooms_availability(RoomAvailabilityQueryCommand(target_date=DAY - timedelta(days=1)))
+
+    late_evening_toronto = datetime.combine(DAY, time(22, 0), tzinfo=TZ).astimezone(timezone.utc)
+    assert late_evening_toronto.date() > DAY
+    service = _make_availability_service(rooms, templates, now_utc=lambda: late_evening_toronto)
+    result = await service.get_rooms_availability(RoomAvailabilityQueryCommand(target_date=DAY))
+    assert len(result.items) == 1
+
+
+@pytest.mark.asyncio
+async def test_past_date_with_ministry_context_is_bad_request_not_forbidden():
+    _, rooms, templates = _room_and_template()
+    ministry_id = uuid4()
+    set_user_context(UserContext(user_id=uuid4(), email="outsider@efcnewlife.org"))
+    ministry_repo = StubMinistryRepository(
+        ministry_by_id={
+            ministry_id: MinistryDetailResult(id=ministry_id, name="Choir", status=MinistryStatus.ACTIVE.value, has_priority_booking=False, is_active=True)
+        },
+        booking_member_user_ids=set(),
+    )
+    service = _make_availability_service(rooms, templates, ministry_repository=ministry_repo)
+    with pytest.raises(BadRequestException) as exc_info:
+        await service.get_rooms_availability(RoomAvailabilityQueryCommand(target_date=DAY - timedelta(days=1), ministry_id=ministry_id))
+    assert exc_info.value.error_code == FacilityErrorCode.AVAILABILITY_DATE_IN_PAST.value
+    assert ministry_repo.membership_check_calls == []
