@@ -406,13 +406,16 @@ class MemberRecurringBookingSeriesProposal(BaseModel):
     rooms: list[MemberRecurringBookingSeriesRoomInput] = Field(default_factory=list)
     surcharge_codes: list[str] = Field(default_factory=list)
     remark: Optional[str] = Field(default=None)
+    excluded_dates: list[DateType] = Field(default_factory=list, description="Conflicting occurrence dates to omit; the review token is bound to them")
 
 
 class MemberRecurringBookingSeriesCreate(MemberRecurringBookingSeriesProposal):
     """Create a weekly Recurring Booking Series."""
 
     title: BookingTitle = Field(...)
-    excluded_dates: list[DateType] = Field(default_factory=list)
+    override_review_token: Optional[str] = Field(
+        default=None, max_length=4096, description="overrideReviewToken from the reviewed preview; required when the Series displaces Bookings"
+    )
 
 
 class MemberRecurringBookingSeriesTitleUpdate(BaseModel):
@@ -482,6 +485,10 @@ class MemberRecurringBookingPreview(BaseModel):
     conflicts: list[MemberRecurringBookingConflict] = Field(default_factory=list)
     quoted_amount: Decimal = Field(..., serialization_alias="quotedAmount")
     currency: str = Field(...)
+    override_impacts: list[MemberOverrideImpact] = Field(default_factory=list, serialization_alias="overrideImpacts")
+    override_review_token: Optional[str] = Field(
+        default=None, serialization_alias="overrideReviewToken", description="Send as override_review_token on final confirmation"
+    )
 
 
 class MemberRecurringBookingWindowStatus(BaseModel):
@@ -502,7 +509,6 @@ class MemberRecurringSeriesDraftCreate(MemberRecurringBookingSeriesProposal):
     """Create a Recurring Series Draft from a preview-ready weekly proposal."""
 
     title: OptionalBookingTitle = Field(default=None)
-    excluded_dates: list[DateType] = Field(default_factory=list)
 
 
 class MemberRecurringSeriesDraftUpdate(MemberRecurringSeriesDraftCreate):
@@ -536,3 +542,15 @@ class MemberRecurringSeriesDraftDetail(UUIDBaseModel):
     occurrence_count: int = Field(..., serialization_alias="occurrenceCount")
     pending_payment_hold_days: int = Field(..., serialization_alias="pendingPaymentHoldDays")
     payment_hold_expires_at: datetime = Field(..., serialization_alias="paymentHoldExpiresAt")
+    override_impacts: list[MemberOverrideImpact] = Field(default_factory=list, serialization_alias="overrideImpacts")
+    override_review_token: Optional[str] = Field(
+        default=None, serialization_alias="overrideReviewToken", description="Send as override_review_token on final confirmation"
+    )
+
+
+class MemberRecurringSeriesDraftConfirm(BaseModel):
+    """Optional final-confirmation body; omit when the reviewed Draft displaces nothing."""
+
+    override_review_token: Optional[str] = Field(
+        default=None, max_length=4096, description="overrideReviewToken from the reviewed Draft; required when the Series displaces Bookings"
+    )

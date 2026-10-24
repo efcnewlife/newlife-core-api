@@ -40,7 +40,7 @@ ADR 0021 lets a Priority Ministry Recurring Series displace future Rental occurr
 
 - Facility Booking frontend sends `overrideReviewToken` from the reviewed Draft as `override_review_token`, and refreshes the Draft on either review error.
 - Rotating `JWT_SECRET_KEY` invalidates outstanding review tokens (members re-review).
-- Recurring confirmation (EFC-259) should reuse `priority_override` (token, `apply_whole_booking_overrides`, `notify_displaced_bookers_after_commit`).
+- Recurring confirmation reuses `priority_override` (token, `apply_whole_booking_overrides`, `notify_displaced_bookers_after_commit`); see ADR 0036.
 
 ## Related
 

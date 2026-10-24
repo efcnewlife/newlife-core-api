@@ -701,6 +701,8 @@ def recurring_series_draft_result_to_api(result: RecurringSeriesDraftResult) -> 
         excluded_dates=result.excluded_dates,
         rooms=[MemberRecurringSeriesDraftRoom(facility_id=room.facility_id, sequence=room.sequence) for room in result.rooms],
         conflicts=[MemberRecurringBookingConflict.model_validate(item.model_dump()) for item in result.conflicts],
+        override_impacts=[MemberOverrideImpact.model_validate(item.model_dump()) for item in result.override_impacts],
+        override_review_token=result.override_review_token,
         is_confirmable=result.is_confirmable,
         invalidity_code=result.invalidity_code,
         invalidity_detail=result.invalidity_detail,
@@ -864,6 +866,8 @@ def create_recurring_booking_series_to_command(model) -> "CreateRecurringBooking
         remark=model.remark,
         excluded_dates=list(getattr(model, "excluded_dates", []) or []),
         enforce_opening_hours=not is_admin,
+        require_override_review=not is_admin,
+        override_review_token=getattr(model, "override_review_token", None),
     )
 
 
