@@ -118,6 +118,10 @@ _Avoid_: Ministry rental, assuming every Church Activity Booking has priority, p
 An Active Ministry whose `has_priority_booking` is true and whose current primary or secondary steward may create a Church Activity Booking that replaces conflicting future Rental occurrences. Removing priority does not rewrite existing Series or override audit, but blocks future overrides.
 _Avoid_: every Active Ministry, a Ministry with a priority member, a Ministry that may replace another Church Activity Booking, retroactively changing existing overrides
 
+**Ministry Booking Charging Policy**:
+Every Church Activity Booking is entirely free, including room fees and all surcharges, regardless of Priority status or whether it is One-time or Recurring. Free Ministry Bookings do not require a configured Rental Rate; final confirmation creates a Confirmed Booking or Series and its Confirmed Occurrences without a payment hold.
+_Avoid_: a configurable charging toggle, waiving only room fees, treating free booking as Priority status, requiring a Rental Rate for a free Ministry Booking
+
 **Override impact**:
 The whole future Rental Booking (or, for a Series target, only that Booking Occurrence) that a Priority Ministry proposal would displace, listed with every room interval it would release, not just the intersecting ones. Draft read/update reports it without reserving, displacing, or notifying. It omits the Rental Booker's identity and Booking Title.
 _Avoid_: listing only overlapping lines, partial-line displacement, cancelling the target's whole Series, showing the displaced Booker's name in the impact list
@@ -251,11 +255,11 @@ The binding of one Rental Rate Template to one Room, used when selecting which T
 _Avoid_: Rate as a priced catalog row of its own, global NULL-facility Rate rows as the v1 model
 
 **Preview quote**:
-Server-computed rental totals for a proposed set of Booking lines (each with its own interval): per-line amounts from the selected Rental Rate Template, then booking-level ministry discount and surcharges. The quoted amount is line subtotals minus discount plus surcharges. There is no minimum-fee floor and no Rental Policy Setting in the pricing model. Distinct from creating a booking.
+Server-computed totals for proposed Booking lines, each with its own interval. Personal quotes use selected Rental Rate Templates, applicable Booking Discount, and any applicable surcharges without a minimum-fee floor; Church Activity quotes are entirely zero under the Ministry Booking Charging Policy.
 _Avoid_: client-side HST or totals, a single shared interval for all lines on member preview, treating Preview quote as a created booking, minimum fee / policy floor as part of the quote
 
 **Booking Discount**:
-An admin-managed percentage reduction of a Booking's room-line subtotal. An Active Ministry Booking whose Booker is its current primary or secondary member receives the Ministry Discount (30%); otherwise, a Recurring Booking receives the Recurring Discount (20%). Only one Booking Discount applies, and surcharges are added after the reduction. A configured percentage is from 0 to 100 with at most two decimal places; an inactive or absent rule is no discount.
+An admin-managed percentage reduction of a charged Booking's room-line subtotal. Personal Recurring Bookings receive the Recurring Discount (20%); Church Activity Bookings follow the Ministry Booking Charging Policy instead of a percentage discount. Only one Booking Discount applies, and surcharges are added after the reduction. A configured percentage is from 0 to 100 with at most two decimal places; an inactive or absent rule is no discount.
 _Avoid_: stacking Ministry and Recurring Discounts, discounting surcharges, a client-supplied discount amount
 
 **Booking Discount Eligibility**:
@@ -267,7 +271,7 @@ The persisted line-rate and Booking or Series financial values captured when a B
 _Avoid_: repricing a Confirmed Booking, retroactive discount-rule changes, a live total for historical Bookings
 
 **Admin Booking edit**:
-The limited admin change surface for an existing Booking: title, Ministry association, and surcharge selection may be submitted, while header or line times and Room selection cannot be changed. Room or time changes are handled manually until separately designed.
+The limited admin change surface for an existing Booking: title may be edited, while Ministry association, header or line times, and Room selection cannot be changed. Changing between Personal and Ministry or between Ministries requires cancellation and a new Booking; Draft associations remain editable before confirmation.
 _Avoid_: changing Rooms without their time intervals, silently repricing a Confirmed Booking, treating Admin Booking edit as an unrestricted update
 
 **Booking Draft**:
@@ -275,7 +279,7 @@ A standalone, non-locking snapshot of a member's proposed Booking lines (date, m
 _Avoid_: a `facility.booking` row with status DRAFT, a slot hold or lock, a link shareable with non-creators, caching its quote or availability, treating the Start Booking cleanup as a scheduled expiry mechanism, a second browser-only Title at confirmation
 
 **Recurring Series Draft**:
-A standalone, non-locking snapshot of one weekly Recurring Booking Series proposal owned by a member: shared local time window, First occurrence, Last occurrence, weekday (implied by those dates), ministry context, ordered rooms, Title, permitted exclusions, and the current server quote plus payment-hold information. It is created from a preview-ready Repeated proposal, never reserves rooms, and is unavailable to every other member. Reads and confirmation revalidate current availability and policy; a stale proposal is non-confirmable and does not create a Series. Confirming an owned valid Draft atomically creates exactly one pending-payment Recurring Booking Series and consumes that Draft. Start Booking clears unconfirmed Recurring Series Drafts without deleting a created Series. Distinct from Booking Draft and from a Recurring Booking Series.
+A standalone, non-locking snapshot of one weekly Recurring Booking Series proposal owned by a member: shared local time window, First occurrence, Last occurrence, weekday (implied by those dates), ministry context, ordered rooms, Title, permitted exclusions, and the current server quote plus any applicable Personal payment-hold information. It is created from a preview-ready Repeated proposal, never reserves rooms, and is unavailable to every other member. Reads and confirmation revalidate current availability and policy; a stale proposal is non-confirmable and does not create a Series. Confirming an owned valid Draft atomically creates exactly one Recurring Booking Series and consumes that Draft: Confirmed for Ministry, Pending-payment for Personal. Start Booking clears unconfirmed Recurring Series Drafts without deleting a created Series. Distinct from Booking Draft and from a Recurring Booking Series.
 _Avoid_: widening Booking Draft to hold weekly-Series data, treating the Draft as a room hold, creating a Series from a consumed, missing, or another member's Draft, deleting a pending-payment Series when clearing Drafts
 
 **System Setting**:
