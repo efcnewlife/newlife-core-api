@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. Core API pricing, lifecycle, and response contracts are implemented (EFC-271). Post-creation association immutability (EFC-272) and frontend adoption (EFC-273, EFC-274) are tracked separately.
+Accepted. Core API pricing, lifecycle, and response contracts are implemented (EFC-271), as is post-creation association immutability (EFC-272). Frontend adoption (EFC-273, EFC-274) is tracked separately.
 
 ## Context and decision
 
@@ -40,9 +40,17 @@ The server decides free pricing; a client never derives it from `ministryId` alo
 - Created Ministry Series: `status` `confirmed`, `paymentHoldExpiresAt` `null`, every occurrence `confirmed`. Created One-time Ministry Booking stays `confirmed`. Persisted snapshots store zero amounts, `is_mission_aligned = true`, and null rate fields on room rows. Payment queues, the expiry sweep, and payment instructions already key off `pending_payment`, so free Ministry bookings never appear in them.
 - No database shape change is required; every affected snapshot column is already nullable.
 
+## API contract (EFC-272)
+
+`PUT /admin/api/v1/facility/bookings/{id}` is the only post-creation surface that accepts a Ministry association; it applies to One-time Bookings and Recurring Occurrences alike. Member title edits for Bookings and Series accept only `title`. No Series-level edit API exists.
+
+- `ministry_id` omitted: the stored association is kept.
+- `ministry_id` equal to the stored value (including `null` on a Personal Booking): accepted. The title is saved; eligibility is not re-checked and the Booking is not repriced.
+- `ministry_id` different from the stored value (Personal to Ministry, explicit `null` on a Ministry Booking, or another Ministry): `409` with `error_code` `FACILITY_BOOKING_MINISTRY_ASSOCIATION_LOCKED`. Nothing is written, including the title. The client should direct the operator to cancel and create a new booking.
+- Booking and Series Drafts are unaffected; their association stays editable with live revalidation.
+
 ## Remaining implementation gaps
 
-- Admin forms may submit an unchanged Ministry association on every save. Immutability must reject association changes while allowing an unchanged submitted value, so ordinary title edits remain possible.
 - Member and Admin presentation, payment actions, and discount eligibility displays require coordinated review. Backend zero totals alone do not satisfy the free-booking experience. Frontends should switch from the 30% Ministry discount display to `isFreeMinistry`.
 
 ## Related

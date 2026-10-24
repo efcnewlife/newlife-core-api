@@ -168,58 +168,70 @@ async def test_update_booking_not_found():
     assert exc_info.value.error_code == "FACILITY_BOOKING_NOT_FOUND"
 
 
+_MINISTRY_A = uuid4()
+_MINISTRY_B = uuid4()
+
+
 @pytest.mark.asyncio
-async def test_update_booking_updates_title_and_ministry_without_changing_rooms(monkeypatch):
-    operator_id = uuid4()
+@pytest.mark.parametrize(
+    ("stored_ministry_id", "submitted"),
+    [
+        pytest.param(None, {"ministry_id": _MINISTRY_A}, id="personal-to-ministry"),
+        pytest.param(_MINISTRY_A, {"ministry_id": None}, id="ministry-to-personal"),
+        pytest.param(_MINISTRY_A, {"ministry_id": _MINISTRY_B}, id="ministry-to-other-ministry"),
+    ],
+)
+async def test_update_booking_rejects_ministry_association_change_and_keeps_snapshot(monkeypatch, stored_ministry_id, submitted):
     booker_id = uuid4()
-    ministry = make_ministry_detail()
-    _user_ctx(monkeypatch, user_id=operator_id)
+    _user_ctx(monkeypatch)
     booking_id = uuid4()
-    existing = _updatable_booking(booking_id=booking_id, user_id=booker_id)
+    existing = _updatable_booking(booking_id=booking_id, user_id=booker_id, ministry_id=stored_ministry_id)
     booking_stub = StubBookingRepository(exists=True, detail=existing)
-    ministry_stub = StubMinistryRepository(ministry_by_id={ministry.id: ministry}, booking_member_user_ids={booker_id})
-    service = _booking_service(booking_stub, ministry_stub=ministry_stub)
-    result = await service.update_booking(
-        booking_id, make_update_booking_command(title="Updated choir", ministry_id=ministry.id, surcharge_codes=["audio_system"])
-    )
-    header = booking_stub.update_header_calls[0]
-    assert header == {"title": "Updated choir", "ministry_id": ministry.id}
+    stewarded = {ministry_id: make_ministry_detail(ministry_id=ministry_id) for ministry_id in (_MINISTRY_A, _MINISTRY_B)}
+    ministry_stub = StubMinistryRepository(ministry_by_id=stewarded, booking_member_user_ids={booker_id})
+    pricing_stub = StubPricingService(make_preview_quote_result(quoted_amount=Decimal("0")))
+    service = _booking_service(booking_stub, pricing_stub=pricing_stub, ministry_stub=ministry_stub)
+
+    with pytest.raises(ConflictErrorException) as exc_info:
+        await service.update_booking(booking_id, make_update_booking_command(title="Updated choir", **submitted))
+
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.error_code == BookingErrorCode.MINISTRY_ASSOCIATION_LOCKED.value
+    assert booking_stub.update_header_calls == []
+    assert pricing_stub.preview_calls == []
+    stored = await service.get_booking_by_id(booking_id)
+    assert stored == existing
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("stored_ministry_id", "submitted"),
+    [
+        pytest.param(_MINISTRY_A, {"ministry_id": _MINISTRY_A}, id="ministry-unchanged"),
+        pytest.param(_MINISTRY_A, {}, id="ministry-omitted"),
+        pytest.param(None, {"ministry_id": None}, id="personal-unchanged"),
+        pytest.param(None, {}, id="personal-omitted"),
+    ],
+)
+async def test_update_booking_title_edit_keeps_association_without_revalidation_or_repricing(monkeypatch, stored_ministry_id, submitted):
+    _user_ctx(monkeypatch)
+    booking_id = uuid4()
+    existing = _updatable_booking(booking_id=booking_id, ministry_id=stored_ministry_id)
+    booking_stub = StubBookingRepository(exists=True, detail=existing)
+    # The stored Ministry is unknown to the repository and the Booker no longer stewards it: a title edit must not re-run creation eligibility.
+    ministry_stub = StubMinistryRepository()
+    pricing_stub = StubPricingService(make_preview_quote_result(quoted_amount=Decimal("999")))
+    service = _booking_service(booking_stub, pricing_stub=pricing_stub, ministry_stub=ministry_stub)
+
+    result = await service.update_booking(booking_id, make_update_booking_command(title="Updated choir", surcharge_codes=["audio_system"], **submitted))
+
+    assert booking_stub.update_header_calls == [{"title": "Updated choir"}]
+    assert ministry_stub.membership_check_calls == []
+    assert pricing_stub.preview_calls == []
     assert booking_stub.replace_rooms_calls == []
     assert booking_stub.replace_slots_calls == []
     assert result.title == "Updated choir"
-    assert result.ministry_id == ministry.id
-    assert result.rooms[0].facility_id == existing.rooms[0].facility_id
-    assert result.rooms[0].start_at == existing.rooms[0].start_at
-    assert result.rooms[0].end_at == existing.rooms[0].end_at
-
-
-@pytest.mark.asyncio
-async def test_update_booking_validates_ministry_against_booker(monkeypatch):
-    operator_id = uuid4()
-    booker_id = uuid4()
-    ministry = make_ministry_detail()
-    _user_ctx(monkeypatch, user_id=operator_id)
-    booking_id = uuid4()
-    booking_stub = StubBookingRepository(exists=True, detail=_updatable_booking(booking_id=booking_id, user_id=booker_id))
-    ministry_stub = StubMinistryRepository(ministry_by_id={ministry.id: ministry}, booking_member_user_ids={booker_id})
-    service = _booking_service(booking_stub, ministry_stub=ministry_stub)
-    await service.update_booking(booking_id, make_update_booking_command(ministry_id=ministry.id))
-    assert ministry_stub.membership_check_calls[0]["user_id"] == booker_id
-
-
-@pytest.mark.asyncio
-async def test_update_booking_rejects_when_booker_not_ministry_member(monkeypatch):
-    operator_id = uuid4()
-    booker_id = uuid4()
-    ministry = make_ministry_detail()
-    _user_ctx(monkeypatch, user_id=operator_id)
-    booking_id = uuid4()
-    service = _booking_service(
-        StubBookingRepository(exists=True, detail=_updatable_booking(booking_id=booking_id, user_id=booker_id)),
-        ministry_stub=StubMinistryRepository(ministry_by_id={ministry.id: ministry}, booking_member_user_ids={operator_id}),
-    )
-    with pytest.raises(ForbiddenException, match="not a ministry owner"):
-        await service.update_booking(booking_id, make_update_booking_command(ministry_id=ministry.id))
+    assert result.model_dump(exclude={"title"}) == existing.model_dump(exclude={"title"})
 
 
 @pytest.mark.asyncio

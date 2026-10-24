@@ -142,10 +142,13 @@ class AdminBookingCreate(BaseModel):
 
 
 class AdminBookingUpdate(BaseModel):
-    """Constrained Admin Booking update: title, Ministry, and surcharge selection."""
+    """Constrained Admin Booking update: title edit; the Ministry association is immutable after creation."""
 
     title: BookingTitle = Field(...)
-    ministry_id: Optional[UUID] = Field(default=None)
+    ministry_id: Optional[UUID] = Field(
+        default=None,
+        description="Immutable after creation: omit or resend the stored value; any change returns 409 FACILITY_BOOKING_MINISTRY_ASSOCIATION_LOCKED",
+    )
     surcharge_codes: list[str] = Field(default_factory=list)
 
 

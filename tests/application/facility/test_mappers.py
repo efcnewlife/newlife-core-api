@@ -328,6 +328,13 @@ def test_booking_and_member_mappers():
     assert not hasattr(update_cmd, "start_at")
     assert not hasattr(update_cmd, "end_at")
     assert not hasattr(update_cmd, "rooms")
+    assert "ministry_id" in update_cmd.model_fields_set
+
+    omitted_cmd = update_booking_to_command(AdminBookingUpdate.model_validate_json('{"title": "Choir practice"}'))
+    assert "ministry_id" not in omitted_cmd.model_fields_set
+    removal_cmd = update_booking_to_command(AdminBookingUpdate.model_validate_json('{"title": "Choir practice", "ministry_id": null}'))
+    assert "ministry_id" in removal_cmd.model_fields_set
+    assert removal_cmd.ministry_id is None
 
     cancel_cmd = cancel_booking_to_command(AdminBookingCancel(scope="series", cancel_reason="weather"))
     assert cancel_cmd.scope == "series"

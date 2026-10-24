@@ -284,11 +284,15 @@ class BookingRoomLineCommand(BaseModel):
 
 
 class UpdateBookingCommand(BaseModel):
-    """Constrained Admin Booking update: title, Ministry, and surcharge selection."""
+    """Constrained Admin Booking update: title edit; the Ministry association is immutable after creation."""
 
     title: BookingTitle = Field(...)
     ministry_id: Optional[UUID] = Field(default=None)
     surcharge_codes: list[str] = Field(default_factory=list)
+
+    def changes_ministry_association(self, stored_ministry_id: Optional[UUID]) -> bool:
+        """True only when ``ministry_id`` was submitted and differs from the stored association; omission keeps it."""
+        return "ministry_id" in self.model_fields_set and self.ministry_id != stored_ministry_id
 
 
 class CancelBookingCommand(BaseModel):
