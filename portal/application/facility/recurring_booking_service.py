@@ -18,7 +18,6 @@ from portal.application.facility.commands import (
     PreviewQuoteRoomLineCommand,
     UpdateTitleCommand,
 )
-from portal.application.facility.discount_eligibility_service import is_mission_aligned_discount
 from portal.application.facility.opening_hours import member_interval_within_opening_hours
 from portal.application.facility.participant_detail import assemble_participant_booking_detail, assemble_participant_series_detail
 from portal.application.facility.pricing_service import PricingService
@@ -190,6 +189,12 @@ class RecurringBookingService:
         local_tz = await self._setting_service.get_facility_timezone()
         return hold_days, calendar_day_payment_hold_expires_at(now_utc, hold_days, local_tz)
 
+    async def _proposal_payment_hold(self, command: CreateRecurringBookingSeriesCommand, now_utc: datetime) -> tuple[Optional[int], Optional[datetime]]:
+        """Ministry proposals show no hold, even while not yet evaluable, and never read hold settings (ADR 0037)."""
+        if command.ministry_id is not None:
+            return None, None
+        return await self._pending_payment_hold(now_utc)
+
     @distributed_trace()
     async def preview_conflicts(self, command: CreateRecurringBookingSeriesCommand) -> RecurringBookingPreviewResult:
         """Never reserves, displaces, or notifies; the review token covers the schedule minus ``excluded_dates``."""
@@ -210,13 +215,14 @@ class RecurringBookingService:
             conflicts=conflicts,
             quoted_amount=quote["quoted_amount"],
             currency=quote["currency"],
+            is_free_ministry=quote["is_free_ministry"],
             override_impacts=impacts,
             override_review_token=self._issue_review_token(command, prepared, remaining, impacts) if is_reviewable else None,
         )
 
     @distributed_trace()
     async def evaluate_proposal(self, command: CreateRecurringBookingSeriesCommand) -> RecurringProposalEvaluationResult:
-        hold_days, payment_hold_expires_at = await self._pending_payment_hold(self._now_utc())
+        hold_days, payment_hold_expires_at = await self._proposal_payment_hold(command, self._now_utc())
         try:
             prepared = await self._prepare_series(command)
         except ForbiddenException:
@@ -274,6 +280,7 @@ class RecurringBookingService:
             discount_amount=quote["discount_amount"],
             surcharge_amount=quote["surcharge_amount"],
             currency=quote["currency"],
+            is_free_ministry=quote["is_free_ministry"],
             occurrence_count=len(remaining),
             pending_payment_hold_days=hold_days,
             payment_hold_expires_at=payment_hold_expires_at,
@@ -355,7 +362,10 @@ class RecurringBookingService:
             currency = quote.currency
             discount_percent = quote.discount_percent
 
-        _, payment_hold_expires_at = await self._pending_payment_hold(now_utc)
+        # Price decides lifecycle: only a Series the pricing policy made entirely free skips the payment hold.
+        is_free_ministry = all(item.is_free_ministry for item in occurrence_quotes)
+        payment_hold_expires_at = None if is_free_ministry else (await self._pending_payment_hold(now_utc))[1]
+        status = BookingStatus.CONFIRMED.value if is_free_ministry else BookingStatus.PENDING_PAYMENT.value
         series_id = uuid4()
         await self._series_repository.insert_series(
             dict(
@@ -366,7 +376,7 @@ class RecurringBookingService:
                 last_occurrence_date=command.last_occurrence_date,
                 local_start_time=command.local_start_time,
                 local_end_time=command.local_end_time,
-                status=BookingStatus.PENDING_PAYMENT.value,
+                status=status,
                 payment_hold_expires_at=payment_hold_expires_at,
                 billed_hours=series_billed,
                 subtotal_amount=series_subtotal,
@@ -375,7 +385,7 @@ class RecurringBookingService:
                 surcharge_amount=series_surcharge,
                 quoted_amount=series_quoted,
                 currency=currency,
-                is_mission_aligned=is_mission_aligned_discount(quote.discount_code),
+                is_mission_aligned=is_free_ministry,
                 is_priority=is_priority,
                 remark=command.remark,
                 title=command.title,
@@ -400,8 +410,8 @@ class RecurringBookingService:
                     booking_type=BookingType.RECURRING.value,
                     start_at=start_at,
                     end_at=end_at,
-                    status=BookingStatus.PENDING_PAYMENT.value,
-                    is_mission_aligned=is_mission_aligned_discount(quote.discount_code),
+                    status=status,
+                    is_mission_aligned=quote.is_free_ministry,
                     billed_hours=total_billed,
                     subtotal_amount=quote.subtotal_amount,
                     discount_percent=quote.discount_percent,
@@ -453,7 +463,7 @@ class RecurringBookingService:
                     title=command.title,
                     start_at=start_at,
                     end_at=end_at,
-                    status=BookingStatus.PENDING_PAYMENT.value,
+                    status=status,
                     quoted_amount=quote.quoted_amount,
                     currency=quote.currency,
                     facility_ids=[line.facility_id for line in resolved_lines],
@@ -488,7 +498,7 @@ class RecurringBookingService:
             last_occurrence_date=command.last_occurrence_date,
             local_start_time=command.local_start_time,
             local_end_time=command.local_end_time,
-            status=BookingStatus.PENDING_PAYMENT.value,
+            status=status,
             payment_hold_expires_at=payment_hold_expires_at,
             quoted_amount=series_quoted,
             currency=currency,
@@ -848,8 +858,8 @@ class RecurringBookingService:
     @staticmethod
     def _unevaluable_proposal(
         error: BadRequestException,
-        hold_days: int,
-        payment_hold_expires_at: datetime,
+        hold_days: Optional[int],
+        payment_hold_expires_at: Optional[datetime],
         *,
         conflicts: Optional[list[RecurringBookingConflictResult]] = None,
         occurrence_count: int = 0,
@@ -878,6 +888,7 @@ class RecurringBookingService:
         currency = "CAD"
         discount_percent = Decimal("0")
         discount_code = None
+        is_free_ministry = False
         for item in occurrences:
             billed_hours = self._billed_hours(item.start_at, item.end_at)
             quote_lines = [PreviewQuoteRoomLineCommand(facility_id=room.facility_id, billed_hours=billed_hours) for room in command.rooms]
@@ -899,6 +910,7 @@ class RecurringBookingService:
             currency = quote.currency
             discount_percent = quote.discount_percent
             discount_code = quote.discount_code
+            is_free_ministry = quote.is_free_ministry
         return {
             "quoted_amount": series_quoted,
             "subtotal_amount": series_subtotal,
@@ -907,6 +919,7 @@ class RecurringBookingService:
             "surcharge_amount": series_surcharge,
             "currency": currency,
             "discount_code": discount_code,
+            "is_free_ministry": is_free_ministry,
         }
 
     @staticmethod

@@ -163,8 +163,8 @@ The Booker selects first and last occurrences within one Recurring Booking perio
 _Avoid_: a fixed mandatory six-month Series, a per-room minimum-duration policy, counting excluded occurrences toward the minimum
 
 **Pending-payment Booking**:
-A Booking that reserves its requested room intervals in first-come order but is not Confirmed until full payment is verified. It is distinct from a non-locking Booking Draft.
-_Avoid_: Booking Draft, a Confirmed Booking before payment, a non-blocking payment request
+A Booking that reserves its requested room intervals in first-come order but is not Confirmed until full payment is verified. Only Personal Recurring Booking Series enter it; free Church Activity Series are created Confirmed under the Ministry Booking Charging Policy. It is distinct from a non-locking Booking Draft.
+_Avoid_: Booking Draft, a Confirmed Booking before payment, a non-blocking payment request, holding a free Ministry Series for payment
 
 **Weekly Rental Booking quota**:
 The rule that a Booker may have no more than one Rental Booking occurrence from Sunday 00:00 through Saturday 23:59:59 in a facility-local calendar week, across one-time and recurring Rental Bookings. Pending-payment Bookings count toward this quota. Priority and Non-priority Ministry Series do not.
@@ -267,7 +267,7 @@ The server-resolved result that identifies the one Booking Discount applicable t
 _Avoid_: a Ministry-only discount checker, trusting a cached preflight for creation, a client-controlled `is_mission_aligned` flag
 
 **Confirmed price snapshot**:
-The persisted line-rate and Booking or Series financial values captured when a Booking becomes Confirmed. A Pending-payment Recurring Booking Series locks its quoted price when it is created, and payment confirmation does not reprice it. Later rate or discount-rule changes never reprice either snapshot.
+The persisted line-rate and Booking or Series financial values captured when a Booking becomes Confirmed. A Pending-payment Recurring Booking Series locks its quoted price when it is created, a free Ministry snapshot records zero amounts without a fabricated Rental Rate, and payment confirmation does not reprice it. Later rate or discount-rule changes never reprice either snapshot.
 _Avoid_: repricing a Confirmed Booking, retroactive discount-rule changes, a live total for historical Bookings
 
 **Admin Booking edit**:

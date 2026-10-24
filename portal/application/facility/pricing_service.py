@@ -45,20 +45,25 @@ class PricingService:
     @distributed_trace()
     async def preview_quote(self, command: PreviewQuoteCommand) -> PreviewQuoteResult:
         """
-        Compute preview quote for room lines, discounts, and surcharges.
+        Compute preview quote for room lines, discounts, and surcharges; an eligible Ministry proposal is entirely free.
         """
         if not command.room_lines:
             raise BadRequestException(detail="At least one room line is required")
-
-        room_lines: list[PreviewQuoteRoomLineResult] = []
-        subtotal = Decimal("0")
-
         for line in command.room_lines:
             if not await self._room_repository.exists_by_id(line.facility_id):
                 raise BadRequestException(detail=f"Room {line.facility_id} not found")
             if line.billed_hours <= 0:
                 raise BadRequestException(detail="billed_hours must be positive")
 
+        eligibility = await self._discount_eligibility_service.evaluate(
+            EvaluateDiscountEligibilityCommand(booking_type=command.booking_type, ministry_id=command.ministry_id, booker_id=command.booker_id)
+        )
+        if eligibility.is_free_ministry:
+            return self._free_ministry_quote(command)
+
+        room_lines: list[PreviewQuoteRoomLineResult] = []
+        subtotal = Decimal("0")
+        for line in command.room_lines:
             rate = await self._resolve_rate_for_room(facility_id=line.facility_id, billed_hours=line.billed_hours, as_of_date=command.as_of_date)
             if not rate:
                 raise BadRequestException(detail=f"No active rental rate for room {line.facility_id}")
@@ -80,9 +85,6 @@ class PricingService:
                 )
             )
 
-        eligibility = await self._discount_eligibility_service.evaluate(
-            EvaluateDiscountEligibilityCommand(booking_type=command.booking_type, ministry_id=command.ministry_id, booker_id=command.booker_id)
-        )
         discount_percent = eligibility.discount_percent
         discount_amount = self._quantize(subtotal * discount_percent / Decimal("100"))
         after_discount = subtotal - discount_amount
@@ -98,6 +100,23 @@ class PricingService:
             quoted_amount=self._quantize(quoted_amount),
             currency=command.currency,
             room_lines=room_lines,
+        )
+
+    def _free_ministry_quote(self, command: PreviewQuoteCommand) -> PreviewQuoteResult:
+        """Zero every charge without resolving a Rental Rate or pricing surcharge inputs (ADR 0037)."""
+        zero = self._quantize(Decimal("0"))
+        return PreviewQuoteResult(
+            subtotal_amount=zero,
+            discount_percent=Decimal("0"),
+            discount_amount=zero,
+            surcharge_amount=zero,
+            quoted_amount=zero,
+            currency=command.currency,
+            is_free_ministry=True,
+            room_lines=[
+                PreviewQuoteRoomLineResult(facility_id=line.facility_id, billed_hours=line.billed_hours, currency=command.currency, line_subtotal=zero)
+                for line in command.room_lines
+            ],
         )
 
     @staticmethod

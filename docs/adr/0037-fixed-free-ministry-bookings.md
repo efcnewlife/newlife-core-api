@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. This document describes the intended policy, not completed implementation.
+Accepted. Core API pricing, lifecycle, and response contracts are implemented (EFC-271). Post-creation association immutability (EFC-272) and frontend adoption (EFC-273, EFC-274) are tracked separately.
 
 ## Context and decision
 
@@ -29,14 +29,21 @@ Existing Active Ministry and Booker stewardship eligibility, availability, openi
 - Financial snapshots must represent zero payable room fees and surcharge charges without fabricating a Rental Rate when none exists.
 - No legacy-data conversion, historical refund workflow, or charging toggle is required.
 
-## Implementation gaps identified during review
+## API contract (EFC-271)
 
-These are implementation requirements derived from the policy, not completed work:
+The server decides free pricing; a client never derives it from `ministryId` alone. "Eligible" means the existing Active Ministry plus current primary/secondary Booker stewardship check. An ineligible Ministry proposal is still rejected by quote/create gates exactly as before.
 
-- Recurring proposal and Draft results currently require payment-hold fields. Free Ministry results must represent the absence of a hold consistently through API serializers and frontend consumers, rather than inventing a deadline.
-- Quote line results currently require billing-unit and amount fields and pricing resolves a rate before discounts. The no-rate Ministry path must support every consumer without presenting an invented catalog rate.
+- `isFreeMinistry` (boolean, default `false`) is present on: member and Admin preview quotes, member and Admin discount eligibility, Booking Draft detail, member and Admin Recurring conflict preview, and Recurring Series Draft detail.
+- Free quote totals: `subtotalAmount`, `discountAmount`, `surchargeAmount`, `quotedAmount` are `0.00`; `discountPercent` is `0`; `discountCode` is `null`. Dormant `surcharge_codes` are ignored, not priced or validated.
+- Free quote `roomLines`: one entry per requested room line, in request order, with the real `facilityId` and `billedHours`, `currency` from the request, `lineSubtotal` `0.00`, `isDefault` `false`, and `rentalRateName`, `billingUnit`, `unitAmount`, `applicability` all `null`. No Rental Rate is resolved, so a Room without one still quotes. Personal lines are unchanged and still fail with "No active rental rate" when none applies.
+- Recurring Series Draft detail: `pendingPaymentHoldDays` and `paymentHoldExpiresAt` are `null` for every Ministry proposal (including one that is not currently confirmable) and keep their existing non-null values for Personal proposals. Ministry evaluation never reads the hold-days setting.
+- Created Ministry Series: `status` `confirmed`, `paymentHoldExpiresAt` `null`, every occurrence `confirmed`. Created One-time Ministry Booking stays `confirmed`. Persisted snapshots store zero amounts, `is_mission_aligned = true`, and null rate fields on room rows. Payment queues, the expiry sweep, and payment instructions already key off `pending_payment`, so free Ministry bookings never appear in them.
+- No database shape change is required; every affected snapshot column is already nullable.
+
+## Remaining implementation gaps
+
 - Admin forms may submit an unchanged Ministry association on every save. Immutability must reject association changes while allowing an unchanged submitted value, so ordinary title edits remain possible.
-- Member and Admin presentation, payment actions, and discount eligibility displays require coordinated review. Backend zero totals alone do not satisfy the free-booking experience.
+- Member and Admin presentation, payment actions, and discount eligibility displays require coordinated review. Backend zero totals alone do not satisfy the free-booking experience. Frontends should switch from the 30% Ministry discount display to `isFreeMinistry`.
 
 ## Related
 

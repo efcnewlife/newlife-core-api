@@ -263,13 +263,13 @@ class MemberPreviewQuoteRequest(BaseModel):
 
 
 class MemberPreviewQuoteRoomLineResult(BaseModel):
-    """Quoted room line."""
+    """Quoted room line; rate fields are null on a free Ministry line because no Rental Rate applies."""
 
     facility_id: UUID = Field(..., serialization_alias="facilityId")
     billed_hours: Decimal = Field(..., serialization_alias="billedHours")
-    rental_rate_name: str = Field(..., serialization_alias="rentalRateName")
-    billing_unit: str = Field(..., serialization_alias="billingUnit")
-    unit_amount: Decimal = Field(..., serialization_alias="unitAmount")
+    rental_rate_name: Optional[str] = Field(default=None, serialization_alias="rentalRateName")
+    billing_unit: Optional[str] = Field(default=None, serialization_alias="billingUnit")
+    unit_amount: Optional[Decimal] = Field(default=None, serialization_alias="unitAmount")
     currency: str = Field(...)
     applicability: Optional[dict] = Field(default=None)
     is_default: bool = Field(default=False, serialization_alias="isDefault")
@@ -285,6 +285,7 @@ class MemberPreviewQuoteResponse(BaseModel):
     surcharge_amount: Decimal = Field(..., serialization_alias="surchargeAmount")
     quoted_amount: Decimal = Field(..., serialization_alias="quotedAmount")
     currency: str = Field(...)
+    is_free_ministry: bool = Field(default=False, serialization_alias="isFreeMinistry", description="Eligible Church Activity Booking: all charges are zero")
     room_lines: list[MemberPreviewQuoteRoomLineResult] = Field(default_factory=list, serialization_alias="roomLines")
 
 
@@ -300,6 +301,7 @@ class MemberDiscountEligibilityResponse(BaseModel):
 
     discount_code: Optional[str] = Field(default=None, serialization_alias="discountCode")
     discount_percent: Decimal = Field(..., serialization_alias="discountPercent")
+    is_free_ministry: bool = Field(default=False, serialization_alias="isFreeMinistry", description="Eligible Church Activity Booking: all charges are zero")
 
 
 class MemberBookingDraftLineInput(BaseModel):
@@ -380,6 +382,7 @@ class MemberBookingDraftDetail(UUIDBaseModel):
     surcharge_amount: Decimal = Field(..., serialization_alias="surchargeAmount")
     quoted_amount: Decimal = Field(..., serialization_alias="quotedAmount")
     currency: str = Field(...)
+    is_free_ministry: bool = Field(default=False, serialization_alias="isFreeMinistry", description="Eligible Church Activity Booking: all charges are zero")
     is_confirmable: bool = Field(default=True, serialization_alias="isConfirmable")
     conflicts: list[MemberBookingConflict] = Field(default_factory=list)
     override_impacts: list[MemberOverrideImpact] = Field(default_factory=list, serialization_alias="overrideImpacts")
@@ -485,6 +488,7 @@ class MemberRecurringBookingPreview(BaseModel):
     conflicts: list[MemberRecurringBookingConflict] = Field(default_factory=list)
     quoted_amount: Decimal = Field(..., serialization_alias="quotedAmount")
     currency: str = Field(...)
+    is_free_ministry: bool = Field(default=False, serialization_alias="isFreeMinistry", description="Eligible Church Activity Booking: all charges are zero")
     override_impacts: list[MemberOverrideImpact] = Field(default_factory=list, serialization_alias="overrideImpacts")
     override_review_token: Optional[str] = Field(
         default=None, serialization_alias="overrideReviewToken", description="Send as override_review_token on final confirmation"
@@ -539,9 +543,14 @@ class MemberRecurringSeriesDraftDetail(UUIDBaseModel):
     discount_amount: Decimal = Field(..., serialization_alias="discountAmount")
     surcharge_amount: Decimal = Field(..., serialization_alias="surchargeAmount")
     currency: str = Field(...)
+    is_free_ministry: bool = Field(default=False, serialization_alias="isFreeMinistry", description="Eligible Church Activity Booking: all charges are zero")
     occurrence_count: int = Field(..., serialization_alias="occurrenceCount")
-    pending_payment_hold_days: int = Field(..., serialization_alias="pendingPaymentHoldDays")
-    payment_hold_expires_at: datetime = Field(..., serialization_alias="paymentHoldExpiresAt")
+    pending_payment_hold_days: Optional[int] = Field(
+        default=None, serialization_alias="pendingPaymentHoldDays", description="Null when no payment hold applies (free Ministry Series)"
+    )
+    payment_hold_expires_at: Optional[datetime] = Field(
+        default=None, serialization_alias="paymentHoldExpiresAt", description="Null when no payment hold applies (free Ministry Series)"
+    )
     override_impacts: list[MemberOverrideImpact] = Field(default_factory=list, serialization_alias="overrideImpacts")
     override_review_token: Optional[str] = Field(
         default=None, serialization_alias="overrideReviewToken", description="Send as override_review_token on final confirmation"

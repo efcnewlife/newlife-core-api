@@ -98,9 +98,9 @@ class AdminPreviewQuoteRoomLineResult(BaseModel):
 
     facility_id: UUID = Field(..., serialization_alias="facilityId", description="Room ID")
     billed_hours: Decimal = Field(..., serialization_alias="billedHours", description="Billed hours")
-    rental_rate_name: str = Field(..., serialization_alias="rentalRateName", description="Rule display name")
-    billing_unit: str = Field(..., serialization_alias="billingUnit", description="Billing unit")
-    unit_amount: Decimal = Field(..., serialization_alias="unitAmount", description="Unit amount")
+    rental_rate_name: Optional[str] = Field(None, serialization_alias="rentalRateName", description="Rule display name; null on a free Ministry line")
+    billing_unit: Optional[str] = Field(None, serialization_alias="billingUnit", description="Billing unit; null on a free Ministry line")
+    unit_amount: Optional[Decimal] = Field(None, serialization_alias="unitAmount", description="Unit amount; null on a free Ministry line")
     currency: str = Field(..., description="Currency")
     applicability: Optional[dict] = Field(None, description="Applicability rule snapshot")
     is_default: bool = Field(False, serialization_alias="isDefault", description="Default flag snapshot")
@@ -116,4 +116,5 @@ class AdminPreviewQuoteResponse(BaseModel):
     surcharge_amount: Decimal = Field(..., serialization_alias="surchargeAmount", description="Surcharge amount")
     quoted_amount: Decimal = Field(..., serialization_alias="quotedAmount", description="Quoted amount")
     currency: str = Field(..., description="Currency")
+    is_free_ministry: bool = Field(False, serialization_alias="isFreeMinistry", description="Eligible Church Activity Booking: all charges are zero")
     room_lines: list[AdminPreviewQuoteRoomLineResult] = Field(default_factory=list, serialization_alias="roomLines", description="Room lines")

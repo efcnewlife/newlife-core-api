@@ -442,6 +442,7 @@ def preview_quote_result_to_api(result: PreviewQuoteResult) -> AdminPreviewQuote
         surcharge_amount=result.surcharge_amount,
         quoted_amount=result.quoted_amount,
         currency=result.currency,
+        is_free_ministry=result.is_free_ministry,
         room_lines=[
             AdminPreviewQuoteRoomLineResult(
                 facility_id=line.facility_id,
@@ -476,6 +477,7 @@ def member_preview_quote_result_to_api(result: PreviewQuoteResult) -> MemberPrev
         surcharge_amount=result.surcharge_amount,
         quoted_amount=result.quoted_amount,
         currency=result.currency,
+        is_free_ministry=result.is_free_ministry,
         room_lines=[
             MemberPreviewQuoteRoomLineResult(
                 facility_id=line.facility_id,
@@ -671,6 +673,7 @@ def booking_draft_result_to_api(result: BookingDraftResult) -> MemberBookingDraf
         surcharge_amount=result.surcharge_amount,
         quoted_amount=result.quoted_amount,
         currency=result.currency,
+        is_free_ministry=result.is_free_ministry,
         is_confirmable=result.is_confirmable,
         conflicts=[MemberBookingConflict.model_validate(item.model_dump()) for item in result.conflicts],
         override_impacts=[MemberOverrideImpact.model_validate(item.model_dump()) for item in result.override_impacts],
@@ -712,6 +715,7 @@ def recurring_series_draft_result_to_api(result: RecurringSeriesDraftResult) -> 
         discount_amount=result.discount_amount,
         surcharge_amount=result.surcharge_amount,
         currency=result.currency,
+        is_free_ministry=result.is_free_ministry,
         occurrence_count=result.occurrence_count,
         pending_payment_hold_days=result.pending_payment_hold_days,
         payment_hold_expires_at=result.payment_hold_expires_at,

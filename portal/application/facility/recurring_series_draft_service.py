@@ -11,7 +11,6 @@ from portal.application.facility.commands import (
     CreateRecurringSeriesDraftCommand,
     UpdateRecurringSeriesDraftCommand,
 )
-from portal.application.facility.discount_eligibility_service import is_mission_aligned_discount
 from portal.application.facility.recurring_booking_service import RecurringBookingService
 from portal.application.facility.results import (
     RecurringBookingSeriesResult,
@@ -113,7 +112,7 @@ class RecurringSeriesDraftService:
             last_occurrence_date=row.last_occurrence_date,
             local_start_time=row.local_start_time,
             local_end_time=row.local_end_time,
-            is_mission_aligned=is_mission_aligned_discount(evaluation.discount_code),
+            is_mission_aligned=evaluation.is_free_ministry,
             remark=row.remark,
             surcharge_codes=row.surcharge_codes,
             excluded_dates=row.excluded_dates,
@@ -128,6 +127,7 @@ class RecurringSeriesDraftService:
             discount_amount=evaluation.discount_amount,
             surcharge_amount=evaluation.surcharge_amount,
             currency=evaluation.currency,
+            is_free_ministry=evaluation.is_free_ministry,
             occurrence_count=evaluation.occurrence_count,
             pending_payment_hold_days=evaluation.pending_payment_hold_days,
             payment_hold_expires_at=evaluation.payment_hold_expires_at,

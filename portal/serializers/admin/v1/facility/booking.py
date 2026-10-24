@@ -169,3 +169,4 @@ class AdminDiscountEligibilityResponse(BaseModel):
 
     discount_code: Optional[str] = Field(default=None, serialization_alias="discountCode")
     discount_percent: Decimal = Field(..., serialization_alias="discountPercent")
+    is_free_ministry: bool = Field(default=False, serialization_alias="isFreeMinistry", description="Eligible Church Activity Booking: all charges are zero")

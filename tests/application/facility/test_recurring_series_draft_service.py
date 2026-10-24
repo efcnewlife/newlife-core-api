@@ -10,13 +10,15 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from portal.application.facility.commands import BookingRoomLineCommand, CreateRecurringSeriesDraftCommand, UpdateRecurringSeriesDraftCommand
+from portal.application.facility.discount_eligibility_service import DiscountEligibilityService
+from portal.application.facility.pricing_service import PricingService
 from portal.application.facility.recurring_booking_service import RecurringBookingService
 from portal.application.facility.recurring_series_draft_service import RecurringSeriesDraftService
 from portal.application.facility.results import RecurringOccupyingBookingResult, RecurringSeriesDraftDetailResult, RecurringSeriesDraftStoredRoomResult
 from portal.domain.facility.constants import BookingErrorCode, BookingStatus, FacilityErrorCode, RentalDiscountCode
 from portal.domain.facility.recurring import localize_wall_time
 from portal.exceptions.responses import BadRequestException, ConflictErrorException, ForbiddenException, NotFoundException
-from tests.fixtures.facility.factories import make_preview_quote_result, new_uuid
+from tests.fixtures.facility.factories import make_discount_rule, make_hourly_and_daily_rates, make_ministry_detail, make_preview_quote_result, new_uuid
 from tests.fixtures.facility.stubs import (
     StubBookingRepository,
     StubMinistryRepository,
@@ -25,7 +27,9 @@ from tests.fixtures.facility.stubs import (
     StubRecurringBookingRepository,
     StubRecurringOverrideNotifier,
     StubRecurringSeriesDraftRepository,
+    StubRentalRepository,
     StubRoomBlackoutRepository,
+    StubRoomRepository,
     StubRoomSlotTemplateRepository,
     StubTransactionHooks,
     StubUserReadService,
@@ -97,6 +101,7 @@ def _service(
     blackout_stub=None,
     pricing_stub=None,
     setting_stub=None,
+    ministry_stub=None,
     now_utc=None,
 ):
     user_id = _user_ctx(monkeypatch, user_id=user_id, email=email)
@@ -108,7 +113,7 @@ def _service(
         series_repository=series_stub,
         booking_repository=booking_stub,
         pricing_service=pricing_stub or StubPricingService(quote),
-        ministry_repository=StubMinistryRepository(),
+        ministry_repository=ministry_stub or StubMinistryRepository(),
         room_blackout_repository=blackout_stub or StubRoomBlackoutRepository(),
         setting_service=setting_stub or StubSettingService(max_booking_lines=10),
         user_read_service=StubUserReadService(email=email),
@@ -469,10 +474,96 @@ async def test_get_draft_is_mission_aligned_follows_live_evaluation(monkeypatch)
     user_id = uuid4()
     draft_id = uuid4()
     stub = StubRecurringSeriesDraftRepository(draft_by_id={draft_id: _stored_draft(draft_id=draft_id, user_id=user_id, room_id=new_uuid())})
-    quote = make_preview_quote_result(quoted_amount=Decimal("280")).model_copy(update={"discount_code": RentalDiscountCode.MISSION_ALIGNED.value})
+    quote = make_preview_quote_result(quoted_amount=Decimal("280")).model_copy(update={"is_free_ministry": True})
     service, *_ = _service(monkeypatch, user_id=user_id, draft_stub=stub, pricing_stub=StubPricingService(quote))
 
     result = await service.get_draft(draft_id)
 
     assert result.is_mission_aligned is True
-    assert result.quoted_amount == Decimal("1120")
+    assert result.is_free_ministry is True
+
+
+class _NoPaymentHoldSettingService(StubSettingService):
+    async def get_pending_payment_hold_days(self) -> int:
+        raise NotFoundException(detail="facility.pending_payment_hold_days setting is not configured")
+
+
+def _ministry_draft_service(monkeypatch, *, rated: bool, setting_stub=None):
+    user_id = uuid4()
+    room_id = new_uuid()
+    ministry = make_ministry_detail()
+    ministry_stub = StubMinistryRepository(ministry_by_id={ministry.id: ministry}, booking_member_user_ids={user_id})
+    rental = StubRentalRepository(
+        rates_by_facility={room_id: make_hourly_and_daily_rates(room_id)} if rated else {},
+        discount_rules=[make_discount_rule(RentalDiscountCode.RECURRING_WEEKLY_MONTHLY.value, Decimal("20"))],
+    )
+    pricing = PricingService(rental, StubRoomRepository(existing_ids={room_id}), DiscountEligibilityService(rental, ministry_stub))
+    service, draft_stub, series_stub, booking_stub, _ = _service(
+        monkeypatch, user_id=user_id, pricing_stub=pricing, ministry_stub=ministry_stub, setting_stub=setting_stub
+    )
+    return service, draft_stub, series_stub, booking_stub, ministry, room_id
+
+
+@pytest.mark.asyncio
+async def test_ministry_draft_review_is_free_without_hold_and_confirms_a_confirmed_series(monkeypatch):
+    service, draft_stub, series_stub, booking_stub, ministry, room_id = _ministry_draft_service(
+        monkeypatch, rated=False, setting_stub=_NoPaymentHoldSettingService(max_booking_lines=10)
+    )
+    created = await service.create_draft(_command(facility_id=room_id, ministry_id=ministry.id))
+
+    review = await service.get_draft(created.id)
+    series = await service.confirm_draft(created.id)
+
+    assert review.is_confirmable is True
+    assert review.is_free_ministry is True
+    assert review.is_mission_aligned is True
+    assert (review.quoted_amount, review.subtotal_amount, review.discount_percent, review.discount_amount, review.surcharge_amount) == (
+        Decimal("0"),
+        Decimal("0"),
+        Decimal("0"),
+        Decimal("0"),
+        Decimal("0"),
+    )
+    assert review.pending_payment_hold_days is None
+    assert review.payment_hold_expires_at is None
+    assert series.status == BookingStatus.CONFIRMED.value
+    assert series.payment_hold_expires_at is None
+    assert series.quoted_amount == Decimal("0")
+    assert all(item.status == BookingStatus.CONFIRMED.value for item in series.occurrences)
+    assert all(row["status"] == BookingStatus.CONFIRMED.value for row in booking_stub.insert_calls)
+    assert draft_stub.draft_by_id.get(created.id) is None
+
+
+@pytest.mark.asyncio
+async def test_draft_context_switch_reprices_and_reapplies_hold_in_both_directions(monkeypatch):
+    service, _, _, _, ministry, room_id = _ministry_draft_service(monkeypatch, rated=True)
+    created = await service.create_draft(_command(facility_id=room_id))
+
+    personal = await service.get_draft(created.id)
+    as_ministry = await service.update_draft(
+        created.id, UpdateRecurringSeriesDraftCommand.model_validate(_command(facility_id=room_id, ministry_id=ministry.id).model_dump())
+    )
+    back_to_personal = await service.update_draft(created.id, UpdateRecurringSeriesDraftCommand.model_validate(_command(facility_id=room_id).model_dump()))
+
+    assert personal.is_free_ministry is False
+    assert personal.quoted_amount == Decimal("64.00")
+    assert personal.pending_payment_hold_days == 3
+    assert as_ministry.is_free_ministry is True
+    assert as_ministry.quoted_amount == Decimal("0")
+    assert as_ministry.pending_payment_hold_days is None
+    assert as_ministry.payment_hold_expires_at is None
+    assert back_to_personal.is_free_ministry is False
+    assert back_to_personal.quoted_amount == Decimal("64.00")
+    assert back_to_personal.payment_hold_expires_at is not None
+
+
+@pytest.mark.asyncio
+async def test_draft_switch_to_ineligible_ministry_is_rejected(monkeypatch):
+    service, _, _, _, ministry, room_id = _ministry_draft_service(monkeypatch, rated=True)
+    created = await service.create_draft(_command(facility_id=room_id))
+    service._recurring_booking_service._ministry_repository.booking_member_user_ids = set()
+
+    with pytest.raises(ForbiddenException):
+        await service.update_draft(
+            created.id, UpdateRecurringSeriesDraftCommand.model_validate(_command(facility_id=room_id, ministry_id=ministry.id).model_dump())
+        )

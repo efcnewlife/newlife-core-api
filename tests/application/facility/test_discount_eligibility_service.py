@@ -52,13 +52,25 @@ async def test_recurring_without_ministry_receives_recurring_discount():
 
 
 @pytest.mark.asyncio
-async def test_qualifying_ministry_takes_precedence_over_recurring():
+@pytest.mark.parametrize("booking_type", [BookingType.ONE_TIME, BookingType.RECURRING])
+async def test_qualifying_ministry_is_free_instead_of_any_discount(booking_type):
     booker_id = uuid4()
     ministry = make_ministry_detail()
     service = _eligibility_service(ministry_stub=StubMinistryRepository(ministry_by_id={ministry.id: ministry}, booking_member_user_ids={booker_id}))
-    result = await service.evaluate(EvaluateDiscountEligibilityCommand(booking_type=BookingType.RECURRING, ministry_id=ministry.id, booker_id=booker_id))
-    assert result.discount_code == RentalDiscountCode.MISSION_ALIGNED.value
-    assert result.discount_percent == Decimal("30")
+    result = await service.evaluate(EvaluateDiscountEligibilityCommand(booking_type=booking_type, ministry_id=ministry.id, booker_id=booker_id))
+    assert result.is_free_ministry is True
+    assert result.discount_code is None
+    assert result.discount_percent == Decimal("0")
+
+
+@pytest.mark.asyncio
+async def test_personal_proposal_is_not_free_ministry_even_for_ministry_member():
+    booker_id = uuid4()
+    ministry = make_ministry_detail()
+    service = _eligibility_service(ministry_stub=StubMinistryRepository(ministry_by_id={ministry.id: ministry}, booking_member_user_ids={booker_id}))
+    result = await service.evaluate(EvaluateDiscountEligibilityCommand(booking_type=BookingType.RECURRING, booker_id=booker_id))
+    assert result.is_free_ministry is False
+    assert result.discount_code == RentalDiscountCode.RECURRING_WEEKLY_MONTHLY.value
 
 
 @pytest.mark.asyncio
@@ -70,6 +82,7 @@ async def test_inactive_ministry_falls_back_to_recurring_discount():
     result = await service.evaluate(EvaluateDiscountEligibilityCommand(booking_type=BookingType.RECURRING, ministry_id=ministry.id, booker_id=booker_id))
     assert result.discount_code == RentalDiscountCode.RECURRING_WEEKLY_MONTHLY.value
     assert result.discount_percent == Decimal("20")
+    assert result.is_free_ministry is False
 
 
 @pytest.mark.asyncio
@@ -80,6 +93,7 @@ async def test_ineligible_booker_does_not_receive_ministry_discount():
     result = await service.evaluate(EvaluateDiscountEligibilityCommand(booking_type=BookingType.ONE_TIME, ministry_id=ministry.id, booker_id=booker_id))
     assert result.discount_code is None
     assert result.discount_percent == Decimal("0")
+    assert result.is_free_ministry is False
 
 
 @pytest.mark.asyncio
@@ -99,12 +113,13 @@ async def test_inactive_or_absent_rule_yields_no_discount():
     recurring_result = await service.evaluate(EvaluateDiscountEligibilityCommand(booking_type=BookingType.RECURRING, booker_id=booker_id))
     assert ministry_result.discount_code is None
     assert ministry_result.discount_percent == Decimal("0")
+    assert ministry_result.is_free_ministry is True
     assert recurring_result.discount_code is None
     assert recurring_result.discount_percent == Decimal("0")
 
 
 @pytest.mark.asyncio
-async def test_inactive_ministry_rule_does_not_fall_through_to_recurring():
+async def test_inactive_ministry_rule_keeps_ministry_free_without_recurring_discount():
     booker_id = uuid4()
     ministry = make_ministry_detail()
     service = _eligibility_service(
@@ -117,6 +132,7 @@ async def test_inactive_ministry_rule_does_not_fall_through_to_recurring():
     result = await service.evaluate(EvaluateDiscountEligibilityCommand(booking_type=BookingType.RECURRING, ministry_id=ministry.id, booker_id=booker_id))
     assert result.discount_code is None
     assert result.discount_percent == Decimal("0")
+    assert result.is_free_ministry is True
     booker_id = uuid4()
     service = _eligibility_service(discount_rules=[])
     result = await service.evaluate(EvaluateDiscountEligibilityCommand(booking_type=BookingType.RECURRING, booker_id=booker_id))
@@ -132,8 +148,7 @@ async def test_admin_on_behalf_uses_booker_not_operator(monkeypatch):
     _user_ctx(monkeypatch, user_id=operator_id)
     service = _eligibility_service(ministry_stub=StubMinistryRepository(ministry_by_id={ministry.id: ministry}, booking_member_user_ids={booker_id}))
     result = await service.evaluate(EvaluateDiscountEligibilityCommand(booking_type=BookingType.ONE_TIME, ministry_id=ministry.id, booker_id=booker_id))
-    assert result.discount_code == RentalDiscountCode.MISSION_ALIGNED.value
-    assert result.discount_percent == Decimal("30")
+    assert result.is_free_ministry is True
 
 
 @pytest.mark.asyncio
@@ -143,8 +158,7 @@ async def test_member_evaluate_uses_authenticated_booker(monkeypatch):
     _user_ctx(monkeypatch, user_id=booker_id)
     service = _eligibility_service(ministry_stub=StubMinistryRepository(ministry_by_id={ministry.id: ministry}, booking_member_user_ids={booker_id}))
     result = await service.evaluate(EvaluateDiscountEligibilityCommand(booking_type=BookingType.ONE_TIME, ministry_id=ministry.id))
-    assert result.discount_code == RentalDiscountCode.MISSION_ALIGNED.value
-    assert result.discount_percent == Decimal("30")
+    assert result.is_free_ministry is True
 
 
 @pytest.mark.asyncio

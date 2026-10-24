@@ -119,29 +119,107 @@ async def test_preview_quote_sums_multiple_room_lines():
     assert result.subtotal_amount == Decimal("60.00")
 
 
+def _ministry_pricing_service(rental: StubRentalRepository, room_ids: set, *, booker_id, has_priority_booking: bool = False):
+    ministry = make_ministry_detail().model_copy(update={"has_priority_booking": has_priority_booking})
+    ministry_stub = StubMinistryRepository(ministry_by_id={ministry.id: ministry}, booking_member_user_ids={booker_id})
+    return _pricing_service(rental, room_ids, ministry_stub=ministry_stub), ministry
+
+
 @pytest.mark.asyncio
-async def test_preview_quote_qualifying_ministry_receives_thirty_percent_not_stacked_with_recurring():
-    room_id = new_uuid()
+@pytest.mark.parametrize("booking_type", [BookingType.ONE_TIME, BookingType.RECURRING])
+@pytest.mark.parametrize("has_priority_booking", [True, False])
+@pytest.mark.parametrize(
+    "discount_rules",
+    [
+        [make_discount_rule(RentalDiscountCode.MISSION_ALIGNED.value, Decimal("30"))],
+        [make_discount_rule(RentalDiscountCode.MISSION_ALIGNED.value, Decimal("55"))],
+        [make_discount_rule(RentalDiscountCode.MISSION_ALIGNED.value, Decimal("30"), is_active=False)],
+        [],
+    ],
+    ids=["ministry-30", "ministry-edited", "ministry-inactive", "ministry-absent"],
+)
+async def test_preview_quote_qualifying_ministry_is_entirely_free(booking_type, has_priority_booking, discount_rules):
+    room_a = new_uuid()
+    room_b = new_uuid()
     booker_id = new_uuid()
-    ministry = make_ministry_detail()
     rental = StubRentalRepository(
-        rates_by_facility={room_id: make_hourly_and_daily_rates(room_id)},
-        discount_rules=[
-            make_discount_rule(RentalDiscountCode.MISSION_ALIGNED.value, Decimal("30")),
-            make_discount_rule(RentalDiscountCode.RECURRING_WEEKLY_MONTHLY.value, Decimal("20")),
+        rates_by_facility={room_a: make_hourly_and_daily_rates(room_a)},
+        discount_rules=[*discount_rules, make_discount_rule(RentalDiscountCode.RECURRING_WEEKLY_MONTHLY.value, Decimal("20"))],
+        surcharges=[make_surcharge(charge_type=RentalSurchargeChargeType.FLAT.value, unit_amount=Decimal("25"))],
+    )
+    service, ministry = _ministry_pricing_service(rental, {room_a, room_b}, booker_id=booker_id, has_priority_booking=has_priority_booking)
+    command = PreviewQuoteCommand(
+        booking_type=booking_type,
+        ministry_id=ministry.id,
+        booker_id=booker_id,
+        surcharge_codes=["audio_system", "not_in_catalog"],
+        room_lines=[
+            PreviewQuoteRoomLineCommand(facility_id=room_a, billed_hours=Decimal("6")),
+            PreviewQuoteRoomLineCommand(facility_id=room_b, billed_hours=Decimal("2.5")),
         ],
     )
-    service = _pricing_service(
-        rental, {room_id}, ministry_stub=StubMinistryRepository(ministry_by_id={ministry.id: ministry}, booking_member_user_ids={booker_id})
-    )
-    command = make_preview_quote_command(
-        facility_id=room_id, billed_hours=Decimal("6"), booking_type=BookingType.RECURRING, ministry_id=ministry.id, booker_id=booker_id
-    )
+
     result = await service.preview_quote(command)
-    assert result.discount_code == RentalDiscountCode.MISSION_ALIGNED.value
-    assert result.discount_percent == Decimal("30")
-    assert result.discount_amount == Decimal("60.00")
-    assert result.quoted_amount == Decimal("140.00")
+
+    assert result.is_free_ministry is True
+    assert result.discount_code is None
+    assert (result.subtotal_amount, result.discount_percent, result.discount_amount, result.surcharge_amount, result.quoted_amount) == (
+        Decimal("0.00"),
+        Decimal("0"),
+        Decimal("0.00"),
+        Decimal("0.00"),
+        Decimal("0.00"),
+    )
+    assert [(line.facility_id, line.billed_hours, line.line_subtotal) for line in result.room_lines] == [
+        (room_a, Decimal("6"), Decimal("0.00")),
+        (room_b, Decimal("2.5"), Decimal("0.00")),
+    ]
+    for line in result.room_lines:
+        assert (line.rental_rate_name, line.billing_unit, line.unit_amount, line.applicability) == (None, None, None, None)
+        assert line.currency == "CAD"
+
+
+@pytest.mark.asyncio
+async def test_preview_quote_free_ministry_needs_no_rental_rate():
+    room_id = new_uuid()
+    booker_id = new_uuid()
+    service, ministry = _ministry_pricing_service(StubRentalRepository(rates_by_facility={}), {room_id}, booker_id=booker_id)
+    result = await service.preview_quote(
+        make_preview_quote_command(facility_id=room_id, billed_hours=Decimal("3"), ministry_id=ministry.id, booker_id=booker_id)
+    )
+    assert result.quoted_amount == Decimal("0.00")
+    assert result.room_lines[0].facility_id == room_id
+    assert result.room_lines[0].billed_hours == Decimal("3")
+
+
+@pytest.mark.asyncio
+async def test_preview_quote_free_ministry_still_validates_rooms_and_hours():
+    room_id = new_uuid()
+    booker_id = new_uuid()
+    service, ministry = _ministry_pricing_service(StubRentalRepository(), set(), booker_id=booker_id)
+    with pytest.raises(BadRequestException, match="not found"):
+        await service.preview_quote(make_preview_quote_command(facility_id=room_id, ministry_id=ministry.id, booker_id=booker_id))
+
+
+@pytest.mark.asyncio
+async def test_preview_quote_ineligible_ministry_booker_keeps_personal_pricing():
+    room_id = new_uuid()
+    ministry = make_ministry_detail()
+    rental = StubRentalRepository(rates_by_facility={room_id: make_hourly_and_daily_rates(room_id)})
+    service = _pricing_service(rental, {room_id}, ministry_stub=StubMinistryRepository(ministry_by_id={ministry.id: ministry}, booking_member_user_ids=set()))
+    result = await service.preview_quote(
+        make_preview_quote_command(facility_id=room_id, billed_hours=Decimal("4"), ministry_id=ministry.id, booker_id=new_uuid())
+    )
+    assert result.is_free_ministry is False
+    assert result.quoted_amount == Decimal("40.00")
+
+
+@pytest.mark.asyncio
+async def test_preview_quote_personal_without_rate_still_requires_rental_rate():
+    room_id = new_uuid()
+    service = _pricing_service(StubRentalRepository(rates_by_facility={}), {room_id})
+    with pytest.raises(BadRequestException, match="No active rental rate"):
+        await service.preview_quote(make_preview_quote_command(facility_id=room_id))
 
 
 @pytest.mark.asyncio
@@ -163,29 +241,19 @@ async def test_preview_quote_recurring_discount_without_ministry():
 @pytest.mark.asyncio
 async def test_preview_quote_applies_discount_to_room_subtotals_then_adds_surcharges():
     room_id = new_uuid()
-    booker_id = new_uuid()
-    ministry = make_ministry_detail()
     rental = StubRentalRepository(
         rates_by_facility={room_id: make_hourly_and_daily_rates(room_id)},
-        discount_rules=[make_discount_rule(RentalDiscountCode.MISSION_ALIGNED.value, Decimal("30"))],
+        discount_rules=[make_discount_rule(RentalDiscountCode.RECURRING_WEEKLY_MONTHLY.value, Decimal("20"))],
         surcharges=[make_surcharge(charge_type=RentalSurchargeChargeType.FLAT.value, unit_amount=Decimal("25"))],
     )
-    service = _pricing_service(
-        rental, {room_id}, ministry_stub=StubMinistryRepository(ministry_by_id={ministry.id: ministry}, booking_member_user_ids={booker_id})
-    )
-    command = make_preview_quote_command(
-        facility_id=room_id,
-        billed_hours=Decimal("6"),
-        booking_type=BookingType.ONE_TIME,
-        ministry_id=ministry.id,
-        booker_id=booker_id,
-        surcharge_codes=["audio_system"],
-    )
+    service = _pricing_service(rental, {room_id})
+    command = make_preview_quote_command(facility_id=room_id, billed_hours=Decimal("6"), booking_type=BookingType.RECURRING, surcharge_codes=["audio_system"])
     result = await service.preview_quote(command)
     assert result.subtotal_amount == Decimal("200.00")
-    assert result.discount_amount == Decimal("60.00")
+    assert result.discount_amount == Decimal("40.00")
     assert result.surcharge_amount == Decimal("25.00")
-    assert result.quoted_amount == Decimal("165.00")
+    assert result.quoted_amount == Decimal("185.00")
+    assert result.is_free_ministry is False
 
 
 @pytest.mark.asyncio

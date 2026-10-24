@@ -205,6 +205,7 @@ class BookingDraftService:
             surcharge_amount=quote.surcharge_amount,
             quoted_amount=quote.quoted_amount,
             currency=quote.currency,
+            is_free_ministry=quote.is_free_ministry,
             is_confirmable=is_confirmable,
             conflicts=conflicts,
             override_impacts=evaluation.impacts,
