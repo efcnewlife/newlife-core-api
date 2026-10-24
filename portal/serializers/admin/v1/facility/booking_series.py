@@ -100,6 +100,7 @@ class AdminRecurringBookingPreview(BaseModel):
     conflicts: list[AdminRecurringBookingConflict] = Field(default_factory=list)
     quoted_amount: Decimal = Field(..., serialization_alias="quotedAmount")
     currency: str = Field(...)
+    is_free_ministry: bool = Field(default=False, serialization_alias="isFreeMinistry", description="Eligible Church Activity Booking: all charges are zero")
 
 
 class AdminPendingPaymentSeriesItem(UUIDBaseModel):

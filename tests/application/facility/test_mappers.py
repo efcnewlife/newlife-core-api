@@ -15,6 +15,7 @@ from portal.application.facility.mappers import (
     admin_discount_eligibility_to_command,
     blackout_impact_to_api,
     booking_detail_to_api,
+    booking_draft_result_to_api,
     booking_page_to_api,
     booking_pages_query_to_command,
     booking_range_to_api,
@@ -43,6 +44,7 @@ from portal.application.facility.mappers import (
     pending_payment_series_list_to_admin_api,
     preview_quote_result_to_api,
     preview_quote_to_command,
+    recurring_booking_preview_to_admin_api,
     recurring_booking_preview_to_member_api,
     recurring_booking_series_to_admin_api,
     recurring_booking_series_to_member_api,
@@ -56,6 +58,7 @@ from portal.application.facility.results import (
     BlackoutImpactOccurrenceResult,
     BlackoutImpactResult,
     BookingDetailResult,
+    BookingDraftResult,
     BookingListItemResult,
     BookingPageResult,
     BookingRangeResult,
@@ -271,11 +274,16 @@ def test_discount_eligibility_mappers():
     assert admin_command.ministry_id == ministry_id
     assert admin_command.booker_id == booker_id
 
-    result = DiscountEligibilityResult(discount_code="mission_aligned", discount_percent=Decimal("30"))
+    result = DiscountEligibilityResult(discount_code="recurring_weekly_monthly", discount_percent=Decimal("20"))
     member_api = discount_eligibility_to_member_api(result)
     admin_api = discount_eligibility_to_admin_api(result)
-    assert member_api.model_dump(by_alias=True) == {"discountCode": "mission_aligned", "discountPercent": Decimal("30")}
-    assert admin_api.model_dump(by_alias=True) == {"discountCode": "mission_aligned", "discountPercent": Decimal("30")}
+    expected = {"discountCode": "recurring_weekly_monthly", "discountPercent": Decimal("20"), "isFreeMinistry": False}
+    assert member_api.model_dump(by_alias=True) == expected
+    assert admin_api.model_dump(by_alias=True) == expected
+
+    free_result = DiscountEligibilityResult(discount_code=None, discount_percent=Decimal("0"), is_free_ministry=True)
+    assert discount_eligibility_to_member_api(free_result).model_dump(by_alias=True)["isFreeMinistry"] is True
+    assert discount_eligibility_to_admin_api(free_result).model_dump(by_alias=True)["isFreeMinistry"] is True
 
     none_result = DiscountEligibilityResult(discount_code=None, discount_percent=Decimal("0"))
     none_api = discount_eligibility_to_member_api(none_result)
@@ -1135,3 +1143,88 @@ def test_recurring_preview_and_series_draft_expose_override_review_in_camel_case
     dumped = recurring_series_draft_result_to_api(draft).model_dump(by_alias=True)
     assert dumped["overrideImpacts"][0]["bookingId"] == booking_id
     assert dumped["overrideReviewToken"] == "opaque"
+
+
+def _free_ministry_quote_result(room_id) -> PreviewQuoteResult:
+    return PreviewQuoteResult(
+        subtotal_amount=Decimal("0.00"),
+        discount_percent=Decimal("0"),
+        discount_amount=Decimal("0.00"),
+        surcharge_amount=Decimal("0.00"),
+        quoted_amount=Decimal("0.00"),
+        currency="CAD",
+        is_free_ministry=True,
+        room_lines=[PreviewQuoteRoomLineResult(facility_id=room_id, billed_hours=Decimal("3"), currency="CAD", line_subtotal=Decimal("0.00"))],
+    )
+
+
+@pytest.mark.parametrize("to_api", [member_preview_quote_result_to_api, preview_quote_result_to_api], ids=["member", "admin"])
+def test_free_ministry_no_rate_quote_json_contract(to_api):
+    room_id = uuid4()
+
+    dumped = to_api(_free_ministry_quote_result(room_id)).model_dump(by_alias=True, mode="json")
+
+    assert dumped["isFreeMinistry"] is True
+    assert dumped["quotedAmount"] == "0.00"
+    assert dumped["roomLines"] == [
+        {
+            "facilityId": str(room_id),
+            "billedHours": "3",
+            "rentalRateName": None,
+            "billingUnit": None,
+            "unitAmount": None,
+            "currency": "CAD",
+            "applicability": None,
+            "isDefault": False,
+            "lineSubtotal": "0.00",
+        }
+    ]
+
+
+def test_free_ministry_series_draft_json_contract_has_null_payment_hold():
+    result = RecurringSeriesDraftResult(
+        id=uuid4(),
+        title="Weekly prayer",
+        ministry_id=uuid4(),
+        first_occurrence_date=date(2026, 1, 6),
+        last_occurrence_date=date(2026, 1, 27),
+        local_start_time=time(10, 0),
+        local_end_time=time(12, 0),
+        is_mission_aligned=True,
+        is_confirmable=True,
+        quoted_amount=Decimal("0"),
+        subtotal_amount=Decimal("0"),
+        discount_percent=Decimal("0"),
+        discount_amount=Decimal("0"),
+        surcharge_amount=Decimal("0"),
+        currency="CAD",
+        is_free_ministry=True,
+        occurrence_count=4,
+    )
+
+    dumped = recurring_series_draft_result_to_api(result).model_dump(by_alias=True, mode="json")
+
+    assert dumped["isFreeMinistry"] is True
+    assert dumped["pendingPaymentHoldDays"] is None
+    assert dumped["paymentHoldExpiresAt"] is None
+    assert dumped["quotedAmount"] == "0"
+
+
+def test_free_ministry_recurring_preview_and_booking_draft_expose_free_flag():
+    preview = RecurringBookingPreviewResult(quoted_amount=Decimal("0"), currency="CAD", is_free_ministry=True)
+    draft = BookingDraftResult(
+        id=uuid4(),
+        title="Prayer night",
+        date=date(2026, 5, 1),
+        subtotal_amount=Decimal("0.00"),
+        discount_percent=Decimal("0"),
+        discount_amount=Decimal("0.00"),
+        surcharge_amount=Decimal("0.00"),
+        quoted_amount=Decimal("0.00"),
+        currency="CAD",
+        is_free_ministry=True,
+    )
+
+    assert recurring_booking_preview_to_member_api(preview).model_dump(by_alias=True)["isFreeMinistry"] is True
+    assert recurring_booking_preview_to_admin_api(preview).model_dump(by_alias=True)["isFreeMinistry"] is True
+    assert booking_draft_result_to_api(draft).model_dump(by_alias=True)["isFreeMinistry"] is True

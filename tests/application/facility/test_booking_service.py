@@ -22,7 +22,8 @@ from portal.application.facility.commands import (
 from portal.application.facility.discount_eligibility_service import DiscountEligibilityService
 from portal.application.facility.pricing_service import PricingService
 from portal.application.facility.results import BookingDetailResult, BookingDraftDetailResult, BookingRoomLineResult, PreviewQuoteRoomLineResult
-from portal.domain.facility.constants import BookingErrorCode, BookingStatus, BookingType, RentalDiscountCode
+from portal.domain.facility.constants import BookingErrorCode, BookingStatus, BookingType, RentalDiscountCode, RentalSurchargeChargeType
+from portal.domain.org.constants import MinistryStatus
 from portal.exceptions.responses import BadRequestException, ConflictErrorException, ForbiddenException, NotFoundException
 from tests.fixtures.facility.factories import (
     make_booking_list_item,
@@ -32,6 +33,7 @@ from tests.fixtures.facility.factories import (
     make_ministry_detail,
     make_preview_quote_result,
     make_slot_template_result,
+    make_surcharge,
     make_update_booking_command,
     new_uuid,
 )
@@ -789,18 +791,12 @@ async def test_preview_quote_for_member_honors_ministry_gate(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_preview_quote_for_member_qualifying_ministry_applies_thirty_percent(monkeypatch):
+async def test_preview_quote_for_member_eligible_ministry_is_free_without_rental_rate(monkeypatch):
     booker_id = uuid4()
     _user_ctx(monkeypatch, user_id=booker_id)
     ministry = make_ministry_detail()
     room_id = new_uuid()
-    rental = StubRentalRepository(
-        rates_by_facility={room_id: make_hourly_and_daily_rates(room_id)},
-        discount_rules=[
-            make_discount_rule(RentalDiscountCode.MISSION_ALIGNED.value, Decimal("30")),
-            make_discount_rule(RentalDiscountCode.RECURRING_WEEKLY_MONTHLY.value, Decimal("20")),
-        ],
-    )
+    rental = StubRentalRepository(rates_by_facility={}, discount_rules=[make_discount_rule(RentalDiscountCode.MISSION_ALIGNED.value, Decimal("30"))])
     ministry_stub = StubMinistryRepository(ministry_by_id={ministry.id: ministry}, booking_member_user_ids={booker_id})
     service = _real_pricing_booking_service(room_id=room_id, ministry_stub=ministry_stub, rental=rental)
     start = datetime(2026, 5, 1, 10, 0, tzinfo=timezone.utc)
@@ -808,9 +804,26 @@ async def test_preview_quote_for_member_qualifying_ministry_applies_thirty_perce
     result = await service.preview_quote_for_member(
         MemberPreviewQuoteCommand(ministry_id=ministry.id, lines=[MemberPreviewQuoteLineCommand(facility_id=room_id, start_at=start, end_at=end)])
     )
-    assert result.discount_code == RentalDiscountCode.MISSION_ALIGNED.value
-    assert result.discount_percent == Decimal("30")
-    assert result.quoted_amount == Decimal("28.00")
+    assert result.is_free_ministry is True
+    assert result.discount_code is None
+    assert result.quoted_amount == Decimal("0.00")
+    assert [(line.facility_id, line.billed_hours, line.unit_amount) for line in result.room_lines] == [(room_id, Decimal("4.00"), None)]
+
+
+@pytest.mark.asyncio
+async def test_preview_quote_for_member_non_steward_ministry_is_rejected(monkeypatch):
+    _user_ctx(monkeypatch, user_id=uuid4())
+    ministry = make_ministry_detail()
+    room_id = new_uuid()
+    ministry_stub = StubMinistryRepository(ministry_by_id={ministry.id: ministry}, booking_member_user_ids=set())
+    service = _real_pricing_booking_service(room_id=room_id, ministry_stub=ministry_stub, rental=StubRentalRepository())
+    start = datetime(2026, 5, 1, 10, 0, tzinfo=timezone.utc)
+    with pytest.raises(ForbiddenException):
+        await service.preview_quote_for_member(
+            MemberPreviewQuoteCommand(
+                ministry_id=ministry.id, lines=[MemberPreviewQuoteLineCommand(facility_id=room_id, start_at=start, end_at=start + timedelta(hours=2))]
+            )
+        )
 
 
 @pytest.mark.asyncio
@@ -919,26 +932,57 @@ def _real_pricing_booking_service(*, room_id, ministry_stub, rental):
 
 
 @pytest.mark.asyncio
-async def test_create_booking_qualifying_ministry_applies_thirty_percent(monkeypatch):
+@pytest.mark.parametrize("on_behalf", [False, True], ids=["member", "admin-on-behalf"])
+async def test_create_booking_eligible_ministry_is_confirmed_and_free(monkeypatch, on_behalf):
     booker_id = uuid4()
-    _user_ctx(monkeypatch, user_id=booker_id)
+    _user_ctx(monkeypatch, user_id=uuid4() if on_behalf else booker_id)
     ministry = make_ministry_detail()
     room_id = new_uuid()
     rental = StubRentalRepository(
         rates_by_facility={room_id: make_hourly_and_daily_rates(room_id)},
-        discount_rules=[
-            make_discount_rule(RentalDiscountCode.MISSION_ALIGNED.value, Decimal("30")),
-            make_discount_rule(RentalDiscountCode.RECURRING_WEEKLY_MONTHLY.value, Decimal("20")),
-        ],
+        discount_rules=[make_discount_rule(RentalDiscountCode.MISSION_ALIGNED.value, Decimal("30"))],
+        surcharges=[make_surcharge(charge_type=RentalSurchargeChargeType.FLAT.value, unit_amount=Decimal("25"))],
     )
     ministry_stub = StubMinistryRepository(ministry_by_id={ministry.id: ministry}, booking_member_user_ids={booker_id})
     service = _real_pricing_booking_service(room_id=room_id, ministry_stub=ministry_stub, rental=rental)
-    await service.create_booking(make_create_booking_command(facility_id=room_id, user_id=booker_id, ministry_id=ministry.id))
+    command = make_create_booking_command(facility_id=room_id, user_id=booker_id, ministry_id=ministry.id).model_copy(
+        update={"surcharge_codes": ["audio_system"]}
+    )
+
+    await service.create_booking(command)
+
     payload = service._repository.insert_calls[0]
-    assert payload["discount_percent"] == Decimal("30")
-    assert payload["discount_amount"] == Decimal("12.00")
-    assert payload["quoted_amount"] == Decimal("28.00")
+    assert payload["user_id"] == booker_id
+    assert payload["status"] == BookingStatus.CONFIRMED.value
     assert payload["is_mission_aligned"] is True
+    assert (payload["subtotal_amount"], payload["discount_percent"], payload["discount_amount"], payload["surcharge_amount"], payload["quoted_amount"]) == (
+        Decimal("0.00"),
+        Decimal("0"),
+        Decimal("0.00"),
+        Decimal("0.00"),
+        Decimal("0.00"),
+    )
+    [room_row] = service._repository.replace_rooms_calls[0]
+    assert (room_row["facility_id"], room_row["billed_hours"], room_row["rental_rate_name"], room_row["unit_amount"], room_row["line_subtotal"]) == (
+        room_id,
+        Decimal("4.00"),
+        None,
+        None,
+        Decimal("0.00"),
+    )
+
+
+@pytest.mark.asyncio
+async def test_create_booking_inactive_ministry_is_rejected_even_though_ministry_pricing_is_free(monkeypatch):
+    booker_id = uuid4()
+    _user_ctx(monkeypatch, user_id=booker_id)
+    ministry = make_ministry_detail().model_copy(update={"status": MinistryStatus.INACTIVE.value})
+    room_id = new_uuid()
+    ministry_stub = StubMinistryRepository(ministry_by_id={ministry.id: ministry}, booking_member_user_ids={booker_id})
+    service = _real_pricing_booking_service(room_id=room_id, ministry_stub=ministry_stub, rental=StubRentalRepository())
+    with pytest.raises(BadRequestException):
+        await service.create_booking(make_create_booking_command(facility_id=room_id, user_id=booker_id, ministry_id=ministry.id))
+    assert service._repository.insert_calls == []
 
 
 @pytest.mark.asyncio

@@ -29,7 +29,6 @@ from portal.application.facility.commands import (
     UpdateBookingCommand,
     UpdateTitleCommand,
 )
-from portal.application.facility.discount_eligibility_service import is_mission_aligned_discount
 from portal.application.facility.my_bookings import card_primary_facility_id, paginate_my_bookings_cards, project_my_bookings_cards
 from portal.application.facility.one_time_override import evaluate_one_time_occupancy, load_ministry_proposal_context, one_time_proposal
 from portal.application.facility.opening_hours import raise_if_outside_opening_hours
@@ -258,7 +257,7 @@ class BookingService:
                 start_at=header_start,
                 end_at=header_end,
                 status=BookingStatus.CONFIRMED.value,
-                is_mission_aligned=is_mission_aligned_discount(quote.discount_code),
+                is_mission_aligned=quote.is_free_ministry,
                 billed_hours=total_billed,
                 subtotal_amount=quote.subtotal_amount,
                 discount_percent=quote.discount_percent,

@@ -12,16 +12,27 @@ from pydantic import ValidationError
 
 from portal.application.facility.booking_draft_service import BookingDraftService
 from portal.application.facility.commands import BookingDraftLineCommand, CreateBookingDraftCommand, UpdateBookingDraftCommand
+from portal.application.facility.discount_eligibility_service import DiscountEligibilityService
+from portal.application.facility.pricing_service import PricingService
 from portal.application.facility.results import BookingDraftDetailResult, BookingDraftStoredLineResult
 from portal.exceptions.responses import BadRequestException, ForbiddenException, NotFoundException
 from portal.serializers.apis.v1.facility import MemberBookingDraftCreate, MemberBookingDraftLineInput, MemberBookingDraftUpdate
-from tests.fixtures.facility.factories import make_create_booking_draft_command, make_preview_quote_result, make_slot_template_result, new_uuid
+from tests.fixtures.facility.factories import (
+    make_create_booking_draft_command,
+    make_hourly_and_daily_rates,
+    make_ministry_detail,
+    make_preview_quote_result,
+    make_slot_template_result,
+    new_uuid,
+)
 from tests.fixtures.facility.stubs import (
     StubBookingDraftRepository,
     StubBookingRepository,
     StubMinistryRepository,
     StubPricingService,
+    StubRentalRepository,
     StubRoomBlackoutRepository,
+    StubRoomRepository,
     StubRoomSlotTemplateRepository,
 )
 from tests.fixtures.system.stubs import StubSettingService
@@ -685,3 +696,62 @@ async def test_update_draft_two_sequential_patches_last_write_wins(monkeypatch):
     assert len(second_result.lines) == 1
     assert second_result.lines[0].facility_id == room_c
     assert stub.draft_by_id[draft_id].lines == [BookingDraftStoredLineResult(facility_id=room_c, start_at=start, end_at=end, sequence=0)]
+
+
+def _real_pricing(room_id, ministry_stub: StubMinistryRepository, *, rated: bool) -> PricingService:
+    rental = StubRentalRepository(rates_by_facility={room_id: make_hourly_and_daily_rates(room_id)} if rated else {})
+    return PricingService(rental, StubRoomRepository(existing_ids={room_id}), DiscountEligibilityService(rental, ministry_stub))
+
+
+@pytest.mark.asyncio
+async def test_get_draft_eligible_ministry_is_free_and_confirmable_without_rental_rate(monkeypatch):
+    user_id = _user_ctx(monkeypatch).user_id
+    draft_id = uuid4()
+    room_id = new_uuid()
+    ministry = make_ministry_detail()
+    ministry_stub = StubMinistryRepository(ministry_by_id={ministry.id: ministry}, booking_member_user_ids={user_id})
+    start = datetime(2026, 5, 1, 14, 0, tzinfo=timezone.utc)
+    stored = _stored_draft(
+        draft_id=draft_id,
+        user_id=user_id,
+        date_=date(2026, 5, 1),
+        ministry_id=ministry.id,
+        lines=[_stored_line(facility_id=room_id, start_at=start, end_at=datetime(2026, 5, 1, 17, 0, tzinfo=timezone.utc))],
+    )
+    service = _service(
+        draft_stub=StubBookingDraftRepository(draft_by_id={draft_id: stored}),
+        pricing_stub=_real_pricing(room_id, ministry_stub, rated=False),
+        ministry_stub=ministry_stub,
+    )
+
+    result = await service.get_draft(draft_id)
+
+    assert result.is_confirmable is True
+    assert result.is_free_ministry is True
+    assert (result.subtotal_amount, result.discount_percent, result.discount_amount, result.quoted_amount) == (
+        Decimal("0.00"),
+        Decimal("0"),
+        Decimal("0.00"),
+        Decimal("0.00"),
+    )
+
+
+@pytest.mark.asyncio
+async def test_draft_switch_from_ministry_to_personal_reprices_live(monkeypatch):
+    user_id = _user_ctx(monkeypatch).user_id
+    room_id = new_uuid()
+    ministry = make_ministry_detail()
+    ministry_stub = StubMinistryRepository(ministry_by_id={ministry.id: ministry}, booking_member_user_ids={user_id})
+    draft_stub = StubBookingDraftRepository()
+    service = _service(draft_stub=draft_stub, pricing_stub=_real_pricing(room_id, ministry_stub, rated=True), ministry_stub=ministry_stub)
+    start = datetime(2026, 5, 1, 14, 0, tzinfo=timezone.utc)
+    lines = [BookingDraftLineCommand(facility_id=room_id, start_at=start, end_at=datetime(2026, 5, 1, 18, 0, tzinfo=timezone.utc), sequence=0)]
+    created = await service.create_draft(CreateBookingDraftCommand(title="Choir practice", ministry_id=ministry.id, lines=lines))
+
+    as_ministry = await service.get_draft(created.id)
+    as_personal = await service.update_draft(created.id, UpdateBookingDraftCommand(title="Choir practice", lines=lines))
+
+    assert as_ministry.is_free_ministry is True
+    assert as_ministry.quoted_amount == Decimal("0.00")
+    assert as_personal.is_free_ministry is False
+    assert as_personal.quoted_amount == Decimal("40.00")

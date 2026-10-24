@@ -23,7 +23,7 @@ This ADR covers the Series aggregate, System Settings, and create APIs (core-api
 
 ### Status and payment
 
-- A successful Personal Rental Series (and a Ministry Series in this slice) is created as `pending_payment`. Slots are reserved with `BookingSlotStatus.CONFIRMED` so they occupy the room the same way Confirmed Bookings do.
+- A successful Personal Rental Series (and a Ministry Series in this slice) is created as `pending_payment`. Superseded for Ministry Series by ADR 0037: an eligible Ministry Series and its occurrences are created `confirmed` with no payment hold. Slots are reserved with `BookingSlotStatus.CONFIRMED` so they occupy the room the same way Confirmed Bookings do.
 - Store `payment_hold_expires_at` on the Series as `now + facility.pending_payment_hold_hours` (NUMBER, default 72). Manual confirmation and the expiry sweep are out of scope here.
 - Recalculate the Series payment total server-side from every materialized occurrence using `BookingType.RECURRING` pricing. Persist that total on the Series and per-occurrence snapshots on each Booking.
 

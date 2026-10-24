@@ -13,7 +13,12 @@ from portal.application.facility.commands import BookingRoomLineCommand, CreateR
 from portal.application.facility.discount_eligibility_service import DiscountEligibilityService
 from portal.application.facility.pricing_service import PricingService
 from portal.application.facility.recurring_booking_service import RecurringBookingService
-from portal.application.facility.results import RecurringBookingPreviewResult, RecurringBookingSeriesResult, RecurringOccupyingBookingResult
+from portal.application.facility.results import (
+    RecurringBookingOccurrenceResult,
+    RecurringBookingPreviewResult,
+    RecurringBookingSeriesResult,
+    RecurringOccupyingBookingResult,
+)
 from portal.application.org.results import MinistryMemberResult
 from portal.config import settings
 from portal.domain.facility.constants import (
@@ -27,7 +32,7 @@ from portal.domain.facility.constants import (
 )
 from portal.domain.facility.recurring import localize_wall_time
 from portal.domain.org.constants import MinistryMemberRole, MinistryStatus
-from portal.exceptions.responses import BadRequestException, ConflictErrorException, ForbiddenException
+from portal.exceptions.responses import BadRequestException, ConflictErrorException, ForbiddenException, NotFoundException
 from tests.fixtures.facility.factories import (
     make_discount_rule,
     make_hourly_and_daily_rates,
@@ -42,6 +47,7 @@ from tests.fixtures.facility.stubs import (
     StubOverrideLogRepository,
     StubPricingService,
     StubRecurringBookingRepository,
+    StubRecurringExpiryNotifier,
     StubRecurringOverrideNotifier,
     StubRentalRepository,
     StubRoomBlackoutRepository,
@@ -1013,19 +1019,195 @@ async def test_create_series_without_ministry_applies_recurring_discount(monkeyp
     assert all(row["discount_percent"] == Decimal("20") for row in booking_stub.insert_calls)
 
 
-@pytest.mark.asyncio
-async def test_create_series_qualifying_ministry_applies_thirty_percent_not_recurring(monkeypatch):
+class _NoPaymentHoldSettingService(StubSettingService):
+    """Free Ministry flows must not need payment-hold configuration to fabricate an unused deadline."""
+
+    async def get_pending_payment_hold_days(self) -> int:
+        raise NotFoundException(detail="facility.pending_payment_hold_days setting is not configured")
+
+
+def _free_ministry_service(monkeypatch, *, has_priority_booking: bool = False, now_utc=None, operator_id=None):
     user_id = uuid4()
-    room_id = new_uuid()
+    rated_room = new_uuid()
+    unrated_room = new_uuid()
+    ministry = make_ministry_detail().model_copy(update={"has_priority_booking": has_priority_booking})
+    ministry_stub = StubMinistryRepository(ministry_by_id={ministry.id: ministry}, booking_member_user_ids={user_id})
+    expiry_notifier = StubRecurringExpiryNotifier()
+    service, series_stub, booking_stub, _ = _service(
+        monkeypatch,
+        user_id=operator_id or user_id,
+        ministry_stub=ministry_stub,
+        setting_stub=_NoPaymentHoldSettingService(max_booking_lines=10),
+        now_utc=now_utc,
+    )
+    service._expiry_notifier = expiry_notifier
+    pricing = _real_pricing_for_room(rated_room, ministry_stub)
+    pricing._room_repository = StubRoomRepository(existing_ids={rated_room, unrated_room})
+    service._pricing_service = pricing
+    command = _command(
+        ministry_id=ministry.id,
+        rooms=[BookingRoomLineCommand(facility_id=rated_room, sequence=0), BookingRoomLineCommand(facility_id=unrated_room, sequence=1)],
+        surcharge_codes=["dormant_surcharge"],
+        user_id=user_id if operator_id else None,
+    )
+    return service, series_stub, booking_stub, expiry_notifier, command
+
+
+def _load_persisted_series(series_stub: StubRecurringBookingRepository, booking_stub: StubBookingRepository) -> RecurringBookingSeriesResult:
+    payload = series_stub.insert_series_calls[0]
+    occurrences = [
+        RecurringBookingOccurrenceResult(
+            id=row["id"],
+            start_at=row["start_at"],
+            end_at=row["end_at"],
+            status=row["status"],
+            quoted_amount=row["quoted_amount"],
+            currency=row["currency"],
+            facility_ids=[row["facility_id"]],
+        )
+        for row in booking_stub.insert_calls
+    ]
+    series = RecurringBookingSeriesResult(
+        id=payload["id"],
+        user_id=payload["user_id"],
+        ministry_id=payload["ministry_id"],
+        first_occurrence_date=payload["first_occurrence_date"],
+        last_occurrence_date=payload["last_occurrence_date"],
+        local_start_time=payload["local_start_time"],
+        local_end_time=payload["local_end_time"],
+        status=payload["status"],
+        payment_hold_expires_at=payload["payment_hold_expires_at"],
+        quoted_amount=payload["quoted_amount"],
+        currency=payload["currency"],
+        occurrence_count=len(occurrences),
+        is_priority=payload["is_priority"],
+    )
+    series_stub.series_by_id[series.id] = series
+    booking_stub.series_occurrences[series.id] = occurrences
+    return series
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("has_priority_booking", [True, False])
+async def test_create_free_ministry_series_is_confirmed_free_and_holdless(monkeypatch, has_priority_booking):
+    service, series_stub, booking_stub, _, command = _free_ministry_service(monkeypatch, has_priority_booking=has_priority_booking)
+
+    result = await service.create_series(command)
+
+    assert result.status == BookingStatus.CONFIRMED.value
+    assert result.payment_hold_expires_at is None
+    assert result.quoted_amount == Decimal("0")
+    assert [item.status for item in result.occurrences] == [BookingStatus.CONFIRMED.value] * 4
+    payload = series_stub.insert_series_calls[0]
+    assert payload["status"] == BookingStatus.CONFIRMED.value
+    assert payload["payment_hold_expires_at"] is None
+    assert payload["is_mission_aligned"] is True
+    assert payload["is_priority"] is has_priority_booking
+    assert (payload["subtotal_amount"], payload["discount_percent"], payload["discount_amount"], payload["surcharge_amount"], payload["quoted_amount"]) == (
+        Decimal("0"),
+        Decimal("0"),
+        Decimal("0"),
+        Decimal("0"),
+        Decimal("0"),
+    )
+    assert payload["billed_hours"] == Decimal("16.00")
+    assert all(row["status"] == BookingStatus.CONFIRMED.value and row["quoted_amount"] == Decimal("0") for row in booking_stub.insert_calls)
+    for rows in booking_stub.replace_rooms_calls:
+        assert [row["facility_id"] for row in rows] == [room.facility_id for room in command.rooms]
+        for row in rows:
+            assert (row["rental_rate_name"], row["billing_unit"], row["unit_amount"], row["line_subtotal"]) == (None, None, None, Decimal("0.00"))
+            assert row["billed_hours"] == Decimal("2.00")
+
+
+@pytest.mark.asyncio
+async def test_free_ministry_series_survives_expiry_sweep_and_is_not_payment_actionable(monkeypatch):
+    clock = {"now": OPEN_WINDOW_NOW}
+    service, series_stub, booking_stub, expiry_notifier, command = _free_ministry_service(monkeypatch, now_utc=lambda: clock["now"])
+    await service.create_series(command)
+    series = _load_persisted_series(series_stub, booking_stub)
+
+    clock["now"] = OPEN_WINDOW_NOW + timedelta(days=30)
+    sweep = await service.expire_pending_holds()
+    pending = await service.list_pending_payment_series()
+
+    assert sweep.expired_series_ids == []
+    assert expiry_notifier.calls == []
+    assert booking_stub.cancel_calls == []
+    assert series_stub.series_by_id[series.id].status == BookingStatus.CONFIRMED.value
+    assert pending.items == []
+
+
+@pytest.mark.asyncio
+async def test_evaluate_free_ministry_proposal_is_zero_and_has_no_payment_hold(monkeypatch):
+    service, *_, command = _free_ministry_service(monkeypatch)
+
+    evaluation = await service.evaluate_proposal(command)
+
+    assert evaluation.is_confirmable is True
+    assert evaluation.is_free_ministry is True
+    assert evaluation.quoted_amount == Decimal("0")
+    assert evaluation.subtotal_amount == Decimal("0")
+    assert evaluation.discount_code is None
+    assert evaluation.discount_percent == Decimal("0")
+    assert evaluation.pending_payment_hold_days is None
+    assert evaluation.payment_hold_expires_at is None
+
+
+@pytest.mark.asyncio
+async def test_unevaluable_ministry_proposal_has_no_payment_hold(monkeypatch):
+    service, *_, command = _free_ministry_service(monkeypatch)
+
+    evaluation = await service.evaluate_proposal(command.model_copy(update={"local_end_time": time(9, 0)}))
+
+    assert evaluation.is_confirmable is False
+    assert evaluation.pending_payment_hold_days is None
+    assert evaluation.payment_hold_expires_at is None
+
+
+@pytest.mark.asyncio
+async def test_preview_free_ministry_series_quotes_zero(monkeypatch):
+    service, *_, command = _free_ministry_service(monkeypatch)
+
+    preview = await service.preview_conflicts(command)
+
+    assert preview.is_free_ministry is True
+    assert preview.quoted_amount == Decimal("0")
+
+
+@pytest.mark.asyncio
+async def test_admin_on_behalf_free_ministry_series_uses_booker_eligibility(monkeypatch):
+    service, series_stub, _, _, command = _free_ministry_service(monkeypatch, operator_id=uuid4())
+
+    result = await service.create_series(command)
+
+    assert result.user_id == command.user_id
+    assert result.status == BookingStatus.CONFIRMED.value
+    assert series_stub.insert_series_calls[0]["quoted_amount"] == Decimal("0")
+
+
+@pytest.mark.asyncio
+async def test_ministry_series_priced_as_charged_keeps_pending_payment_hold(monkeypatch):
+    user_id = uuid4()
     ministry = make_ministry_detail()
     ministry_stub = StubMinistryRepository(ministry_by_id={ministry.id: ministry}, booking_member_user_ids={user_id})
-    service, series_stub, *_ = _service(monkeypatch, user_id=user_id, ministry_stub=ministry_stub)
-    service._pricing_service = _real_pricing_for_room(room_id, ministry_stub)
-    await service.create_series(_command(facility_id=room_id, ministry_id=ministry.id))
-    payload = series_stub.insert_series_calls[0]
-    assert payload["discount_percent"] == Decimal("30")
-    assert payload["quoted_amount"] == Decimal("56.00")
-    assert payload["is_mission_aligned"] is True
+    service, series_stub, booking_stub, _ = _service(monkeypatch, user_id=user_id, ministry_stub=ministry_stub)
+
+    result = await service.create_series(_command(ministry_id=ministry.id))
+
+    assert result.status == BookingStatus.PENDING_PAYMENT.value
+    assert result.payment_hold_expires_at is not None
+    assert series_stub.insert_series_calls[0]["is_mission_aligned"] is False
+    assert all(row["status"] == BookingStatus.PENDING_PAYMENT.value for row in booking_stub.insert_calls)
+
+
+@pytest.mark.asyncio
+async def test_free_ministry_series_still_rejects_non_steward_booker(monkeypatch):
+    service, series_stub, _, _, command = _free_ministry_service(monkeypatch)
+    service._ministry_repository.booking_member_user_ids = set()
+
+    with pytest.raises(ForbiddenException):
+        await service.create_series(command)
+    assert series_stub.insert_series_calls == []
 
 
 @pytest.mark.asyncio
@@ -1038,20 +1220,6 @@ async def test_evaluate_proposal_resolves_discount_independently_of_create(monke
     assert evaluation.discount_percent == Decimal("20")
     assert evaluation.quoted_amount == Decimal("64.00")
     assert evaluation.discount_code == RentalDiscountCode.RECURRING_WEEKLY_MONTHLY.value
-
-
-@pytest.mark.asyncio
-async def test_evaluate_proposal_qualifying_ministry_applies_thirty_percent_not_recurring(monkeypatch):
-    user_id = uuid4()
-    room_id = new_uuid()
-    ministry = make_ministry_detail()
-    ministry_stub = StubMinistryRepository(ministry_by_id={ministry.id: ministry}, booking_member_user_ids={user_id})
-    service, *_ = _service(monkeypatch, user_id=user_id, ministry_stub=ministry_stub)
-    service._pricing_service = _real_pricing_for_room(room_id, ministry_stub)
-    evaluation = await service.evaluate_proposal(_command(facility_id=room_id, ministry_id=ministry.id))
-    assert evaluation.discount_percent == Decimal("30")
-    assert evaluation.quoted_amount == Decimal("56.00")
-    assert evaluation.discount_code == RentalDiscountCode.MISSION_ALIGNED.value
 
 
 @pytest.mark.asyncio

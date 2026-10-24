@@ -4,6 +4,8 @@
 
 Accepted
 
+Partially superseded by ADR 0037: Ministry Bookings are fixed free and their Ministry association is immutable after creation. Personal Recurring Discount and price-snapshot rules remain applicable. Fixed-free Ministry pricing is implemented (EFC-271); association immutability is tracked in EFC-272.
+
 ## Context
 
 Facility rental has two business discounts: Active Ministry Bookings receive 30% and Recurring Bookings receive 20%. The system must retain the published commercial amount after confirmation while allowing authorized administrators to manage future discount percentages.

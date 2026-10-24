@@ -1,6 +1,6 @@
 # Recurring Series Draft checkout
 
-A Recurring Series Draft is a member-owned, non-locking review resource for one weekly Recurring Booking Series proposal. Confirming an owned valid Draft is the member path that creates a pending-payment Series; the Draft is consumed in the same request. This keeps Repeated Booking on the same Review / Booking Details / Payment journey as One-time Booking without widening Booking Draft to hold weekly-Series data.
+A Recurring Series Draft is a member-owned, non-locking review resource for one weekly Recurring Booking Series proposal. Confirming an owned valid Draft is the member path that creates a pending-payment Series (a Confirmed, hold-free Series for an eligible Ministry per ADR 0037); the Draft is consumed in the same request. This keeps Repeated Booking on the same Review / Booking Details / Payment journey as One-time Booking without widening Booking Draft to hold weekly-Series data.
 
 ## Context
 
@@ -16,7 +16,7 @@ facility-booking-frontend #125 and ADR 0034 require a separate Recurring Series 
   - `POST /api/v1/facility/booking-series-drafts` — persist a structurally valid preview-ready proposal
   - `GET /api/v1/facility/booking-series-drafts/{id}` — owner read with live conflicts, quote, payment-hold hours, and `isConfirmable`
   - `PATCH /api/v1/facility/booking-series-drafts/{id}` — replace the proposal after a fresh preview (last-write-wins)
-  - `POST /api/v1/facility/booking-series-drafts/{id}/confirm` — revalidate; if confirmable, create one pending-payment Series and delete the Draft; otherwise `FACILITY_BOOKING_SERIES_DRAFT_NOT_CONFIRMABLE` with `invalidity_code` and current conflicts
+  - `POST /api/v1/facility/booking-series-drafts/{id}/confirm` — revalidate; if confirmable, create one Series (pending-payment for Personal, Confirmed for an eligible Ministry) and delete the Draft; otherwise `FACILITY_BOOKING_SERIES_DRAFT_NOT_CONFIRMABLE` with `invalidity_code` and current conflicts
   - `DELETE /api/v1/facility/booking-series-drafts` — clear the member's unconfirmed Recurring Series Drafts only
 - Confirm requires a valid Title and the same policy/conflict rules as `RecurringBookingService.create_series`. Admin `POST /admin/api/v1/facility/booking-series` is unchanged.
 - Agents must not add or edit `alembic/versions/**`. A human migration must create the two tables; suggested columns live on the ORM models.

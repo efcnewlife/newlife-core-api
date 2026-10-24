@@ -255,6 +255,7 @@ class DiscountEligibilityResult(BaseModel):
 
     discount_code: Optional[str] = Field(default=None)
     discount_percent: Decimal = Field(...)
+    is_free_ministry: bool = Field(default=False, description="Eligible Church Activity Booking: entirely free instead of any discount")
 
 
 class SurchargeResult(UUIDBaseModel):
@@ -278,13 +279,13 @@ class SurchargeListResult(BaseModel):
 
 
 class PreviewQuoteRoomLineResult(BaseModel):
-    """Quoted room line with rule snapshot fields."""
+    """Quoted room line with rule snapshot fields; rate fields are None on a free Ministry line (no Rental Rate applies)."""
 
     facility_id: UUID = Field(...)
     billed_hours: Decimal = Field(...)
-    rental_rate_name: str = Field(default="")
-    billing_unit: str = Field(...)
-    unit_amount: Decimal = Field(...)
+    rental_rate_name: Optional[str] = Field(default=None)
+    billing_unit: Optional[str] = Field(default=None)
+    unit_amount: Optional[Decimal] = Field(default=None)
     currency: str = Field(default="CAD")
     applicability: Optional[dict] = Field(default=None)
     is_default: bool = Field(default=False)
@@ -301,6 +302,7 @@ class PreviewQuoteResult(BaseModel):
     surcharge_amount: Decimal = Field(...)
     quoted_amount: Decimal = Field(...)
     currency: str = Field(...)
+    is_free_ministry: bool = Field(default=False)
     room_lines: list[PreviewQuoteRoomLineResult] = Field(default_factory=list)
 
 
@@ -625,6 +627,7 @@ class BookingDraftResult(UUIDBaseModel):
     surcharge_amount: Decimal = Field(...)
     quoted_amount: Decimal = Field(...)
     currency: str = Field(...)
+    is_free_ministry: bool = Field(default=False)
     is_confirmable: bool = Field(default=True)
     conflicts: list[BookingConflictResult] = Field(default_factory=list)
     override_impacts: list[OverrideImpactResult] = Field(default_factory=list)
@@ -822,9 +825,10 @@ class RecurringProposalEvaluationResult(BaseModel):
     discount_amount: Decimal = Field(...)
     surcharge_amount: Decimal = Field(...)
     currency: str = Field(...)
+    is_free_ministry: bool = Field(default=False)
     occurrence_count: int = Field(...)
-    pending_payment_hold_days: int = Field(...)
-    payment_hold_expires_at: datetime = Field(...)
+    pending_payment_hold_days: Optional[int] = Field(default=None, description="None when no payment hold applies (Ministry Series)")
+    payment_hold_expires_at: Optional[datetime] = Field(default=None, description="None when no payment hold applies (Ministry Series)")
     invalidity_code: Optional[str] = Field(default=None)
     invalidity_detail: Optional[str] = Field(default=None)
     override_impacts: list[OverrideImpactResult] = Field(default_factory=list)
@@ -855,9 +859,10 @@ class RecurringSeriesDraftResult(UUIDBaseModel):
     discount_amount: Decimal = Field(...)
     surcharge_amount: Decimal = Field(...)
     currency: str = Field(...)
+    is_free_ministry: bool = Field(default=False)
     occurrence_count: int = Field(...)
-    pending_payment_hold_days: int = Field(...)
-    payment_hold_expires_at: datetime = Field(...)
+    pending_payment_hold_days: Optional[int] = Field(default=None, description="None when no payment hold applies (Ministry Series)")
+    payment_hold_expires_at: Optional[datetime] = Field(default=None, description="None when no payment hold applies (Ministry Series)")
     override_impacts: list[OverrideImpactResult] = Field(default_factory=list)
     override_review_token: Optional[str] = Field(default=None)
 
@@ -868,6 +873,7 @@ class RecurringBookingPreviewResult(BaseModel):
     conflicts: list[RecurringBookingConflictResult] = Field(default_factory=list)
     quoted_amount: Decimal = Field(...)
     currency: str = Field(...)
+    is_free_ministry: bool = Field(default=False)
     override_impacts: list[OverrideImpactResult] = Field(default_factory=list)
     override_review_token: Optional[str] = Field(default=None)
 
