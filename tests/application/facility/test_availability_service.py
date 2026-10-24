@@ -68,12 +68,7 @@ class _StubSlotTemplateRepository(StubRoomSlotTemplateRepository):
 def _room_and_template(room_id=None, start=time(9, 0), end=time(12, 0), duration=60):
     room_id = room_id or uuid4()
     rooms = [RoomListItemResult(id=room_id, code="gym", name="Gym", room_number="1", is_active=True)]
-    templates = [
-        RoomSlotTemplateResult(
-            id=uuid4(), facility_id=room_id, name="Day", days_of_week_mask=127, start_time=start, end_time=end, slot_duration_minutes=duration, is_active=True
-        )
-    ]
-    return room_id, rooms, templates
+    return room_id, rooms, [_template(room_id, start, end, duration)]
 
 
 def _make_availability_service(rooms, templates, blackouts=None, file_service=None, setting_service=None, booking_repository=None, ministry_repository=None):
@@ -86,6 +81,52 @@ def _make_availability_service(rooms, templates, blackouts=None, file_service=No
         setting_service or StubSettingService(),
         file_service or StubFileService(),
     )
+
+
+def _template(room_id, start, end, duration=60):
+    return RoomSlotTemplateResult(
+        id=uuid4(), facility_id=room_id, name="Day", days_of_week_mask=127, start_time=start, end_time=end, slot_duration_minutes=duration, is_active=True
+    )
+
+
+def _blackout(start, end):
+    return RoomBlackoutResult(
+        id=uuid4(),
+        facility_id=None,
+        name="Closed",
+        reason="Maintenance",
+        kind=RoomBlackoutKind.ONE_OFF.value,
+        blackout_date=DAY,
+        days_of_week_mask=None,
+        start_time=start,
+        end_time=end,
+        is_active=True,
+    )
+
+
+async def _ministry_room_day(windows, occupied_from, occupied_to, blackouts=None):
+    room_id = uuid4()
+    rooms = [RoomListItemResult(id=room_id, code="gym", name="Gym", room_number="1", is_active=True)]
+    templates = [_template(room_id, start, end) for start, end in windows]
+    occupying = [
+        RecurringOccupyingBookingResult(
+            booking_id=uuid4(), user_id=uuid4(), ministry_id=None, facility_ids=[room_id], start_at=_utc(*occupied_from), end_at=_utc(*occupied_to)
+        )
+    ]
+    ministry_id = uuid4()
+    user_id = uuid4()
+    set_user_context(UserContext(user_id=user_id, email="steward@efcnewlife.org"))
+    ministry_repo = StubMinistryRepository(
+        ministry_by_id={
+            ministry_id: MinistryDetailResult(id=ministry_id, name="Choir", status=MinistryStatus.ACTIVE.value, has_priority_booking=False, is_active=True)
+        },
+        booking_member_user_ids={user_id},
+    )
+    service = _make_availability_service(
+        rooms, templates, blackouts, booking_repository=StubBookingRepository(occupying_bookings=occupying), ministry_repository=ministry_repo
+    )
+    result = await service.get_rooms_availability(RoomAvailabilityQueryCommand(target_date=DAY, ministry_id=ministry_id))
+    return result.items[0]
 
 
 @pytest.mark.asyncio
@@ -282,3 +323,34 @@ async def test_room_without_applicable_template_is_omitted():
     service = _make_availability_service(rooms, [])
     result = await service.get_rooms_availability(RoomAvailabilityQueryCommand(target_date=DAY))
     assert result.items == []
+
+
+@pytest.mark.asyncio
+async def test_identical_overlapping_templates_yield_one_event_per_booking():
+    room = await _ministry_room_day([(time(8, 0), time(22, 0))] * 3, (13, 0), (14, 0))
+    assert [(event.start, event.end) for event in room.events] == [("13:00", "14:00")]
+    by_start = {cell.start: cell for cell in room.cells}
+    assert by_start["13:00"].state == TimetableCellState.UNAVAILABLE.value
+    assert by_start["13:00"].event_indices == [0]
+
+
+@pytest.mark.asyncio
+async def test_partially_overlapping_templates_merge_into_one_window():
+    room = await _ministry_room_day([(time(8, 0), time(14, 0)), (time(12, 0), time(22, 0))], (11, 0), (16, 0))
+    assert [(event.start, event.end) for event in room.events] == [("11:00", "16:00")]
+
+
+@pytest.mark.asyncio
+async def test_touching_templates_merge_into_one_window():
+    room = await _ministry_room_day([(time(12, 0), time(22, 0)), (time(8, 0), time(12, 0))], (11, 0), (13, 0))
+    assert [(event.start, event.end) for event in room.events] == [("11:00", "13:00")]
+
+
+@pytest.mark.asyncio
+async def test_blackout_splits_merged_window_and_crossing_event():
+    room = await _ministry_room_day([(time(8, 0), time(22, 0))] * 2, (11, 0), (14, 0), blackouts=[_blackout(time(12, 0), time(13, 0))])
+    assert [(event.start, event.end) for event in room.events] == [("11:00", "12:00"), ("13:00", "14:00")]
+    by_start = {cell.start: cell.state for cell in room.cells}
+    assert by_start["12:00"] == TimetableCellState.CLOSED.value
+    assert by_start["11:00"] == TimetableCellState.UNAVAILABLE.value
+    assert by_start["13:00"] == TimetableCellState.UNAVAILABLE.value

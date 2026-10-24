@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 
 from portal.application.content.file_service import FileService
 from portal.application.facility.commands import RoomAvailabilityQueryCommand
+from portal.application.facility.opening_hours import merge_open_windows
 from portal.application.facility.results import (
     DayAvailabilityResult,
     RoomAvailabilityCellResult,
@@ -107,17 +108,18 @@ class AvailabilityService:
     def _build_open_windows(
         self, day: date, templates: list[RoomSlotTemplateResult], blackouts: list[RoomBlackoutResult], local_tz: ZoneInfo
     ) -> list[OpenInterval]:
-        raw: list[OpenInterval] = []
+        template_windows: list[tuple[datetime, datetime]] = []
         for template in templates:
             start_at = self._combine_local(day, template.start_time, local_tz)
             end_at = self._combine_local(day, template.end_time, local_tz)
             if start_at < end_at:
-                raw.append(OpenInterval(start_at=start_at, end_at=end_at))
+                template_windows.append((start_at, end_at))
+        merged = merge_open_windows(template_windows)
         if not blackouts:
-            return raw
+            return [OpenInterval(start_at=start_at, end_at=end_at) for start_at, end_at in merged]
         open_windows: list[OpenInterval] = []
-        for window in raw:
-            segments = [(window.start_at, window.end_at)]
+        for window_start, window_end in merged:
+            segments = [(window_start, window_end)]
             for blackout in blackouts:
                 blackout_start = self._combine_local(day, blackout.start_time, local_tz)
                 blackout_end = self._combine_local(day, blackout.end_time, local_tz)
