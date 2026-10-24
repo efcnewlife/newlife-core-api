@@ -3,7 +3,7 @@ Member room availability application service.
 """
 
 from datetime import date, datetime, time, timedelta, timezone
-from typing import Optional
+from typing import Callable, Optional
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -34,7 +34,7 @@ from portal.application.facility.timetable_projection import (
 )
 from portal.application.system.setting_service import SettingService
 from portal.domain.content.constants import FILE_RESOURCE_KIND_FACILITY_ROOM
-from portal.domain.facility.constants import ROOM_GALLERY_MAX_FILES, TIMETABLE_CELLS_PER_DAY
+from portal.domain.facility.constants import ROOM_GALLERY_MAX_FILES, TIMETABLE_CELLS_PER_DAY, FacilityErrorCode
 from portal.domain.org.constants import MinistryMemberRole, MinistryStatus
 from portal.exceptions.responses import BadRequestException, ForbiddenException
 from portal.infrastructure.persistence.repositories.facility.booking_repository import BookingRepository
@@ -59,6 +59,7 @@ class AvailabilityService:
         room_blackout_repository: RoomBlackoutRepository,
         setting_service: SettingService,
         file_service: FileService,
+        now_utc: Optional[Callable[[], datetime]] = None,
     ):
         self._room_repository = room_repository
         self._slot_template_repository = room_slot_template_repository
@@ -67,6 +68,7 @@ class AvailabilityService:
         self._blackout_repository = room_blackout_repository
         self._setting_service = setting_service
         self._file_service = file_service
+        self._now_utc = now_utc or (lambda: datetime.now(timezone.utc))
         self._req_ctx: Optional[RequestContext] = get_request_context()
         self._user_ctx: Optional[UserContext] = get_user_context()
 
@@ -196,12 +198,14 @@ class AvailabilityService:
 
     @distributed_trace()
     async def get_rooms_availability(self, command: RoomAvailabilityQueryCommand) -> RoomAvailabilityListResult:
-        is_ministry_context, is_priority = await self._resolve_ministry_context(command.ministry_id)
         local_tz = await self._setting_service.get_facility_timezone()
-        max_booking_lines = await self._setting_service.get_max_booking_lines()
+        now_utc = self._now_utc()
         day = command.target_date
+        if day < now_utc.astimezone(local_tz).date():
+            raise BadRequestException(detail="Date must be today or later", error_code=FacilityErrorCode.AVAILABILITY_DATE_IN_PAST.value)
+        is_ministry_context, is_priority = await self._resolve_ministry_context(command.ministry_id)
+        max_booking_lines = await self._setting_service.get_max_booking_lines()
         day_of_week = day.weekday()
-        now_utc = datetime.now(timezone.utc)
         cell_bounds = day_cell_bounds(day, local_tz)
         rooms = await self._room_repository.list_active(self._resolved_locale_id())
         items: list[RoomAvailabilityResult] = []
