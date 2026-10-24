@@ -30,7 +30,7 @@ def _combine_local(day: date, value: time, tz: ZoneInfo) -> datetime:
     return datetime.combine(day, value, tzinfo=tz)
 
 
-def _merge_open_windows(windows: list[tuple[datetime, datetime]]) -> list[tuple[datetime, datetime]]:
+def merge_open_windows(windows: list[tuple[datetime, datetime]]) -> list[tuple[datetime, datetime]]:
     if not windows:
         return []
     ordered = sorted(windows, key=lambda item: item[0])
@@ -78,7 +78,7 @@ def member_interval_within_opening_hours(start_at: datetime, end_at: datetime, t
         for template in applicable
         if template.start_time < template.end_time
     ]
-    merged = _merge_open_windows(raw_windows)
+    merged = merge_open_windows(raw_windows)
     start_local = start_at.astimezone(local_tz)
     end_local = end_at.astimezone(local_tz)
     for window_start, window_end in merged:
