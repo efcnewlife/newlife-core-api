@@ -169,8 +169,13 @@ class BookingService:
         existing = await self._repository.get_detail(booking_id, self._resolved_locale_id())
         if existing is None:
             raise NotFoundException(detail="Booking not found", error_code=FacilityErrorCode.BOOKING_NOT_FOUND.value, context={"booking_id": str(booking_id)})
-        await self._validate_ministry_booking_gate(command.ministry_id, booker_id=existing.user_id)
-        await self._repository.update_booking_header(booking_id, dict(title=command.title, ministry_id=command.ministry_id))
+        if command.changes_ministry_association(existing.ministry_id):
+            raise ConflictErrorException(
+                detail="Ministry association cannot change after creation; cancel and create a new booking",
+                error_code=BookingErrorCode.MINISTRY_ASSOCIATION_LOCKED.value,
+                context={"booking_id": str(booking_id)},
+            )
+        await self._repository.update_booking_header(booking_id, dict(title=command.title))
         return await self.get_booking_by_id(booking_id)
 
     @distributed_trace()

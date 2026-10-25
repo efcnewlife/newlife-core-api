@@ -817,7 +817,7 @@ def create_booking_to_command(model) -> "CreateBookingCommand":
 def update_booking_to_command(model) -> "UpdateBookingCommand":
     from portal.application.facility.commands import UpdateBookingCommand
 
-    return UpdateBookingCommand(title=model.title, ministry_id=model.ministry_id, surcharge_codes=model.surcharge_codes)
+    return UpdateBookingCommand(**model.model_dump(exclude_unset=True))
 
 
 def cancel_booking_to_command(model) -> "CancelBookingCommand":

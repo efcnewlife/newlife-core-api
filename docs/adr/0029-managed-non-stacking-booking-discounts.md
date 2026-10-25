@@ -4,7 +4,7 @@
 
 Accepted
 
-Partially superseded by ADR 0037: Ministry Bookings are fixed free and their Ministry association is immutable after creation. Personal Recurring Discount and price-snapshot rules remain applicable. Fixed-free Ministry pricing is implemented (EFC-271); association immutability is tracked in EFC-272.
+Partially superseded by ADR 0037: Ministry Bookings are fixed free and their Ministry association is immutable after creation. Personal Recurring Discount and price-snapshot rules remain applicable. Fixed-free Ministry pricing (EFC-271) and association immutability (EFC-272) are implemented.
 
 ## Context
 

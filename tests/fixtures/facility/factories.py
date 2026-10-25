@@ -300,10 +300,9 @@ def make_booking_list_item(
     )
 
 
-def make_update_booking_command(
-    title: str = "Choir practice", ministry_id: UUID | None = None, surcharge_codes: list[str] | None = None
-) -> UpdateBookingCommand:
-    return UpdateBookingCommand(title=title, ministry_id=ministry_id, surcharge_codes=surcharge_codes or [])
+def make_update_booking_command(title: str = "Choir practice", surcharge_codes: list[str] | None = None, **association) -> UpdateBookingCommand:
+    """Pass ``ministry_id=...`` (including ``None``) to submit an association; omit it to leave the field unsent."""
+    return UpdateBookingCommand(title=title, surcharge_codes=surcharge_codes or [], **association)
 
 
 def make_create_booking_command(
