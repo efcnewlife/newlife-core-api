@@ -14,7 +14,7 @@ from portal.container import Container
 from portal.exceptions.responses import ApiBaseException
 from portal.libs.consts.enums import APIScope
 from portal.libs.contexts.request_session_context import get_request_session
-from portal.libs.telemetry import init_sentry
+from portal.libs.telemetry import capture_request_failure, init_sentry
 from portal.libs.utils.lifespan import lifespan
 from portal.middlewares import AuthMiddleware, CoreRequestMiddleware
 from portal.routers import admin_api_router, api_router
@@ -83,6 +83,7 @@ def _setup_exception_handlers(application: FastAPI) -> None:
         :param exc:
         :return:
         """
+        capture_request_failure(request, exc)
         session = get_request_session()
         if session is not None:
             await session.rollback()
@@ -96,6 +97,7 @@ def _setup_exception_handlers(application: FastAPI) -> None:
         :param exc:
         :return:
         """
+        capture_request_failure(request, exc)
         session = get_request_session()
         if session is not None:
             await session.rollback()
@@ -118,6 +120,7 @@ def _setup_exception_handlers(application: FastAPI) -> None:
         :param exc:
         :return:
         """
+        capture_request_failure(request, exc)
         content = defaultdict()
         content["detail"] = {"message": "Internal Server Error", "url": str(request.url)}
         if settings.is_dev:

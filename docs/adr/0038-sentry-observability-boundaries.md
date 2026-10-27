@@ -58,6 +58,13 @@ These policies are recorded for future deployment work and do not authorize impl
 
 Account region, retention, entitlements, source-map/release API access, deployment URLs, and Azure activation remain future provisioning checks. Email alert rules and routing are deliberately outside implementation scope.
 
+## Core API capture policy (EFC-281)
+
+- Errors are captured explicitly in the app error handlers, not through the SDK's Starlette/FastAPI integrations, so no request data is attached by default. A mounted app re-raises into the public app's handler; a flag on the exception keeps that to one event.
+- The user ID travels on `request.state`. `AuthMiddleware` runs in a child task under Starlette's `BaseHTTPMiddleware`, so a `ContextVar` it sets is not visible to the outer error handlers. Per-request state also keeps concurrent and later requests apart.
+- Events are allowlisted rather than denylisted. Exception values are always dropped: SQL errors and wrapped exceptions can carry parameters, emails, or names that no pattern can reliably detect. Diagnosis relies on exception types, chained causes, and stack frames.
+- Logs go to Sentry Logs only, never as error events, so one failure is not reported twice. Templated parameters are dropped unless they are numbers, booleans, or UUIDs. Untemplated text is only pattern-scrubbed, so names inside f-strings remain a residual risk. Existing exception-text log calls on request paths now use templates.
+
 ## Plan and notification evidence
 
 Checked on 2026-10-27: [Sentry pricing](https://sentry.io/pricing/) lists Developer as one user with unlimited projects, 5,000 errors, 5 million spans, 50 replays, 5 GB logs, one uptime monitor, and one cron monitor. These are plan allowances, not per-project allocations; actual account entitlements remain unverified. Third-party integrations are listed under Team. Do not rely on introductory Replay promotions for steady-state design.

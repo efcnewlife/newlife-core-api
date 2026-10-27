@@ -391,7 +391,15 @@ The SDK starts once while the public app is composed. Missing or invalid setting
 
 The Sentry release is `newlife-core-api@<VERSION>` (`newlife-core-api@local` in dev). Unknown `ENV` values disable telemetry instead of being labeled as prod.
 
-This phase sends only explicit captures. Automatic error, log, breadcrumb, trace, metric, and session export is off, and PII, request bodies, and local variables are not collected (see ADR 0038; capture policy lands in EFC-281). Tracing is reserved for OpenTelemetry through `portal.libs.tracing.distributed_trace` (EFC-284); do not add a separate tracing provider.
+What is enabled (no extra settings; see ADR 0038):
+
+- **Errors.** The public, Admin, and App error handlers report an unexpected exception or a 5xx response once (`capture_request_failure`). Ordinary 4xx and business rejections are not reported. The response, rollback, and cleanup do not change.
+- **User.** Only the authenticated internal user ID (`AuthMiddleware` → `bind_request_user`). No name, email, or IP.
+- **Logs.** Python `WARNING` and above become Sentry Logs, never Sentry errors. `INFO` request/response logging from `LogRoute` stays local.
+- **Correlation.** Error events carry a `request_id` tag and that request's logs carry the same `request_id` attribute. The ID is server-generated per request.
+- **Sanitization** (`portal/libs/telemetry/sanitizer.py`). Events keep only exception types, stack frames without locals, route template, method, environment, and release. Exception text, request/response bodies, query values, headers, and extras are dropped. Logs send the message template; parameters are kept only when they are numbers, booleans, or UUIDs. Untemplated text is scrubbed (emails, phones, tokens, `key=value` values). Log with `%s` parameters, not f-strings.
+
+Off: breadcrumbs, traces, metrics, sessions, client reports, Profiling, and Replay. There is no sampling or quota tuning. Delivery failure or exhausted quota drops telemetry; the SDK queue is bounded. Tracing is reserved for OpenTelemetry through `portal.libs.tracing.distributed_trace` (EFC-284); do not add a separate tracing provider.
 
 Local check with a real DSN in `.env`:
 

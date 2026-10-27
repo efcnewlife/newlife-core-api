@@ -106,7 +106,7 @@ class LogRoute(APIRoute):
                     filtered_body = self.filter_request_body(body_str)
                     request_message["http.request.body"] = filtered_body
                 except Exception as exc:  # noqa
-                    logger.warning(exc)
+                    logger.warning("Request body logging skipped: %s", exc)
                     request_message["http.request.body"] = ""
             logger.info(request_message)
 
@@ -117,7 +117,7 @@ class LogRoute(APIRoute):
                 try:
                     response_body = response.body.decode()
                 except Exception as exc:  # noqa
-                    logger.warning(exc)
+                    logger.warning("Response body logging skipped: %s", exc)
                     response_body = ""
 
                 response_message = {
@@ -129,7 +129,7 @@ class LogRoute(APIRoute):
                 logger.info(response_message)
                 return response
             except Exception as exc:
-                logger.warning(exc)
+                logger.warning("Response logging failed: %s", exc)
                 return response
 
         return route_handler

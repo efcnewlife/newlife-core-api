@@ -22,6 +22,7 @@ from portal.libs.authorization.auth_config import AuthConfig
 from portal.libs.authorization.permission_checker import PermissionChecker
 from portal.libs.contexts.user_context import UserContext, get_user_context, set_user_context
 from portal.libs.logger import logger
+from portal.libs.telemetry import bind_request_user
 from portal.providers.jwt_provider import JWTProvider
 
 
@@ -211,6 +212,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             username=user.email.split("@")[0],
         )
         set_user_context(user_context)
+        bind_request_user(request, user.id)
 
     @inject
     async def _verify_user_token(
@@ -260,6 +262,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             username=user.email.split("@")[0],
         )
         set_user_context(user_context)
+        bind_request_user(request, user.id)
 
     @inject
     async def _check_permissions(
