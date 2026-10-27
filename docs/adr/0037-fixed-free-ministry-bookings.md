@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. Core API pricing, lifecycle, and response contracts are implemented (EFC-271), as is post-creation association immutability (EFC-272). Frontend adoption (EFC-273, EFC-274) is tracked separately.
+Accepted. Core API pricing, lifecycle, and response contracts are implemented (EFC-271), as are post-creation association immutability (EFC-272) and the saved-record free flag (EFC-275). Frontend adoption (EFC-273, EFC-274) is tracked separately.
 
 ## Context and decision
 
@@ -48,6 +48,15 @@ The server decides free pricing; a client never derives it from `ministryId` alo
 - `ministry_id` equal to the stored value (including `null` on a Personal Booking): accepted. The title is saved; eligibility is not re-checked and the Booking is not repriced.
 - `ministry_id` different from the stored value (Personal to Ministry, explicit `null` on a Ministry Booking, or another Ministry): `409` with `error_code` `FACILITY_BOOKING_MINISTRY_ASSOCIATION_LOCKED`. Nothing is written, including the title. The client should direct the operator to cancel and create a new booking.
 - Booking and Series Drafts are unaffected; their association stays editable with live revalidation.
+
+## API contract (EFC-275)
+
+Saved records state whether they were created as free Ministry bookings, so clients no longer infer it from `ministryId` plus a zero `quotedAmount`.
+
+- `isFreeMinistry` (boolean, default `false`) is present on: member Booking detail (`MemberBookingDetail`, One-time and Recurring Occurrences, including the title-edit response), member Recurring Series detail and its `occurrences`, the member Series create response, Admin Booking detail, and Admin Recurring Series detail and its `occurrences`. Each Occurrence reports its own snapshot.
+- The value is read from the persisted `is_mission_aligned` snapshot of that Booking or Series, which creation sets only for free Ministry pricing since EFC-271. Rows created earlier under the ADR 0029 Ministry Discount also carry `true`; they are pre-launch data covered by "no legacy-data conversion" and must be reset rather than relied on. The flag never re-evaluates current Ministry status or Booker stewardship, so it stays stable after a Booker loses stewardship or a Ministry is deactivated.
+- Personal records and any Ministry record not created as free return `false`.
+- Admin Booking list and range items do not carry the flag. Admin Booking detail keeps `isMissionAligned` for compatibility; clients should read `isFreeMinistry`.
 
 ## Remaining implementation gaps
 

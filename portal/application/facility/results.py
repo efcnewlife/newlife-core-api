@@ -389,6 +389,7 @@ class BookingDetailResult(UUIDBaseModel):
     recurrence_end_at: Optional[datetime] = Field(default=None, description="Recurrence series end")
     status: str = Field(...)
     is_mission_aligned: bool = Field(default=False)
+    is_free_ministry: bool = Field(default=False, description="Created as a free Church Activity Booking (persisted pricing snapshot)")
     subtotal_amount: Optional[Decimal] = Field(default=None)
     discount_percent: Optional[Decimal] = Field(default=None)
     discount_amount: Optional[Decimal] = Field(default=None)
@@ -668,6 +669,7 @@ class RecurringBookingOccurrenceResult(UUIDBaseModel):
     quoted_amount: Decimal = Field(...)
     currency: str = Field(...)
     facility_ids: list[UUID] = Field(default_factory=list)
+    is_free_ministry: bool = Field(default=False, description="Created as a free Church Activity Booking (persisted pricing snapshot)")
 
 
 class RecurringBookingSeriesResult(UUIDBaseModel):
@@ -690,6 +692,7 @@ class RecurringBookingSeriesResult(UUIDBaseModel):
     currency: str = Field(...)
     occurrence_count: int = Field(...)
     is_priority: bool = Field(default=False)
+    is_free_ministry: bool = Field(default=False, description="Created as a free Church Activity Booking (persisted pricing snapshot)")
     confirmed_by_id: Optional[UUID] = Field(default=None)
     created_at: Optional[datetime] = Field(default=None)
     occurrences: list[RecurringBookingOccurrenceResult] = Field(default_factory=list)
@@ -750,6 +753,7 @@ class ParticipantBookingDetailResult(UUIDBaseModel):
     surcharge_amount: Optional[Decimal] = Field(default=None)
     quoted_amount: Optional[Decimal] = Field(default=None)
     currency: Optional[str] = Field(default=None)
+    is_free_ministry: bool = Field(default=False, description="Created as a free Church Activity Booking (persisted pricing snapshot)")
     payment_hold_expires_at: Optional[datetime] = Field(default=None)
     is_booker: bool = Field(...)
     is_view_only: bool = Field(...)
@@ -773,6 +777,7 @@ class ParticipantSeriesDetailResult(UUIDBaseModel):
     payment_hold_expires_at: Optional[datetime] = Field(default=None)
     quoted_amount: Decimal = Field(...)
     currency: str = Field(...)
+    is_free_ministry: bool = Field(default=False)
     occurrence_count: int = Field(...)
     booker_display_name: Optional[str] = Field(default=None)
     booker_email: Optional[str] = Field(default=None)
