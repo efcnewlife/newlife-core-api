@@ -14,6 +14,7 @@ from portal.container import Container
 from portal.exceptions.responses import ApiBaseException
 from portal.libs.consts.enums import APIScope
 from portal.libs.contexts.request_session_context import get_request_session
+from portal.libs.telemetry import init_sentry
 from portal.libs.utils.lifespan import lifespan
 from portal.middlewares import AuthMiddleware, CoreRequestMiddleware
 from portal.routers import admin_api_router, api_router
@@ -162,6 +163,8 @@ def get_api_application(container: Container) -> FastAPI:
 
 
 def get_public_application(container: Container) -> FastAPI:
+    # Before any FastAPI app (public or mounted) is built; idempotent and never blocks startup.
+    init_sentry(settings)
     application = FastAPI(lifespan=lifespan, title=f"{settings.APP_NAME} Public API", version=settings.APP_VERSION)
     application.container = container
 

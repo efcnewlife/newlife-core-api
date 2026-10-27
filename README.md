@@ -379,6 +379,28 @@ When `GRAPH_MAIL_SEND_ENABLED=true`, successful Ministry Application submit send
 4. Keep `AZURE_TENANT_ID`, `AZURE_APP_CLIENT_ID`, and `AZURE_APP_CLIENT_SECRET` configured (same as directory sync).
 5. Optional (non-`prod` only): set `GRAPH_MAIL_OVERRIDE_TO` to one or more comma-separated addresses so dev/stg mail never reaches real applicants or incumbents. The subject line is prefixed with `[DEV -> intended@recipient]`.
 
+#### Sentry (optional)
+
+The SDK starts once while the public app is composed. Missing or invalid settings only log a warning; startup, `/healthz`, login, and Booking keep working.
+
+| Variable | Meaning |
+| --- | --- |
+| `SENTRY_DSN` | Project DSN. Unset means telemetry off. Never commit a real DSN. |
+| `SENTRY_ENABLED` | Defaults to `true` for `ENV=stg`/`prod`, `false` for `dev`. Set `true` locally only to verify. |
+| `VERSION` | Release version. `prod` needs `x.y.z`, `stg` needs a short commit SHA; any other value disables telemetry. `dev` always reports `local`. |
+
+The Sentry release is `newlife-core-api@<VERSION>` (`newlife-core-api@local` in dev). Unknown `ENV` values disable telemetry instead of being labeled as prod.
+
+This phase sends only explicit captures. Automatic error, log, breadcrumb, trace, metric, and session export is off, and PII, request bodies, and local variables are not collected (see ADR 0038; capture policy lands in EFC-281). Tracing is reserved for OpenTelemetry through `portal.libs.tracing.distributed_trace` (EFC-284); do not add a separate tracing provider.
+
+Local check with a real DSN in `.env`:
+
+```bash
+SENTRY_ENABLED=true uv run python -c "import sentry_sdk; from portal.libs.telemetry import init_sentry, capture_diagnostic_event; init_sentry(); print(capture_diagnostic_event()); sentry_sdk.flush()"
+```
+
+The test suite forces `SENTRY_ENABLED=false` (`tests/conftest.py`); tests use `tests/fixtures/telemetry/sentry_transport.py` instead of real ingestion.
+
 ### Docker
 
 Make sure you have Docker installed and running.
