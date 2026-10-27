@@ -847,9 +847,14 @@ def booking_detail_to_api(result) -> "AdminBookingDetail":
 
 
 def override_log_page_to_api(result) -> "AdminOverrideLogPages":
-    from portal.serializers.admin.v1.facility.override_log import AdminOverrideLogPages
+    from portal.serializers.admin.v1.facility.override_log import AdminOverrideLogItem, AdminOverrideLogPages
 
-    return AdminOverrideLogPages(page=result.page, page_size=result.page_size, total=result.total, items=[item for item in result.items])
+    return AdminOverrideLogPages(
+        page=result.page,
+        page_size=result.page_size,
+        total=result.total,
+        items=[AdminOverrideLogItem.model_validate(item.model_dump()) for item in result.items],
+    )
 
 
 def create_recurring_booking_series_to_command(model) -> "CreateRecurringBookingSeriesCommand":

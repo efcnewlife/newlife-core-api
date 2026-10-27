@@ -39,6 +39,7 @@ from portal.application.facility.mappers import (
     member_preview_quote_result_to_api,
     member_preview_quote_to_command,
     member_recurring_series_draft_create_to_command,
+    override_log_page_to_api,
     override_log_pages_query_to_command,
     pages_query_to_command,
     pending_payment_series_list_to_admin_api,
@@ -67,6 +68,8 @@ from portal.application.facility.results import (
     DiscountEligibilityResult,
     DiscountRuleResult,
     MemberBrowseBookingResult,
+    OverrideLogPageResult,
+    OverrideLogResult,
     PendingPaymentSeriesListItemResult,
     PendingPaymentSeriesListResult,
     PreviewQuoteResult,
@@ -1235,3 +1238,36 @@ def test_free_ministry_recurring_preview_and_booking_draft_expose_free_flag():
     assert recurring_booking_preview_to_member_api(preview).model_dump(by_alias=True)["isFreeMinistry"] is True
     assert recurring_booking_preview_to_admin_api(preview).model_dump(by_alias=True)["isFreeMinistry"] is True
     assert booking_draft_result_to_api(draft).model_dump(by_alias=True)["isFreeMinistry"] is True
+
+
+def test_override_log_page_to_api_maps_items():
+    item = OverrideLogResult(
+        id=uuid4(),
+        facility_booking_id=uuid4(),
+        overridden_booking_id=uuid4(),
+        overridden_by_id=uuid4(),
+        overridden_by_name="Admin",
+        facility_id=uuid4(),
+        facility_name="Main Hall",
+        outcome="overridden",
+        reason="Church event",
+        created_at=datetime(2026, 10, 1, 9, 0, tzinfo=timezone.utc),
+        created_by="admin@example.com",
+    )
+    dumped = override_log_page_to_api(OverrideLogPageResult(page=1, page_size=10, total=11, items=[item])).model_dump(by_alias=True)
+    assert (dumped["page"], dumped["pageSize"], dumped["total"]) == (1, 10, 11)
+    assert dumped["items"] == [
+        {
+            "id": str(item.id),
+            "facilityBookingId": item.facility_booking_id,
+            "overriddenBookingId": item.overridden_booking_id,
+            "overriddenById": item.overridden_by_id,
+            "overriddenByName": "Admin",
+            "facilityId": item.facility_id,
+            "facilityName": "Main Hall",
+            "outcome": "overridden",
+            "reason": "Church event",
+            "createdAt": item.created_at,
+            "createdBy": "admin@example.com",
+        }
+    ]
