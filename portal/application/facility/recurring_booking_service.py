@@ -467,6 +467,7 @@ class RecurringBookingService:
                     quoted_amount=quote.quoted_amount,
                     currency=quote.currency,
                     facility_ids=[line.facility_id for line in resolved_lines],
+                    is_free_ministry=quote.is_free_ministry,
                 )
             )
 
@@ -504,6 +505,7 @@ class RecurringBookingService:
             currency=currency,
             occurrence_count=len(occurrences),
             is_priority=is_priority,
+            is_free_ministry=is_free_ministry,
             occurrences=occurrences,
         )
 

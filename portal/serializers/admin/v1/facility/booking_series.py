@@ -59,6 +59,9 @@ class AdminRecurringBookingOccurrence(UUIDBaseModel):
     quoted_amount: Decimal = Field(..., serialization_alias="quotedAmount")
     currency: str = Field(...)
     facility_ids: list[UUID] = Field(default_factory=list, serialization_alias="facilityIds")
+    is_free_ministry: bool = Field(
+        default=False, serialization_alias="isFreeMinistry", description="Created as a free Church Activity Booking: all charges are zero"
+    )
 
 
 class AdminRecurringBookingSeriesDetail(UUIDBaseModel):
@@ -78,6 +81,9 @@ class AdminRecurringBookingSeriesDetail(UUIDBaseModel):
     currency: str = Field(...)
     occurrence_count: int = Field(..., serialization_alias="occurrenceCount")
     is_priority: bool = Field(default=False, serialization_alias="isPriority")
+    is_free_ministry: bool = Field(
+        default=False, serialization_alias="isFreeMinistry", description="Created as a free Church Activity Booking: all charges are zero"
+    )
     confirmed_by_id: Optional[UUID] = Field(default=None, serialization_alias="confirmedById")
     occurrences: list[AdminRecurringBookingOccurrence] = Field(default_factory=list)
 

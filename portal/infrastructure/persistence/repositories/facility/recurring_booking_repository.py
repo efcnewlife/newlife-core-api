@@ -55,6 +55,7 @@ class RecurringBookingRepository:
                 FacilityBookingSeries.quoted_amount,
                 FacilityBookingSeries.currency,
                 FacilityBookingSeries.is_priority,
+                FacilityBookingSeries.is_mission_aligned,
                 FacilityBookingSeries.updated_by_id,
                 FacilityBookingSeries.created_at,
             )
@@ -175,6 +176,7 @@ class RecurringBookingRepository:
             quoted_amount=quoted_amount if quoted_amount is not None else Decimal("0"),
             currency=data.get("currency") or "CAD",
             is_priority=bool(data.get("is_priority")),
+            is_free_ministry=bool(data.get("is_mission_aligned")),
             occurrence_count=0,
             confirmed_by_id=confirmed_by_id,
             created_at=data.get("created_at"),

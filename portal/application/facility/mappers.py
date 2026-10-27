@@ -560,6 +560,7 @@ def member_booking_detail_to_api(result: ParticipantBookingDetailResult) -> Memb
         discount_amount=result.discount_amount,
         surcharge_amount=result.surcharge_amount,
         currency=result.currency,
+        is_free_ministry=result.is_free_ministry,
         payment_hold_expires_at=result.payment_hold_expires_at,
         is_booker=result.is_booker,
         is_view_only=result.is_view_only,
@@ -900,6 +901,7 @@ def recurring_booking_series_to_member_api(result) -> "MemberRecurringBookingSer
         currency=result.currency,
         occurrence_count=result.occurrence_count,
         is_priority=getattr(result, "is_priority", False),
+        is_free_ministry=result.is_free_ministry,
         user_id=getattr(result, "user_id", None),
         booker_display_name=getattr(result, "booker_display_name", None) or getattr(result, "user_display_name", None),
         booker_email=getattr(result, "booker_email", None) or getattr(result, "user_email", None),
@@ -939,6 +941,7 @@ def _member_occurrence_to_api(item) -> MemberBookingDetail:
         end_at=item.end_at,
         quoted_amount=item.quoted_amount,
         currency=item.currency,
+        is_free_ministry=item.is_free_ministry,
     )
 
 

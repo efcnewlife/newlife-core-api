@@ -811,8 +811,45 @@ def test_recurring_booking_series_to_member_api_exposes_occurrence_and_payment_s
     assert dumped["status"] == "pending_payment"
     assert dumped["paymentHoldExpiresAt"] == expires_at
     assert dumped["quotedAmount"] == Decimal("400")
+    assert dumped["isFreeMinistry"] is False
     assert dumped["occurrences"][0]["id"] == str(occurrence_id)
     assert dumped["occurrences"][0]["status"] == "cancelled"
+    assert dumped["occurrences"][0]["isFreeMinistry"] is False
+
+
+def test_created_free_ministry_series_to_api_marks_series_and_occurrences_free():
+    result = RecurringBookingSeriesResult(
+        id=uuid4(),
+        user_id=uuid4(),
+        ministry_id=uuid4(),
+        first_occurrence_date=date(2026, 1, 13),
+        last_occurrence_date=date(2026, 1, 13),
+        local_start_time=time(10, 0),
+        local_end_time=time(12, 0),
+        status="confirmed",
+        quoted_amount=Decimal("0"),
+        currency="CAD",
+        occurrence_count=1,
+        is_free_ministry=True,
+        occurrences=[
+            RecurringBookingOccurrenceResult(
+                id=uuid4(),
+                start_at=datetime(2026, 1, 13, 15, 0, tzinfo=timezone.utc),
+                end_at=datetime(2026, 1, 13, 17, 0, tzinfo=timezone.utc),
+                status="confirmed",
+                quoted_amount=Decimal("0"),
+                currency="CAD",
+                facility_ids=[],
+                is_free_ministry=True,
+            )
+        ],
+    )
+    member = recurring_booking_series_to_member_api(result).model_dump(by_alias=True)
+    assert member["isFreeMinistry"] is True
+    assert member["occurrences"][0]["isFreeMinistry"] is True
+    admin = recurring_booking_series_to_admin_api(result).model_dump(by_alias=True)
+    assert admin["isFreeMinistry"] is True
+    assert admin["occurrences"][0]["isFreeMinistry"] is True
 
 
 def test_create_room_blackout_to_command_keeps_confirm_occurrence_ids():
@@ -938,6 +975,21 @@ def test_admin_booking_detail_exposes_series_id_for_occurrence():
     dumped = booking_detail_to_api(result).model_dump(by_alias=True)
     assert dumped["seriesId"] == series_id
     assert dumped["bookingType"] == "recurring"
+    assert dumped["isFreeMinistry"] is False
+
+
+def test_admin_booking_detail_exposes_free_ministry_snapshot():
+    result = BookingDetailResult(
+        id=uuid4(),
+        user_id=uuid4(),
+        ministry_id=uuid4(),
+        booking_type="one_time",
+        start_at=datetime(2026, 9, 18, 15, 0, tzinfo=timezone.utc),
+        end_at=datetime(2026, 9, 18, 16, 30, tzinfo=timezone.utc),
+        status="confirmed",
+        is_free_ministry=True,
+    )
+    assert booking_detail_to_api(result).model_dump(by_alias=True)["isFreeMinistry"] is True
 
 
 def test_admin_booking_detail_one_time_series_id_is_null():
@@ -1060,6 +1112,34 @@ def test_admin_recurring_booking_series_detail_exposes_ministry_name():
     dumped = recurring_booking_series_to_admin_api(result).model_dump(by_alias=True)
     assert dumped["ministryId"] == ministry_id
     assert dumped["ministryName"] == "Youth Fellowship"
+    assert dumped["isFreeMinistry"] is False
+    free = result.model_copy(update={"is_free_ministry": True})
+    assert recurring_booking_series_to_admin_api(free).model_dump(by_alias=True)["isFreeMinistry"] is True
+
+
+@pytest.mark.parametrize("is_mission_aligned", [True, False])
+def test_series_repository_reads_free_ministry_from_persisted_snapshot(is_mission_aligned):
+    result = RecurringBookingRepository._to_series_result(
+        {
+            "id": uuid4(),
+            "user_id": uuid4(),
+            "first_occurrence_date": date(2026, 1, 13),
+            "last_occurrence_date": date(2026, 1, 13),
+            "local_start_time": time(10, 0),
+            "local_end_time": time(12, 0),
+            "status": "confirmed",
+            "is_mission_aligned": is_mission_aligned,
+        }
+    )
+    assert result.is_free_ministry is is_mission_aligned
+
+
+def test_series_get_by_id_selects_free_ministry_snapshot():
+    assert "FacilityBookingSeries.is_mission_aligned" in getsource(RecurringBookingRepository.get_by_id)
+
+
+def test_booking_detail_query_reads_free_ministry_from_snapshot():
+    assert 'FacilityBooking.is_mission_aligned.label("is_free_ministry")' in getsource(BookingRepository.get_detail)
 
 
 def test_booking_list_query_selects_ministry_id_and_name():

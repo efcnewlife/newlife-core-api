@@ -10,7 +10,7 @@ from pydantic import ValidationError
 
 from portal.application.content.results import FileGridItemResult
 from portal.application.facility.commands import CancelBookingCommand, CancelRecurringBookingSeriesCommand, UpdateTitleCommand
-from portal.application.facility.mappers import member_booking_detail_to_api
+from portal.application.facility.mappers import member_booking_detail_to_api, participant_series_detail_to_api
 from portal.application.facility.participant_detail import assemble_participant_booking_detail
 from portal.application.facility.results import BookingDetailResult, BookingRoomLineResult, RecurringBookingOccurrenceResult, RecurringBookingSeriesResult
 from portal.domain.facility.constants import BookingLifecycleEventKind, BookingStatus, BookingType, FacilityErrorCode, RecurringCancellationScope
@@ -41,6 +41,7 @@ def _detail(
     payment_hold_expires_at=None,
     series_id=None,
     title="Choir practice",
+    is_free_ministry=False,
 ):
     start_at = start_at or datetime(2026, 10, 1, 14, 0, tzinfo=timezone.utc)
     end_at = start_at + timedelta(hours=2)
@@ -58,6 +59,7 @@ def _detail(
         start_at=start_at,
         end_at=end_at,
         status=status,
+        is_free_ministry=is_free_ministry,
         remark="Bring scores",
         subtotal_amount=Decimal("100"),
         discount_percent=Decimal("0"),
@@ -382,6 +384,58 @@ def test_member_booking_detail_api_omits_operator_and_exposes_actions():
     assert dumped["rooms"][0]["photoUrls"] == ["https://files.example/gym.jpg"]
     assert dumped["actions"]["canEditTitle"] is True
     assert dumped["timeline"][0]["kind"] == BookingLifecycleEventKind.CREATED.value
+
+
+@pytest.mark.asyncio
+async def test_free_ministry_booking_detail_reports_snapshot_after_stewardship_ends(monkeypatch):
+    owner_id = uuid4()
+    _user_ctx(monkeypatch, user_id=owner_id)
+    booking_id = uuid4()
+    detail = _detail(booking_id=booking_id, user_id=owner_id, ministry_id=uuid4(), is_free_ministry=True)
+    service = _booking_service(StubBookingRepository(detail=detail), ministry_stub=StubMinistryRepository())
+
+    result = await service.get_my_booking_by_id(booking_id, now=NOW)
+
+    assert result.is_free_ministry is True
+    assert member_booking_detail_to_api(result).model_dump(by_alias=True)["isFreeMinistry"] is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("ministry_id", [None, uuid4()], ids=["personal", "charged_ministry"])
+async def test_booking_detail_not_created_free_reports_not_free_ministry(monkeypatch, ministry_id):
+    owner_id = uuid4()
+    _user_ctx(monkeypatch, user_id=owner_id)
+    booking_id = uuid4()
+    detail = _detail(booking_id=booking_id, user_id=owner_id, ministry_id=ministry_id)
+    service = _booking_service(StubBookingRepository(detail=detail))
+
+    result = await service.get_my_booking_by_id(booking_id, now=NOW)
+
+    assert result.is_free_ministry is False
+    assert member_booking_detail_to_api(result).model_dump(by_alias=True)["isFreeMinistry"] is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("ministry_id", "is_free_ministry"), [(uuid4(), True), (uuid4(), False), (None, False)], ids=["free_ministry", "charged_ministry", "personal"]
+)
+async def test_series_detail_and_occurrences_report_free_ministry_snapshot(monkeypatch, ministry_id, is_free_ministry):
+    booker_id = uuid4()
+    series = _series(user_id=booker_id).model_copy(update={"ministry_id": ministry_id, "is_free_ministry": is_free_ministry})
+    series_repo = StubRecurringBookingRepository()
+    booking_stub = StubBookingRepository(
+        detail=_detail(booking_id=series.occurrences[-1].id, user_id=booker_id, ministry_id=ministry_id, series_id=series.id, is_free_ministry=is_free_ministry)
+    )
+    _seed_series(series_repo, booking_stub, series)
+    service, *_ = _series_service(monkeypatch, operator_id=booker_id, series_stub=series_repo, booking_stub=booking_stub)
+
+    result = await service.get_my_series_detail(series.id, now=SERIES_NOW)
+
+    assert result.is_free_ministry is is_free_ministry
+    assert [item.is_free_ministry for item in result.occurrences] == [is_free_ministry]
+    dumped = participant_series_detail_to_api(result).model_dump(by_alias=True)
+    assert dumped["isFreeMinistry"] is is_free_ministry
+    assert [item["isFreeMinistry"] for item in dumped["occurrences"]] == [is_free_ministry]
 
 
 def test_member_cancel_serializers_require_reason():

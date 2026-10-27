@@ -240,6 +240,7 @@ class BookingRepository:
                 FacilityBooking.recurrence_end_at,
                 FacilityBooking.status,
                 FacilityBooking.is_mission_aligned,
+                FacilityBooking.is_mission_aligned.label("is_free_ministry"),
                 FacilityBooking.subtotal_amount,
                 FacilityBooking.discount_percent,
                 FacilityBooking.discount_amount,
@@ -528,6 +529,7 @@ class BookingRepository:
                 FacilityBooking.status,
                 FacilityBooking.quoted_amount,
                 FacilityBooking.currency,
+                FacilityBooking.is_mission_aligned,
             )
             .where(FacilityBooking.series_id == series_id)
             .where(FacilityBooking.is_deleted == False)
@@ -546,6 +548,7 @@ class BookingRepository:
                 quoted_amount=row["quoted_amount"],
                 currency=row["currency"],
                 facility_ids=ids_by_booking_id.get(row["id"], []),
+                is_free_ministry=bool(row["is_mission_aligned"]),
             )
             for row in rows
         ]

@@ -1097,6 +1097,8 @@ async def test_create_free_ministry_series_is_confirmed_free_and_holdless(monkey
     assert result.status == BookingStatus.CONFIRMED.value
     assert result.payment_hold_expires_at is None
     assert result.quoted_amount == Decimal("0")
+    assert result.is_free_ministry is True
+    assert [item.is_free_ministry for item in result.occurrences] == [True] * 4
     assert [item.status for item in result.occurrences] == [BookingStatus.CONFIRMED.value] * 4
     payload = series_stub.insert_series_calls[0]
     assert payload["status"] == BookingStatus.CONFIRMED.value
@@ -1196,6 +1198,7 @@ async def test_ministry_series_priced_as_charged_keeps_pending_payment_hold(monk
 
     assert result.status == BookingStatus.PENDING_PAYMENT.value
     assert result.payment_hold_expires_at is not None
+    assert result.is_free_ministry is False
     assert series_stub.insert_series_calls[0]["is_mission_aligned"] is False
     assert all(row["status"] == BookingStatus.PENDING_PAYMENT.value for row in booking_stub.insert_calls)
 

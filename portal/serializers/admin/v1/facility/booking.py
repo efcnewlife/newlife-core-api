@@ -105,6 +105,9 @@ class AdminBookingDetail(AdminBookingListItem):
     )
     recurrence_end_at: Optional[datetime] = Field(default=None, serialization_alias="recurrenceEndAt", description="Recurrence series end")
     is_mission_aligned: bool = Field(default=False, serialization_alias="isMissionAligned")
+    is_free_ministry: bool = Field(
+        default=False, serialization_alias="isFreeMinistry", description="Created as a free Church Activity Booking: all charges are zero"
+    )
     subtotal_amount: Optional[Decimal] = Field(default=None, serialization_alias="subtotalAmount")
     discount_percent: Optional[Decimal] = Field(default=None, serialization_alias="discountPercent")
     discount_amount: Optional[Decimal] = Field(default=None, serialization_alias="discountAmount")

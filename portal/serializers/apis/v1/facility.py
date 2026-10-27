@@ -235,6 +235,9 @@ class MemberBookingDetail(UUIDBaseModel):
     discount_amount: Optional[Decimal] = Field(default=None, serialization_alias="discountAmount")
     surcharge_amount: Optional[Decimal] = Field(default=None, serialization_alias="surchargeAmount")
     currency: Optional[str] = Field(default=None)
+    is_free_ministry: bool = Field(
+        default=False, serialization_alias="isFreeMinistry", description="Created as a free Church Activity Booking: all charges are zero"
+    )
     payment_hold_expires_at: Optional[datetime] = Field(default=None, serialization_alias="paymentHoldExpiresAt")
     is_booker: bool = Field(default=False, serialization_alias="isBooker")
     is_view_only: bool = Field(default=True, serialization_alias="isViewOnly")
@@ -457,6 +460,9 @@ class MemberRecurringBookingSeriesDetail(UUIDBaseModel):
     currency: str = Field(...)
     occurrence_count: int = Field(..., serialization_alias="occurrenceCount")
     is_priority: bool = Field(default=False, serialization_alias="isPriority")
+    is_free_ministry: bool = Field(
+        default=False, serialization_alias="isFreeMinistry", description="Created as a free Church Activity Booking: all charges are zero"
+    )
     booker_display_name: Optional[str] = Field(default=None, serialization_alias="bookerDisplayName")
     booker_email: Optional[str] = Field(default=None, serialization_alias="bookerEmail")
     is_booker: bool = Field(default=False, serialization_alias="isBooker")
