@@ -41,6 +41,7 @@ dependencies = [
     "pytz",
     "python-dateutil",
     "pyyaml",
+    "sentry-sdk>=2.73.0",
 ]
 
 [dependency-groups]

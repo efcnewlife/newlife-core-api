@@ -68,6 +68,11 @@ class Configuration(BaseSettings):
     # [Logging]
     SENSITIVE_PARAMS: set[str] = set(os.getenv(key="SENSITIVE_PARAMS", default="password,secret,api_key").split(","))
 
+    # [Sentry]
+    # Collection defaults on for stg/prod and off for dev; dev may opt in for verification.
+    SENTRY_DSN: Optional[str] = os.getenv(key="SENTRY_DSN") or None
+    SENTRY_ENABLED: bool = Converter.to_bool(os.getenv(key="SENTRY_ENABLED", default=str(ENV in ["prod", "stg"])), default=False)
+
     # [URLs]
     ADMIN_PORTAL_URL: str = os.getenv(key="ADMIN_PORTAL_URL", default="http://localhost:5173")
     FACILITY_BOOKING_BASE_URL: str = os.getenv(key="FACILITY_BOOKING_BASE_URL", default="http://localhost:5174")
