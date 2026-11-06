@@ -379,19 +379,28 @@ When `GRAPH_MAIL_SEND_ENABLED=true`, successful Ministry Application submit send
 4. Keep `AZURE_TENANT_ID`, `AZURE_APP_CLIENT_ID`, and `AZURE_APP_CLIENT_SECRET` configured (same as directory sync).
 5. Optional (non-`prod` only): set `GRAPH_MAIL_OVERRIDE_TO` to one or more comma-separated addresses so dev/stg mail never reaches real applicants or incumbents. The subject line is prefixed with `[DEV -> intended@recipient]`.
 
-#### Sentry (optional)
+#### Telemetry and Sentry (optional)
 
-The SDK starts once while the public app is composed. Missing or invalid settings only log a warning; startup, `/healthz`, login, and Booking keep working.
+One telemetry backend is selected once while the public app is composed. It stays fixed for the process; changing it requires a restart. Missing or invalid settings turn remote telemetry off; startup, `/healthz`, login, and Booking keep working. A missing DSN or `SENTRY_ENABLED=false` does this quietly; an invalid `TELEMETRY_BACKEND`, release, or DSN also logs a warning.
+
+Selection precedence (first match wins):
+
+1. `TELEMETRY_BACKEND=noop` selects NoOp, even with Sentry fully configured.
+2. Any value other than empty, `sentry`, or `noop` selects NoOp and logs a warning. It never selects another destination.
+3. Empty or `sentry` selects Sentry only if it can start: `SENTRY_ENABLED` is true, `SENTRY_DSN` is set, the release is valid, and the SDK initializes. Otherwise it selects NoOp. `SENTRY_ENABLED=false` therefore still wins over `TELEMETRY_BACKEND=sentry`, and `dev` still needs `SENTRY_ENABLED=true`.
+
+NoOp sends nothing remotely and installs no remote handler. Local Python logging and API behavior do not change.
 
 | Variable | Meaning |
 | --- | --- |
+| `TELEMETRY_BACKEND` | `sentry` (default when unset) or `noop`. Lowercase only. |
 | `SENTRY_DSN` | Project DSN. Unset means telemetry off. Never commit a real DSN. |
-| `SENTRY_ENABLED` | Defaults to `true` for `ENV=stg`/`prod`, `false` for `dev`. Set `true` locally only to verify. |
+| `SENTRY_ENABLED` | Defaults to `true` for `ENV=stg`/`prod`, `false` for `dev`. Set `true` locally only to verify. A malformed value counts as `false`. |
 | `VERSION` | Release version. `prod` needs `x.y.z`, `stg` needs a short commit SHA; any other value disables telemetry. `dev` always reports `local`. |
 
 The Sentry release is `newlife-core-api@<VERSION>` (`newlife-core-api@local` in dev). Unknown `ENV` values disable telemetry instead of being labeled as prod.
 
-What is enabled (no extra settings; see ADR 0038):
+What the Sentry backend enables (no extra settings; see ADR 0038):
 
 - **Errors.** The public, Admin, and App error handlers report an unexpected exception or a 5xx response once (`capture_request_failure`). Ordinary 4xx and business rejections are not reported. The response, rollback, and cleanup do not change.
 - **User.** Only the authenticated internal user ID (`AuthMiddleware` → `bind_request_user`). No name, email, or IP.
@@ -399,12 +408,12 @@ What is enabled (no extra settings; see ADR 0038):
 - **Correlation.** Error events carry a `request_id` tag and that request's logs carry the same `request_id` attribute. The ID is server-generated per request.
 - **Sanitization** (`portal/libs/telemetry/sanitizer.py`). Events keep only exception types, stack frames without locals, route template, method, environment, and release. Exception text, request/response bodies, query values, headers, and extras are dropped. Logs send the message template; parameters are kept only when they are numbers, booleans, or UUIDs. Untemplated text is scrubbed (emails, phones, tokens, `key=value` values). Log with `%s` parameters, not f-strings.
 
-Off: breadcrumbs, traces, metrics, sessions, client reports, Profiling, and Replay. There is no sampling or quota tuning. Delivery failure or exhausted quota drops telemetry; the SDK queue is bounded. Tracing is reserved for OpenTelemetry through `portal.libs.tracing.distributed_trace` (EFC-284); do not add a separate tracing provider.
+Off: breadcrumbs, traces, metrics, sessions, client reports, Profiling, and Replay. There is no sampling or quota tuning. Delivery failure or exhausted quota drops telemetry; the SDK queue is bounded. EFC-289 adds tracing behind the selected backend; do not add a separate tracing provider.
 
 Local check with a real DSN in `.env`:
 
 ```bash
-SENTRY_ENABLED=true uv run python -c "import sentry_sdk; from portal.libs.telemetry import init_sentry, capture_diagnostic_event; init_sentry(); print(capture_diagnostic_event()); sentry_sdk.flush()"
+SENTRY_ENABLED=true uv run python -c "import sentry_sdk; from portal.libs.telemetry import select_telemetry_backend, capture_diagnostic_event; select_telemetry_backend(); print(capture_diagnostic_event()); sentry_sdk.flush()"
 ```
 
 The test suite forces `SENTRY_ENABLED=false` (`tests/conftest.py`); tests use `tests/fixtures/telemetry/sentry_transport.py` instead of real ingestion.

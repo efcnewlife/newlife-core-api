@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from portal.apps import get_public_application
 from portal.config import settings
 from portal.container import Container
-from portal.libs.telemetry import capture_diagnostic_event, init_sentry
+from portal.libs.telemetry import NoOpBackend, SentryBackend, capture_diagnostic_event, get_telemetry_backend, select_telemetry_backend
 from tests.fixtures.telemetry.sentry_transport import TEST_DSN, CapturingTransport, reset_sentry_client  # noqa: F401
 
 pytestmark = pytest.mark.usefixtures("reset_sentry_client")
@@ -41,10 +41,21 @@ def test_composition_initializes_sentry_from_settings(stg_sentry_settings, monke
     assert TestClient(application).get("/healthz").status_code == 200
 
 
+def test_composition_selects_noop_over_full_sentry_settings(stg_sentry_settings, monkeypatch):
+    monkeypatch.setattr(settings, "SENTRY_DSN", TEST_DSN)
+    monkeypatch.setattr(settings, "TELEMETRY_BACKEND", "noop")
+
+    application = get_public_application(Container())
+
+    assert isinstance(get_telemetry_backend(), NoOpBackend)
+    assert sentry_sdk.is_initialized() is False
+    assert TestClient(application).get("/healthz").json() == {"message": "ok"}
+
+
 def test_enabled_startup_sends_only_the_synthetic_diagnostic(stg_sentry_settings, monkeypatch):
     monkeypatch.setattr(settings, "SENTRY_DSN", TEST_DSN)
     transport = CapturingTransport()
-    assert init_sentry(settings, transport=transport) is True
+    assert isinstance(select_telemetry_backend(settings, transport=transport), SentryBackend)
 
     application = get_public_application(Container())
     assert TestClient(application).get("/healthz").status_code == 200

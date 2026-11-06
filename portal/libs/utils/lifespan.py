@@ -14,6 +14,7 @@ from portal.config import settings
 from portal.container import Container
 from portal.libs.depends.rate_limiters import create_redis_rate_limiters
 from portal.libs.logger import logger
+from portal.libs.telemetry import flush_telemetry
 
 
 @asynccontextmanager
@@ -65,3 +66,4 @@ async def lifespan(app: FastAPI):
             logger.warning("Failed to close Redis rate limiter connection: %s", e)
 
     logger.info("Lifespan finished")
+    flush_telemetry()

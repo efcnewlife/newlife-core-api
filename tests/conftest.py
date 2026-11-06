@@ -13,6 +13,7 @@ if str(_root) not in sys.path:
 # Set before portal.config loads .env (load_dotenv never overrides): tests must not reach real Sentry ingestion.
 os.environ["SENTRY_ENABLED"] = "false"
 os.environ["SENTRY_DSN"] = ""
+os.environ["TELEMETRY_BACKEND"] = ""
 
 import pytest
 

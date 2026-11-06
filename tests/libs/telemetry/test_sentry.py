@@ -9,7 +9,7 @@ import sentry_sdk
 from sentry_sdk import metrics
 
 from portal.config import Configuration, settings
-from portal.libs.telemetry import capture_diagnostic_event, init_sentry
+from portal.libs.telemetry import NoOpBackend, SentryBackend, capture_diagnostic_event, select_telemetry_backend
 from tests.fixtures.telemetry.sentry_transport import TEST_DSN, CapturingTransport, reset_sentry_client  # noqa: F401
 
 pytestmark = pytest.mark.usefixtures("reset_sentry_client")
@@ -24,7 +24,7 @@ def _config(**overrides) -> Configuration:
 def test_stg_diagnostic_carries_canonical_environment_and_release():
     transport = CapturingTransport()
 
-    assert init_sentry(_config(), transport=transport) is True
+    assert isinstance(select_telemetry_backend(_config(), transport=transport), SentryBackend)
     capture_diagnostic_event()
 
     [event] = transport.events
@@ -39,7 +39,7 @@ def test_stg_diagnostic_carries_canonical_environment_and_release():
 def test_release_follows_environment_version_convention(env: str, version: str, expected_release: str):
     transport = CapturingTransport()
 
-    assert init_sentry(_config(ENV=env, APP_VERSION=version), transport=transport) is True
+    assert isinstance(select_telemetry_backend(_config(ENV=env, APP_VERSION=version), transport=transport), SentryBackend)
     capture_diagnostic_event()
 
     [event] = transport.events
@@ -63,7 +63,7 @@ def test_release_follows_environment_version_convention(env: str, version: str, 
 def test_deployed_or_unknown_environment_without_matching_version_stays_disabled(env: str, version: str):
     transport = CapturingTransport()
 
-    assert init_sentry(_config(ENV=env, APP_VERSION=version), transport=transport) is False
+    assert isinstance(select_telemetry_backend(_config(ENV=env, APP_VERSION=version), transport=transport), NoOpBackend)
     assert capture_diagnostic_event() is None
     assert transport.envelopes == []
 
@@ -72,21 +72,22 @@ def test_deployed_or_unknown_environment_without_matching_version_stays_disabled
 def test_disabled_or_missing_dsn_does_not_export(overrides: dict):
     transport = CapturingTransport()
 
-    assert init_sentry(_config(**overrides), transport=transport) is False
+    assert isinstance(select_telemetry_backend(_config(**overrides), transport=transport), NoOpBackend)
     assert capture_diagnostic_event() is None
     assert transport.envelopes == []
 
 
+# A custom transport skips DSN parsing, so only the real transport can prove SDK initialization failure.
 def test_invalid_dsn_with_real_transport_disables_instead_of_raising():
-    assert init_sentry(_config(SENTRY_DSN="not-a-dsn")) is False
+    assert isinstance(select_telemetry_backend(_config(SENTRY_DSN="not-a-dsn")), NoOpBackend)
     assert capture_diagnostic_event() is None
 
 
 def test_repeated_initialization_keeps_the_first_client():
     first, second = CapturingTransport(), CapturingTransport()
 
-    assert init_sentry(_config(), transport=first) is True
-    assert init_sentry(_config(ENV="prod", APP_VERSION="0.2.33"), transport=second) is True
+    assert isinstance(select_telemetry_backend(_config(), transport=first), SentryBackend)
+    assert isinstance(select_telemetry_backend(_config(ENV="prod", APP_VERSION="0.2.33"), transport=second), SentryBackend)
     capture_diagnostic_event()
 
     [event] = first.events
@@ -96,7 +97,7 @@ def test_repeated_initialization_keeps_the_first_client():
 
 def test_info_logs_traces_metrics_and_locals_are_not_exported_automatically():
     transport = CapturingTransport()
-    assert init_sentry(_config(), transport=transport) is True
+    assert isinstance(select_telemetry_backend(_config(), transport=transport), SentryBackend)
 
     logging.getLogger("tests.telemetry").info("password=hunter2")
     with sentry_sdk.start_transaction(name="probe"):
@@ -123,7 +124,7 @@ def test_info_logs_traces_metrics_and_locals_are_not_exported_automatically():
 
 def test_error_logs_are_exported_scrubbed_and_never_as_error_events():
     transport = CapturingTransport()
-    assert init_sentry(_config(), transport=transport) is True
+    assert isinstance(select_telemetry_backend(_config(), transport=transport), SentryBackend)
 
     logging.getLogger("tests.telemetry").error("password=hunter2")
     sentry_sdk.flush()
@@ -136,7 +137,7 @@ def test_error_logs_are_exported_scrubbed_and_never_as_error_events():
 
 def test_unreachable_ingestion_does_not_raise():
     # Closed local port: the real HTTP transport fails without contacting Sentry.
-    assert init_sentry(_config(SENTRY_DSN="http://public@127.0.0.1:9/0")) is True
+    assert isinstance(select_telemetry_backend(_config(SENTRY_DSN="http://public@127.0.0.1:9/0")), SentryBackend)
 
     assert capture_diagnostic_event() is not None
     sentry_sdk.flush(timeout=1)

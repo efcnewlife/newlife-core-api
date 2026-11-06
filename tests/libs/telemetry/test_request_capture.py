@@ -10,7 +10,7 @@ from fastapi import APIRouter, FastAPI, Request
 from fastapi.testclient import TestClient
 
 from portal.config import settings
-from portal.libs.telemetry import capture_request_failure, init_sentry
+from portal.libs.telemetry import SentryBackend, capture_request_failure, select_telemetry_backend
 from tests.fixtures.telemetry.sentry_transport import TEST_DSN, CapturingTransport, reset_sentry_client  # noqa: F401
 
 pytestmark = pytest.mark.usefixtures("reset_sentry_client")
@@ -40,7 +40,7 @@ def _application() -> FastAPI:
 def test_transaction_uses_route_template_for_non_canonical_values(raw_item_id: str):
     transport = CapturingTransport()
     config = settings.model_copy(update={"ENV": "stg", "APP_VERSION": "5ba2c79", "SENTRY_ENABLED": True, "SENTRY_DSN": TEST_DSN})
-    assert init_sentry(config, transport=transport) is True
+    assert isinstance(select_telemetry_backend(config, transport=transport), SentryBackend)
 
     response = TestClient(_application(), raise_server_exceptions=False).get(f"/admin/api/v1/items/{raw_item_id}/notes/007")
 

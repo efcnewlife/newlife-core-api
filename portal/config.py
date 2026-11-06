@@ -68,6 +68,10 @@ class Configuration(BaseSettings):
     # [Logging]
     SENSITIVE_PARAMS: set[str] = set(os.getenv(key="SENSITIVE_PARAMS", default="password,secret,api_key").split(","))
 
+    # [Telemetry]
+    # sentry (default when unset) or noop; read once at startup. Precedence: portal/libs/telemetry/selection.py.
+    TELEMETRY_BACKEND: Optional[str] = os.getenv(key="TELEMETRY_BACKEND") or None
+
     # [Sentry]
     # Collection defaults on for stg/prod and off for dev; dev may opt in for verification.
     SENTRY_DSN: Optional[str] = os.getenv(key="SENTRY_DSN") or None

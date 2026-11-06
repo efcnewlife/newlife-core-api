@@ -46,7 +46,7 @@ class Converter:
         if raise_error:
             raise BoolError(value)
         if default is not None:
-            return default or value
+            return default
         return False
 
     @classmethod

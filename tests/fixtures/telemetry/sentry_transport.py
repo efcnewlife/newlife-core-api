@@ -9,6 +9,8 @@ import sentry_sdk
 from sentry_sdk.envelope import Envelope
 from sentry_sdk.transport import Transport
 
+from portal.libs.telemetry import selection
+
 # Reserved DSN shape; the host is never contacted because tests always pass a transport.
 TEST_DSN = "https://public@o0.ingest.invalid/0"
 
@@ -28,9 +30,16 @@ class CapturingTransport(Transport):
         return [envelope.get_event() for envelope in self.envelopes if envelope.get_event() is not None]
 
 
-@pytest.fixture
-def reset_sentry_client():
-    """Drop the process-wide Sentry client so each test initializes from scratch."""
-    yield
+def reset_telemetry_state() -> None:
+    """Forget the process-wide client and selection, as a restart would. Production has no such path."""
     sentry_sdk.get_client().close()
     sentry_sdk.get_global_scope().set_client(None)
+    selection._selected_backend = None
+
+
+@pytest.fixture
+def reset_sentry_client():
+    """Run each test as a fresh process: importing portal.main has already selected a backend."""
+    reset_telemetry_state()
+    yield
+    reset_telemetry_state()
