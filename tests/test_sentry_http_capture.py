@@ -228,11 +228,13 @@ def test_error_and_logs_share_the_request_id(transport, client, override_depende
 
     _put_preferred_language(client, _member_headers(uuid4()))
 
-    logs = _logs(transport)
+    # Lifespan startup can log too (e.g. Redis unavailable); only logs from the failing request carry its ID.
+    request_logs = [log for log in _logs(transport) if log["attributes"]["code.function.name"]["value"] == "update_preferred_locale"]
     [event] = transport.events
     request_id = event["tags"]["request_id"]
     assert UUID(request_id)
-    assert logs and all(log["attributes"]["request_id"]["value"] == request_id for log in logs)
+    assert len(request_logs) == 2
+    assert all(log["attributes"]["request_id"]["value"] == request_id for log in request_logs)
 
 
 def test_admin_failure_carries_admin_user_id_only(transport, client, override_dependencies):
