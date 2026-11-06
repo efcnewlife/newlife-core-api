@@ -78,7 +78,7 @@ class RentalRateTemplateService:
                     error_code=FacilityErrorCode.RENTAL_RATE_TEMPLATE_NAME_EXISTS.value,
                     context={"name": command.name},
                 )
-            logger.exception(error)
+            logger.exception("Rental rate template create failed: %s", error)
             raise ApiBaseException(status_code=500, detail="Internal Server Error", debug_detail=str(error))
         return CreateIdResult(id=template_id)
 

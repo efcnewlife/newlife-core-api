@@ -138,5 +138,6 @@ class JWTProvider:
             payload = jwt.decode(token, self.secret_key, algorithms=[self.algorithm], audience=audience, issuer=self._issuer, **kwargs)
             return AccessTokenPayload.model_validate(payload)
         except jwt.PyJWTError as e:
-            logger.error(f"Error decoding JWT: {e}")
+            # Expired or invalid tokens are ordinary 401s, not failures worth forwarding to Sentry Logs.
+            logger.info("Error decoding JWT: %s", e)
             return None

@@ -127,7 +127,7 @@ class RefreshTokenProvider:
                 .execute()
             )
         except Exception as e:
-            logger.exception(e)
+            logger.exception("Refresh token rotation failed: %s", e)
             raise e
         else:
             return new_refresh_token, new_rt_data

@@ -94,11 +94,11 @@ def test_repeated_initialization_keeps_the_first_client():
     assert second.envelopes == []
 
 
-def test_logs_traces_metrics_and_locals_are_not_exported_automatically():
+def test_info_logs_traces_metrics_and_locals_are_not_exported_automatically():
     transport = CapturingTransport()
     assert init_sentry(_config(), transport=transport) is True
 
-    logging.getLogger("tests.telemetry").error("password=hunter2")
+    logging.getLogger("tests.telemetry").info("password=hunter2")
     with sentry_sdk.start_transaction(name="probe"):
         pass
     metrics.count("probe.count", 1)
@@ -119,6 +119,19 @@ def test_logs_traces_metrics_and_locals_are_not_exported_automatically():
     assert "user" not in event and "request" not in event
     frames = event["exception"]["values"][0]["stacktrace"]["frames"]
     assert all("vars" not in frame for frame in frames)
+
+
+def test_error_logs_are_exported_scrubbed_and_never_as_error_events():
+    transport = CapturingTransport()
+    assert init_sentry(_config(), transport=transport) is True
+
+    logging.getLogger("tests.telemetry").error("password=hunter2")
+    sentry_sdk.flush()
+
+    assert transport.events == []
+    [envelope] = transport.envelopes
+    [log] = envelope.items[0].payload.json["items"]
+    assert log["body"] == "password=[Filtered]"
 
 
 def test_unreachable_ingestion_does_not_raise():

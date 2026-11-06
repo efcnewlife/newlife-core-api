@@ -72,7 +72,7 @@ class RentalRateService:
                     error_code=FacilityErrorCode.RENTAL_RATE_BINDING_EXISTS.value,
                     context={"facility_id": str(command.facility_id), "template_id": str(command.template_id)},
                 )
-            logger.exception(error)
+            logger.exception("Rental rate binding create failed: %s", error)
             raise ApiBaseException(status_code=500, detail="Internal Server Error", debug_detail=str(error))
         return CreateIdResult(id=rate_id)
 

@@ -12,6 +12,7 @@ from portal.application.locale.locale_service import LocaleService
 from portal.container import Container
 from portal.libs.contexts.request_context import RequestContext, reset_request_context, set_request_context
 from portal.libs.contexts.request_session_context import reset_request_session, set_request_session
+from portal.libs.telemetry import bind_request_id
 
 
 def _resolve_ip(request: Request) -> str | None:
@@ -103,9 +104,11 @@ class CoreRequestMiddleware(BaseHTTPMiddleware):
             # initialize request context
             headers = await self.resolve_raw_headers(request.headers)
             resolved_locale_code, resolved_locale_id, locale_candidates = await self.locale_detector(headers.accept_language)
+            request_id = str(uuid.uuid4())
+            bind_request_id(request, request_id)
             req_ctx_token = set_request_context(
                 RequestContext(
-                    request_id=str(uuid.uuid4()),
+                    request_id=request_id,
                     ip=_resolve_ip(request),
                     client_ip=(request.client.host if request.client else None),
                     method=request.method,

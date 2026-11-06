@@ -115,7 +115,7 @@ class EventBus:
                     await session.rollback()
                 except Exception as rollback_err:
                     logger.warning("Event handler session rollback failed: %s", rollback_err)
-            logger.error(f"Error in handler {handler.__class__.__name__} for event {event.event_type}: {str(e)}", exc_info=True)
+            logger.error("Error in handler %s for event %s: %s", handler.__class__.__name__, event.event_type, e, exc_info=True)
             raise
         finally:
             if session is not None and token is not None:
