@@ -6,7 +6,7 @@ from uuid import uuid4
 
 import pytest
 
-from portal.libs.telemetry.sanitizer import FILTERED, drop_breadcrumb, sanitize_event, sanitize_log, scrub_text
+from portal.libs.telemetry.sanitizer import FILTERED, drop_breadcrumb, sanitize_event, sanitize_log, sanitize_span_attribute, scrub_text
 
 
 @pytest.mark.parametrize(
@@ -116,6 +116,15 @@ def test_sanitize_log_masks_every_value_in_untemplated_bodies():
     log = {"body": "Error in handler H for event E: detail=Jane note='call me'", "attributes": {}}
 
     assert sanitize_log(log)["body"] == f"Error in handler H for event E: detail={FILTERED} note={FILTERED}"
+
+
+def test_sanitize_span_attribute_applies_value_contract_and_privacy():
+    assert sanitize_span_attribute("synthetic.count", 2) == ("synthetic.count", 2)
+    assert sanitize_span_attribute("diagnostic.detail", "token=Bearer eyJabc.def.ghi")[1] == "token=[Filtered]"
+    assert sanitize_span_attribute("email", "a@example.com") is None
+    assert sanitize_span_attribute("remark", "x") is None
+    assert sanitize_span_attribute("payload", "{}") is None
+    assert sanitize_span_attribute("synthetic.blob", {"a": 1}) is None
 
 
 def test_breadcrumbs_are_dropped():

@@ -137,3 +137,96 @@ def drop_breadcrumb(_breadcrumb: dict[str, Any], _hint: Any = None) -> None:
     :return:
     """
     return None
+
+
+_SPAN_ATTRIBUTE_VALUE_TYPES = (str, int, float, bool)
+_SENSITIVE_ATTRIBUTE_TOKEN = re.compile(
+    r"(?i)(?:^|[._-])(password|passwd|secret|token|api_?key|authorization|cookie|session|email|phone|mobile|name|remark|address|payload)(?:$|[._-])"
+)
+# Transactions keep route/span structure only; exception payloads stay on error events (sanitize_event).
+_TRANSACTION_KEYS = frozenset(
+    {
+        "event_id",
+        "timestamp",
+        "start_timestamp",
+        "platform",
+        "environment",
+        "release",
+        "dist",
+        "server_name",
+        "sdk",
+        "transaction",
+        "transaction_info",
+        "fingerprint",
+        "tags",
+        "user",
+        "contexts",
+        "type",
+        "spans",
+        "measurements",
+    }
+)
+_TRACE_CONTEXT_DATA_DROP = frozenset({"thread.id", "thread.name"})
+
+
+def sanitize_span_attribute(key: str, value: Any) -> Optional[tuple[str, str | int | float | bool]]:
+    """
+    Apply the attribute-value contract and privacy rules to one manual span attribute.
+    :param key:
+    :param value:
+    :return: Sanitized (key, value), or None when the attribute must not leave the process
+    """
+    if not isinstance(key, str) or not key or _SENSITIVE_ATTRIBUTE_TOKEN.search(key):
+        return None
+    if type(value) not in _SPAN_ATTRIBUTE_VALUE_TYPES:
+        return None
+    if isinstance(value, str):
+        return key, scrub_text(value)
+    return key, value
+
+
+def _sanitize_span_data(data: dict[str, Any]) -> dict[str, Any]:
+    sanitized: dict[str, Any] = {}
+    for key, value in data.items():
+        if key in _TRACE_CONTEXT_DATA_DROP:
+            continue
+        cleaned = sanitize_span_attribute(key, value)
+        if cleaned is not None:
+            sanitized[cleaned[0]] = cleaned[1]
+    return sanitized
+
+
+def _sanitize_transaction_span(span: dict[str, Any]) -> dict[str, Any]:
+    kept = {
+        key: span[key]
+        for key in ("trace_id", "span_id", "parent_span_id", "same_process_as_parent", "op", "description", "start_timestamp", "timestamp", "origin", "status")
+        if key in span
+    }
+    if "data" in span and isinstance(span["data"], dict):
+        kept["data"] = _sanitize_span_data(span["data"])
+    return kept
+
+
+def sanitize_transaction(event: dict[str, Any], _hint: Any = None) -> Optional[dict[str, Any]]:
+    """
+    before_send_transaction: keep route/operation structure and scrub span attribute payloads.
+    :param event:
+    :param _hint:
+    :return:
+    """
+    sanitized = {key: value for key, value in event.items() if key in _TRANSACTION_KEYS}
+    if "contexts" in sanitized and isinstance(sanitized["contexts"], dict):
+        contexts = {key: value for key, value in sanitized["contexts"].items() if key in _CONTEXT_KEYS}
+        trace = contexts.get("trace")
+        if isinstance(trace, dict) and isinstance(trace.get("data"), dict):
+            trace = {**trace, "data": _sanitize_span_data(trace["data"])}
+            contexts["trace"] = trace
+        sanitized["contexts"] = contexts
+    user_id = (sanitized.pop("user", None) or {}).get("id")
+    if user_id is not None:
+        sanitized["user"] = {"id": str(user_id)}
+    if "spans" in sanitized and isinstance(sanitized["spans"], list):
+        sanitized["spans"] = [_sanitize_transaction_span(span) for span in sanitized["spans"] if isinstance(span, dict)]
+    if isinstance(sanitized.get("transaction"), str):
+        sanitized["transaction"] = scrub_text(sanitized["transaction"])
+    return sanitized

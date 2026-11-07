@@ -8,7 +8,7 @@ Precedence (first match wins):
    release is valid, and the SDK initializes. Otherwise NoOpBackend is selected.
 """
 
-from typing import Optional
+from typing import ContextManager, Optional
 
 from fastapi import Request
 from sentry_sdk.transport import Transport
@@ -88,3 +88,12 @@ def flush_telemetry() -> None:
     :return:
     """
     get_telemetry_backend().flush()
+
+
+def bind_http_request(request: Request) -> ContextManager[None]:
+    """
+    Open the selected backend's HTTP request root (inbound frontend trace continuation).
+    :param request:
+    :return:
+    """
+    return get_telemetry_backend().bind_http_request(request)
