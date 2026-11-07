@@ -65,6 +65,15 @@ Account region, retention, entitlements, source-map/release API access, deployme
 - Events are allowlisted rather than denylisted. Exception values are always dropped: SQL errors and wrapped exceptions can carry parameters, emails, or names that no pattern can reliably detect. Diagnosis relies on exception types, chained causes, and stack frames.
 - Logs go to Sentry Logs only, never as error events, so one failure is not reported twice. Templated parameters are dropped unless they are numbers, booleans, or UUIDs. Untemplated text is only pattern-scrubbed, so names inside f-strings remain a residual risk. Existing exception-text log calls on request paths now use templates.
 
+## Core API telemetry backend selection (EFC-288)
+
+- One `TelemetryBackend` owns remote errors, logs, and traces for the process. `select_telemetry_backend` resolves it once while the public app is composed; repeat app construction returns the same backend, and a change requires a restart. There is no hot swap, per-request selection, or fan-out.
+- `TELEMETRY_BACKEND` is `sentry` (default when unset, so existing deployments keep working) or `noop`. `noop` wins over every `SENTRY_*` setting. Any other value selects NoOp with a warning that does not echo the value. `sentry` still requires `SENTRY_ENABLED`, `SENTRY_DSN`, a valid release, and SDK initialization; otherwise NoOp is selected. Explicit disabling and development opt-in therefore keep their meaning, and a bad setting never reaches another destination.
+- `SentryBackend` holds the existing initialization and capture policy above unchanged. `NoOpBackend` starts no client and installs no remote handler, so local Python logging is untouched.
+- `start_span` is the internal seam for `distributed_trace`. Both backends yield a stateless no-op span until EFC-289 implements Sentry-native spans, so no automatic tracing is enabled by this step.
+- A future Azure backend implements the same contract with its own Azure Monitor pipeline. It must own errors, logs, and traces together, apply the same privacy policy, and must not start a Sentry client or remote handler. It is not implemented, and identical dashboards or issue grouping are not promised.
+- The OpenTelemetry tracing direction earlier in this ADR is revised by [Core API #263](https://github.com/efcnewlife/newlife-core-api/issues/263): `SentryBackend` will use Sentry-native spans, and OpenTelemetry stays a possible internal detail of a future backend. EFC-289 completes this revision together with the tracing work.
+
 ## Plan and notification evidence
 
 Checked on 2026-10-27: [Sentry pricing](https://sentry.io/pricing/) lists Developer as one user with unlimited projects, 5,000 errors, 5 million spans, 50 replays, 5 GB logs, one uptime monitor, and one cron monitor. These are plan allowances, not per-project allocations; actual account entitlements remain unverified. Third-party integrations are listed under Team. Do not rely on introductory Replay promotions for steady-state design.

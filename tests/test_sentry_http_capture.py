@@ -5,6 +5,7 @@ Every synthetic secret/PII marker is built at runtime so it never appears in a c
 """
 
 import asyncio
+import logging
 from uuid import UUID, uuid4
 
 import httpx
@@ -20,10 +21,10 @@ from portal.application.locale.locale_service import LocaleService
 from portal.config import settings
 from portal.libs.consts.enums import AccessTokenAudType
 from portal.libs.logger import logger
-from portal.libs.telemetry import init_sentry
+from portal.libs.telemetry import NoOpBackend, SentryBackend, get_telemetry_backend, select_telemetry_backend
 from portal.main import app
 from portal.providers.jwt_provider import JWTProvider
-from tests.fixtures.telemetry.sentry_transport import TEST_DSN, CapturingTransport, reset_sentry_client  # noqa: F401
+from tests.fixtures.telemetry.sentry_transport import TEST_DSN, CapturingTransport, reset_sentry_client, reset_telemetry_state  # noqa: F401
 
 pytestmark = pytest.mark.usefixtures("reset_sentry_client")
 
@@ -128,7 +129,7 @@ def transport(monkeypatch) -> CapturingTransport:
     monkeypatch.setattr(settings, "SENTRY_ENABLED", True)
     monkeypatch.setattr(settings, "SENTRY_DSN", TEST_DSN)
     capturing = CapturingTransport()
-    assert init_sentry(settings, transport=capturing) is True
+    assert isinstance(select_telemetry_backend(settings, transport=capturing), SentryBackend)
     return capturing
 
 
@@ -346,9 +347,95 @@ def test_delivery_failure_preserves_the_response(monkeypatch, client, override_d
     monkeypatch.setattr(settings, "SENTRY_ENABLED", True)
     # Closed local port: the real HTTP transport fails delivery without contacting Sentry.
     monkeypatch.setattr(settings, "SENTRY_DSN", "http://public@127.0.0.1:9/0")
-    assert init_sentry(settings) is True
+    assert isinstance(select_telemetry_backend(settings), SentryBackend)
     failing_delivery_response = _put_preferred_language(client, headers)
     sentry_sdk.flush(timeout=1)
 
     assert failing_delivery_response.status_code == disabled_response.status_code == 500
     assert failing_delivery_response.json() == disabled_response.json()
+
+
+def _select_with_capture(monkeypatch, backend_name: str) -> CapturingTransport:
+    monkeypatch.setattr(settings, "ENV", "stg")
+    monkeypatch.setattr(settings, "APP_VERSION", "5ba2c79")
+    monkeypatch.setattr(settings, "SENTRY_ENABLED", True)
+    monkeypatch.setattr(settings, "SENTRY_DSN", TEST_DSN)
+    monkeypatch.setattr(settings, "TELEMETRY_BACKEND", backend_name)
+    capturing = CapturingTransport()
+    select_telemetry_backend(settings, transport=capturing)
+    return capturing
+
+
+def _business_outcomes(client: TestClient, headers: dict[str, str]) -> list[tuple[int, object]]:
+    responses = [
+        _put_preferred_language(client, headers),
+        client.put(PREFERRED_LANGUAGE_PATH, json={"preferred_locale_id": str(uuid4())}),
+        client.put(PREFERRED_LANGUAGE_PATH, json={"preferredLocaleId": "x"}, headers=headers),
+        client.get("/admin/api/v1/does-not-exist"),
+        client.get("/healthz"),
+    ]
+    return [(response.status_code, response.json()) for response in responses]
+
+
+def test_noop_backend_exports_nothing_and_keeps_local_logs(monkeypatch, client, override_dependencies):
+    override_dependencies(user_repository=StubUserRepository(fail_update=True), member_web_app_registry=StubMemberWebAppRegistry())
+    capturing = _select_with_capture(monkeypatch, "noop")
+    records: list[logging.LogRecord] = []
+    handler = logging.Handler()
+    handler.emit = records.append
+    logger.addHandler(handler)
+
+    response = _put_preferred_language(client, _member_headers(uuid4()))
+
+    logger.removeHandler(handler)
+    assert response.status_code == 500
+    assert isinstance(get_telemetry_backend(), NoOpBackend)
+    assert sentry_sdk.is_initialized() is False
+    sentry_sdk.flush()
+    assert capturing.envelopes == []
+    assert "Preferred locale update failed for %s" in [record.msg for record in records]
+
+
+def test_business_behavior_is_identical_under_sentry_and_noop(monkeypatch, client, override_dependencies):
+    override_dependencies(user_repository=StubUserRepository(fail_update=True), member_web_app_registry=StubMemberWebAppRegistry())
+    headers = _member_headers(uuid4())
+
+    noop_capture = _select_with_capture(monkeypatch, "noop")
+    noop_outcomes = _business_outcomes(client, headers)
+    reset_telemetry_state()
+    sentry_capture = _select_with_capture(monkeypatch, "sentry")
+    sentry_outcomes = _business_outcomes(client, headers)
+
+    assert sentry_outcomes == noop_outcomes
+    assert [status for status, _ in sentry_outcomes] == [500, 401, 422, 404, 200]
+    assert noop_capture.envelopes == []
+    # One unexpected failure only; the 4xx rejections add no error events.
+    serialized = _serialized(sentry_capture)
+    [event] = sentry_capture.events
+    assert event["exception"]["values"][-1]["type"] == "FailingDependencyError"
+    _assert_no_markers(serialized)
+
+
+def test_capture_failure_preserves_the_response_and_rollback(transport, client, monkeypatch):
+    rollbacks = []
+
+    class RecordingSession:
+        async def rollback(self):
+            rollbacks.append(True)
+
+    def _fail_capture():
+        raise RuntimeError("synthetic capture failure")
+
+    monkeypatch.setattr("portal.apps.get_request_session", RecordingSession)
+    monkeypatch.setattr(sentry_sdk, "new_scope", _fail_capture)
+    monkeypatch.setattr(settings, "AZURE_TENANT_ID", None)
+    monkeypatch.setattr(settings, "AZURE_APP_CLIENT_ID", None)
+    app.container.core.microsoft_oidc_provider.reset()
+
+    response = client.post("/admin/api/v1/auth/login/microsoft", json={"id_token": PASSWORD})
+
+    app.container.core.microsoft_oidc_provider.reset()
+    assert response.status_code == 503
+    assert rollbacks
+    sentry_sdk.flush()
+    assert transport.events == []
