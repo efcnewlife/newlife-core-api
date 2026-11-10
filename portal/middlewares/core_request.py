@@ -12,7 +12,7 @@ from portal.application.locale.locale_service import LocaleService
 from portal.container import Container
 from portal.libs.contexts.request_context import RequestContext, reset_request_context, set_request_context
 from portal.libs.contexts.request_session_context import reset_request_session, set_request_session
-from portal.libs.telemetry import bind_request_id
+from portal.libs.telemetry import bind_http_request, bind_request_id
 
 
 def _resolve_ip(request: Request) -> str | None:
@@ -121,7 +121,8 @@ class CoreRequestMiddleware(BaseHTTPMiddleware):
                     resolved_locale_id=resolved_locale_id,
                 )
             )
-            response = await call_next(request)
+            with bind_http_request(request):
+                response = await call_next(request)
         except Exception as e:
             await db_session.rollback()
             raise e

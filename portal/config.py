@@ -21,6 +21,18 @@ from portal.libs.shared import Converter
 load_dotenv()
 
 
+def _optional_traces_sample_rate(raw: Optional[str]) -> Optional[float]:
+    if raw is None or not str(raw).strip():
+        return None
+    try:
+        rate = float(raw)
+    except ValueError:
+        return None
+    if 0.0 <= rate <= 1.0:
+        return rate
+    return None
+
+
 class CustomSource(EnvSettingsSource):
     def prepare_field_value(self, field_name: str, field: FieldInfo, value: Any, value_is_complex: bool) -> Any:
         """
@@ -76,6 +88,8 @@ class Configuration(BaseSettings):
     # Collection defaults on for stg/prod and off for dev; dev may opt in for verification.
     SENTRY_DSN: Optional[str] = os.getenv(key="SENTRY_DSN") or None
     SENTRY_ENABLED: bool = Converter.to_bool(os.getenv(key="SENTRY_ENABLED", default=str(ENV in ["prod", "stg"])), default=False)
+    # Unset keeps Sentry tracing off. Set a 0..1 rate to export Sentry-native spans; no default policy is prescribed.
+    SENTRY_TRACES_SAMPLE_RATE: Optional[float] = _optional_traces_sample_rate(os.getenv(key="SENTRY_TRACES_SAMPLE_RATE"))
 
     # [URLs]
     ADMIN_PORTAL_URL: str = os.getenv(key="ADMIN_PORTAL_URL", default="http://localhost:5173")

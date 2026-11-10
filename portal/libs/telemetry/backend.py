@@ -40,6 +40,11 @@ def noop_span() -> Iterator[TraceSpan]:
     yield NOOP_SPAN
 
 
+@contextmanager
+def noop_http_request() -> Iterator[None]:
+    yield None
+
+
 class TelemetryBackend(Protocol):
     """
     Implementations must never raise into application work, except for start_span propagating the caller's exception.
@@ -83,6 +88,14 @@ class TelemetryBackend(Protocol):
         """
         ...
 
+    def bind_http_request(self, request: Request) -> ContextManager[None]:
+        """
+        HTTP root for inbound frontend trace continuation (NoOp is a no-op context).
+        :param request:
+        :return:
+        """
+        ...
+
 
 class NoOpBackend:
     """
@@ -103,3 +116,6 @@ class NoOpBackend:
 
     def start_span(self, name: str) -> ContextManager[TraceSpan]:
         return noop_span()
+
+    def bind_http_request(self, request: Request) -> ContextManager[None]:
+        return noop_http_request()

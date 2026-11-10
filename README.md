@@ -396,6 +396,7 @@ NoOp sends nothing remotely and installs no remote handler. Local Python logging
 | `TELEMETRY_BACKEND` | `sentry` (default when unset) or `noop`. Lowercase only. |
 | `SENTRY_DSN` | Project DSN. Unset means telemetry off. Never commit a real DSN. |
 | `SENTRY_ENABLED` | Defaults to `true` for `ENV=stg`/`prod`, `false` for `dev`. Set `true` locally only to verify. A malformed value counts as `false`. |
+| `SENTRY_TRACES_SAMPLE_RATE` | Optional `0..1`. Unset keeps tracing off. Set (for example `1.0` locally) to export Sentry-native spans from `@distributed_trace` and request roots. No default sampling policy is prescribed. |
 | `VERSION` | Release version. `prod` needs `x.y.z`, `stg` needs a short commit SHA; any other value disables telemetry. `dev` always reports `local`. |
 
 The Sentry release is `newlife-core-api@<VERSION>` (`newlife-core-api@local` in dev). Unknown `ENV` values disable telemetry instead of being labeled as prod.
@@ -408,12 +409,24 @@ What the Sentry backend enables (no extra settings; see ADR 0038):
 - **Correlation.** Error events carry a `request_id` tag and that request's logs carry the same `request_id` attribute. The ID is server-generated per request.
 - **Sanitization** (`portal/libs/telemetry/sanitizer.py`). Events keep only exception types, stack frames without locals, route template, method, environment, and release. Exception text, request/response bodies, query values, headers, and extras are dropped. Logs send the message template; parameters are kept only when they are numbers, booleans, or UUIDs. Untemplated text is scrubbed (emails, phones, tokens, `key=value` values). Log with `%s` parameters, not f-strings.
 
-Off: breadcrumbs, traces, metrics, sessions, client reports, Profiling, and Replay. There is no sampling or quota tuning. Delivery failure or exhausted quota drops telemetry; the SDK queue is bounded. EFC-289 adds tracing behind the selected backend; do not add a separate tracing provider.
+Off by default: breadcrumbs, traces, metrics, sessions, client reports, Profiling, and Replay. Set `SENTRY_TRACES_SAMPLE_RATE` to enable sanitized Sentry-native traces behind the selected backend (`@distributed_trace`, optional `_span` injection, inbound frontend `sentry-trace` continuation). Do not add a separate tracing provider or OTel-to-Sentry bridge. There is no quota tuning. Delivery failure or exhausted quota drops telemetry; the SDK queue is bounded.
+
+Minimum real tracing enablement (after Sentry can start):
+
+1. Set `SENTRY_TRACES_SAMPLE_RATE` to a value in `0..1` (use `1.0` only for local verification unless you choose otherwise).
+2. Keep using `@distributed_trace()` on application services. Add `inject_span=True` and `*, _span: TraceSpan = NOOP_SPAN` only where you need attributes.
+3. Frontend repos continue sending supported trace headers; Core API continues them on mounted admin/api requests. No frontend changes belong in this backend ticket.
 
 Local check with a real DSN in `.env`:
 
 ```bash
-SENTRY_ENABLED=true uv run python -c "import sentry_sdk; from portal.libs.telemetry import select_telemetry_backend, capture_diagnostic_event; select_telemetry_backend(); print(capture_diagnostic_event()); sentry_sdk.flush()"
+SENTRY_ENABLED=true SENTRY_TRACES_SAMPLE_RATE=1.0 uv run python -c "import sentry_sdk; from portal.libs.telemetry import NOOP_SPAN, TraceSpan, select_telemetry_backend; from portal.libs.tracing import distributed_trace; select_telemetry_backend();
+
+@distributed_trace(inject_span=True)
+def probe(*, _span: TraceSpan = NOOP_SPAN):
+    _span.set_attribute('synthetic.count', 1)
+
+probe(); sentry_sdk.flush()"
 ```
 
 The test suite forces `SENTRY_ENABLED=false` (`tests/conftest.py`); tests use `tests/fixtures/telemetry/sentry_transport.py` instead of real ingestion.

@@ -218,7 +218,7 @@ def test_tracing_seam_propagates_exceptions_and_cancellation(overrides: dict):
         raise asyncio.CancelledError()
 
 
-def test_unsafe_automatic_tracing_stays_disabled_under_sentry():
+def test_unsafe_automatic_tracing_stays_disabled_under_sentry_without_sample_rate():
     transport = CapturingTransport()
     select_telemetry_backend(_config(), transport=transport)
 
@@ -231,6 +231,21 @@ def test_unsafe_automatic_tracing_stays_disabled_under_sentry():
     assert options["traces_sampler"] is None
     assert options["auto_enabling_integrations"] is False
     assert transport.envelopes == []
+
+
+def test_configured_traces_sample_rate_exports_manual_spans():
+    transport = CapturingTransport()
+    select_telemetry_backend(_config(SENTRY_TRACES_SAMPLE_RATE=1.0), transport=transport)
+
+    with select_telemetry_backend().start_span("synthetic.operation") as span:
+        span.set_attribute("synthetic.count", 1)
+    sentry_sdk.flush()
+
+    options = sentry_sdk.get_client().options
+    assert options["traces_sample_rate"] == 1.0
+    assert options["auto_enabling_integrations"] is False
+    transactions = [item.payload.json for envelope in transport.envelopes for item in envelope.items if item.headers.get("type") == "transaction"]
+    assert [item["transaction"] for item in transactions] == ["synthetic.operation"]
 
 
 def test_noop_span_keeps_no_state():
