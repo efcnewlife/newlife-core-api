@@ -7,6 +7,7 @@ from portal.libs.telemetry.request_binding import bind_request_id, bind_request_
 from portal.libs.telemetry.selection import (
     bind_http_request,
     capture_diagnostic_event,
+    capture_exception,
     capture_request_failure,
     flush_telemetry,
     get_telemetry_backend,
@@ -25,6 +26,7 @@ __all__ = [
     "bind_request_id",
     "bind_request_user",
     "capture_diagnostic_event",
+    "capture_exception",
     "capture_request_failure",
     "flush_telemetry",
     "get_telemetry_backend",

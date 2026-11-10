@@ -96,6 +96,7 @@ from portal.infrastructure.persistence.repositories.org.ministry_repository impo
 from portal.libs.contexts.request_context import RequestContext, get_request_context
 from portal.libs.contexts.user_context import UserContext, get_user_context
 from portal.libs.logger import logger
+from portal.libs.telemetry import capture_exception
 from portal.libs.tracing.distributed_trace import distributed_trace
 
 
@@ -655,8 +656,9 @@ class RecurringBookingService:
             )
             try:
                 await self._expiry_notifier.notify_payment_hold_expired(notification)
-            except Exception:
+            except Exception as exc:
                 logger.exception("Pending-payment hold expiry email failed for series %s", series.id)
+                capture_exception(exc)
         return PendingPaymentExpirySweepResult(skipped=False, expired_series_ids=expired_series_ids)
 
     @distributed_trace()

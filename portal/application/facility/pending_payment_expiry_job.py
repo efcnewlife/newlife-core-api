@@ -8,6 +8,7 @@ from typing import Any
 from portal.domain.facility.constants import PENDING_PAYMENT_SWEEP_INTERVAL_SECONDS
 from portal.libs.contexts.request_session_context import reset_request_session, set_request_session
 from portal.libs.logger import logger
+from portal.libs.telemetry import capture_exception
 
 
 async def run_pending_payment_expiry_once(container: Any) -> None:
@@ -19,15 +20,17 @@ async def run_pending_payment_expiry_once(container: Any) -> None:
         service = container.recurring_booking_service()
         await service.expire_pending_holds()
         await session.commit()
-    except Exception:
+    except Exception as exc:
         await session.rollback()
         logger.exception("Pending-payment hold expiry sweep failed")
+        capture_exception(exc)
     finally:
         if service is not None:
             try:
                 await service.release_pending_payment_sweep_lock()
-            except Exception:
+            except Exception as unlock_exc:
                 logger.exception("Failed to release pending-payment sweep lock")
+                capture_exception(unlock_exc)
         reset_request_session(token)
         await session.close()
 

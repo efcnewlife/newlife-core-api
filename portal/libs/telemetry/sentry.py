@@ -172,6 +172,28 @@ class SentryBackend:
         except Exception as e:
             logger.warning("Sentry capture failed: %s", e.__class__.__name__)
 
+    def capture_exception(self, exc: BaseException) -> None:
+        """
+        Report an already handled exception once. Clears inherited user identity so background work
+        does not keep a stale request user, while retaining any active trace context.
+        Never raises: telemetry must not change business rollback or cleanup.
+        :param exc:
+        :return:
+        """
+        if not sentry_sdk.is_initialized() or getattr(exc, _CAPTURED_FLAG, False):
+            return
+        if isinstance(exc, (KeyboardInterrupt, SystemExit, GeneratorExit)):
+            return
+        try:
+            # Flag first: a later automatic or explicit path must not report the same failure again.
+            setattr(exc, _CAPTURED_FLAG, True)
+            # Fresh isolation scope avoids inheriting a request user; the active span still supplies trace context.
+            with sentry_sdk.isolation_scope() as scope:
+                scope.set_user(None)
+                scope.capture_exception(exc)
+        except Exception as e:
+            logger.warning("Sentry capture failed: %s", e.__class__.__name__)
+
     def capture_diagnostic_event(self) -> Optional[str]:
         """
         Send a fixed, non-sensitive message to verify the SDK configuration.

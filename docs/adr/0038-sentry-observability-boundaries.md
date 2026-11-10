@@ -80,7 +80,14 @@ Account region, retention, entitlements, source-map/release API access, deployme
 - `TraceSpan` only supports `set_attribute` with `str | int | float | bool` values. It does not expose the native SDK span, finish controls, or a business-facing child-span facade. Nested decorated calls create child spans.
 - HTTP middleware continues supported inbound `sentry-trace` / `baggage` headers and opens one `http.server` transaction per request; service spans nest under it. Standalone decorated background work opens its own transaction root without fabricating an HTTP request.
 - Tracing export requires `SENTRY_TRACES_SAMPLE_RATE` in `0..1` in addition to a started Sentry backend. Unset leaves tracing off (no prescribed sampling policy). Automatic framework integrations stay disabled.
-- Custom attributes, transaction payloads, and automatic span metadata pass through the same privacy sanitizer; credentials, personal content, payload, and remark markers must not leave through spans. The decorator records span status and does not independently `capture_exception` at every nested layer (handled-error reporting remains EFC-290).
+- Custom attributes, transaction payloads, and automatic span metadata pass through the same privacy sanitizer; credentials, personal content, payload, and remark markers must not leave through spans. The decorator records span status and does not independently `capture_exception` at every nested layer.
+
+## Core API handled-exception reporting (EFC-290)
+
+- `capture_exception` is the vendor-neutral entry point for already handled failures. Application and background callers use it; they do not import Sentry event types. `SentryBackend` reports through the SDK; `NoOpBackend` returns without initializing or contacting Sentry.
+- Explicit capture coordinates with the existing logging integration (`event_level=None`) and the shared `__telemetry_captured__` flag so a logged exception plus a second capture still produce one error event. Nested `@distributed_trace` layers do not report independently.
+- Background boundaries that need explicit reporting today: Pending-payment expiry email failure inside a successful sweep, the expiry sweep/unlock lifecycle runner, and EventBus handler execution. Expected business rejections and normal advisory-lock contention are not reported as errors. Notification-email failure does not change the sweep's cancelled-series result.
+- Capture uses an isolation scope that clears inherited user identity so background work does not keep a stale request user, while any active trace context remains attached. Reporting also works when no span is active. Sanitization reuses the shared allowlist policy (no bodies, credentials, personal fields, remarks, or exception text).
 
 ## Plan and notification evidence
 
