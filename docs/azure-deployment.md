@@ -136,7 +136,7 @@ Use a separate database recovery procedure for destructive data mistakes; applic
 
 Indicative USD PAYG estimate, researched on 2026-11-09/10, using 730 hours/month and no reservations. Figures are planning inputs, not an Azure quote or proof of service/grant eligibility.
 
-The itemized inventory in [`infra/azure/cost/`](../infra/azure/cost/README.md) supersedes the table below. With Private Endpoints removed, it gives about USD 130.97/month (USD 1,572/year) before tax and other grant spend; it also adds further variable charges and does not apply shared free allowances.
+The itemized inventory in [`infra/azure/cost/`](../infra/azure/cost/README.md) supersedes the table below. With Private Endpoints removed, it gives about USD 130.98/month (USD 1,572/year) before tax and other grant spend; it also adds further variable charges and does not apply shared free allowances.
 
 | Item | Monthly USD assumption |
 | --- | ---: |
