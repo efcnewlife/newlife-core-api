@@ -73,6 +73,14 @@ class TelemetryBackend(Protocol):
         """
         ...
 
+    def capture_exception(self, exc: BaseException) -> None:
+        """
+        Report an already handled exception once without vendor event types at the call site.
+        :param exc:
+        :return:
+        """
+        ...
+
     def capture_diagnostic_event(self) -> Optional[str]:
         """
         Send a fixed, non-sensitive message to verify the configuration.
@@ -109,6 +117,9 @@ class NoOpBackend:
         return None
 
     def capture_request_failure(self, request: Request, exc: Exception) -> None:
+        return None
+
+    def capture_exception(self, exc: BaseException) -> None:
         return None
 
     def capture_diagnostic_event(self) -> Optional[str]:

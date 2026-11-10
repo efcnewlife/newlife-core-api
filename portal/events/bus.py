@@ -7,6 +7,7 @@ from typing import Dict, List, Type
 from portal.libs.contexts.event_session_context import reset_event_session, set_event_session
 from portal.libs.database import Session
 from portal.libs.logger import logger
+from portal.libs.telemetry import capture_exception
 
 from .base import BaseEvent, EventHandler
 
@@ -116,6 +117,7 @@ class EventBus:
                 except Exception as rollback_err:
                     logger.warning("Event handler session rollback failed: %s", rollback_err)
             logger.error("Error in handler %s for event %s: %s", handler.__class__.__name__, event.event_type, e, exc_info=True)
+            capture_exception(e)
             raise
         finally:
             if session is not None and token is not None:

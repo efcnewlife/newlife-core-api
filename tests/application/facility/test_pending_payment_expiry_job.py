@@ -5,8 +5,12 @@ Pending-payment expiry FastAPI lifecycle runner tests.
 import asyncio
 
 import pytest
+import sentry_sdk
 
 from portal.application.facility.pending_payment_expiry_job import pending_payment_expiry_loop, run_pending_payment_expiry_once
+from portal.config import settings
+from portal.libs.telemetry import NoOpBackend, SentryBackend, select_telemetry_backend
+from tests.fixtures.telemetry.sentry_transport import TEST_DSN, CapturingTransport, reset_sentry_client  # noqa: F401
 
 
 class _StubSession:
@@ -83,6 +87,72 @@ async def test_run_pending_payment_expiry_once_unlocks_after_rollback():
     assert session.commit_calls == 0
     assert session.rollback_calls == 1
     assert service.release_calls == 1
+    assert events == ["expire", "rollback", "unlock", "close"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("reset_sentry_client")
+async def test_run_pending_payment_expiry_once_reports_sweep_failure_once():
+    transport = CapturingTransport()
+    config = settings.model_copy(update={"ENV": "stg", "APP_VERSION": "5ba2c79", "SENTRY_ENABLED": True, "SENTRY_DSN": TEST_DSN})
+    assert isinstance(select_telemetry_backend(config, transport=transport), SentryBackend)
+
+    events: list[str] = []
+    session = _StubSession(events)
+    service = _StubService(events, error=RuntimeError("db down"))
+    await run_pending_payment_expiry_once(_StubContainer(session, service))
+
+    sentry_sdk.flush()
+    assert session.rollback_calls == 1
+    assert service.release_calls == 1
+    assert len(transport.events) == 1
+    assert transport.events[0]["exception"]["values"][0]["type"] == "RuntimeError"
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("reset_sentry_client")
+async def test_run_pending_payment_expiry_once_noop_exports_nothing_on_failure():
+    transport = CapturingTransport()
+    config = settings.model_copy(update={"ENV": "stg", "APP_VERSION": "5ba2c79", "SENTRY_ENABLED": True, "SENTRY_DSN": TEST_DSN, "TELEMETRY_BACKEND": "noop"})
+    assert isinstance(select_telemetry_backend(config, transport=transport), NoOpBackend)
+
+    events: list[str] = []
+    session = _StubSession(events)
+    service = _StubService(events, error=RuntimeError("db down"))
+    await run_pending_payment_expiry_once(_StubContainer(session, service))
+
+    sentry_sdk.flush()
+    assert session.rollback_calls == 1
+    assert transport.envelopes == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("reset_sentry_client")
+async def test_run_pending_payment_expiry_once_keeps_rollback_when_transport_fails():
+    class _FailingTransport(CapturingTransport):
+        def __init__(self) -> None:
+            super().__init__()
+            self.failures = 0
+
+        def capture_envelope(self, envelope) -> None:
+            self.failures += 1
+            if self.failures == 1:
+                raise RuntimeError("transport down")
+
+    transport = _FailingTransport()
+    config = settings.model_copy(update={"ENV": "stg", "APP_VERSION": "5ba2c79", "SENTRY_ENABLED": True, "SENTRY_DSN": TEST_DSN})
+    assert isinstance(select_telemetry_backend(config, transport=transport), SentryBackend)
+
+    events: list[str] = []
+    session = _StubSession(events)
+    service = _StubService(events, error=RuntimeError("db down"))
+    await run_pending_payment_expiry_once(_StubContainer(session, service))
+    sentry_sdk.flush()
+
+    assert transport.failures >= 1
+    assert session.rollback_calls == 1
+    assert service.release_calls == 1
+    assert session.close_calls == 1
     assert events == ["expire", "rollback", "unlock", "close"]
 
 

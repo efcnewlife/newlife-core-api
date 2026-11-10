@@ -74,6 +74,15 @@ def capture_request_failure(request: Request, exc: Exception) -> None:
     get_telemetry_backend().capture_request_failure(request, exc)
 
 
+def capture_exception(exc: BaseException) -> None:
+    """
+    Report an already handled exception through the selected backend.
+    :param exc:
+    :return:
+    """
+    get_telemetry_backend().capture_exception(exc)
+
+
 def capture_diagnostic_event() -> Optional[str]:
     """
     Send a fixed, non-sensitive message through the selected backend.

@@ -8,6 +8,7 @@ from inspect import getsource
 from uuid import uuid4
 
 import pytest
+import sentry_sdk
 from sqlalchemy.dialects import postgresql
 
 from portal.application.facility.recurring_booking_service import RecurringBookingService
@@ -17,11 +18,13 @@ from portal.application.facility.results import (
     RecurringBookingOccurrenceResult,
     RecurringBookingSeriesResult,
 )
+from portal.config import settings
 from portal.domain.facility.constants import PENDING_PAYMENT_HOLD_EXPIRED_REASON, BookingStatus, FacilityErrorCode
 from portal.exceptions.responses import BadRequestException, ForbiddenException, NotFoundException
 from portal.infrastructure.persistence.repositories.facility.booking_repository import BookingRepository
 from portal.infrastructure.persistence.repositories.facility.recurring_booking_repository import RecurringBookingRepository
 from portal.libs.consts.permission import Permission
+from portal.libs.telemetry import SentryBackend, select_telemetry_backend
 from portal.routers.admin.v1.facility.booking_series import confirm_booking_series_payment, list_pending_payment_booking_series
 from tests.fixtures.facility.factories import make_preview_quote_result, new_uuid
 from tests.fixtures.facility.stubs import (
@@ -38,6 +41,7 @@ from tests.fixtures.facility.stubs import (
     StubUserReadService,
 )
 from tests.fixtures.system.stubs import StubSettingService
+from tests.fixtures.telemetry.sentry_transport import TEST_DSN, CapturingTransport, reset_sentry_client  # noqa: F401
 
 NOW = datetime(2026, 1, 10, 17, 0, tzinfo=timezone.utc)
 
@@ -325,6 +329,48 @@ async def test_expire_pending_holds_keeps_expiry_when_email_fails(monkeypatch):
     assert series_stub.update_series_calls[0]["status"] == BookingStatus.CANCELLED.value
     assert len(booking_stub.cancel_calls) == 2
     assert series_stub.lock_release_calls == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("reset_sentry_client")
+async def test_expire_pending_holds_reports_email_failure_once(monkeypatch):
+    transport = CapturingTransport()
+    config = settings.model_copy(update={"ENV": "stg", "APP_VERSION": "5ba2c79", "SENTRY_ENABLED": True, "SENTRY_DSN": TEST_DSN})
+    assert isinstance(select_telemetry_backend(config, transport=transport), SentryBackend)
+
+    series = _series(expires_at=NOW - timedelta(minutes=1))
+    series_stub = StubRecurringBookingRepository()
+    booking_stub = StubBookingRepository()
+    _seed_pending_series(series_stub, booking_stub, series)
+    expiry_notifier = StubRecurringExpiryNotifier(raise_error=RuntimeError("graph down"))
+    service, *_ = _service(monkeypatch, series_stub=series_stub, booking_stub=booking_stub, expiry_notifier=expiry_notifier)
+
+    result = await service.expire_pending_holds()
+
+    sentry_sdk.flush()
+    assert result.expired_series_ids == [series.id]
+    assert len(transport.events) == 1
+    assert transport.events[0]["exception"]["values"][0]["type"] == "RuntimeError"
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("reset_sentry_client")
+async def test_expire_pending_holds_lock_contention_is_not_reported(monkeypatch):
+    transport = CapturingTransport()
+    config = settings.model_copy(update={"ENV": "stg", "APP_VERSION": "5ba2c79", "SENTRY_ENABLED": True, "SENTRY_DSN": TEST_DSN})
+    assert isinstance(select_telemetry_backend(config, transport=transport), SentryBackend)
+
+    series = _series(expires_at=NOW - timedelta(minutes=1))
+    series_stub = StubRecurringBookingRepository(lock_acquired=False)
+    booking_stub = StubBookingRepository()
+    _seed_pending_series(series_stub, booking_stub, series)
+    service, *_ = _service(monkeypatch, series_stub=series_stub, booking_stub=booking_stub)
+
+    result = await service.expire_pending_holds()
+
+    sentry_sdk.flush()
+    assert result.skipped is True
+    assert transport.events == []
 
 
 @pytest.mark.asyncio
