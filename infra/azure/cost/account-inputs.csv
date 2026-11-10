@@ -1,0 +1,14 @@
+key,value,notes
+grant_annual_usd,2000,User-reported nonprofit grant per year. Operator confirms in the Azure portal.
+grant_remaining_usd,,Remaining grant credit in USD from the Azure portal (Sponsorships or Cost Management).
+grant_expiry_date,,Grant end date as YYYY-MM-DD.
+months_remaining,,Months from today to grant_expiry_date; round a part month up so the forecast is not too low.
+existing_monthly_spend_usd,,Current monthly spend of other resources on this grant (Cost Management). Use 0 only if Cost Management shows no other spend.
+spending_limit_behavior,,What happens when credit runs out: spending limit on or off; whether charges move to a card.
+eligible_services_confirmed,,yes/no: every selected service is covered by the grant.
+canada_east_capacity_confirmed,,yes/no: Linux B1; PostgreSQL B1ms; Managed Redis B0 with and without HA can be created in Canada East.
+static_web_apps_region,,Static Web Apps resource region chosen (no Canada region is listed).
+public_dns_zone_billed_to_grant,,yes/no: the existing efcnewlife.com zone is billed to this grant.
+defender_for_cloud_plans,,Paid Defender plans already enabled on the subscription; none if none.
+free_allowances_used_elsewhere,,"Notes on egress (100 GB), Log Analytics (5 GB), metric alert (10) and email (1,000) free allowances already used."
+tax_treatment,,Tax or other charges on this billing account; replaces the unknown tax row once known.

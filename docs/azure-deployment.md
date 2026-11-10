@@ -136,6 +136,8 @@ Use a separate database recovery procedure for destructive data mistakes; applic
 
 Indicative USD PAYG estimate, researched on 2026-11-09/10, using 730 hours/month and no reservations. Figures are planning inputs, not an Azure quote or proof of service/grant eligibility.
 
+The itemized inventory in [`infra/azure/cost/`](../infra/azure/cost/README.md) supersedes the table below. It adds further variable charges and does not apply shared free allowances, giving about USD 161.87/month (USD 1,942/year) before tax and other grant spend.
+
 | Item | Monthly USD assumption |
 | --- | ---: |
 | Two Linux B1 App Service Plans | 26.28 |

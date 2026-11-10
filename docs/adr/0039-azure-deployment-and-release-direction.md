@@ -46,6 +46,8 @@ The user's `ExportedEstimate.xlsx` (`NewLife Application`, rows 4-9) supplies an
 
 ## Budget basis and hosting tradeoff
 
+The itemized estimate in [`infra/azure/cost/`](../../infra/azure/cost/README.md) supersedes the figures below. It gives about USD 1,942/year for the selected App Service baseline before tax and other grant spend.
+
 The earlier approximate USD 145-160 monthly figures omitted the managed public IP and load balancer costs of Container Apps environments attached to a custom VNet. Do not use them as complete estimates. [Container Apps managed resources](https://learn.microsoft.com/en-us/azure/container-apps/custom-virtual-networks#managed-resources) documents these additional charges.
 
 Canada East PAYG research using 730 hours per month, two external workload-profiles environments with Consumption apps, two API replicas at 0.5 vCPU/1 GiB, two PostgreSQL B1ms servers with 32 GiB each, three Balanced B0 Redis nodes, four Private Endpoints, two shared Private DNS zones, two production Standard Static Web Apps, shared ACR Basic, and small illustrative Blob/Key Vault/DNS usage gives approximately USD 210 per month (USD 2,520 per year) when API replicas mostly qualify for idle billing. This excludes several variable charges, including logs, processed network data, deployment overlap, and excess backup storage. Separate Container Apps environments are an estimation assumption, not a separately confirmed isolation requirement.
