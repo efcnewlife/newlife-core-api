@@ -1,5 +1,7 @@
 # Azure cost estimate
 
+[繁體中文](README.zh-TW.md) · Chinese CSV: `estimate.zh-TW.csv`
+
 `estimate.csv` is the itemized Canada East cost estimate for the [Azure deployment plan](../../../docs/azure-deployment.md) ([ADR 0039](../../../docs/adr/0039-azure-deployment-and-release-direction.md)). Open it in any spreadsheet.
 
 It uses public list prices checked on 2026-11-10 (pay-as-you-go, USD, 730 hours per month, no reservations). No Azure account was accessed. A human checks the account facts and creates every Azure resource.
