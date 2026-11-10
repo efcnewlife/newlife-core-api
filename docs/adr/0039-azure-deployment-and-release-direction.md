@@ -38,6 +38,8 @@ Keep API ingress public HTTPS and use App Service regional VNet integration to r
 
 Use PostgreSQL's `Public access (allowed IP addresses) and private endpoints` networking mode for both servers. API apps connect through Private Endpoints; developer debugging and production manual migration use the public endpoint restricted to explicit developer IP addresses, while staging migration is also human-run from an explicitly allowlisted operator IP. Do not use private VNet integration for these servers or enable broad public firewall exceptions. Keep Azure Managed Redis private-only with public network access disabled; the user no longer requests public Redis debugging access. A local Redis GUI tunnel is not an initial requirement. Account for four Private Endpoints in total, one per PostgreSQL and Redis instance, with the required Private DNS configuration, and reconcile their costs with the grant.
 
+Revision 2026-11-10: to save about USD 31/month, the user removed all four Private Endpoints, the Private DNS zones, and App Service VNet integration. PostgreSQL uses public access with a firewall allowlist of the App Service possible outbound IPs plus explicit developer/operator IPs, with TLS; these outbound IPs are shared with other customers and can change. Azure Managed Redis offers no IP allowlist, so both Redis instances use public access from all networks with access-key or Entra authentication and TLS. This supersedes the Private Endpoint and private-only Redis decisions above. Sharing one Redis instance between staging and production is under consideration and not selected.
+
 Service placement exceptions, sizing, live account/cost checks, and cloud validation are human acceptance gates. The proposed production runner read-only connection is not selected under the human-only policy. Agent deliverables must distinguish offline validation from pending human live evidence. No Azure resources or pipelines are provisioned by this decision. Preserve ADR 0038 telemetry/privacy rules.
 
 ## Candidate services supplied by the user
@@ -46,7 +48,7 @@ The user's `ExportedEstimate.xlsx` (`NewLife Application`, rows 4-9) supplies an
 
 ## Budget basis and hosting tradeoff
 
-The itemized estimate in [`infra/azure/cost/`](../../infra/azure/cost/README.md) supersedes the figures below. It gives about USD 1,942/year for the selected App Service baseline before tax and other grant spend.
+The itemized estimate in [`infra/azure/cost/`](../../infra/azure/cost/README.md) supersedes the figures below. It gives about USD 1,572/year for the selected App Service baseline without Private Endpoints, before tax and other grant spend.
 
 The earlier approximate USD 145-160 monthly figures omitted the managed public IP and load balancer costs of Container Apps environments attached to a custom VNet. Do not use them as complete estimates. [Container Apps managed resources](https://learn.microsoft.com/en-us/azure/container-apps/custom-virtual-networks#managed-resources) documents these additional charges.
 

@@ -39,20 +39,28 @@ The budget gate stays `BLOCKED` while any account input is blank, any baseline p
 
 | Scenario | USD/month | USD/year | Status |
 | --- | ---: | ---: | --- |
-| **baseline** (selected fixed + variable) | **161.87** | **1,942.44** | Selected |
-| shared-app-service-plan | 148.73 | 1,784.76 | Rejected |
-| container-apps-shared-environment | 265.68 | 3,188.11 | Rejected |
-| container-apps-separate-environments | 364.23 | 4,370.71 | Rejected |
-| azure-cache-for-redis-c0 | 180.85 | 2,170.20 | Rejected |
+| **baseline** (selected fixed + variable) | **130.97** | **1,571.64** | Selected |
+| shared-redis | 118.56 | 1,422.72 | Under consideration |
+| shared-app-service-plan | 117.83 | 1,413.96 | Rejected |
+| azure-cache-for-redis-c0 | 149.95 | 1,799.40 | Rejected |
+| private-endpoints (original design) | 161.87 | 1,942.44 | Rejected for cost |
+| container-apps-shared-environment | 234.78 | 2,817.31 | Rejected |
+| container-apps-separate-environments | 333.33 | 3,999.91 | Rejected |
 
-The baseline is USD 155.89/month fixed plus USD 5.98/month of variable usage assumptions. The nominal headroom is **USD 57.56/year** against a USD 2,000 grant, before tax and before any spend from other resources on the grant.
+The baseline is USD 125.69/month fixed plus USD 5.28/month of variable usage assumptions. The nominal headroom is **USD 428.36/year** against a USD 2,000 grant, before tax and before any spend from other resources on the grant.
 
-This is higher than the plan's USD 1,876/year figure. The CSV adds metric alerts, Private Link data processing, Private DNS queries, Static Web Apps bandwidth, and alert emails. It also charges logs and egress without assuming the shared free allowances are unused.
+Network decision (2026-11-10, user): the baseline has no Private Endpoints, Private DNS zones, or VNet integration. The `private-endpoints` scenario adds them back for comparison (USD 30.90/month).
+
+- PostgreSQL uses public access with a firewall allowlist: every App Service possible outbound IP plus explicit operator IPs, with TLS. App Service outbound IPs are shared with other customers on the same deployment unit and can change, so the allowlist admits more than this app. Password and TLS remain the main protection. A fixed outbound IP would need a NAT Gateway, which costs more than the Private Endpoints it replaces.
+- Managed Redis has no IP allowlist. Public access is either open to all networks or off. Both instances are open to all networks and rely on access keys or Entra authentication with TLS.
+- `shared-redis` (staging uses the production instance) is under consideration, not selected. Managed Redis has database 0 only, so staging would need key prefixes, and staging tests would share production memory, rate limits, and authentication state.
+
+Compared with the plan's original USD 1,876/year, the CSV also adds metric alerts, Static Web Apps bandwidth, and alert emails. It charges logs and egress without assuming the shared free allowances are unused.
 
 Findings from the public price list:
 
 - Static Web Apps has no Canada region. The CSV uses `eastus2` as a placement-exception candidate; the operator picks the region.
-- A new Container Apps `Environment Management Hour` meter (USD 0.10/hour, effective 2026-11-01) appears in Canada East. It is marked `unverified` in the rejected Container Apps scenarios. Without it they would cost about USD 218 and USD 193 per month.
+- A new Container Apps `Environment Management Hour` meter (USD 0.10/hour, effective 2026-11-01) appears in Canada East. It is marked `unverified` in the rejected Container Apps scenarios. Without it they would cost about USD 187 and USD 162 per month.
 - Managed Redis is priced per node. Staging is assumed to bill one node and production with HA two nodes. Both rows are `unverified` until the calculator confirms this.
 
 ## Column reference
@@ -94,7 +102,7 @@ curl -s -G 'https://prices.azure.com/api/retail/prices' \
 
 The agent does not perform any of these steps. This ticket creates no Azure resources.
 
-1. **Open the CSV** in a spreadsheet. Filter `scenario` = `baseline` and check `environment` staging, production, and shared. Confirm App Service Plans, PostgreSQL, Redis, ACR, four Private Endpoints, four Static Web Apps, DNS, Blob, Key Vault, logs, and egress are present. Alternative and excluded rows are not in the baseline.
+1. **Open the CSV** in a spreadsheet. Filter `scenario` = `baseline` and check `environment` staging, production, and shared. Confirm App Service Plans, PostgreSQL with its firewall allowlist, Redis, ACR, four Static Web Apps, DNS, Blob, Key Vault, logs, and egress are present. Alternative and excluded rows are not in the baseline.
 2. **Check each row** for region, SKU, quantity, USD unit price, and `checked_date`. Open `source_url`, or find the `notes` meter in the [Azure pricing calculator](https://azure.microsoft.com/en-us/pricing/calculator/). Confirm the two `unverified` Redis rows in the calculator.
 3. **Collect account facts** in the Azure portal and fill `account-inputs.csv`. Do not put credentials, tokens, or personal data in either CSV.
 
@@ -116,7 +124,7 @@ The agent does not perform any of these steps. This ticket creates no Azure reso
 4. **Recompute locally** after any edit: `uv run python scripts/azure_cost_estimate.py --write`. Confirm `CSV valid`, and that the baseline total matches your calculator total within rounding.
 5. **Compare** the remaining grant with existing spend plus the baseline forecast. The script prints `Account headroom` once the account inputs are filled. If any row is still unknown or unverified, or the forecast exceeds the grant (or USD 2,000/year), stop before creating paid resources and report the gap on the issue.
 
-Provisioning order for later tickets, also human only: shared ACR and identities, then each environment's VNet and Private DNS, then PostgreSQL, Redis, Storage, and Key Vault, then Private Endpoints, then App Service Plans and Web Apps, then the Static Web Apps, then DNS, TLS, and monitoring.
+Provisioning order for later tickets, also human only: shared ACR and identities, then PostgreSQL, Redis, Storage, and Key Vault, then App Service Plans and Web Apps, then the PostgreSQL firewall allowlist from the Web Apps' possible outbound IPs, then the Static Web Apps, then DNS, TLS, and monitoring.
 
 ### Done when
 

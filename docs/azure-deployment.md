@@ -28,8 +28,8 @@ This user instruction supersedes the earlier automatic Azure staging deployment/
 | Managed Redis | Separate Balanced instance, smallest viable SKU, no HA | Separate Balanced instance, smallest viable SKU, HA enabled |
 | Blob Storage | Separate Standard GPv2 account | Separate Standard GPv2 account |
 | Key Vault | Separate vault | Separate vault |
-| Network | Environment-specific VNet and App Service integration | Separate VNet and integration |
-| Private Endpoints | PostgreSQL and Redis | PostgreSQL and Redis |
+| Network | Public endpoints; PostgreSQL firewall allowlist | Public endpoints; PostgreSQL firewall allowlist |
+| Private Endpoints | None (removed for cost on 2026-11-10) | None |
 | ACR | One shared Basic registry, explicit immutable image digest selection | Same registry |
 
 Balanced B0 is the pricing candidate, not a reservation of capacity or a proven memory requirement. Validate client connection policy, TLS, connection limits, memory headroom, and behavior on restart/failover. Managed Redis supports database 0 only: adapt existing db0/db10 usage before deployment. Prefer a compatible non-clustered policy initially if supported by the selected SKU, and test rate limiter operations rather than assuming compatibility.
@@ -42,11 +42,11 @@ The following directories are proposed; no Bicep files or workflows are created 
 
 | Repository | Proposed infrastructure directory | Owns |
 | --- | --- | --- |
-| `newlife-core-api` | `infra/azure/` | API apps/plans, VNet integrations, PostgreSQL, Redis, Private Endpoints/DNS, Blob, Key Vault, shared ACR, backend monitoring, `api` and `api.dev` DNS records |
+| `newlife-core-api` | `infra/azure/` | API apps/plans, PostgreSQL and its firewall allowlist, Redis, Blob, Key Vault, shared ACR, backend monitoring, `api` and `api.dev` DNS records |
 | `newlife-portal-frontend` | `infra/azure/` | Two Portal Static Web Apps, domain bindings, `portal` and `portal.dev` DNS records, frontend workflows |
 | `facility-booking-frontend` | `infra/azure/` | Two Booking Static Web Apps, domain bindings, `booking` and `booking.dev` DNS records, frontend workflows |
 
-Keep Bicep modules reusable, with environment-specific parameters. Reference the existing public DNS zone; do not recreate or transfer it. Shared private DNS zones can link to both environment VNets while data services and credentials remain separate. Verify the resulting DNS resolution from each API app.
+Keep Bicep modules reusable, with environment-specific parameters. Reference the existing public DNS zone; do not recreate or transfer it. Data services and credentials remain separate per environment.
 
 Infrastructure delivery: the agent authors and offline-validates Bicep and operator procedures. The human runs Azure `what-if`, reviews changes/costs, and applies them. Routine CI has no Azure credentials and does not apply infrastructure or publish applications. Humans establish scoped operator/runtime identities and DNS/RBAC access, documenting actual permission boundaries. Agent-run cloud inspection is prohibited.
 
@@ -60,12 +60,12 @@ Infrastructure delivery: the agent authors and offline-validates Bicep and opera
 
 Here `dev` means staging, not local development. Configure exact HTTPS origins consistently in frontend builds, API CORS/member-app settings, Entra redirect URIs, and email/application links. Bind managed certificates to the full hostnames and verify the existing DNS/CAA configuration.
 
-- API ingress is public HTTPS. App Service regional VNet integration provides outbound access to private data services; it is not an inbound private endpoint.
-- PostgreSQL uses `Public access (allowed IP addresses) and private endpoints`. API traffic goes through Private Endpoints. Local debugging uses explicit developer public IP firewall rules and TLS. Do not enable all-Azure or unrestricted public access.
-- Managed Redis remains private-only with public network access disabled. No public Redis allowlist or local GUI tunnel is required initially.
+- API ingress is public HTTPS. The user removed Private Endpoints, Private DNS zones, and VNet integration on 2026-11-10 to save about USD 31/month; see the [cost estimate](../infra/azure/cost/README.md).
+- PostgreSQL uses `Public access (allowed IP addresses)`. The firewall allows every App Service possible outbound IP plus explicit developer/operator IPs, with TLS required. Those outbound IPs are shared with other customers on the same deployment unit and can change, so re-check the list after scaling. Do not enable the all-Azure-services rule or unrestricted public access.
+- Managed Redis has no IP allowlist, so both instances use public access from all networks, protected by access keys or Entra authentication and TLS. Sharing one instance between staging and production is under consideration, not selected.
 - Blob endpoints remain reachable by external browsers for authorized/SAS URLs, with anonymous access disabled. Use Hot/LRS without hierarchical namespace, 14-day soft delete, and a 10 GB first-year live-data estimating assumption. There is no initial video workload.
 - ACR Basic and Key Vault can use authenticated public endpoints initially. Use image-pull identity/RBAC and Key Vault references where supported; application secrets stay out of Git and frontend builds. The existing Blob adapter still uses connection-string/account-key SAS, so do not assume application-level managed identity conversion is already implemented.
-- Retain four Private Endpoints in the budget. No NAT Gateway, permanent administration VM, VPN Gateway, or Container Apps environment is included.
+- No Private Endpoint, NAT Gateway, permanent administration VM, VPN Gateway, or Container Apps environment is included.
 
 ## CI and deployment events
 
@@ -136,7 +136,7 @@ Use a separate database recovery procedure for destructive data mistakes; applic
 
 Indicative USD PAYG estimate, researched on 2026-11-09/10, using 730 hours/month and no reservations. Figures are planning inputs, not an Azure quote or proof of service/grant eligibility.
 
-The itemized inventory in [`infra/azure/cost/`](../infra/azure/cost/README.md) supersedes the table below. It adds further variable charges and does not apply shared free allowances, giving about USD 161.87/month (USD 1,942/year) before tax and other grant spend.
+The itemized inventory in [`infra/azure/cost/`](../infra/azure/cost/README.md) supersedes the table below. With Private Endpoints removed, it gives about USD 130.97/month (USD 1,572/year) before tax and other grant spend; it also adds further variable charges and does not apply shared free allowances.
 
 | Item | Monthly USD assumption |
 | --- | ---: |
@@ -164,7 +164,7 @@ Final budget acceptance requires live calculator/account verification and a cred
 The agent delivers offline-validated code/templates/CSV/runbooks for these stages. Every actual Azure command, inspection, deployment, drill, and cleanup below is human-owned and stays pending until operator evidence is recorded.
 
 1. **Account checks and prerequisites:** verify grant/expiry/spending controls, existing DNS and permissions, Canada East capacity, the supported Static Web Apps resource region, Sentry entitlements, package access, and Entra registrations/redirects. Confirm which resources already consume the grant.
-2. **Application readiness:** fix/verify the current container entrypoint (it refers to `gunicorn_conf.py`, absent in the inspected checkout), constrain Docker build context with `.dockerignore`, test database/Redis TLS and private DNS, adapt Redis single-database usage, verify HTTPS staging links, and disable production mock login. Existing auth/Redis failure behavior needs its own focused readiness review; do not promise immediate access-token revocation solely because a blacklist provider exists.
+2. **Application readiness:** fix/verify the current container entrypoint (it refers to `gunicorn_conf.py`, absent in the inspected checkout), constrain Docker build context with `.dockerignore`, test database/Redis TLS over public endpoints, adapt Redis single-database usage, verify HTTPS staging links, and disable production mock login. Existing auth/Redis failure behavior needs its own focused readiness review; do not promise immediate access-token revocation solely because a blacklist provider exists.
 3. **Infrastructure:** implement Bicep by repository, review `what-if` and costs, bootstrap identities/secrets, create staging first, and validate connections from the real App Service container. Keep production resources gated on the account and budget checks.
 4. **Staging release package:** implement non-Azure CI/build, immutable artifacts, and offline/mocked checks for the human-run source-map, migration/IP cleanup, serialization, smoke, and tag/main procedures. Test a failed migration, interrupted firewall cleanup, older-tag/newer-schema case, and application rollback.
 5. **Recovery and capacity:** exercise PostgreSQL restore, Blob recovery, App Service restart/Always On behavior, Redis loss/failover and reconnects, and representative booking load. Validate B1/B1ms and Redis memory headroom; adjust the budget if capacity must change.

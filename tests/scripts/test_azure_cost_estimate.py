@@ -406,7 +406,7 @@ def test_shipped_estimate_is_valid_and_covers_the_selected_inventory() -> None:
         *(f"api-plan-{env}" for env in ("staging", "production")),
         *(f"pg-compute-{env}" for env in ("staging", "production")),
         *(f"redis-{env}" for env in ("staging", "production")),
-        *(f"private-endpoint-{target}-{env}" for target in ("pg", "redis") for env in ("staging", "production")),
+        *(f"pg-firewall-allowlist-{env}" for env in ("staging", "production")),
         *(f"swa-{app}-{env}" for app in ("portal", "booking") for env in ("staging", "production")),
         "acr-basic",
         "public-dns-zone",
@@ -416,7 +416,10 @@ def test_shipped_estimate_is_valid_and_covers_the_selected_inventory() -> None:
         "internet-egress",
     }
     assert required <= baseline_ids
-    assert {"shared-app-service-plan", "container-apps-separate-environments", "container-apps-shared-environment"} <= set(report.scenarios)
+    assert not {record_id for record_id in baseline_ids if record_id.startswith("private-endpoint-")}
+    assert {"shared-app-service-plan", "container-apps-separate-environments", "container-apps-shared-environment", "private-endpoints", "shared-redis"} <= set(
+        report.scenarios
+    )
 
 
 @pytest.mark.parametrize("value", ["NaN", "Infinity", "-1"])
