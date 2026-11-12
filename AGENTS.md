@@ -58,6 +58,7 @@ uv run pytest tests/application/rbac/test_permission_service.py -v
 PORTAL_DB_INTEGRATION=1 uv run pytest tests/integration -v   # opt-in; needs migrated local DB with seed data
 PORTAL_REDIS_INTEGRATION=1 REDIS_URL=redis://localhost:6391/0 uv run pytest tests/integration/test_redis_db0.py -v   # opt-in; throwaway Redis
 scripts/local-image-smoke.sh   # build image + smoke against disposable TLS PostgreSQL/Redis; never contacts Azure (docs/azure-core-api-image.md)
+scripts/validate-bicep.sh      # offline compile/lint/format of infra/azure Bicep; warnings fail; needs `az bicep install` (docs/azure-container-registry.md)
 ./scripts/check-branch-name.test.sh
 ./scripts/format-staged.test.sh
 

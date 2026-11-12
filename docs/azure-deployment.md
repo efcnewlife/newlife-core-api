@@ -38,7 +38,7 @@ Static Web Apps distributes static assets globally. Its supported resource regio
 
 ## Repository ownership
 
-The following directories are proposed; no Bicep files or workflows are created by this planning change.
+The following directories are proposed. The shared ACR template is in `infra/azure/registry/` (see the [registry runbook](azure-container-registry.md)); other Bicep files and workflows are separate work.
 
 | Repository | Proposed infrastructure directory | Owns |
 | --- | --- | --- |
