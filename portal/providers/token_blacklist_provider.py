@@ -7,7 +7,6 @@ from datetime import datetime, timezone
 
 from redis.asyncio import Redis
 
-from portal.config import settings
 from portal.libs.consts.cache_keys import CacheKeys
 from portal.libs.database import RedisPool
 
@@ -16,7 +15,7 @@ class TokenBlacklistProvider:
     """Token Blacklist Provider for managing revoked tokens"""
 
     def __init__(self, redis_client: RedisPool):
-        self.redis: Redis = redis_client.create(db=settings.REDIS_DB)
+        self.redis: Redis = redis_client.create()
 
     def _get_token_hash(self, token: str) -> str:
         """Generate hash for token to use as Redis key"""

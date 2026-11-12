@@ -32,7 +32,7 @@ This user instruction supersedes the earlier automatic Azure staging deployment/
 | Private Endpoints | None (removed for cost on 2026-11-10) | None |
 | ACR | One shared Basic registry, explicit immutable image digest selection | Same registry |
 
-Balanced B0 is the pricing candidate, not a reservation of capacity or a proven memory requirement. Validate client connection policy, TLS, connection limits, memory headroom, and behavior on restart/failover. Managed Redis supports database 0 only: adapt existing db0/db10 usage before deployment. Prefer a compatible non-clustered policy initially if supported by the selected SKU, and test rate limiter operations rather than assuming compatibility.
+Balanced B0 is the pricing candidate, not a reservation of capacity or a proven memory requirement. Validate client connection policy, TLS, connection limits, memory headroom, and behavior on restart/failover. Managed Redis supports database 0 only; Core API now keeps all Redis state in one database 0 keyspace (see the [Core API image and Managed Redis runbook](azure-core-api-image.md)). Prefer a compatible non-clustered policy initially if supported by the selected SKU, and test rate limiter operations rather than assuming compatibility.
 
 Static Web Apps distributes static assets globally. Its supported resource region must be selected separately if Canada East is unavailable; this is not a guarantee that frontend content stays in Canada. The API remains separately hosted on App Service, using the existing MSAL and API authentication flows.
 

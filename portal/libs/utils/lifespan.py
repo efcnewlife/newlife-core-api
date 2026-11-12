@@ -7,12 +7,12 @@ from contextlib import asynccontextmanager, suppress
 from os import environ
 
 from fastapi import FastAPI
-from redis.asyncio import from_url as redis_from_url
 
 from portal.application.facility.pending_payment_expiry_job import pending_payment_expiry_loop
 from portal.config import settings
 from portal.container import Container
-from portal.libs.depends.rate_limiters import create_redis_rate_limiters
+from portal.libs.database.aio_redis import create_redis_client
+from portal.libs.depends.rate_limiters import attach_rate_limiters, create_redis_rate_limiters
 from portal.libs.logger import logger
 from portal.libs.telemetry import flush_telemetry
 
@@ -39,12 +39,12 @@ async def lifespan(app: FastAPI):
     redis_connection = None
     if settings.REDIS_URL:
         try:
-            redis_connection = redis_from_url(settings.REDIS_URL, db=settings.RATE_LIMITER_REDIS_DB, encoding="utf-8", decode_responses=True)
-            app.state.rate_limiters = await create_redis_rate_limiters(redis_connection)
+            redis_connection = create_redis_client(settings.REDIS_URL)
+            attach_rate_limiters(app, await create_redis_rate_limiters(redis_connection))
             logger.info("Redis rate limiters initialized")
         except Exception as e:
             logger.error("Failed to initialize Redis rate limiters: %s", e)
-            app.state.rate_limiters = None
+            attach_rate_limiters(app, None)
 
     sweep_stop = Event()
     sweep_task = None

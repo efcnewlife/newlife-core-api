@@ -10,20 +10,65 @@ Different endpoint types rate limiters strategy:
 - Read endpoint: Looser, because read operations are less burdened on the system
 - Write endpoint: Stricter, because write operations need more resources
 
-When REDIS_URL is set, limiters use RedisBucket for distributed rate limiting across workers.
-Otherwise in-memory limiters are used (per-process).
+When REDIS_URL is set, limiters keep one sliding-window sorted set per client identifier (IP + path) in Redis,
+shared across workers: `<app>:rate_limiter:<type>:<identifier>` in the database 0 keyspace, expiring after the
+longest window. Otherwise in-memory limiters are used (per-process).
 
 Configuration file location: env/rate_limiters.yaml
 """
 
-from fastapi import Depends, Request
+from time import time_ns
+from uuid import uuid4
+
+from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import HTTPException
 from fastapi_limiter.depends import RateLimiter
 from pyrate_limiter import Duration, Limiter, Rate
-from pyrate_limiter.buckets.redis_bucket import RedisBucket
+from redis.asyncio import Redis
+from starlette.routing import Mount
 
 from portal.config import settings
+from portal.libs.consts.cache_keys import CacheKeys
 from portal.libs.rate_limit.config import RateLimiterConfig
+
+# KEYS[1]: client key. ARGV: now_ms, member, then (interval_ms, limit) per window.
+# Rejects without recording when any window is full; otherwise records the request, trims entries
+# older than the longest window, and expires the key after it.
+SLIDING_WINDOW_SCRIPT = """
+local key = KEYS[1]
+local now = tonumber(ARGV[1])
+local longest = 0
+for i = 3, #ARGV, 2 do
+    local interval = tonumber(ARGV[i])
+    if redis.call('ZCOUNT', key, now - interval, now) >= tonumber(ARGV[i + 1]) then
+        return 0
+    end
+    if interval > longest then
+        longest = interval
+    end
+end
+redis.call('ZADD', key, now, ARGV[2])
+redis.call('ZREMRANGEBYSCORE', key, 0, now - longest)
+redis.call('PEXPIRE', key, longest)
+return 1
+"""
+
+
+class RedisSlidingWindowLimiter:
+    """
+    Per-client limiter for one config type, checking all windows in one atomic script call.
+    redis-py reloads the script on NOSCRIPT (the script cache is lost on restart or failover).
+    """
+
+    def __init__(self, redis: Redis, config_type: str, config: RateLimiterConfig):
+        self._script = redis.register_script(SLIDING_WINDOW_SCRIPT)
+        self._key_prefix = CacheKeys("rate_limiter").add_attribute(config_type).build()
+        self._windows = [value for window in (config.short, config.medium, config.long) for value in (window.seconds * 1000, window.times)]
+
+    async def try_acquire_async(self, name: str, blocking: bool = False) -> bool:
+        now_ms = time_ns() // 1_000_000
+        allowed = await self._script(keys=[f"{self._key_prefix}:{name}"], args=[now_ms, f"{now_ms}:{uuid4().hex}", *self._windows])
+        return bool(allowed)
 
 
 async def default_identifier(request: Request) -> str:
@@ -75,38 +120,31 @@ def get_rate_limiters_config(config_type: str = "default") -> RateLimiterConfig:
     return config_map.get(config_type, settings.RATE_LIMITERS_CONFIG.default)
 
 
-async def create_redis_rate_limiters(redis) -> dict[str, list[Limiter]]:
+async def create_redis_rate_limiters(redis: Redis) -> dict[str, list[RedisSlidingWindowLimiter]]:
     """
     Create Redis-backed limiters for default, read, and write config types.
-    Each config type has three limiters (short, medium, long). Caller must pass
-    an async Redis connection (e.g. from redis.asyncio.from_url).
 
     :param redis: Async Redis client (redis.asyncio.Redis)
-    :return: Dict mapping config_type to list of three Limiters (short, medium, long)
+    :return: Dict mapping config_type to its limiters
     """
-    prefix = f"{settings.APP_NAME}_limiter"
-    result: dict[str, list[Limiter]] = {}
+    return {config_type: [RedisSlidingWindowLimiter(redis, config_type, get_rate_limiters_config(config_type))] for config_type in ("default", "read", "write")}
 
-    for config_type in ("default", "read", "write"):
-        config = get_rate_limiters_config(config_type)
-        short_bucket = await RedisBucket.init(  # noqa
-            [Rate(config.short.times, Duration.SECOND * config.short.seconds)], redis, f"{prefix}_{config_type}_short"
-        )
-        medium_bucket = await RedisBucket.init(  # noqa
-            [Rate(config.medium.times, Duration.SECOND * config.medium.seconds)], redis, f"{prefix}_{config_type}_medium"
-        )
-        long_bucket = await RedisBucket.init(  # noqa
-            [Rate(config.long.times, Duration.SECOND * config.long.seconds)], redis, f"{prefix}_{config_type}_long"
-        )
-        result[config_type] = [Limiter(short_bucket), Limiter(medium_bucket), Limiter(long_bucket)]
 
-    return result
+def attach_rate_limiters(app: FastAPI, limiters: dict[str, list[RedisSlidingWindowLimiter]] | None) -> None:
+    """
+    Set Redis-backed limiters on the app and every mounted sub-app.
+    Inside a mounted app, request.app is the sub-app, so the root app's state alone is not visible there.
+    """
+    app.state.rate_limiters = limiters
+    for route in app.routes:
+        if isinstance(route, Mount) and isinstance(route.app, FastAPI):
+            attach_rate_limiters(route.app, limiters)
 
 
 class RedisRateLimiterDependency:
     """
     FastAPI dependency that applies Redis-backed rate limiters for a config type.
-    Requires app.state.rate_limiters to be set (done in lifespan when REDIS_URL is set).
+    Requires app.state.rate_limiters to be set (attach_rate_limiters in lifespan when REDIS_URL is set).
     """
 
     def __init__(self, config_type: str):

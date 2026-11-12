@@ -7,7 +7,6 @@ from typing import Any, Optional
 
 from redis.asyncio import Redis
 
-from portal.config import settings
 from portal.libs.consts.cache_keys import CacheExpiry, CacheKeys
 from portal.libs.database import RedisPool
 
@@ -16,7 +15,7 @@ class SettingCache:
     """Per-key JSON value cache for system settings."""
 
     def __init__(self, redis_client: RedisPool):
-        self._redis: Redis = redis_client.create(db=settings.REDIS_DB)
+        self._redis: Redis = redis_client.create()
 
     @staticmethod
     def _cache_key(namespace: str, setting_key: str) -> str:

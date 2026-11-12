@@ -6,7 +6,6 @@ from uuid import UUID
 
 from redis.asyncio import Redis
 
-from portal.config import settings
 from portal.libs.consts.cache_keys import CacheKeys
 from portal.libs.database import RedisPool
 
@@ -15,7 +14,7 @@ class RoleCache:
     """User role set cache."""
 
     def __init__(self, redis_client: RedisPool):
-        self._redis: Redis = redis_client.create(db=settings.REDIS_DB)
+        self._redis: Redis = redis_client.create()
 
     @staticmethod
     def user_role_key(user_id: UUID) -> str:

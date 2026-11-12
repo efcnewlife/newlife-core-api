@@ -10,7 +10,7 @@ This document helps AI agents quickly understand the **NewLife Core API** codeba
 | ------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | **Purpose**         | Backend portal API for NewLife Core infrastructure — admin CRUD, RBAC, facility booking, org/ministry management |
 | **Framework**       | FastAPI (async)                                                                                                  |
-| **Database**        | PostgreSQL 17 + SQLAlchemy (asyncpg)                                                                             |
+| **Database**        | PostgreSQL 18 + SQLAlchemy (asyncpg)                                                                             |
 | **Cache**           | Redis (auth blacklist, RBAC caches, rate limiting)                                                               |
 | **Auth**            | JWT (email/password + Microsoft Entra ID token exchange)                                                         |
 | **Authorization**   | RBAC — roles, permissions, resources, verbs                                                                      |
@@ -56,6 +56,8 @@ uv run uvicorn portal.main:app --reload
 uv run pytest
 uv run pytest tests/application/rbac/test_permission_service.py -v
 PORTAL_DB_INTEGRATION=1 uv run pytest tests/integration -v   # opt-in; needs migrated local DB with seed data
+PORTAL_REDIS_INTEGRATION=1 REDIS_URL=redis://localhost:6391/0 uv run pytest tests/integration/test_redis_db0.py -v   # opt-in; throwaway Redis
+scripts/local-image-smoke.sh   # build image + smoke against disposable TLS PostgreSQL/Redis; never contacts Azure (docs/azure-core-api-image.md)
 ./scripts/check-branch-name.test.sh
 ./scripts/format-staged.test.sh
 

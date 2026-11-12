@@ -15,7 +15,7 @@ class MemberRefreshAppBindingProvider:
     """Store family_id -> app_code for member refresh tokens."""
 
     def __init__(self, redis_client: RedisPool):
-        self.redis: Redis = redis_client.create(db=settings.REDIS_DB)
+        self.redis: Redis = redis_client.create()
         self._ttl_seconds = max(1, settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60)
 
     def _key(self, family_id: UUID) -> str:

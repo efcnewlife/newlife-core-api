@@ -15,9 +15,11 @@ ENV \
 
 WORKDIR /app
 
-COPY . /app/
-
+# Dependencies first so source-only changes reuse this layer; .dockerignore limits the context.
+COPY pyproject.toml uv.lock .python-version /app/
 RUN uv sync --frozen --no-dev --no-install-project
+
+COPY . /app/
 
 RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
 USER appuser

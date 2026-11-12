@@ -6,7 +6,6 @@ from uuid import UUID
 
 from redis.asyncio import Redis
 
-from portal.config import settings
 from portal.domain.rbac.entities import PermissionRecord
 from portal.libs.consts.cache_keys import CacheExpiry, CacheKeys
 from portal.libs.database import RedisPool
@@ -16,7 +15,7 @@ class PermissionCache:
     """User permission hash and admin list cache."""
 
     def __init__(self, redis_client: RedisPool):
-        self._redis: Redis = redis_client.create(db=settings.REDIS_DB)
+        self._redis: Redis = redis_client.create()
 
     @staticmethod
     def permission_key(user_id: UUID, permission_code: str | None = None) -> str:

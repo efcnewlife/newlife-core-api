@@ -319,7 +319,7 @@ flowchart LR
 ## Prerequisites
 
 - uv `>=0.12.4,<0.13` (see `[tool.uv] required-version`)
-- PostgreSQL 17
+- PostgreSQL 18
 - Redis 7
 - Docker
 

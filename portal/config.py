@@ -41,7 +41,8 @@ class CustomSource(EnvSettingsSource):
         if field.annotation is bool:
             return Converter.to_bool(value, default=field.default or False)
         if isinstance(list[str], type(field.annotation)):
-            return [v for v in value.split(',')]
+            # Unset variable: None keeps the field default instead of failing at import.
+            return [v for v in value.split(',')] if value is not None else None
         return value
 
 
@@ -100,9 +101,8 @@ class Configuration(BaseSettings):
     CORS_ALLOW_ORIGINS_REGEX: Optional[str] = os.getenv(key="CORS_ALLOW_ORIGINS_REGEX")
 
     # [Redis]
+    # Single database 0 keyspace (Azure Managed Redis supports db 0 only); rediss:// enables TLS.
     REDIS_URL: Optional[str] = os.getenv(key="REDIS_URL")
-    REDIS_DB: int = int(os.getenv(key="REDIS_DB", default="0"))
-    RATE_LIMITER_REDIS_DB: int = int(os.getenv(key="RATE_LIMITER_REDIS_DB", default="10"))
 
     # [Database]
     DATABASE_HOST: str = os.getenv(key="DATABASE_HOST", default="localhost")
@@ -137,7 +137,6 @@ class Configuration(BaseSettings):
     TESTING_ACCOUNT_EMAIL_SUFFIX: str = os.getenv(key="TESTING_ACCOUNT_EMAIL_SUFFIX", default="@test.local")
 
     # [Token Blacklist]
-    TOKEN_BLACKLIST_REDIS_DB: int = int(os.getenv(key="TOKEN_BLACKLIST_REDIS_DB", default="1"))
     TOKEN_BLACKLIST_CLEANUP_INTERVAL: int = int(os.getenv(key="TOKEN_BLACKLIST_CLEANUP_INTERVAL", default="3600"))
 
     # [Rate Limiting]
