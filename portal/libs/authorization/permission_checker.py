@@ -7,7 +7,6 @@ from uuid import UUID
 
 from redis.asyncio import Redis
 
-from portal.config import settings
 from portal.exceptions.responses import UnauthorizedException
 from portal.infrastructure.cache.permission_cache import PermissionCache
 from portal.libs.consts.cache_keys import CacheKeys
@@ -19,7 +18,7 @@ class PermissionChecker:
     """Permission Checker Service for authorization"""
 
     def __init__(self, redis_client: RedisPool):
-        self._redis: Redis = redis_client.create(db=settings.REDIS_DB)
+        self._redis: Redis = redis_client.create()
 
     async def has_permission(self, permission_code: str, user_id: Optional[UUID] = None) -> bool:
         """

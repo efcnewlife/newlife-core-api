@@ -1,0 +1,17 @@
+# Allowlist: the build context holds only what the runtime image needs.
+# Secrets (.env, .envrc), Git metadata, local data, tests, docs, and tooling stay out.
+*
+
+!pyproject.toml
+!uv.lock
+!.python-version
+!gunicorn_conf.py
+!entrypoint.sh
+!env/rate_limiters.yaml
+!portal/
+
+**/__pycache__
+**/*.py[cod]
+**/.env
+**/.env.*
+**/.DS_Store

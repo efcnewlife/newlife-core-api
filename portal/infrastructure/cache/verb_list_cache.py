@@ -7,7 +7,6 @@ from uuid import UUID
 from redis.asyncio import Redis
 
 from portal.application.rbac.results import VerbListResult
-from portal.config import settings
 from portal.domain.rbac.entities import VerbListItem
 from portal.libs.consts.cache_keys import CacheExpiry, CacheKeys
 from portal.libs.database import RedisPool
@@ -17,7 +16,7 @@ class VerbListCache:
     """Cache verb lists keyed by locale id."""
 
     def __init__(self, redis_client: RedisPool):
-        self._redis: Redis = redis_client.create(db=settings.REDIS_DB)
+        self._redis: Redis = redis_client.create()
 
     def _cache_key(self, locale_id: UUID) -> str:
         return CacheKeys(resource="verb").add_attribute("list").add_attribute(str(locale_id)).build()

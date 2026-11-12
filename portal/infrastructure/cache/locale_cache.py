@@ -8,7 +8,6 @@ from typing import Any
 from redis.asyncio import Redis
 
 from portal.application.locale.results import LocaleSnapshotResult
-from portal.config import settings
 from portal.domain.locale.entities import Locale
 from portal.libs.consts.cache_keys import CacheExpiry, CacheKeys
 from portal.libs.database import RedisPool
@@ -18,7 +17,7 @@ class LocaleCache:
     """Active locale set, meta hash, and normalization maps in Redis."""
 
     def __init__(self, redis_client: RedisPool):
-        self._redis: Redis = redis_client.create(db=settings.REDIS_DB)
+        self._redis: Redis = redis_client.create()
 
     @staticmethod
     def _decode_redis_value(value: Any) -> str:
