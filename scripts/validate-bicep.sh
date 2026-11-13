@@ -14,6 +14,9 @@ else
 fi
 [ -n "$BICEP" ] && [ -x "$BICEP" ] || { echo "bicep not found; install it with: az bicep install" >&2; exit 1; }
 
+# Parameter files read secrets from the environment at deploy time; offline compilation needs only a placeholder.
+export NEWLIFE_PG_ADMIN_PASSWORD="${NEWLIFE_PG_ADMIN_PASSWORD:-offline-validation-placeholder}"
+
 files="$(find "$ROOT/infra/azure" -name '*.bicep' -o -name '*.bicepparam' | sort)"
 [ -n "$files" ] || { echo "no Bicep files under infra/azure" >&2; exit 1; }
 

@@ -34,7 +34,7 @@ Not available on Basic, so not assumed: retention policy for untagged manifests 
 | Who | Identity | Role at registry scope | When |
 | --- | --- | --- | --- |
 | Operator (publish, lock, cleanup) | Their own Entra user | `Reader` + `AcrPush` (includes pull), plus `AcrDelete` | `AcrDelete` only for a cleanup session |
-| Staging Web App | System-assigned managed identity | `AcrPull` | After the Web App exists ([EFC-295](https://linear.app/jayhsia/issue/EFC-295)) |
+| Staging Web App | System-assigned managed identity | `AcrPull` | Created by the API template with the Web App ([staging runbook](azure-staging-api.md)) |
 | Production Web App | System-assigned managed identity | `AcrPull` | After the Web App exists |
 | GitHub Actions | **None** | None | — |
 

@@ -12,6 +12,7 @@ docs/*
 !docs/azure-deployment.md
 !docs/azure-core-api-image.md
 !docs/azure-container-registry.md
+!docs/azure-staging-api.md
 
 ### Python template
 # Byte-compiled / optimized / DLL files
