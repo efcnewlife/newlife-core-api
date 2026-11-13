@@ -28,7 +28,7 @@ Names are proposals; the operator confirms they are free.
 | App Service Plan | `asp-newlife-api-stg` | Linux, `B1`, 1 instance. Phase 2 only. |
 | Web App for Containers | `app-newlife-api-stg` | Image `efcnewlifecr.azurecr.io/newlife-core-api@<digest>`, pulled with its system-assigned identity. Always On, `WEBSITES_PORT=8000`, HTTPS only, TLS 1.2, FTP and SCM basic auth off. Phase 2 only. |
 | PostgreSQL Flexible Server | `psql-newlife-stg` | Version 18, Burstable `Standard_B1ms`, 32 GiB (no auto-grow), 14-day backups, no HA, no geo backup. Public access with exact-IP firewall rules only. `require_secure_transport=ON`. Database `newlife-core`. |
-| Azure Managed Redis | `redis-newlife-stg` | `Balanced_B0`, **HA disabled**, TLS 1.2, port 10000, non-clustered policy, `NoEviction`, access keys on. Public network access (no IP allowlist exists). |
+| Azure Managed Redis | `redis-newlife-stg` | `Balanced_B0`, **HA disabled**, TLS 1.2, port 10000, non-clustered policy, `VolatileLRU` eviction (when full, the least recently used key is dropped; a lost member refresh binding only forces a new sign-in), access keys on. Public network access (no IP allowlist exists). |
 | Storage account | `stnewlifecorestg` | StorageV2, Standard LRS, Hot, no hierarchical namespace, no anonymous blob access, TLS 1.2. Blob and container soft delete 14 days. Private container `files`. |
 | Key Vault | `kv-newlife-stg` | Standard, Azure RBAC, soft delete 90 days, purge protection on. Public endpoint (App Service resolves references over it). |
 | DNS records | in the existing `efcnewlife.com` zone | `CNAME api.dev → app-newlife-api-stg.azurewebsites.net`, `TXT asuid.api.dev → <domain verification ID>`. The zone is referenced, never created. `api-domain` template. |

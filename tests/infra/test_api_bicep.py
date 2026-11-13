@@ -163,7 +163,7 @@ def test_staging_redis_is_tls_access_key_non_clustered_without_ha(template, stag
     assert database["clientProtocol"] == "Encrypted"
     assert database["accessKeysAuthentication"] == "Enabled"
     assert database["clusteringPolicy"] == "NoCluster"
-    assert database["evictionPolicy"] == "NoEviction"
+    assert database["evictionPolicy"] == "VolatileLRU"
 
 
 def test_blob_storage_is_private_hot_lrs_with_14_day_soft_delete(template):

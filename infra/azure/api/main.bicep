@@ -254,8 +254,9 @@ resource redisDatabase 'Microsoft.Cache/redisEnterprise/databases@2025-07-01' = 
     port: 10000
     // The API uses a non-cluster client; never the OSS cluster policy.
     clusteringPolicy: 'NoCluster'
-    // Auth state (revocations, refresh bindings) shares the keyspace and must not be evicted.
-    evictionPolicy: 'NoEviction'
+    // When full, evict the least recently used key with a TTL (every key has one) instead of refusing writes.
+    // Losing a member refresh binding only forces a new sign-in; refusing writes would fail requests.
+    evictionPolicy: 'VolatileLRU'
     // The API has no Entra token support for Redis.
     accessKeysAuthentication: 'Enabled'
   }
