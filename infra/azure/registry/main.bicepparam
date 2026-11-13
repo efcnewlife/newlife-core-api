@@ -3,6 +3,9 @@ using 'main.bicep'
 // Proposed name; the operator confirms it is free with `az acr check-name` before deploying.
 param registryName = 'efcnewlifecr'
 
+// Pinned so the registry does not follow a resource group created in Canada East (EFC-306).
+param location = 'canadacentral'
+
 param tags = {
   app: 'newlife'
   owner: 'newlife-core-api'

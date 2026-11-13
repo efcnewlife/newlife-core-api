@@ -2,23 +2,25 @@
 
 [繁體中文](README.zh-TW.md) · Chinese CSV: `estimate.zh-TW.csv`
 
-`estimate.csv` is the itemized Canada East cost estimate for the [Azure deployment plan](../../../docs/azure-deployment.md) ([ADR 0039](../../../docs/adr/0039-azure-deployment-and-release-direction.md)). Open it in any spreadsheet.
+`estimate.csv` is the itemized Canada Central (`canadacentral`) cost estimate for the [Azure deployment plan](../../../docs/azure-deployment.md) ([ADR 0039](../../../docs/adr/0039-azure-deployment-and-release-direction.md)). Open it in any spreadsheet.
 
-It uses public list prices checked on 2026-11-10 (pay-as-you-go, USD, 730 hours per month, no reservations). No Azure account was accessed. A human checks the account facts and creates every Azure resource.
+It uses public list prices checked on 2026-11-10 for Canada East and rechecked for Canada Central on 2026-11-12 with the public [Azure Retail Prices API](https://learn.microsoft.com/en-us/rest/api/cost-management/retail-prices/azure-retail-prices) (pay-as-you-go, USD, 730 hours per month, no reservations). The region moved because PostgreSQL provisioning is restricted in Canada East for the grant subscription ([ADR 0039](../../../docs/adr/0039-azure-deployment-and-release-direction.md)). No Azure account was accessed.
+
+Only PostgreSQL prices changed: B1ms compute USD 0.0204 to 0.0185/hour, storage USD 0.138 to 0.1265/GB-month, and backup USD 0.114 to 0.105/GB-month. Every other Canada East row has the same Canada Central price and was recorded as checked; the `Global` rows (Private Endpoint, Load Balancer) do not depend on the region. A human checks the account facts and creates every Azure resource.
 
 ## Totals
 
 | Plan | USD/month | USD/year |
 | --- | ---: | ---: |
-| **Selected** | **130.98** | **1,571.78** |
-| Option: staging shares the production Redis (under consideration) | 118.57 | 1,422.86 |
-| Rejected: one App Service Plan for both environments | 117.84 | 1,414.10 |
-| Rejected: Azure Cache for Redis C0 | 149.96 | 1,799.54 |
-| Rejected for cost: original design with four Private Endpoints | 161.88 | 1,942.58 |
-| Rejected: Container Apps, one shared environment | 234.78 | 2,817.38 |
-| Rejected: Container Apps, separate environments | 333.33 | 3,999.98 |
+| **Selected** | **127.48** | **1,529.78** |
+| Option: staging shares the production Redis (under consideration) | 115.07 | 1,380.86 |
+| Rejected: one App Service Plan for both environments | 114.34 | 1,372.10 |
+| Rejected: Azure Cache for Redis C0 | 146.46 | 1,757.54 |
+| Rejected for cost: original design with four Private Endpoints | 158.38 | 1,900.58 |
+| Rejected: Container Apps, one shared environment | 231.28 | 2,775.38 |
+| Rejected: Container Apps, separate environments | 329.83 | 3,957.98 |
 
-Against the USD 2,000/year grant, the selected plan leaves about USD 428/year, before tax and before spend from other resources on the grant.
+Against the USD 2,000/year grant, the selected plan leaves about USD 470/year, before tax and before spend from other resources on the grant.
 
 ## How to read the CSV
 
@@ -31,6 +33,7 @@ Against the USD 2,000/year grant, the selected plan leaves about USD 428/year, b
 
 - Check the remaining grant, its end date, and current spend from other resources (Azure Sponsorships page and Cost Management).
 - Confirm the Managed Redis B0 price in the [pricing calculator](https://azure.microsoft.com/en-us/pricing/calculator/). The two Redis rows say `needs check`: one node for staging, two nodes for production HA.
+- Confirm Canada Central supports PostgreSQL 18 `Standard_B1ms`, Managed Redis `Balanced_B0`, and Linux App Service `B1` in the grant subscription. This is still pending.
 - Find out whether tax applies. That row is `unknown`.
 - Pick the Static Web Apps region. There is no Canada region; the CSV uses `eastus2`.
 - Network: there are no Private Endpoints. PostgreSQL allows only the App Service outbound IPs plus your own IP, with TLS. Managed Redis has no IP allowlist, so it is open to all networks and protected by its access key or Entra login and TLS.
