@@ -618,3 +618,7 @@ INFO:     Application startup complete.
 ### API documentation
 
 API documentation reference clicks [here](http://127.0.0.1:8000/docs)
+
+## Azure deployment
+
+Azure infrastructure (Bicep, parameters, cost estimate, offline Bicep validation, and the registry and staging runbooks) lives in [`efcnewlife/newlife-infra`](https://github.com/efcnewlife/newlife-infra). This repository keeps the application side: the [deployment plan](docs/azure-deployment.md), the [Core API image runbook](docs/azure-core-api-image.md), [image publication](docs/azure-container-registry.md), and `scripts/local-image-smoke.sh`.

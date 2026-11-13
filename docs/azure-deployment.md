@@ -38,13 +38,14 @@ Static Web Apps distributes static assets globally. It has no Canada region, so 
 
 ## Repository ownership
 
-The following directories are proposed. The shared ACR template is in `infra/azure/registry/` (see the [registry runbook](azure-container-registry.md)); other Bicep files and workflows are separate work.
+Revision 2026-11-13 ([EFC-308](https://linear.app/jayhsia/issue/EFC-308)): all Azure infrastructure lives in [`efcnewlife/newlife-infra`](https://github.com/efcnewlife/newlife-infra), the only editable source ([newlife-infra ADR 0001](https://github.com/efcnewlife/newlife-infra/blob/main/docs/adr/0001-newlife-infra-owns-azure-infrastructure.md)). This supersedes the earlier proposal of an `infra/azure/` directory in each application repository. Templates are in `azure/modules/`, shared-registry parameters in `azure/shared/`, and per-environment parameters in `azure/environments/<env>/`; see the [registry runbook](https://github.com/efcnewlife/newlife-infra/blob/main/docs/azure-container-registry.md) and the [staging API runbook](https://github.com/efcnewlife/newlife-infra/blob/main/docs/azure-staging-api.md).
 
-| Repository | Proposed infrastructure directory | Owns |
-| --- | --- | --- |
-| `newlife-core-api` | `infra/azure/` | API apps/plans, PostgreSQL and its firewall allowlist, Redis, Blob, Key Vault, shared ACR, backend monitoring, `api` and `api.dev` DNS records |
-| `newlife-portal-frontend` | `infra/azure/` | Two Portal Static Web Apps, domain bindings, `portal` and `portal.dev` DNS records, frontend workflows |
-| `facility-booking-frontend` | `infra/azure/` | Two Booking Static Web Apps, domain bindings, `booking` and `booking.dev` DNS records, frontend workflows |
+| Repository | Owns |
+| --- | --- |
+| `newlife-infra` | Bicep and parameters for API apps/plans, PostgreSQL and its firewall allowlist, Redis, Blob, Key Vault, shared ACR, Portal and Booking Static Web Apps, domain bindings and DNS records, backend monitoring; cost estimate; Bicep validation and tests; infrastructure runbooks |
+| `newlife-core-api` | API source, Dockerfile, image build and local smoke, [image publication](azure-container-registry.md), configuration contract, Alembic revisions, application CI, this spec and ADR 0039 |
+| `newlife-portal-frontend` | Portal source, builds, frontend workflows |
+| `facility-booking-frontend` | Booking source, builds, frontend workflows |
 
 Keep Bicep modules reusable, with environment-specific parameters. Reference the existing public DNS zone; do not recreate or transfer it. Data services and credentials remain separate per environment.
 
@@ -60,7 +61,7 @@ Infrastructure delivery: the agent authors and offline-validates Bicep and opera
 
 Here `dev` means staging, not local development. Configure exact HTTPS origins consistently in frontend builds, API CORS/member-app settings, Entra redirect URIs, and email/application links. Bind managed certificates to the full hostnames and verify the existing DNS/CAA configuration.
 
-- API ingress is public HTTPS. The user removed Private Endpoints, Private DNS zones, and VNet integration on 2026-11-10 to save about USD 31/month; see the [cost estimate](../infra/azure/cost/README.md).
+- API ingress is public HTTPS. The user removed Private Endpoints, Private DNS zones, and VNet integration on 2026-11-10 to save about USD 31/month; see the [cost estimate](https://github.com/efcnewlife/newlife-infra/blob/main/azure/cost/README.md).
 - PostgreSQL uses `Public access (allowed IP addresses)`. The firewall allows every App Service possible outbound IP plus explicit developer/operator IPs, with TLS required. Those outbound IPs are shared with other customers on the same deployment unit and can change, so re-check the list after scaling. Do not enable the all-Azure-services rule or unrestricted public access.
 - Managed Redis has no IP allowlist, so both instances use public access from all networks, protected by access keys or Entra authentication and TLS. Sharing one instance between staging and production is under consideration, not selected.
 - Blob endpoints remain reachable by external browsers for authorized/SAS URLs, with anonymous access disabled. Use Hot/LRS without hierarchical namespace, 14-day soft delete, and a 10 GB first-year live-data estimating assumption. There is no initial video workload.
@@ -136,7 +137,7 @@ Use a separate database recovery procedure for destructive data mistakes; applic
 
 Indicative Canada East USD PAYG estimate, researched on 2026-11-09/10, using 730 hours/month and no reservations. Figures are planning inputs, not an Azure quote or proof of service/grant eligibility.
 
-The itemized inventory in [`infra/azure/cost/`](../infra/azure/cost/README.md) supersedes the table below. With Private Endpoints removed and prices rechecked for Canada Central on 2026-11-12, it gives about USD 127.48/month (USD 1,530/year) before tax and other grant spend; it also adds further variable charges and does not apply shared free allowances.
+The itemized inventory in [`newlife-infra/azure/cost/`](https://github.com/efcnewlife/newlife-infra/blob/main/azure/cost/README.md) supersedes the table below. With Private Endpoints removed and prices rechecked for Canada Central on 2026-11-12, it gives about USD 127.48/month (USD 1,530/year) before tax and other grant spend; it also adds further variable charges and does not apply shared free allowances.
 
 | Item | Monthly USD assumption |
 | --- | ---: |
@@ -165,7 +166,7 @@ The agent delivers offline-validated code/templates/CSV/runbooks for these stage
 
 1. **Account checks and prerequisites:** verify grant/expiry/spending controls, existing DNS and permissions, Canada Central capacity and SKU support, the supported Static Web Apps resource region, Sentry entitlements, package access, and Entra registrations/redirects. Confirm which resources already consume the grant.
 2. **Application readiness:** fix/verify the current container entrypoint (it refers to `gunicorn_conf.py`, absent in the inspected checkout), constrain Docker build context with `.dockerignore`, test database/Redis TLS over public endpoints, adapt Redis single-database usage, verify HTTPS staging links, and disable production mock login. Existing auth/Redis failure behavior needs its own focused readiness review; do not promise immediate access-token revocation solely because a blacklist provider exists.
-3. **Infrastructure:** implement Bicep by repository, review `what-if` and costs, bootstrap identities/secrets, create staging first, and validate connections from the real App Service container. Keep production resources gated on the account and budget checks.
+3. **Infrastructure:** implement Bicep in `newlife-infra`, review `what-if` and costs, bootstrap identities/secrets, create staging first, and validate connections from the real App Service container. Keep production resources gated on the account and budget checks.
 4. **Staging release package:** implement non-Azure CI/build, immutable artifacts, and offline/mocked checks for the human-run source-map, migration/IP cleanup, serialization, smoke, and tag/main procedures. Test a failed migration, interrupted firewall cleanup, older-tag/newer-schema case, and application rollback.
 5. **Recovery and capacity:** exercise PostgreSQL restore, Blob recovery, App Service restart/Always On behavior, Redis loss/failover and reconnects, and representative booking load. Validate B1/B1ms and Redis memory headroom; adjust the budget if capacity must change.
 6. **Production:** configure domains/TLS, alerts and spending notifications; run the manual migration and tag deployment procedure; verify the end-to-end workflows and record the initial version tuple.
