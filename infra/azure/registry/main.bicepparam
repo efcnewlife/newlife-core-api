@@ -15,4 +15,6 @@ param tags = {
 // The operator adds entries with real object IDs, for example:
 //   { principalId: '<operator user object ID>', principalType: 'User', role: 'AcrPush' }
 //   { principalId: '<staging Web App identity principal ID>', principalType: 'ServicePrincipal', role: 'AcrPull' }
-param roleAssignments = []
+param roleAssignments = [
+  { principalId: 'bb173cd3-c29d-4338-8e36-6241bb02284b', principalType: 'User', role: 'AcrPush' }
+]
