@@ -1,117 +1,15 @@
-# Shared container registry and image publication
+# Core API image publication
 
-Runbook for [EFC-294](https://linear.app/jayhsia/issue/EFC-294) under the [Azure deployment plan](azure-deployment.md) and [ADR 0039](adr/0039-azure-deployment-and-release-direction.md). Builds on the [Core API image runbook](azure-core-api-image.md).
+Runbook for [EFC-294](https://linear.app/jayhsia/issue/EFC-294) under the [Azure deployment plan](azure-deployment.md) and [ADR 0039](adr/0039-azure-deployment-and-release-direction.md). Builds on the [Core API image runbook](azure-core-api-image.md). Run these steps from a `newlife-core-api` checkout.
 
-Execution boundary: agents author Bicep, scripts, docs, and offline/local checks only. Every Azure account or registry operation below marked **(human)** is performed by a human operator. No agent or CI job signs in to Azure, pushes or pulls through ACR, grants roles, or deletes images.
+The shared registry itself (template, region, role assignments, its verification checklist) is infrastructure and lives in `newlife-infra`: see the [shared container registry runbook](https://github.com/efcnewlife/newlife-infra/blob/main/docs/azure-container-registry.md). Deploy the registry and grant your `AcrPush` role there first.
+
+Execution boundary: agents author scripts, docs, and offline/local checks only. Every Azure account or registry operation below marked **(human)** is performed by a human operator. No agent or CI job signs in to Azure, pushes or pulls through ACR, or deletes images.
 
 | Verification | Who | Status |
 | --- | --- | --- |
-| `scripts/validate-bicep.sh` (compile, lint, format; warnings fail) | Agent | Passed 2026-11-12, Bicep CLI 0.49.2 |
 | Local `linux/amd64` image build with OCI labels + `scripts/local-image-smoke.sh` | Agent | Passed 2026-11-12, see [Local build record](#local-build-record) |
-| Registry deployment, role assignments, push, pull, lock, cleanup | Human operator | **Pending** — see [Human verification checklist](#human-verification-checklist) |
-| Canada East registry deleted, name free again | Human operator | Done 2026-11-12 (operator-reported: `az acr check-name` returned `true`; deletion time not given) |
-| Registry recreated in Canada Central, roles re-granted, image republished | Human operator | **Pending** — see [Move the registry to Canada Central](#move-the-registry-to-canada-central-human) |
-
-Offline Bicep validation does not prove that Azure accepts the template. Only the operator's `what-if` and deployment do.
-
-## What the template creates
-
-`infra/azure/registry/main.bicep` (resource group scope) with parameters in `main.bicepparam`:
-
-- One **Basic** registry, shared by staging and production. Proposed name `efcnewlifecr` (login server `efcnewlifecr.azurecr.io`); the operator confirms the name is free.
-- Region **Canada Central** (`canadacentral`), pinned by `location` in `main.bicepparam` so the registry does not follow the resource group's region. The earlier Canada East choice is superseded ([ADR 0039](adr/0039-azure-deployment-and-release-direction.md), 2026-11-12).
-- **Admin user disabled.** No admin password, repository token, or service principal secret is used anywhere.
-- **Classic RBAC mode** (`roleAssignmentMode: LegacyRegistryPermissions`). AcrPull/AcrPush/AcrDelete are not honored in ABAC repository mode, so the mode is pinned instead of left to a future default.
-- **ARM-audience Entra tokens enabled** (`azureADAuthenticationAsArmPolicy`). App Service managed-identity pulls fail with `UNAUTHORIZED` without it.
-- **Public endpoint, authenticated only.** Basic has no private endpoints, network rules, or anonymous pull.
-- Optional **registry-scope role assignments**, each limited to `AcrPull`, `AcrPush`, or `AcrDelete`.
-- Outputs `registryId`, `registryName`, `loginServer`. No credentials are output.
-
-Not available on Basic, so not assumed: retention policy for untagged manifests (Premium preview only), geo-replication, private endpoints, content trust. Included storage is 10 GiB.
-
-## Identities and permissions
-
-| Who | Identity | Role at registry scope | When |
-| --- | --- | --- | --- |
-| Operator (publish, lock, cleanup) | Their own Entra user | `Reader` + `AcrPush` (includes pull), plus `AcrDelete` | `AcrDelete` only for a cleanup session |
-| Staging Web App | System-assigned managed identity | `AcrPull` | After the Web App exists ([EFC-295](https://linear.app/jayhsia/issue/EFC-295)) |
-| Production Web App | System-assigned managed identity | `AcrPull` | After the Web App exists |
-| GitHub Actions | **None** | None | — |
-
-- `Reader` (control plane) covers `az acr show-usage`, `az acr show`, and `az webapp config show`. Data-plane roles (`AcrPull`/`AcrPush`/`AcrDelete`) do not.
-- Deploying the template needs `Contributor` on the resource group. Creating its role assignments also needs `Role Based Access Control Administrator` (or `Owner`) there. These are the deploying human's own permissions, not template outputs.
-- Removing an entry from `roleAssignments` does **not** revoke it; deployments are incremental. Revoke by hand, for example after a cleanup session:
-  `az role assignment delete --assignee <object ID> --role AcrDelete --scope <registryId output>`
-- Web Apps set `acrUseManagedIdentityCreds: true` and get only `AcrPull`. They never get push or delete.
-- **CI has no Azure identity.** Main/tag CI may build and test the image and keep it as a CI artifact outside Azure. It never pushes to ACR. A future CI publisher (a GitHub OIDC federated credential with `AcrPush` only, bound to a protected environment with a required reviewer and manual dispatch) is a design option only. It contradicts ADR 0039 today and needs a new decision before anyone creates it.
-
-## Deploy the registry (human)
-
-```bash
-az login
-az account set --subscription "<grant subscription>"
-az group show --name rg-newlife-shared --query location -o tsv     # if it exists, skip the next line
-az group create --name rg-newlife-shared --location canadacentral
-az acr check-name --name efcnewlifecr                               # expect "nameAvailable": true
-
-# Optional: grant roles in the same deployment. Get object IDs without pasting secrets:
-az ad signed-in-user show --query id -o tsv
-# Edit roleAssignments in infra/azure/registry/main.bicepparam, then:
-scripts/validate-bicep.sh
-
-az deployment group what-if --resource-group rg-newlife-shared \
-  --template-file infra/azure/registry/main.bicep --parameters infra/azure/registry/main.bicepparam
-# Review: one Basic registry in canadacentral, adminUserEnabled false, only the role assignments you expect.
-az deployment group create --resource-group rg-newlife-shared --name newlife-registry \
-  --template-file infra/azure/registry/main.bicep --parameters infra/azure/registry/main.bicepparam
-az deployment group show --resource-group rg-newlife-shared --name newlife-registry --query properties.outputs
-```
-
-To add the Web App `AcrPull` assignments later, add entries to `roleAssignments` and repeat `what-if` and `create`. Existing assignments are kept because their names are derived from registry, principal, and role.
-
-## Move the registry to Canada Central (human)
-
-The operator first created `efcnewlifecr` in Canada East. A registry cannot change region, so it is deleted and recreated under the same name. Deleting a registry also deletes its images and the role assignments on it.
-
-1. Delete the Canada East registry. Nothing runs from it yet.
-
-   ```bash
-   az acr show --name efcnewlifecr --query "{name:name, location:location, rg:resourceGroup}" -o table
-   az acr delete --name efcnewlifecr --resource-group rg-newlife-shared --yes
-   ```
-
-2. Wait until the name is free. This can take a few minutes; repeat until it prints `true`.
-
-   ```bash
-   az acr check-name --name efcnewlifecr --query nameAvailable
-   ```
-
-3. Check the resource group's region. A resource group's region is metadata only: it says where the group's own records live, not where its resources run. The registry's region comes from `location` in `main.bicepparam`, which is `canadacentral`.
-
-   ```bash
-   az group show --name rg-newlife-shared --query location -o tsv
-   az resource list --resource-group rg-newlife-shared -o table
-   ```
-
-   - `canadacentral`: keep it.
-   - `canadaeast` and the list is empty: delete it and create it again in Canada Central, so it matches everything else.
-
-     ```bash
-     az group delete --name rg-newlife-shared --yes
-     az group create --name rg-newlife-shared --location canadacentral
-     ```
-
-   - `canadaeast` and it still holds other resources: keep it. Do not delete those resources for this. Record the group's region on the ticket.
-
-4. Recreate the registry with [Deploy the registry](#deploy-the-registry-human). Skip `az group create` there: the group already exists, and creating it again in another region fails. In `what-if`, check that the registry's `location` is `canadacentral`. Then check the live region:
-
-   ```bash
-   az acr show --name efcnewlifecr --query location -o tsv   # expect canadacentral
-   ```
-
-5. Grant the roles again. The old assignments were deleted with the old registry, and listing them in `roleAssignments` again recreates them. Grant the operator `Reader` the same way it was granted before.
-
-6. Publish the image again with [Publish, verify, and lock](#publish-verify-and-lock-human) and post a new image record. Mark every earlier Canada East image record as superseded in a reply on its ticket, for example `Superseded 2026-11-12: registry recreated in Canada Central; this digest no longer exists.` Never deploy a digest from a superseded record.
+| Push, pull, lock, cleanup | Human operator | **Pending** — see the registry runbook's [human verification checklist](https://github.com/efcnewlife/newlife-infra/blob/main/docs/azure-container-registry.md#human-verification-checklist) |
 
 ## Image names and tags
 
@@ -133,7 +31,7 @@ The operator first created `efcnewlifecr` in Canada East. A registry cannot chan
 
 Build for `linux/amd64`. App Service runs amd64, and Apple Silicon builds arm64 unless told otherwise. `--provenance=false --sbom=false` keeps the pushed artifact a single image manifest instead of an index with attestation entries, which App Service support is untested for.
 
-Release images are built on the operator's machine from the exact Git tag, because CI has no registry access. A CI-built image artifact is later work ([EFC-296](https://linear.app/jayhsia/issue/EFC-296)).
+Release images are built on the operator's machine from the exact Git tag, because CI has no registry access. A CI-built image artifact is later work ([EFC-311](https://linear.app/jayhsia/issue/EFC-311), formerly EFC-296).
 
 ```bash
 git status --porcelain                      # must print nothing: build only committed source
@@ -223,7 +121,7 @@ REG=efcnewlifecr
 az acr show-usage --name "$REG" -o table                                    # storage used
 az acr manifest list-metadata --registry "$REG" --name newlife-core-api \
   --orderby time_desc -o table                                               # digests, tags, times
-# Running digests (after EFC-295):
+# Running digests (after EFC-310 creates the staging Web App):
 az webapp config show --resource-group <rg> --name <app> --query linuxFxVersion -o tsv
 ```
 
@@ -236,23 +134,3 @@ az acr repository delete --name "$REG" --image "newlife-core-api@<digest>" --yes
 ```
 
 A locked digest cannot be deleted, so a candidate that was not deliberately unlocked stays. Record what was deleted on the ticket.
-
-## Human verification checklist
-
-All items are pending until the operator posts evidence (command output with no keys or tokens) on EFC-294. Evidence from the deleted Canada East registry does not count; repeat each item against the Canada Central registry.
-
-- [ ] `az acr show --name efcnewlifecr --query location` prints `canadacentral`.
-- [ ] The resource group's region and how it was handled (kept, or recreated in `canadacentral`) are recorded.
-- [ ] Earlier Canada East image records are marked superseded.
-- [ ] `what-if` shows one Basic registry with `adminUserEnabled: false`, `roleAssignmentMode: LegacyRegistryPermissions`, `azureADAuthenticationAsArmPolicy: enabled`, and only the expected role assignments.
-- [ ] Deployment succeeds; outputs show `loginServer`.
-- [ ] `az acr credential show --name efcnewlifecr` fails because the admin user is disabled.
-- [ ] Operator with `AcrPush` can `az acr login`, push, and pull. A user without a role gets `unauthorized`.
-- [ ] Locking (`az acr repository update --write-enabled false`) succeeds for an operator with `Reader` + `AcrPush` only. If it is refused, record the role that was needed.
-- [ ] `az acr manifest show-metadata` for the pushed tag shows a single image manifest media type, not an index.
-- [ ] Pushing to an existing locked tag fails.
-- [ ] Deleting a locked digest fails; after unlocking a throwaway test image, deleting it succeeds.
-- [ ] Pull by digest returns `amd64` and the expected revision label.
-- [ ] Image record posted for the first published image.
-- [ ] `az acr show-usage` reported after the first push (compare with the 10 GiB included storage).
-- [ ] Later, with EFC-295: Web App managed identity with `AcrPull` pulls the image by digest; if App Service rejects digest references, record that and use the locked tag instead.
