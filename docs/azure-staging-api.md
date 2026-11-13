@@ -10,7 +10,7 @@ Execution boundary: agents author Bicep, scripts, docs, and offline/local checks
 | `uv run pytest tests/infra/test_api_bicep.py` (policy checks on both compiled templates) | Agent | Passed 2026-11-12 |
 | Account checks, `what-if`, deployment, secrets, migration, DNS/TLS, live checks | Human operator | **Pending** — see [Acceptance checklist](#acceptance-checklist-human) |
 
-Offline validation does not prove that Azure accepts the template, that the SKUs exist in Canada East, or that the app works there. Only the operator's `what-if`, deployment, and live checks do.
+Offline validation does not prove that Azure accepts the template, that the SKUs exist in Canada Central, or that the app works there. Only the operator's `what-if`, deployment, and live checks do.
 
 Network: the ticket text asks for a VNet, Private Endpoints, Private DNS, and private-only Redis. The spec revision of 2026-11-10 ([EFC-292](https://linear.app/jayhsia/issue/EFC-292)) removed all of them for cost, and this template follows the revision: public endpoints, a PostgreSQL exact-IP allowlist, and Redis protected by access key and TLS.
 
@@ -57,7 +57,7 @@ All settings are owned by the template. A deployment replaces the whole set, so 
 | `MEMBER_WEB_APPS` | `facility-booking\|https://booking.dev.efcnewlife.com` |
 | `DATABASE_HOST` / `DATABASE_PORT` / `DATABASE_USER` / `DATABASE_NAME` | server FQDN / `5432` / `newlifeadmin` / `newlife-core` |
 | `PGSSLMODE` / `PGSSLROOTCERT` | `verify-full` / `/etc/ssl/certs/ca-certificates.crt` |
-| `STORAGE_BACKEND` / `AZURE_STORAGE_ACCOUNT_NAME` / `AZURE_STORAGE_CONTAINER_NAME` / `AZURE_STORAGE_REGION` | `azure_blob` / account name / `files` / `canadaeast` |
+| `STORAGE_BACKEND` / `AZURE_STORAGE_ACCOUNT_NAME` / `AZURE_STORAGE_CONTAINER_NAME` / `AZURE_STORAGE_REGION` | `azure_blob` / account name / `files` / `canadacentral` |
 | `AZURE_TENANT_ID` / `AZURE_APP_CLIENT_ID` / `SENTRY_DSN` | from `staging.bicepparam` (not secrets) |
 | `MOCK_LOGIN_ENABLED` | `true` (forced `false` whenever `ENV=prod`) |
 | `GRAPH_MAIL_SEND_ENABLED` | `false` |
@@ -103,7 +103,7 @@ Run from a clean checkout of the commit you are deploying. Commands assume zsh o
 ```bash
 SUB="<grant subscription>"
 RG=rg-newlife-staging
-LOC=canadaeast
+LOC=canadacentral
 KV=kv-newlife-stg
 APP=app-newlife-api-stg
 PG=psql-newlife-stg
@@ -120,18 +120,18 @@ az account show --query '{name:name, id:id, tenant:tenantId}' -o table
 ```
 
 - In Cost Management, confirm the grant's remaining credit and expiry, the spending-limit behaviour, and what else already uses the grant. Compare with `infra/azure/cost/estimate.csv` (staging rows).
-- Check that Canada East offers what the template asks for:
+- Check that Canada Central offers what the template asks for. The region is Canada Central because PostgreSQL provisioning is restricted in Canada East for this subscription ([EFC-306](https://linear.app/jayhsia/issue/EFC-306), [ADR 0039](adr/0039-azure-deployment-and-release-direction.md)):
 
   ```bash
   az postgres flexible-server list-skus --location "$LOC" -o json \
     | jq '[.[].supportedServerEditions[]? | select(.name=="Burstable") | .supportedServerSkus[]?.name] | index("Standard_B1ms") != null'
   az postgres flexible-server list-skus --location "$LOC" -o json \
     | jq '[.[].supportedServerVersions[]?.name] | unique'      # expect "18"
-  az provider show --namespace Microsoft.Cache --query "resourceTypes[?resourceType=='redisEnterprise'].locations" -o tsv | tr '\t' '\n' | grep -i "canada east"
-  az appservice list-locations --sku B1 --linux-workers-enabled -o tsv | grep -i "canada east"
+  az provider show --namespace Microsoft.Cache --query "resourceTypes[?resourceType=='redisEnterprise'].locations" -o tsv | tr '\t' '\n' | grep -i "canada central"
+  az appservice list-locations --sku B1 --linux-workers-enabled -o tsv | grep -i "canada central"
   ```
 
-  Managed Redis `Balanced_B0` availability and price: check in the Azure portal create blade or pricing calculator for Canada East. If any check fails, stop and record it on the ticket. Do not switch region or SKU without a decision.
+  Managed Redis `Balanced_B0` availability and price: check in the Azure portal create blade or pricing calculator for Canada Central. If any check fails, stop and record it on the ticket. Do not switch region or SKU without a decision.
 - Confirm `efcnewlife.com` is an Azure DNS zone you can edit, and note its resource group. If a delegated child zone `dev.efcnewlife.com` exists, set `dnsZoneName = 'dev.efcnewlife.com'` and `dnsRecordName = 'api'` in `infra/azure/api-domain/staging.bicepparam` instead.
 - Check CAA records. If any exist, they must allow the App Service managed certificate issuer: `az network dns record-set caa list -g <zone RG> -z efcnewlife.com -o table`.
 - Confirm the shared registry exists and an image record (EFC-294) is available for the commit you deploy.
@@ -360,7 +360,7 @@ Then, with a controlled test account and no real member notifications:
 
 All items stay pending until the operator posts evidence on EFC-295 (no keys, passwords, tokens, or personal data).
 
-- [ ] Account, grant, Canada East SKU (PostgreSQL 18 `Standard_B1ms`, Redis `Balanced_B0`, Linux `B1`), DNS zone, and CAA checks recorded.
+- [ ] Account, grant, Canada Central SKU (PostgreSQL 18 `Standard_B1ms`, Redis `Balanced_B0`, Linux `B1`), DNS zone, and CAA checks recorded.
 - [ ] Phase 1 `what-if` matched the expected list; deployment succeeded.
 - [ ] All nine secrets exist; no secret value posted anywhere.
 - [ ] Initial migration reached head; `alembic current` revision recorded; `init-all` finished.
@@ -393,7 +393,7 @@ Cleanup / follow-ups: <…>
 | --- | --- | --- |
 | `keyVaultName` / `keyVaultUri` | `kv-newlife-stg` / `https://kv-newlife-stg.vault.azure.net/` | |
 | `postgresFqdn` | `psql-newlife-stg.postgres.database.azure.com` | |
-| `redisHostName` | `redis-newlife-stg.canadaeast.redis.azure.net` | |
+| `redisHostName` | `redis-newlife-stg.canadacentral.redis.azure.net` | |
 | `storageAccountName` | `stnewlifecorestg` | |
 | `webAppName` / `webAppDefaultHostName` | `app-newlife-api-stg` / `app-newlife-api-stg.azurewebsites.net` | |
 | `webAppPrincipalId` | a GUID | |

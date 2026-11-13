@@ -1,7 +1,7 @@
 using 'main.bicep'
 
 param webAppName = 'app-newlife-api-stg'
-param location = 'canadaeast'
+param location = 'canadacentral'
 
 param dnsZoneName = 'efcnewlife.com'
 // Not a secret: the operator fills this in and commits it before deploying.

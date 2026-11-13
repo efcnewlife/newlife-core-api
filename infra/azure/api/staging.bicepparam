@@ -2,7 +2,7 @@ using 'main.bicep'
 
 // Proposed names; the operator confirms each globally unique name is free before deploying.
 param environmentName = 'stg'
-param location = 'canadaeast'
+param location = 'canadacentral'
 param tags = {
   app: 'newlife'
   owner: 'newlife-core-api'

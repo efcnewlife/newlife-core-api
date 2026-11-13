@@ -91,12 +91,13 @@ def _app_settings(template: dict[str, Any]) -> dict[str, str]:
     return {setting["name"]: setting["value"] for setting in site_config["appSettings"]}
 
 
-def test_staging_parameters_target_the_staging_hostname_in_canada_east(staging, domain_staging):
+def test_staging_parameters_target_the_staging_hostname_in_canada_central(staging, domain_staging):
     assert staging["environmentName"] == "stg"
-    assert staging["location"] == "canadaeast"
+    assert staging["location"] == "canadacentral"
     assert staging["apiHostName"] == "api.dev.efcnewlife.com"
     assert f"{domain_staging['dnsRecordName']}.{domain_staging['dnsZoneName']}" == staging["apiHostName"]
     assert domain_staging["webAppName"] == staging["webAppName"]
+    assert domain_staging["location"] == staging["location"]
 
 
 def test_no_private_endpoints_vnets_or_nat_are_created(template):
