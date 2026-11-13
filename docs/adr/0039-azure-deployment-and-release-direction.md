@@ -40,6 +40,8 @@ Use PostgreSQL's `Public access (allowed IP addresses) and private endpoints` ne
 
 Revision 2026-11-10: to save about USD 31/month, the user removed all four Private Endpoints, the Private DNS zones, and App Service VNet integration. PostgreSQL uses public access with a firewall allowlist of the App Service possible outbound IPs plus explicit developer/operator IPs, with TLS; these outbound IPs are shared with other customers and can change. Azure Managed Redis offers no IP allowlist, so both Redis instances use public access from all networks with access-key or Entra authentication and TLS. This supersedes the Private Endpoint and private-only Redis decisions above. Sharing one Redis instance between staging and production is under consideration and not selected.
 
+Revision 2026-11-12: the operator ran `az postgres flexible-server list-skus --location canadaeast` against the grant subscription and Azure answered "Provisioning is restricted in this region. Please choose a different region."; the same check for `canadacentral` returned no restriction. PostgreSQL must share a region with the API App Service, so the user moved every regional resource, for staging and production, from Canada East to Canada Central (Toronto). Canada Central is a Canadian region, so the Canadian placement preference still holds. This supersedes the Canada East primary-region decision above and the Canada East figures below. Canada Central has Availability Zones, but the HA choices are unchanged. Canada Central support for PostgreSQL 18 `Standard_B1ms`, Managed Redis `Balanced_B0`, and Linux App Service `B1` in the grant subscription remains a pending human check. The shared registry `efcnewlifecr`, already created in Canada East, cannot change region; the operator reported deleting it on 2026-11-12 and recreates it under the same name in Canada Central (see [`docs/azure-container-registry.md`](../azure-container-registry.md)). Static Web Apps has no Canada region, so the frontend placement exception is unchanged.
+
 Service placement exceptions, sizing, live account/cost checks, and cloud validation are human acceptance gates. The proposed production runner read-only connection is not selected under the human-only policy. Agent deliverables must distinguish offline validation from pending human live evidence. No Azure resources or pipelines are provisioned by this decision. Preserve ADR 0038 telemetry/privacy rules.
 
 ## Candidate services supplied by the user
@@ -48,7 +50,7 @@ The user's `ExportedEstimate.xlsx` (`NewLife Application`, rows 4-9) supplies an
 
 ## Budget basis and hosting tradeoff
 
-The itemized estimate in [`infra/azure/cost/`](../../infra/azure/cost/README.md) supersedes the figures below. It gives about USD 1,572/year for the selected App Service baseline without Private Endpoints, before tax and other grant spend.
+The itemized estimate in [`infra/azure/cost/`](../../infra/azure/cost/README.md) supersedes the figures below. It gives about USD 1,530/year for the selected App Service baseline in Canada Central without Private Endpoints, before tax and other grant spend. The Canada East figures in this section are history.
 
 The earlier approximate USD 145-160 monthly figures omitted the managed public IP and load balancer costs of Container Apps environments attached to a custom VNet. Do not use them as complete estimates. [Container Apps managed resources](https://learn.microsoft.com/en-us/azure/container-apps/custom-virtual-networks#managed-resources) documents these additional charges.
 

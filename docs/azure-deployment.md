@@ -11,7 +11,7 @@ This user instruction supersedes the earlier automatic Azure staging deployment/
 ## Scope and constraints
 
 - Host Core API, Newlife Portal, and Facility Booking for approximately 200 users with low expected concurrency.
-- Prefer Canada East for regional resources. Validate each SKU, quota, and capacity before provisioning. Canada East has no Availability Zones, so Redis HA here is node redundancy, not cross-zone protection.
+- Use Canada Central (Toronto) for regional resources. On 2026-11-12 the operator found PostgreSQL provisioning restricted in Canada East for the grant subscription, so the earlier Canada East choice is superseded (see [ADR 0039](adr/0039-azure-deployment-and-release-direction.md)). Validate each SKU, quota, and capacity before provisioning; Canada Central support for PostgreSQL 18 `Standard_B1ms`, Managed Redis `Balanced_B0`, and Linux App Service `B1` is a pending human check. Canada Central has Availability Zones, but this plan does not change the HA choices; whether production Redis HA spreads its nodes across zones is not part of the plan or the estimate.
 - Use the USD 2,000 annual nonprofit grant, with no self-funded overage. Verify the actual grant period, remaining credit, eligible services, subscription spending-limit behavior, and other workloads before committing resources.
 - Keep staging available around the clock. The user is the primary contact; email alerts are sufficient and overnight incidents can wait until the next day.
 - Use independent repository versions and the existing `efcnewlife.com` Azure DNS zone. Its existence is user-reported, not independently verified.
@@ -34,7 +34,7 @@ This user instruction supersedes the earlier automatic Azure staging deployment/
 
 Balanced B0 is the pricing candidate, not a reservation of capacity or a proven memory requirement. Validate client connection policy, TLS, connection limits, memory headroom, and behavior on restart/failover. Managed Redis supports database 0 only; Core API now keeps all Redis state in one database 0 keyspace (see the [Core API image and Managed Redis runbook](azure-core-api-image.md)). Prefer a compatible non-clustered policy initially if supported by the selected SKU, and test rate limiter operations rather than assuming compatibility.
 
-Static Web Apps distributes static assets globally. Its supported resource region must be selected separately if Canada East is unavailable; this is not a guarantee that frontend content stays in Canada. The API remains separately hosted on App Service, using the existing MSAL and API authentication flows.
+Static Web Apps distributes static assets globally. It has no Canada region, so its supported resource region is selected separately; this is not a guarantee that frontend content stays in Canada. The API remains separately hosted on App Service, using the existing MSAL and API authentication flows.
 
 ## Repository ownership
 
@@ -132,11 +132,11 @@ Use a separate database recovery procedure for destructive data mistakes; applic
 - Proposed budget notifications for final review: annual grant-use thresholds at 75%, 85%, and 95%, plus a forecast-over-budget alert. Include all grant-funded subscription resources, not only the new apps. These are alerts, not an enforced cap, and billing data is delayed.
 - Before exhaustion, reduce staging expenditure first, then arrange a user-approved production pause if necessary. Stopping a Web App does not stop its Plan charge; stopping PostgreSQL leaves storage/backup charges and automatically restarts compute after seven days. Cost reduction must be modeled per resource, preserving data, rather than assuming a generic stop action makes everything free. Grant expiration and any account-level spending limit need a separate pre-expiry check.
 
-## Canada East budget basis
+## Budget basis (Canada East history)
 
-Indicative USD PAYG estimate, researched on 2026-11-09/10, using 730 hours/month and no reservations. Figures are planning inputs, not an Azure quote or proof of service/grant eligibility.
+Indicative Canada East USD PAYG estimate, researched on 2026-11-09/10, using 730 hours/month and no reservations. Figures are planning inputs, not an Azure quote or proof of service/grant eligibility.
 
-The itemized inventory in [`infra/azure/cost/`](../infra/azure/cost/README.md) supersedes the table below. With Private Endpoints removed, it gives about USD 130.98/month (USD 1,572/year) before tax and other grant spend; it also adds further variable charges and does not apply shared free allowances.
+The itemized inventory in [`infra/azure/cost/`](../infra/azure/cost/README.md) supersedes the table below. With Private Endpoints removed and prices rechecked for Canada Central on 2026-11-12, it gives about USD 127.48/month (USD 1,530/year) before tax and other grant spend; it also adds further variable charges and does not apply shared free allowances.
 
 | Item | Monthly USD assumption |
 | --- | ---: |
@@ -163,7 +163,7 @@ Final budget acceptance requires live calculator/account verification and a cred
 
 The agent delivers offline-validated code/templates/CSV/runbooks for these stages. Every actual Azure command, inspection, deployment, drill, and cleanup below is human-owned and stays pending until operator evidence is recorded.
 
-1. **Account checks and prerequisites:** verify grant/expiry/spending controls, existing DNS and permissions, Canada East capacity, the supported Static Web Apps resource region, Sentry entitlements, package access, and Entra registrations/redirects. Confirm which resources already consume the grant.
+1. **Account checks and prerequisites:** verify grant/expiry/spending controls, existing DNS and permissions, Canada Central capacity and SKU support, the supported Static Web Apps resource region, Sentry entitlements, package access, and Entra registrations/redirects. Confirm which resources already consume the grant.
 2. **Application readiness:** fix/verify the current container entrypoint (it refers to `gunicorn_conf.py`, absent in the inspected checkout), constrain Docker build context with `.dockerignore`, test database/Redis TLS over public endpoints, adapt Redis single-database usage, verify HTTPS staging links, and disable production mock login. Existing auth/Redis failure behavior needs its own focused readiness review; do not promise immediate access-token revocation solely because a blacklist provider exists.
 3. **Infrastructure:** implement Bicep by repository, review `what-if` and costs, bootstrap identities/secrets, create staging first, and validate connections from the real App Service container. Keep production resources gated on the account and budget checks.
 4. **Staging release package:** implement non-Azure CI/build, immutable artifacts, and offline/mocked checks for the human-run source-map, migration/IP cleanup, serialization, smoke, and tag/main procedures. Test a failed migration, interrupted firewall cleanup, older-tag/newer-schema case, and application rollback.

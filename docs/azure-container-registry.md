@@ -9,6 +9,8 @@ Execution boundary: agents author Bicep, scripts, docs, and offline/local checks
 | `scripts/validate-bicep.sh` (compile, lint, format; warnings fail) | Agent | Passed 2026-11-12, Bicep CLI 0.49.2 |
 | Local `linux/amd64` image build with OCI labels + `scripts/local-image-smoke.sh` | Agent | Passed 2026-11-12, see [Local build record](#local-build-record) |
 | Registry deployment, role assignments, push, pull, lock, cleanup | Human operator | **Pending** — see [Human verification checklist](#human-verification-checklist) |
+| Canada East registry deleted, name free again | Human operator | Done 2026-11-12 (operator-reported: `az acr check-name` returned `true`; deletion time not given) |
+| Registry recreated in Canada Central, roles re-granted, image republished | Human operator | **Pending** — see [Move the registry to Canada Central](#move-the-registry-to-canada-central-human) |
 
 Offline Bicep validation does not prove that Azure accepts the template. Only the operator's `what-if` and deployment do.
 
@@ -17,6 +19,7 @@ Offline Bicep validation does not prove that Azure accepts the template. Only th
 `infra/azure/registry/main.bicep` (resource group scope) with parameters in `main.bicepparam`:
 
 - One **Basic** registry, shared by staging and production. Proposed name `efcnewlifecr` (login server `efcnewlifecr.azurecr.io`); the operator confirms the name is free.
+- Region **Canada Central** (`canadacentral`), pinned by `location` in `main.bicepparam` so the registry does not follow the resource group's region. The earlier Canada East choice is superseded ([ADR 0039](adr/0039-azure-deployment-and-release-direction.md), 2026-11-12).
 - **Admin user disabled.** No admin password, repository token, or service principal secret is used anywhere.
 - **Classic RBAC mode** (`roleAssignmentMode: LegacyRegistryPermissions`). AcrPull/AcrPush/AcrDelete are not honored in ABAC repository mode, so the mode is pinned instead of left to a future default.
 - **ARM-audience Entra tokens enabled** (`azureADAuthenticationAsArmPolicy`). App Service managed-identity pulls fail with `UNAUTHORIZED` without it.
@@ -47,8 +50,9 @@ Not available on Basic, so not assumed: retention policy for untagged manifests 
 ```bash
 az login
 az account set --subscription "<grant subscription>"
-az group create --name rg-newlife-shared --location canadaeast   # skip if it exists
-az acr check-name --name efcnewlifecr                            # expect "nameAvailable": true
+az group show --name rg-newlife-shared --query location -o tsv     # if it exists, skip the next line
+az group create --name rg-newlife-shared --location canadacentral
+az acr check-name --name efcnewlifecr                               # expect "nameAvailable": true
 
 # Optional: grant roles in the same deployment. Get object IDs without pasting secrets:
 az ad signed-in-user show --query id -o tsv
@@ -57,13 +61,57 @@ scripts/validate-bicep.sh
 
 az deployment group what-if --resource-group rg-newlife-shared \
   --template-file infra/azure/registry/main.bicep --parameters infra/azure/registry/main.bicepparam
-# Review: one Basic registry, adminUserEnabled false, only the role assignments you expect.
+# Review: one Basic registry in canadacentral, adminUserEnabled false, only the role assignments you expect.
 az deployment group create --resource-group rg-newlife-shared --name newlife-registry \
   --template-file infra/azure/registry/main.bicep --parameters infra/azure/registry/main.bicepparam
 az deployment group show --resource-group rg-newlife-shared --name newlife-registry --query properties.outputs
 ```
 
 To add the Web App `AcrPull` assignments later, add entries to `roleAssignments` and repeat `what-if` and `create`. Existing assignments are kept because their names are derived from registry, principal, and role.
+
+## Move the registry to Canada Central (human)
+
+The operator first created `efcnewlifecr` in Canada East. A registry cannot change region, so it is deleted and recreated under the same name. Deleting a registry also deletes its images and the role assignments on it.
+
+1. Delete the Canada East registry. Nothing runs from it yet.
+
+   ```bash
+   az acr show --name efcnewlifecr --query "{name:name, location:location, rg:resourceGroup}" -o table
+   az acr delete --name efcnewlifecr --resource-group rg-newlife-shared --yes
+   ```
+
+2. Wait until the name is free. This can take a few minutes; repeat until it prints `true`.
+
+   ```bash
+   az acr check-name --name efcnewlifecr --query nameAvailable
+   ```
+
+3. Check the resource group's region. A resource group's region is metadata only: it says where the group's own records live, not where its resources run. The registry's region comes from `location` in `main.bicepparam`, which is `canadacentral`.
+
+   ```bash
+   az group show --name rg-newlife-shared --query location -o tsv
+   az resource list --resource-group rg-newlife-shared -o table
+   ```
+
+   - `canadacentral`: keep it.
+   - `canadaeast` and the list is empty: delete it and create it again in Canada Central, so it matches everything else.
+
+     ```bash
+     az group delete --name rg-newlife-shared --yes
+     az group create --name rg-newlife-shared --location canadacentral
+     ```
+
+   - `canadaeast` and it still holds other resources: keep it. Do not delete those resources for this. Record the group's region on the ticket.
+
+4. Recreate the registry with [Deploy the registry](#deploy-the-registry-human). Skip `az group create` there: the group already exists, and creating it again in another region fails. In `what-if`, check that the registry's `location` is `canadacentral`. Then check the live region:
+
+   ```bash
+   az acr show --name efcnewlifecr --query location -o tsv   # expect canadacentral
+   ```
+
+5. Grant the roles again. The old assignments were deleted with the old registry, and listing them in `roleAssignments` again recreates them. Grant the operator `Reader` the same way it was granted before.
+
+6. Publish the image again with [Publish, verify, and lock](#publish-verify-and-lock-human) and post a new image record. Mark every earlier Canada East image record as superseded in a reply on its ticket, for example `Superseded 2026-11-12: registry recreated in Canada Central; this digest no longer exists.` Never deploy a digest from a superseded record.
 
 ## Image names and tags
 
@@ -191,8 +239,11 @@ A locked digest cannot be deleted, so a candidate that was not deliberately unlo
 
 ## Human verification checklist
 
-All items are pending until the operator posts evidence (command output with no keys or tokens) on EFC-294.
+All items are pending until the operator posts evidence (command output with no keys or tokens) on EFC-294. Evidence from the deleted Canada East registry does not count; repeat each item against the Canada Central registry.
 
+- [ ] `az acr show --name efcnewlifecr --query location` prints `canadacentral`.
+- [ ] The resource group's region and how it was handled (kept, or recreated in `canadacentral`) are recorded.
+- [ ] Earlier Canada East image records are marked superseded.
 - [ ] `what-if` shows one Basic registry with `adminUserEnabled: false`, `roleAssignmentMode: LegacyRegistryPermissions`, `azureADAuthenticationAsArmPolicy: enabled`, and only the expected role assignments.
 - [ ] Deployment succeeds; outputs show `loginServer`.
 - [ ] `az acr credential show --name efcnewlifecr` fails because the admin user is disabled.
