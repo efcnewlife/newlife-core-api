@@ -16,7 +16,7 @@ Offline Bicep validation does not prove that Azure accepts the template. Only th
 
 ## What the template creates
 
-`infra/azure/registry/main.bicep` (resource group scope) with parameters in `main.bicepparam`:
+`infra/azure/container-registry/main.bicep` (resource group scope) with parameters in `main.bicepparam`:
 
 - One **Basic** registry, shared by staging and production. Proposed name `efcnewlifecr` (login server `efcnewlifecr.azurecr.io`); the operator confirms the name is free.
 - Region **Canada Central** (`canadacentral`), pinned by `location` in `main.bicepparam` so the registry does not follow the resource group's region. The earlier Canada East choice is superseded ([ADR 0039](adr/0039-azure-deployment-and-release-direction.md), 2026-11-12).
@@ -56,14 +56,14 @@ az acr check-name --name efcnewlifecr                               # expect "na
 
 # Optional: grant roles in the same deployment. Get object IDs without pasting secrets:
 az ad signed-in-user show --query id -o tsv
-# Edit roleAssignments in infra/azure/registry/main.bicepparam, then:
+# Edit roleAssignments in infra/azure/container-registry/main.bicepparam, then:
 scripts/validate-bicep.sh
 
 az deployment group what-if --resource-group rg-newlife-shared \
-  --template-file infra/azure/registry/main.bicep --parameters infra/azure/registry/main.bicepparam
+  --template-file infra/azure/container-registry/main.bicep --parameters infra/azure/container-registry/main.bicepparam
 # Review: one Basic registry in canadacentral, adminUserEnabled false, only the role assignments you expect.
 az deployment group create --resource-group rg-newlife-shared --name newlife-registry \
-  --template-file infra/azure/registry/main.bicep --parameters infra/azure/registry/main.bicepparam
+  --template-file infra/azure/container-registry/main.bicep --parameters infra/azure/container-registry/main.bicepparam
 az deployment group show --resource-group rg-newlife-shared --name newlife-registry --query properties.outputs
 ```
 

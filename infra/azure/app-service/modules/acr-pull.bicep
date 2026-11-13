@@ -1,5 +1,5 @@
 // AcrPull for one principal on the shared registry, deployed into the registry's resource group.
-// The assignment name matches infra/azure/registry/main.bicep, so either template can own it without conflict.
+// The assignment name matches infra/azure/container-registry/main.bicep, so either template can own it without conflict.
 targetScope = 'resourceGroup'
 
 param registryName string

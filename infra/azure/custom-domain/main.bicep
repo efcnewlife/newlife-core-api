@@ -1,6 +1,6 @@
 // Custom hostname for an existing Core API Web App: CNAME and domain-verification TXT in the existing public DNS
 // zone, a free App Service managed certificate, and an SNI TLS binding. A one-time setup per environment, deployed
-// into the Web App's resource group after infra/azure/api phase 2. Rerun only to change the hostname; App Service
+// into the Web App's resource group after infra/azure/app-service. Rerun only to change the hostname; App Service
 // renews the managed certificate itself. Rerunning rebinds TLS, so HTTPS on the hostname drops briefly.
 // Authored and validated offline. A human operator runs what-if and deploys it; see docs/azure-staging-api.md.
 targetScope = 'resourceGroup'

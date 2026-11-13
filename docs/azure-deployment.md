@@ -38,7 +38,7 @@ Static Web Apps distributes static assets globally. It has no Canada region, so 
 
 ## Repository ownership
 
-The following directories are proposed. The shared ACR template is in `infra/azure/registry/` (see the [registry runbook](azure-container-registry.md)). Each environment's API uses three templates (see the [staging API runbook](azure-staging-api.md)): `infra/azure/api-data/` for the data services, `infra/azure/api/` for the App Service, and `infra/azure/api-domain/` for the one-time custom domain. Other Bicep files and workflows are separate work.
+The following directories are proposed. The shared ACR template is in `infra/azure/container-registry/` (see the [registry runbook](azure-container-registry.md)). Each environment's API uses one template per resource (see the [staging API runbook](azure-staging-api.md)): `infra/azure/key-vault/`, `postgres/`, `redis/`, `storage/`, `app-service/`, and the one-time `custom-domain/`. Other Bicep files and workflows are separate work.
 
 | Repository | Proposed infrastructure directory | Owns |
 | --- | --- | --- |

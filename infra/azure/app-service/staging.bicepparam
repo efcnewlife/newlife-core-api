@@ -20,7 +20,7 @@ param appRelease = readEnvironmentVariable('NEWLIFE_API_RELEASE')
 param registryName = 'efcnewlifecr'
 param registryResourceGroup = 'rg-newlife-shared'
 
-// Must match infra/azure/api-data/staging.bicepparam.
+// Must match the key-vault, postgres, and storage staging parameters.
 param keyVaultName = 'kv-newlife-stg'
 param postgresServerName = 'psql-newlife-stg'
 param postgresDatabaseName = 'newlife-core'

@@ -1,6 +1,6 @@
 // Core API App Service for one environment: App Service Plan, Web App for Containers, its role assignments, and the
-// PostgreSQL firewall rules for its outbound IPs. Redeployed for every new image. It references the data services from
-// infra/azure/api-data and never changes them; the custom hostname is a one-time setup in infra/azure/api-domain.
+// PostgreSQL firewall rules for its outbound IPs. Redeployed for every new image. It references the Key Vault,
+// PostgreSQL, and Storage from their own templates and never changes them; the custom hostname is infra/azure/custom-domain.
 // Public endpoints only: no VNet, Private Endpoints, or Private DNS (removed for cost on 2026-11-10, ADR 0039).
 // Authored and validated offline. A human operator runs what-if and deploys it; see docs/azure-staging-api.md.
 targetScope = 'resourceGroup'
@@ -29,13 +29,13 @@ param appRelease string
 param registryName string
 param registryResourceGroup string
 
-// [Existing data services from infra/azure/api-data]
+// [Existing resources from infra/azure/key-vault, postgres, and storage]
 param keyVaultName string
 param postgresServerName string
 param postgresDatabaseName string
 param storageAccountName string
 
-@description('Public API hostname, passed to the API as APP_FQDN. Bound by infra/azure/api-domain.')
+@description('Public API hostname, passed to the API as APP_FQDN. Bound by infra/azure/custom-domain.')
 param apiHostName string
 
 // [Application]
@@ -55,7 +55,7 @@ var blobContainerName = 'files'
 // Built-in role ID: https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles/security
 var keyVaultSecretsUserRoleId = '4633458b-17de-408a-b874-0445c86b69e6'
 
-// Key Vault secret names. api-data writes the first three; the operator sets the rest before the first app deployment.
+// Key Vault secret names. The postgres, redis, and storage templates write the first three; the operator sets the rest before the first app deployment.
 var secretNames = {
   databasePassword: 'database-password'
   redisUrl: 'redis-url'

@@ -1,11 +1,11 @@
 """
 Offline policy checks for the shared registry Bicep (EFC-294, region moved by EFC-306).
 
-Compiles infra/azure/registry with the local Bicep CLI and checks that the registry is pinned to Canada Central,
+Compiles infra/azure/container-registry with the local Bicep CLI and checks that the registry is pinned to Canada Central,
 so it does not follow the location of an existing resource group created in Canada East.
 Never signs in to Azure; a passing run does not prove Azure accepts the template.
 
-    uv run pytest tests/infra/test_registry_bicep.py -v
+    uv run pytest tests/infra/test_container_registry_bicep.py -v
 """
 
 import json
@@ -18,7 +18,7 @@ from typing import Any
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-REGISTRY_DIR = ROOT / "infra" / "azure" / "registry"
+REGISTRY_DIR = ROOT / "infra" / "azure" / "container-registry"
 
 
 def _bicep() -> str | None:
