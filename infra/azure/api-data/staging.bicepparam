@@ -20,10 +20,14 @@ param postgresDatabaseName = 'newlife-core'
 
 // The operator adds their own public IPv4 address, for example:
 //   { name: 'jay-home', ip: '203.0.113.10' }
-param postgresOperatorIps = []
+param postgresOperatorIps = [
+  { name: 'jay', ip: '173.33.51.225' }
+]
 
 param redisHighAvailability = 'Disabled'
 
 // The operator adds their own object ID (az ad signed-in-user show --query id -o tsv), for example:
 //   { principalId: '<operator object ID>', principalType: 'User' }
-param keyVaultSecretsOfficers = []
+param keyVaultSecretsOfficers = [
+  { principalId: 'bb173cd3-c29d-4338-8e36-6241bb02284b', principalType: 'User' }
+]

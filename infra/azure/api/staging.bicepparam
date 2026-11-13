@@ -31,7 +31,8 @@ param apiHostName = 'api.dev.efcnewlife.com'
 param adminPortalUrl = 'https://portal.dev.efcnewlife.com'
 param facilityBookingUrl = 'https://booking.dev.efcnewlife.com'
 // Not secrets: the operator fills these in and commits them before the first app deployment.
-param azureTenantId = ''
+param azureTenantId = '1611ced1-d776-4134-acca-a77746e45623'
+// Empty until the Admin Portal app registration exists (EFC-297); Microsoft sign-in stays off until then.
 param azureAppClientId = ''
 param sentryDsn = ''
 
