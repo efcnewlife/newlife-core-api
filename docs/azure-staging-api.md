@@ -16,17 +16,22 @@ Network: the ticket text asks for a VNet, Private Endpoints, Private DNS, and pr
 
 ## What the templates create
 
-Two templates, both deployed into the staging resource group:
+Three templates, all deployed into the staging resource group, in this order:
 
-- `infra/azure/api/main.bicep` with `staging.bicepparam`: the App Service and data services. Redeployed whenever infrastructure or the image changes.
-- `infra/azure/api-domain/main.bicep` with `staging.bicepparam`: the custom hostname, DNS records, and TLS certificate. Deployed **once**, after the Web App exists. API redeployments never touch it, so HTTPS on the hostname stays up. App Service renews the managed certificate by itself.
+| Template | Creates | Deployed |
+| --- | --- | --- |
+| `infra/azure/api-data/` | Key Vault, PostgreSQL, Redis, Storage, the three derived secrets, operator PostgreSQL firewall rules | First, then only when a data service changes. The only template that needs the PostgreSQL password. |
+| `infra/azure/api/` | App Service Plan, Web App, its role assignments, PostgreSQL rules for its outbound IPs | For every new image. References the data services and never changes them. |
+| `infra/azure/api-domain/` | `api.dev` DNS records, hostname binding, managed certificate | **Once**, after the Web App exists. App deployments never touch it, so HTTPS stays up; App Service renews the certificate itself. |
+
+Each folder has its own `staging.bicepparam`. The Key Vault, PostgreSQL server, database, and storage account names in `api/` must match `api-data/`; the tests check this.
 
 Names are proposals; the operator confirms they are free.
 
 | Resource | Staging name | Settings |
 | --- | --- | --- |
-| App Service Plan | `asp-newlife-api-stg` | Linux, `B1`, 1 instance. Phase 2 only. |
-| Web App for Containers | `app-newlife-api-stg` | Image `efcnewlifecr.azurecr.io/newlife-core-api@<digest>`, pulled with its system-assigned identity. Always On, `WEBSITES_PORT=8000`, HTTPS only, TLS 1.2, FTP and SCM basic auth off. Phase 2 only. |
+| App Service Plan | `asp-newlife-api-stg` | Linux, `B1`, 1 instance. `api` template. |
+| Web App for Containers | `app-newlife-api-stg` | Image `efcnewlifecr.azurecr.io/newlife-core-api@<digest>`, pulled with its system-assigned identity. Always On, `WEBSITES_PORT=8000`, HTTPS only, TLS 1.2, FTP and SCM basic auth off. `api` template. |
 | PostgreSQL Flexible Server | `psql-newlife-stg` | Version 18, Burstable `Standard_B1ms`, 32 GiB (no auto-grow), 14-day backups, no HA, no geo backup. Public access with exact-IP firewall rules only. `require_secure_transport=ON`. Database `newlife-core`. |
 | Azure Managed Redis | `redis-newlife-stg` | `Balanced_B0`, **HA disabled**, TLS 1.2, port 10000, non-clustered policy, `VolatileLRU` eviction (when full, the least recently used key is dropped; a lost member refresh binding only forces a new sign-in), access keys on. Public network access (no IP allowlist exists). |
 | Storage account | `stnewlifecorestg` | StorageV2, Standard LRS, Hot, no hierarchical namespace, no anonymous blob access, TLS 1.2. Blob and container soft delete 14 days. Private container `files`. |
@@ -37,10 +42,7 @@ Names are proposals; the operator confirms they are free.
 
 Not created: VNet, Private Endpoints, Private DNS zones, NAT Gateway, VPN, the shared registry (EFC-294), and the DNS zone.
 
-The API template deploys in two phases, chosen by `NEWLIFE_API_IMAGE_DIGEST`:
-
-- **Phase 1** (unset): Key Vault, PostgreSQL, Redis, Storage, and the secrets the template can write. No compute is billed yet. The operator then sets the remaining secrets and migrates the empty database.
-- **Phase 2** (set to an image digest): adds the Plan, Web App, role assignments, and app outbound IP firewall rules. Every secret and the schema are in place before the app first starts. Its new role assignments take a few minutes to apply, so the first start usually needs one restart (step 6).
+Between `api-data` and the first `api` deployment, the operator sets the remaining secrets and migrates the empty database, so every secret and the schema exist before the app first starts. The app's new role assignments take a few minutes to apply, so its first start usually needs one restart (step 6).
 
 ### App settings
 
@@ -69,9 +71,9 @@ The app uses the PostgreSQL administrator login. A separate least-privilege runt
 
 | Key Vault secret | App setting | Written by |
 | --- | --- | --- |
-| `database-password` | `DATABASE_PASSWORD` | Template, from `NEWLIFE_PG_ADMIN_PASSWORD` |
-| `redis-url` | `REDIS_URL` | Template: `rediss://:<percent-encoded primary key>@<host>:10000/0` |
-| `storage-connection-string` | `AZURE_STORAGE_CONNECTION_STRING` | Template, from the account key |
+| `database-password` | `DATABASE_PASSWORD` | `api-data`, from `NEWLIFE_PG_ADMIN_PASSWORD` |
+| `redis-url` | `REDIS_URL` | `api-data`: `rediss://:<percent-encoded primary key>@<host>:10000/0` |
+| `storage-connection-string` | `AZURE_STORAGE_CONNECTION_STRING` | `api-data`, from the account key |
 | `jwt-secret-key` | `JWT_SECRET_KEY` | Operator |
 | `refresh-token-hash-salt` | `REFRESH_TOKEN_HASH_SALT` | Operator |
 | `refresh-token-hash-pepper` | `REFRESH_TOKEN_HASH_PEPPER` | Operator |
@@ -79,7 +81,7 @@ The app uses the PostgreSQL administrator login. A separate least-privilege runt
 | `azure-app-client-secret` | `AZURE_APP_CLIENT_SECRET` | Operator, from the Entra app registration |
 | `mock-login-secret` | `MOCK_LOGIN_SECRET` | Operator |
 
-A missing secret does not stop the app: App Service passes the literal `@Microsoft.KeyVault(...)` text as the value. For `JWT_SECRET_KEY` that would sign tokens with a known string. Set every operator secret before phase 2, and check that every reference resolves.
+A missing secret does not stop the app: App Service passes the literal `@Microsoft.KeyVault(...)` text as the value. For `JWT_SECRET_KEY` that would sign tokens with a known string. Set every operator secret before the first `api` deployment, and check that every reference resolves.
 
 No secret appears in Git, template outputs, or the parameter file.
 
@@ -90,7 +92,7 @@ No secret appears in Git, template outputs, or the parameter file.
 | Deploying operator | `Contributor` + `Role Based Access Control Administrator` (or `Owner`) on `rg-newlife-staging` | Create resources and their role assignments |
 | Deploying operator | `Role Based Access Control Administrator` on the registry (or `rg-newlife-shared`) | Create the Web App's `AcrPull` assignment |
 | Deploying operator | `DNS Zone Contributor` on the `efcnewlife.com` zone | Create `api.dev` and `asuid.api.dev` (`api-domain` template only) |
-| Deploying operator | `Key Vault Secrets Officer` on the vault (granted by this template through `keyVaultSecretsOfficers`) | Set and read secrets with `az keyvault secret` |
+| Deploying operator | `Key Vault Secrets Officer` on the vault (granted by `api-data` through `keyVaultSecretsOfficers`) | Set and read secrets with `az keyvault secret` |
 | Staging Web App (system-assigned identity) | `AcrPull` on the registry, `Key Vault Secrets User` on the vault | Pull the image; resolve Key Vault references |
 | GitHub Actions | **None** | CI has no Azure identity |
 
@@ -107,8 +109,10 @@ LOC=canadacentral
 KV=kv-newlife-stg
 APP=app-newlife-api-stg
 PG=psql-newlife-stg
-PARAMS=infra/azure/api/staging.bicepparam
+DATA_TEMPLATE=infra/azure/api-data/main.bicep
+DATA_PARAMS=infra/azure/api-data/staging.bicepparam
 TEMPLATE=infra/azure/api/main.bicep
+PARAMS=infra/azure/api/staging.bicepparam
 ```
 
 ### 1. Account and cost checks
@@ -144,48 +148,47 @@ az account show --query '{name:name, id:id, tenant:tenantId}' -o table
   az keyvault list-deleted --query "[?name=='$KV'].name" -o tsv     # must be empty (purge protection blocks reuse)
   ```
 
-  If a name is taken, change it in `staging.bicepparam` and in the variables above.
+  If a name is taken, change it in both `api-data/staging.bicepparam` and `api/staging.bicepparam` (and `api-domain/` for the Web App), and in the variables above.
 
 ### 2. Fill in the parameters
 
-Edit `infra/azure/api/staging.bicepparam` and commit it (no secrets):
+Edit `infra/azure/api-data/staging.bicepparam` and commit it (no secrets):
 
 - `postgresOperatorIps`: your current public IPv4 (`curl -s https://api.ipify.org`), as `{ name: '<you>-<place>', ip: '<ip>' }`. Exact addresses only; never `0.0.0.0`.
 - `keyVaultSecretsOfficers`: `{ principalId: '<az ad signed-in-user show --query id -o tsv>', principalType: 'User' }`.
+
+Edit `infra/azure/api/staging.bicepparam` and commit it:
+
 - `azureTenantId`, `azureAppClientId`: the Entra tenant and the Admin Portal SPA app registration (the same client ID the portal uses as `VITE_AZURE_CLIENT_ID`).
 - `sentryDsn`: the Core API staging DSN, or leave empty to disable telemetry.
-
-Edit `infra/azure/api-domain/staging.bicepparam` and commit it:
-
-- `dnsZoneResourceGroup`: the zone's resource group.
 
 ```bash
 scripts/validate-bicep.sh
 ```
 
-### 3. Phase 1: data services and Key Vault
+### 3. Data services and Key Vault (`api-data`)
 
 ```bash
 az group create --name "$RG" --location "$LOC" --tags app=newlife owner=newlife-core-api environment=staging
 
 # New password: letters, digits, and '-' only (it is placed in a database URL unencoded).
 export NEWLIFE_PG_ADMIN_PASSWORD="$(openssl rand -hex 20)Aa-"
-unset NEWLIFE_API_IMAGE_DIGEST NEWLIFE_API_RELEASE
 
-az deployment group what-if --resource-group "$RG" --template-file "$TEMPLATE" --parameters "$PARAMS"
+az deployment group what-if --resource-group "$RG" --template-file "$DATA_TEMPLATE" --parameters "$DATA_PARAMS"
 ```
 
 Expect only creates: one Key Vault, three secrets (`database-password`, `redis-url`, `storage-connection-string`), your `Key Vault Secrets Officer` assignment, one PostgreSQL server with one configuration, one database and your operator firewall rule(s), one Redis cluster with database `default` (HA `Disabled`), one storage account with blob service and container `files`. No Plan, Web App, DNS records, or certificate. No `Microsoft.Network/privateEndpoints` or `virtualNetworks`.
 
 ```bash
-az deployment group create --resource-group "$RG" --name newlife-api-staging \
-  --template-file "$TEMPLATE" --parameters "$PARAMS"
-az deployment group show --resource-group "$RG" --name newlife-api-staging --query properties.outputs -o json
+az deployment group create --resource-group "$RG" --name newlife-api-data-staging \
+  --template-file "$DATA_TEMPLATE" --parameters "$DATA_PARAMS"
+az deployment group show --resource-group "$RG" --name newlife-api-data-staging --query properties.outputs -o json
+unset NEWLIFE_PG_ADMIN_PASSWORD
 ```
 
 PostgreSQL and Redis can take 10–20 minutes. From now on, PostgreSQL, Redis, and Storage are billed.
 
-Every later deployment needs the same password. Read it back from the vault instead of generating a new one:
+A later `api-data` deployment needs the same password; `api` deployments never do. Read it back from the vault instead of generating a new one:
 
 ```bash
 export NEWLIFE_PG_ADMIN_PASSWORD="$(az keyvault secret show --vault-name "$KV" --name database-password --query value -o tsv)"
@@ -240,21 +243,20 @@ uv run alembic current      # expect the head revision of $REV; record it
 uv run python -m portal.cli.main init-all   # catalog seed, then an interactive superuser prompt
 ```
 
-Never run `alembic downgrade` or delete data here. If `upgrade head` fails, stop: do not run phase 2, and post the revision shown by `alembic current` and the error message without connection details. Afterwards remove the worktree (`git worktree remove ../newlife-core-api-stg`) and unset the exported variables.
+Never run `alembic downgrade` or delete data here. If `upgrade head` fails, stop: do not deploy the app, and post the revision shown by `alembic current` and the error message without connection details. Afterwards remove the worktree (`git worktree remove ../newlife-core-api-stg`) and unset the exported variables.
 
-### 6. Phase 2: App Service
+### 6. App Service (`api`)
 
 Use the image record from the [registry runbook](azure-container-registry.md#publish-verify-and-lock-human):
 
 ```bash
 export NEWLIFE_API_IMAGE_DIGEST=sha256:<digest from the image record>
 export NEWLIFE_API_RELEASE=<first 7 characters of the commit>
-export NEWLIFE_PG_ADMIN_PASSWORD="$(az keyvault secret show --vault-name "$KV" --name database-password --query value -o tsv)"
 
 az deployment group what-if --resource-group "$RG" --template-file "$TEMPLATE" --parameters "$PARAMS"
 ```
 
-Expect the phase 1 resources unchanged (`NoChange`, or `Ignore` for read-only properties) and creates for the Plan (`B1`), Web App, its `logs` config, two publishing-credential policies, the `Key Vault Secrets User` assignment, the `AcrPull` assignment in `rg-newlife-shared`, and `app-outbound-*` firewall rules. No DNS records, hostname binding, or certificate. Check that `linuxFxVersion` shows the digest you expect.
+Expect only creates, and nothing for Key Vault, PostgreSQL, Redis, or Storage except new `app-outbound-*` firewall rules: the Plan (`B1`), Web App, its `logs` config, two publishing-credential policies, the `Key Vault Secrets User` assignment, the `AcrPull` assignment in `rg-newlife-shared`, and `app-outbound-*` firewall rules. No DNS records, hostname binding, or certificate. Check that `linuxFxVersion` shows the digest you expect.
 
 ```bash
 az deployment group create --resource-group "$RG" --name newlife-api-staging \
@@ -270,7 +272,7 @@ az webapp restart --resource-group "$RG" --name "$APP"
 
 ### 7. Custom domain and TLS (once)
 
-Run only after phase 2 succeeded. Later API deployments do not need this step.
+Run only after step 6 succeeded. Later API deployments do not need this step.
 
 ```bash
 DOMAIN_TEMPLATE=infra/azure/api-domain/main.bicep
@@ -342,16 +344,16 @@ Then, with a controlled test account and no real member notifications:
 
 ## Later deployments (human)
 
-- **Always set `NEWLIFE_API_IMAGE_DIGEST` to the digest staging should run.** An infrastructure deployment with an older digest rolls the app back. To keep the running image:
+- **Always set `NEWLIFE_API_IMAGE_DIGEST` to the digest staging should run.** An `api` deployment with an older digest rolls the app back. To keep the running image:
   `az webapp config show -g "$RG" -n "$APP" --query linuxFxVersion -o tsv` (the part after `@`).
-- API deployments leave the custom domain and certificate alone; do not rerun the `api-domain` template for them. App settings changes restart the app. Basic has no slots.
+- `api` deployments leave the data services, custom domain, and certificate alone; do not rerun `api-data` or `api-domain` for them. App settings changes restart the app. Basic has no slots.
 - Deployments are incremental. Removing an IP from `postgresOperatorIps` or a principal from `keyVaultSecretsOfficers` does not delete the rule or assignment. Remove it by hand:
   `az postgres flexible-server firewall-rule delete -g "$RG" -n "$PG" --rule-name operator-<name> --yes`
 - Temporary single-IP rules for migrations and their cleanup belong to the release procedure ([EFC-296](https://linear.app/jayhsia/issue/EFC-296)).
 
 ## If something fails
 
-- Read the deployment error (`az deployment operation group list -g "$RG" -n newlife-api-staging --query "[?properties.provisioningState=='Failed']"`) and the App Service log stream first.
+- Read the deployment error (`az deployment operation group list -g "$RG" -n <deployment name> --query "[?properties.provisioningState=='Failed']"`) and the App Service log stream first.
 - Do not open PostgreSQL to all IPs or Azure services, and do not turn on anything broader on Redis, to work around a DNS, TLS, or firewall problem.
 - A failed migration stops the rollout. Report the revision and a sanitised error; do not downgrade.
 - Stopping the Web App does not stop the Plan's charge. Deleting a failed resource is a human decision; the Key Vault name stays reserved for 90 days after deletion because of purge protection.
@@ -361,10 +363,10 @@ Then, with a controlled test account and no real member notifications:
 All items stay pending until the operator posts evidence on EFC-295 (no keys, passwords, tokens, or personal data).
 
 - [ ] Account, grant, Canada Central SKU (PostgreSQL 18 `Standard_B1ms`, Redis `Balanced_B0`, Linux `B1`), DNS zone, and CAA checks recorded.
-- [ ] Phase 1 `what-if` matched the expected list; deployment succeeded.
+- [ ] `api-data` `what-if` matched the expected list; deployment succeeded.
 - [ ] All nine secrets exist; no secret value posted anywhere.
 - [ ] Initial migration reached head; `alembic current` revision recorded; `init-all` finished.
-- [ ] Phase 2 `what-if` matched; deployment succeeded; every Key Vault reference `Resolved`.
+- [ ] `api` `what-if` matched; deployment succeeded; every Key Vault reference `Resolved`.
 - [ ] Domain `what-if` matched; deployment succeeded; certificate issued.
 - [ ] Log stream shows port 8000, Redis rate limiters, and the expiry sweep, with no pull, TLS, or connection errors.
 - [ ] `https://api.dev.efcnewlife.com/healthz` returns `200` with a valid certificate.
@@ -381,7 +383,7 @@ Evidence template:
 ```text
 Operator: <name>   Date/time (UTC): <…>   Environment: staging   Subscription: <name>
 Commit: <full SHA>   Image: efcnewlifecr.azurecr.io/newlife-core-api@sha256:<…>   VERSION: <short SHA>
-Phase 1: pass/fail <notes>   Phase 2: pass/fail <notes>   Domain: pass/fail <notes>   Alembic revision: <rev>
+api-data: pass/fail <notes>   api: pass/fail <notes>   Domain: pass/fail <notes>   Alembic revision: <rev>
 Key Vault references resolved: yes/no   Log stream: pass/fail   healthz/TLS: pass/fail
 PG rules exact-IP: yes/no   Redis HA/TLS/policy: pass/fail   Auth: pass/fail   Files: pass/fail   Expiry: pass/fail
 Cleanup / follow-ups: <…>
@@ -391,12 +393,12 @@ Cleanup / follow-ups: <…>
 
 | Output | Expected | Actual (operator) |
 | --- | --- | --- |
-| `keyVaultName` / `keyVaultUri` | `kv-newlife-stg` / `https://kv-newlife-stg.vault.azure.net/` | |
-| `postgresFqdn` | `psql-newlife-stg.postgres.database.azure.com` | |
-| `redisHostName` | `redis-newlife-stg.canadacentral.redis.azure.net` | |
-| `storageAccountName` | `stnewlifecorestg` | |
-| `webAppName` / `webAppDefaultHostName` | `app-newlife-api-stg` / `app-newlife-api-stg.azurewebsites.net` | |
-| `webAppPrincipalId` | a GUID | |
-| `webAppPossibleOutboundIps` | comma-separated IPv4 list, same as the `app-outbound-*` rules | |
+| `keyVaultName` / `keyVaultUri` (`api-data`) | `kv-newlife-stg` / `https://kv-newlife-stg.vault.azure.net/` | |
+| `postgresFqdn` (`api-data`) | `psql-newlife-stg.postgres.database.azure.com` | |
+| `redisHostName` (`api-data`) | `redis-newlife-stg.canadacentral.redis.azure.net` | |
+| `storageAccountName` (`api-data`) | `stnewlifecorestg` | |
+| `webAppName` / `webAppDefaultHostName` (`api`) | `app-newlife-api-stg` / `app-newlife-api-stg.azurewebsites.net` | |
+| `webAppPrincipalId` (`api`) | a GUID | |
+| `webAppPossibleOutboundIps` (`api`) | comma-separated IPv4 list, same as the `app-outbound-*` rules | |
 | `hostName` (domain template) | `api.dev.efcnewlife.com` | |
 | `certificateThumbprint` (domain template) | 40 hex characters | |
