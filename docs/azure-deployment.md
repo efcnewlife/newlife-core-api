@@ -1,12 +1,14 @@
 # Azure deployment plan
 
-Design assembled on 2026-11-10 from the deployment interview. Decisions are recorded in [ADR 0039](adr/0039-azure-deployment-and-release-direction.md). This document proposes implementation details for final review; it does not report provisioned Azure resources or implemented pipelines.
+Design assembled on 2026-11-10 and revised on 2026-11-13 through [EFC-322](https://linear.app/jayhsia/issue/EFC-322). Decisions are recorded in [ADR 0039](adr/0039-azure-deployment-and-release-direction.md) and the [EFC-291 spec](https://linear.app/jayhsia/issue/EFC-291). This document describes the selected deployment direction; it does not report provisioned Azure resources or implemented pipelines.
+
+The selected flow automatically publishes and deploys `main` and eligible tags to staging using GitHub OIDC. Both environments retain manual migrations and image rollback. Staging deploys first and the operator migrates afterward; production migrates first and the operator then deploys the verified tag manually. CI migration was considered and rejected because runner database access and firewall cleanup add unnecessary operational complexity for this application.
 
 ## Mandatory execution boundary
 
-Agents may author and review Bicep, source code, CSV estimates, workflow definitions, operator scripts, documentation, and offline tests only. Every Azure account or resource operation must be performed by a human operator. Agents must not sign in to Azure, inspect the live account, run Azure what-if/apply, create/update/delete resources, change DNS/RBAC/secrets/firewalls, push/pull images through ACR, deploy apps, run migrations against Azure databases, restore data, or trigger Azure-affecting workflows. Main/tag CI may validate/build and retain artifacts outside Azure, but must not automatically perform Azure operations. Do not give unattended CI Azure credentials. Public documentation/pricing research and local tests without live Azure access are allowed. Human execution and live verification must be explicitly attributed and must not be claimed complete without operator-supplied evidence.
+Agents may author and review Bicep, source code, CSV estimates, workflow definitions, operator scripts, documentation, and offline tests only. Agents must not sign in to Azure, inspect the live account, run Azure what-if/apply, create/update/delete resources, change DNS/RBAC/secrets/firewalls, push/pull images through ACR, deploy apps, run migrations against Azure databases, restore data, or trigger Azure-affecting workflows. Public documentation/pricing research and local tests without live Azure access are allowed.
 
-This user instruction supersedes the earlier automatic Azure staging deployment/migration direction. Main and tag events prepare CI results and artifacts only; a human executes every Azure setup, publication, migration, deployment, inspection, drill, and cleanup. Agent acceptance is offline artifact validation; live acceptance remains pending human evidence.
+After human setup, application workflows may use scoped GitHub OIDC federation for artifact publication and automatic staging deployment. Do not store a long-lived Azure client secret or grant production deployment, database migration, or infrastructure administration access to these workflows. Provisioning, federation/RBAC/secret/DNS/firewall setup, database operations, production deployment, recovery, and rollback remain human-operated. CI must not obtain migration credentials, inspect live database revisions, or create runner database firewall rules. Human execution and live verification must be explicitly attributed and must not be claimed complete without operator-supplied evidence. This document change enables no automation and authorizes no agent Azure session.
 
 ## Scope and constraints
 
@@ -49,7 +51,7 @@ Revision 2026-11-13 ([EFC-308](https://linear.app/jayhsia/issue/EFC-308)): all A
 
 Keep Bicep modules reusable, with environment-specific parameters. Reference the existing public DNS zone; do not recreate or transfer it. Data services and credentials remain separate per environment.
 
-Infrastructure delivery: the agent authors and offline-validates Bicep and operator procedures. The human runs Azure `what-if`, reviews changes/costs, and applies them. Routine CI has no Azure credentials and does not apply infrastructure or publish applications. Humans establish scoped operator/runtime identities and DNS/RBAC access, documenting actual permission boundaries. Agent-run cloud inspection is prohibited.
+Infrastructure delivery: the agent authors and offline-validates Bicep and operator procedures. The human runs Azure `what-if`, reviews changes/costs, and applies them. Infrastructure CI does not apply changes. Application workflows may publish artifacts and deploy staging using scoped OIDC federation. Humans establish operator/runtime identities and workflow federation/RBAC, documenting actual permission boundaries. Agent-run cloud inspection is prohibited.
 
 ## Domains and connections
 
@@ -73,18 +75,22 @@ Here `dev` means staging, not local development. Configure exact HTTPS origins c
 | Event | CI | Staging | Production |
 | --- | --- | --- | --- |
 | Pull request | Repository checks, tests, build validation | No privileged deployment by default | None |
-| Update `main` | Required checks and non-Azure artifact preparation | Human deployment only | None |
+| Update `main` | Required checks and exact-commit build | Automatic publication and deployment | None |
 | Update `release/x.y.z` | Required checks only | None from the branch event | None |
-| Create eligible `x.y.z` tag | Verify release commit/CI and prepare artifacts outside Azure | Human deployment only | None |
-| Human production release selecting tag | Review CI/artifacts and manually verify schema | No dependency on currently running staging | Human executes deployment |
+| Create eligible `x.y.z` tag | Verify release commit/CI and build tagged source | Automatically publish and deploy the exact tag | None |
+| Human production release selecting tag | Review artifacts and that exact tag's completed staging acceptance | Need not still run this tag | Human migrates first, then deploys the verified artifact |
 
-All Azure-affecting publication steps are instructions/scripts for the human, never event-triggered execution or an agent-triggered workflow. CI may build/test and retain artifacts outside Azure. Tags have no `v` prefix, for example `0.3.0`. Protect release tags against movement/deletion. Each repository versions independently. A human may deploy a later `main` candidate over staging after a tagged version; production always uses the selected tag's immutable commit/artifact mapping.
+Feature/fix branches merge into `main` through reviewed PRs. Staging normally tests `main`; create `release/x.y.z` from a selected, verified `main` commit to prepare production. Tags have no `v` prefix, for example `0.3.0`, and identify CI-passing release-branch commits. Protect release tags against movement/deletion. Each of the three application repositories versions independently; shared UI package and infrastructure publication have separate procedures.
+
+There is no staging source-switch mode or release freeze. A later `main` update may automatically deploy over a tagged staging version. Production always uses the selected tag's immutable commit/artifact mapping and requires recorded acceptance of that exact tag after required manual staging migration; passing a `main` run alone is insufficient. Neither creating the tag nor completing its workflow deploys production.
 
 Serialize backend deployment/migration operations per environment. Do not cancel a running migration just to deploy a newer commit. Queue later deployments and retain the exact run/commit identity. Determine compatibility before applying or deploying an older tagged version against a newer staging schema; block unknown or incompatible cases without downgrade or data reset.
 
 ### Core API artifacts
 
-The agent builds/tests the container locally or in non-Azure CI before any human schema change. The human publishes it to ACR with a commit-to-digest record and retain digests needed for rollback. The human production release selects the tagged digest rather than rebuilding an unrecorded image or taking the currently deployed staging digest. Runtime settings and Sentry environment/release values can differ per environment.
+For `main` and eligible tag events, required CI builds the exact source commit, records its full SHA, publishes the image to ACR, and deploys staging. Use scoped OIDC federation for Azure login and retain the commit/tag-to-digest mapping and rollback images. Release image tags must not be overwritten. The human production release changes the App Service image tag to the verified release image and confirms its digest mapping, rather than rebuilding an image or taking whatever currently runs on staging. Runtime settings and Sentry environment/release values can differ per environment.
+
+OIDC/RBAC definitions and operator setup belong in `newlife-infra`; application workflow definitions remain in this repository. The operator creates the federation and scoped permissions. Build/publication and staging deployment receive only the permissions they need, without database or production deployment access.
 
 Validate the container entrypoint, listening port, and App Service container configuration. Set Always On; Basic has no deployment slots, so allow for a restart/interruption and do not promise slot-swap or zero-downtime deployment. Preserve the existing Pending-payment expiry interval loop and locking behavior.
 
@@ -92,7 +98,7 @@ Validate the container entrypoint, listening port, and App Service container con
 
 Use pnpm with the committed lockfile, package-read authentication for `@efcnewlife/newlife-ui`, type checks, relevant tests, and production/staging builds. API URLs and MSAL/Sentry settings are build-time inputs: build distinct environment artifacts from the same tagged source when needed. Do not promote staging `dist` unchanged to production when it embeds staging endpoints.
 
-The human release procedure creates and uploads required source maps using the exact Sentry release ID used by that build. Source-map upload failure blocks publishing the new build while the running website remains available. Preserve [ADR 0038](adr/0038-sentry-observability-boundaries.md): `<repo>@<short-commit>` for staging and `<repo>@<version>` for production. Keep Sentry auth tokens and package tokens in CI secrets, never `VITE_*`.
+The publishing procedure creates and uploads required source maps using the exact Sentry release ID used by that build, whether the publication is automated staging or manual production. Source-map upload failure blocks publishing the new build while the running website remains available. Preserve [ADR 0038](adr/0038-sentry-observability-boundaries.md): `<repo>@<short-commit>` for staging and `<repo>@<version>` for production. Keep Sentry auth tokens and package tokens in CI secrets, never `VITE_*`. Frontends follow the same main/release/tag flow, but publish to Static Web Apps rather than ACR/App Service; detailed production publication remains existing frontend release work.
 
 Configure SPA navigation fallback and explicit cache behavior so direct links work and an old HTML entry point does not strand users on unavailable assets. Keep previous deployable artifacts for rollback. Smoke-test HTTPS, a deep link, login, and API connectivity after deployment.
 
@@ -100,27 +106,31 @@ Configure SPA navigation fallback and explicit cache behavior so direct links wo
 
 Migration files remain human-managed; agents must not add, modify, or delete files under `alembic/versions/`.
 
+Both environments use a human operator's exact target checkout with `uv sync --frozen` and `uv run alembic upgrade head`. Runtime images continue to exclude Alembic files; no migration image or CI migration runner is selected. The operator manually runs `init-all` after the first successful schema migration, including its interactive superuser step. Catalog bootstrap is not part of a deployment workflow.
+
 ### Staging: human-executed
 
-1. The agent prepares the exact target checkout/image, migration entrypoint, local/mock checks, and an operator runbook. CI retains artifacts outside Azure only.
-2. The human reviews the intended version, cost/account prerequisites, current revisions, and compatibility. The human adds their exact public IP to PostgreSQL if necessary and verifies TLS connectivity; firewall propagation may require bounded retries.
+1. Successful `main` or eligible tag CI publishes the image to ACR and automatically deploys staging. Record the deployed full SHA, tag where applicable, and image digest. Initial deployment/smoke results are reported without automatic image rollback. Staging may temporarily fail while a required migration is pending; a passing initial smoke check is not final release acceptance in that case.
+2. The human checks out the exact deployed version, reviews cost/account prerequisites, current revisions, and compatibility, and coordinates the manual work with other staging deployments. The human adds their exact public IP to PostgreSQL if necessary and verifies TLS connectivity; firewall propagation may require bounded retries. Runner database access is not needed.
 3. The human runs that target version's committed migrations, checks the exit status and resulting revisions, and removes any temporary rule they created. The human audits residual temporary rules without deleting unrelated developer rules.
-4. The human publishes/selects the ACR digest and deploys the staging API, then performs real smoke checks and records evidence. No automatic staging migration or Azure deployment is enabled.
+4. The human performs smoke and functional verification after required migration and records the exact version/revisions/result. A failed staging migration blocks release acceptance and production publication, although the staging image is already deployed. If a later `main` deployment has replaced the tag, do not attribute that later version's checks to the tagged release; verify the exact tagged version before accepting it. Rollback is a manual decision, subject to image/schema compatibility.
 
 ### Production: human-executed
 
-The human selects/checks out the production tag, verifies recovery and backward compatibility, reads current revisions, and manually applies migrations over TLS from an allowlisted local IP. The human records the tag/revisions/result, publishes/selects the immutable image digest, and deploys production. Neither an agent nor CI performs live revision checks, firewall changes, DDL, or deployment. The earlier proposed production runner read-only connection is not selected under the human-only policy.
+The human selects/checks out a tag whose exact version passed staging acceptance after required migration. Verify recovery and backward compatibility, read current revisions, and manually apply migrations over TLS from an allowlisted local IP. Migrations must remain compatible with the old image still running in production. A failed migration blocks the production image update. The human records the tag/revisions/result, changes the App Service image tag to the already-published and verified release image, confirms the digest mapping, and verifies production. Neither an agent nor CI performs production live revision checks, firewall changes, DDL, or deployment. No production deployment workflow or runner database connection is selected.
 
 The human may execute reviewed local scripts, but the agent must not run them against Azure or trigger an Azure-affecting workflow. Migration files remain human-managed; no agent-authored revisions or automatic downgrade/reset are allowed.
 
 ## Release and rollback procedure
 
-1. Develop on topic branches and merge into `main`; CI prepares artifacts and a human chooses when to deploy staging.
+1. Develop on topic branches and merge into `main`; CI builds/publishes and automatically deploys staging. The operator manually migrates staging afterward when required and verifies that version.
 2. Prepare `release/x.y.z`; its updates run CI only. Make schema changes backward-compatible with the currently running API and frontend where needed.
-3. Create the protected `x.y.z` tag on the validated release commit. The tag prepares a staging release candidate. A human may later deploy a newer `main` candidate over staging.
+3. Create the protected `x.y.z` tag on the CI-validated release commit. Its workflow builds/publishes and automatically deploys that tag to staging. Complete required manual staging migration and verify the exact tag before accepting it for production. Later `main` updates may deploy over staging without changing the accepted tag or production selection.
 4. For a coordinated API/frontend change, the human migrates production, deploys a backward-compatible API, then deploys affected frontends by their own selected tags. Record the version tuple; the three version numbers need not match.
 5. Verify API responsiveness, sign-in/token refresh, representative booking behavior, and authorized file access using controlled test data. Do not treat `/healthz` as a full readiness test.
-6. On an application regression, select the previous compatible API digest/frontend artifact. Recheck schema and API contract compatibility first. Do not automatically downgrade the database.
+6. On an application regression in either environment, the operator selects the previous compatible API image/frontend artifact. Recheck schema and API contract compatibility first. Staging smoke failure reports the result without automatic image rollback, allowing the operator to complete pending migration and re-verify. Do not automatically downgrade the database.
+
+For release fixes, open `hotfix/*` from the target release branch and merge the fix back through a PR. Publish the next patch tag, for example `0.3.0` to `0.3.1`, without moving the original tag. The new tag repeats staging deployment and acceptance before manual production publication. Synchronize every hotfix into `main` through a separate branch and PR so the next release retains the fix without bringing unrelated `main` changes into the current release.
 
 Use a separate database recovery procedure for destructive data mistakes; application rollback is not a substitute for restoring data. After a restore, validate data and handle bookings, expiry work, and notifications produced since the restore point before reopening writes.
 
@@ -162,16 +172,16 @@ Final budget acceptance requires live calculator/account verification and a cred
 
 ## Delivery sequence and acceptance gates
 
-The agent delivers offline-validated code/templates/CSV/runbooks for these stages. Every actual Azure command, inspection, deployment, drill, and cleanup below is human-owned and stays pending until operator evidence is recorded.
+The agent delivers offline-validated code/templates/CSV/workflows/runbooks for these stages. Human setup and live acceptance stay pending until operator evidence is recorded. After the operator establishes scoped federation and enables the application workflows, CI may publish artifacts and automatically deploy staging within the boundary above; the agent does not trigger those workflows.
 
 1. **Account checks and prerequisites:** verify grant/expiry/spending controls, existing DNS and permissions, Canada Central capacity and SKU support, the supported Static Web Apps resource region, Sentry entitlements, package access, and Entra registrations/redirects. Confirm which resources already consume the grant.
 2. **Application readiness:** fix/verify the current container entrypoint (it refers to `gunicorn_conf.py`, absent in the inspected checkout), constrain Docker build context with `.dockerignore`, test database/Redis TLS over public endpoints, adapt Redis single-database usage, verify HTTPS staging links, and disable production mock login. Existing auth/Redis failure behavior needs its own focused readiness review; do not promise immediate access-token revocation solely because a blacklist provider exists.
 3. **Infrastructure:** implement Bicep in `newlife-infra`, review `what-if` and costs, bootstrap identities/secrets, create staging first, and validate connections from the real App Service container. Keep production resources gated on the account and budget checks.
-4. **Staging release package:** implement non-Azure CI/build, immutable artifacts, and offline/mocked checks for the human-run source-map, migration/IP cleanup, serialization, smoke, and tag/main procedures. Test a failed migration, interrupted firewall cleanup, older-tag/newer-schema case, and application rollback.
+4. **Staging release package:** implement application CI/build, immutable artifact mappings, scoped OIDC publication and automatic staging deployment for main/tag events, and offline/mocked checks. Cover source-map publication, per-environment serialization, manual post-deployment migration/verification, and manual rollback. Test failed CI/publication/smoke, failed human migration, operator IP-rule cleanup, and older-tag/newer-schema cases without giving CI database access. Carry this decision into existing release tickets, including [EFC-311](https://linear.app/jayhsia/issue/EFC-311); no new spec or implementation ticket is required.
 5. **Recovery and capacity:** exercise PostgreSQL restore, Blob recovery, App Service restart/Always On behavior, Redis loss/failover and reconnects, and representative booking load. Validate B1/B1ms and Redis memory headroom; adjust the budget if capacity must change.
 6. **Production:** configure domains/TLS, alerts and spending notifications; run the manual migration and tag deployment procedure; verify the end-to-end workflows and record the initial version tuple.
 
-This planning change creates no Azure resources or live account sessions. Agents may later author implementation artifacts and offline tests, but all Azure operation and live verification remain exclusively human-run.
+This documentation change creates no Azure resources, workflows, or live account sessions. Agents may later author implementation artifacts and offline tests. Artifact publication and automatic staging application deployment are the only selected CI Azure exception; infrastructure, database work, production rollout, and recovery remain human-operated. Record live acceptance separately from offline checks.
 
 ## Primary references
 
