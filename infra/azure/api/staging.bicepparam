@@ -39,13 +39,11 @@ param redisHighAvailability = 'Disabled'
 //   { principalId: '<operator object ID>', principalType: 'User' }
 param keyVaultSecretsOfficers = []
 
-param dnsZoneName = 'efcnewlife.com'
-// Not secrets: the operator fills these in and commits them before phase 2.
-param dnsZoneResourceGroup = '<resource group of the efcnewlife.com zone>'
-param dnsRecordName = 'api.dev'
+param apiHostName = 'api.dev.efcnewlife.com'
 
 param adminPortalUrl = 'https://portal.dev.efcnewlife.com'
 param facilityBookingUrl = 'https://booking.dev.efcnewlife.com'
+// Not secrets: the operator fills these in and commits them before phase 2.
 param azureTenantId = ''
 param azureAppClientId = ''
 param sentryDsn = ''

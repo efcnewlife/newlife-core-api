@@ -1,9 +1,10 @@
 """
 Offline policy checks for the staging Core API Bicep (EFC-295).
 
-Compiles infra/azure/api with the local Bicep CLI and checks the decisions the template must encode: no private
-networking, Always On container on port 8000, exact-IP PostgreSQL rules, staging Redis without HA, private Blob
-with soft delete, secrets as Key Vault references, and the shared registry referenced rather than created.
+Compiles infra/azure/api and infra/azure/api-domain with the local Bicep CLI and checks the decisions the templates
+must encode: no private networking, Always On container on port 8000, exact-IP PostgreSQL rules, staging Redis
+without HA, private Blob with soft delete, secrets as Key Vault references, the shared registry referenced rather
+than created, and the one-time hostname/TLS setup kept out of the frequently redeployed API template.
 Never signs in to Azure; a passing run does not prove Azure accepts the template.
 
     uv run pytest tests/infra/test_api_bicep.py -v
@@ -21,6 +22,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 API_DIR = ROOT / "infra" / "azure" / "api"
+DOMAIN_DIR = ROOT / "infra" / "azure" / "api-domain"
 
 
 def _bicep() -> str | None:
@@ -46,10 +48,24 @@ def template() -> dict[str, Any]:
     return _compile("build", API_DIR / "main.bicep")
 
 
+def _parameters(path: Path) -> dict[str, Any]:
+    params = _compile("build-params", path)
+    return {name: entry.get("value") for name, entry in json.loads(params["parametersJson"])["parameters"].items()}
+
+
 @pytest.fixture(scope="module")
 def staging() -> dict[str, Any]:
-    params = _compile("build-params", API_DIR / "staging.bicepparam")
-    return {name: entry.get("value") for name, entry in json.loads(params["parametersJson"])["parameters"].items()}
+    return _parameters(API_DIR / "staging.bicepparam")
+
+
+@pytest.fixture(scope="module")
+def domain_template() -> dict[str, Any]:
+    return _compile("build", DOMAIN_DIR / "main.bicep")
+
+
+@pytest.fixture(scope="module")
+def domain_staging() -> dict[str, Any]:
+    return _parameters(DOMAIN_DIR / "staging.bicepparam")
 
 
 def _resources(template: dict[str, Any]) -> Iterator[dict[str, Any]]:
@@ -75,10 +91,12 @@ def _app_settings(template: dict[str, Any]) -> dict[str, str]:
     return {setting["name"]: setting["value"] for setting in site_config["appSettings"]}
 
 
-def test_staging_parameters_target_the_staging_hostname_in_canada_east(staging):
+def test_staging_parameters_target_the_staging_hostname_in_canada_east(staging, domain_staging):
     assert staging["environmentName"] == "stg"
     assert staging["location"] == "canadaeast"
-    assert f"{staging['dnsRecordName']}.{staging['dnsZoneName']}" == "api.dev.efcnewlife.com"
+    assert staging["apiHostName"] == "api.dev.efcnewlife.com"
+    assert f"{domain_staging['dnsRecordName']}.{domain_staging['dnsZoneName']}" == staging["apiHostName"]
+    assert domain_staging["webAppName"] == staging["webAppName"]
 
 
 def test_no_private_endpoints_vnets_or_nat_are_created(template):
@@ -159,8 +177,20 @@ def test_blob_storage_is_private_hot_lrs_with_14_day_soft_delete(template):
     assert _one(template, "Microsoft.Storage/storageAccounts/blobServices/containers")["properties"]["publicAccess"] == "None"
 
 
-def test_shared_registry_and_dns_zone_are_referenced_not_created(template):
+def test_shared_registry_is_referenced_not_created(template):
     assert not _created(template, "Microsoft.ContainerRegistry/registries")
-    assert not _created(template, "Microsoft.Network/dnsZones")
-    assert _created(template, "Microsoft.Network/dnsZones/CNAME")
-    assert _created(template, "Microsoft.Network/dnsZones/TXT")
+
+
+def test_api_template_leaves_hostname_dns_and_tls_to_the_domain_template(template):
+    domain_types = ["Microsoft.Network/dnsZones/CNAME", "Microsoft.Network/dnsZones/TXT", "Microsoft.Web/sites/hostNameBindings", "Microsoft.Web/certificates"]
+    assert {t: _created(template, t) for t in domain_types} == dict.fromkeys(domain_types, [])
+
+
+def test_domain_template_binds_the_existing_web_app_in_the_existing_zone(domain_template):
+    assert not _created(domain_template, "Microsoft.Web/sites")
+    assert not _created(domain_template, "Microsoft.Network/dnsZones")
+    assert _created(domain_template, "Microsoft.Network/dnsZones/CNAME")
+    assert _created(domain_template, "Microsoft.Network/dnsZones/TXT")
+    assert _created(domain_template, "Microsoft.Web/certificates")
+    binding_states = [b["properties"]["sslState"] for b in _created(domain_template, "Microsoft.Web/sites/hostNameBindings")]
+    assert sorted(binding_states) == ["Disabled", "SniEnabled"]

@@ -7,16 +7,21 @@ Execution boundary: agents author Bicep, scripts, docs, and offline/local checks
 | Verification | Who | Status |
 | --- | --- | --- |
 | `scripts/validate-bicep.sh` (compile, lint, format; warnings fail) | Agent | Passed 2026-11-12, Bicep CLI 0.49.2 |
-| `uv run pytest tests/infra/test_api_bicep.py` (policy checks on the compiled template) | Agent | Passed 2026-11-12 |
+| `uv run pytest tests/infra/test_api_bicep.py` (policy checks on both compiled templates) | Agent | Passed 2026-11-12 |
 | Account checks, `what-if`, deployment, secrets, migration, DNS/TLS, live checks | Human operator | **Pending** — see [Acceptance checklist](#acceptance-checklist-human) |
 
 Offline validation does not prove that Azure accepts the template, that the SKUs exist in Canada East, or that the app works there. Only the operator's `what-if`, deployment, and live checks do.
 
 Network: the ticket text asks for a VNet, Private Endpoints, Private DNS, and private-only Redis. The spec revision of 2026-11-10 ([EFC-292](https://linear.app/jayhsia/issue/EFC-292)) removed all of them for cost, and this template follows the revision: public endpoints, a PostgreSQL exact-IP allowlist, and Redis protected by access key and TLS.
 
-## What the template creates
+## What the templates create
 
-`infra/azure/api/main.bicep` (resource group scope, one deployment per environment) with staging values in `staging.bicepparam`. Names are proposals; the operator confirms they are free.
+Two templates, both deployed into the staging resource group:
+
+- `infra/azure/api/main.bicep` with `staging.bicepparam`: the App Service and data services. Redeployed whenever infrastructure or the image changes.
+- `infra/azure/api-domain/main.bicep` with `staging.bicepparam`: the custom hostname, DNS records, and TLS certificate. Deployed **once**, after the Web App exists. API redeployments never touch it, so HTTPS on the hostname stays up. App Service renews the managed certificate by itself.
+
+Names are proposals; the operator confirms they are free.
 
 | Resource | Staging name | Settings |
 | --- | --- | --- |
@@ -26,16 +31,16 @@ Network: the ticket text asks for a VNet, Private Endpoints, Private DNS, and pr
 | Azure Managed Redis | `redis-newlife-stg` | `Balanced_B0`, **HA disabled**, TLS 1.2, port 10000, non-clustered policy, `NoEviction`, access keys on. Public network access (no IP allowlist exists). |
 | Storage account | `stnewlifecorestg` | StorageV2, Standard LRS, Hot, no hierarchical namespace, no anonymous blob access, TLS 1.2. Blob and container soft delete 14 days. Private container `files`. |
 | Key Vault | `kv-newlife-stg` | Standard, Azure RBAC, soft delete 90 days, purge protection on. Public endpoint (App Service resolves references over it). |
-| DNS records | in the existing `efcnewlife.com` zone | `CNAME api.dev → app-newlife-api-stg.azurewebsites.net`, `TXT asuid.api.dev → <domain verification ID>`. The zone is referenced, never created. Phase 2 only. |
-| Hostname and TLS | `api.dev.efcnewlife.com` | Hostname binding, free App Service managed certificate, SNI binding. Phase 2 only. |
+| DNS records | in the existing `efcnewlife.com` zone | `CNAME api.dev → app-newlife-api-stg.azurewebsites.net`, `TXT asuid.api.dev → <domain verification ID>`. The zone is referenced, never created. `api-domain` template. |
+| Hostname and TLS | `api.dev.efcnewlife.com` | Hostname binding, free App Service managed certificate, SNI binding. `api-domain` template. |
 | Role assignments | — | Web App identity: `Key Vault Secrets User` on the vault and `AcrPull` on the shared registry. Operators in `keyVaultSecretsOfficers`: `Key Vault Secrets Officer` on the vault. |
 
 Not created: VNet, Private Endpoints, Private DNS zones, NAT Gateway, VPN, the shared registry (EFC-294), and the DNS zone.
 
-The template deploys in two phases, chosen by `NEWLIFE_API_IMAGE_DIGEST`:
+The API template deploys in two phases, chosen by `NEWLIFE_API_IMAGE_DIGEST`:
 
 - **Phase 1** (unset): Key Vault, PostgreSQL, Redis, Storage, and the secrets the template can write. No compute is billed yet. The operator then sets the remaining secrets and migrates the empty database.
-- **Phase 2** (set to an image digest): adds the Plan, Web App, role assignments, app outbound IP firewall rules, DNS records, and TLS. Every secret and the schema are in place before the app first starts. Its new role assignments take a few minutes to apply, so the first start usually needs one restart (step 6).
+- **Phase 2** (set to an image digest): adds the Plan, Web App, role assignments, and app outbound IP firewall rules. Every secret and the schema are in place before the app first starts. Its new role assignments take a few minutes to apply, so the first start usually needs one restart (step 6).
 
 ### App settings
 
@@ -84,7 +89,7 @@ No secret appears in Git, template outputs, or the parameter file.
 | --- | --- | --- |
 | Deploying operator | `Contributor` + `Role Based Access Control Administrator` (or `Owner`) on `rg-newlife-staging` | Create resources and their role assignments |
 | Deploying operator | `Role Based Access Control Administrator` on the registry (or `rg-newlife-shared`) | Create the Web App's `AcrPull` assignment |
-| Deploying operator | `DNS Zone Contributor` on the `efcnewlife.com` zone | Create `api.dev` and `asuid.api.dev` |
+| Deploying operator | `DNS Zone Contributor` on the `efcnewlife.com` zone | Create `api.dev` and `asuid.api.dev` (`api-domain` template only) |
 | Deploying operator | `Key Vault Secrets Officer` on the vault (granted by this template through `keyVaultSecretsOfficers`) | Set and read secrets with `az keyvault secret` |
 | Staging Web App (system-assigned identity) | `AcrPull` on the registry, `Key Vault Secrets User` on the vault | Pull the image; resolve Key Vault references |
 | GitHub Actions | **None** | CI has no Azure identity |
@@ -127,7 +132,7 @@ az account show --query '{name:name, id:id, tenant:tenantId}' -o table
   ```
 
   Managed Redis `Balanced_B0` availability and price: check in the Azure portal create blade or pricing calculator for Canada East. If any check fails, stop and record it on the ticket. Do not switch region or SKU without a decision.
-- Confirm `efcnewlife.com` is an Azure DNS zone you can edit, and note its resource group. If a delegated child zone `dev.efcnewlife.com` exists, set `dnsZoneName = 'dev.efcnewlife.com'` and `dnsRecordName = 'api'` instead.
+- Confirm `efcnewlife.com` is an Azure DNS zone you can edit, and note its resource group. If a delegated child zone `dev.efcnewlife.com` exists, set `dnsZoneName = 'dev.efcnewlife.com'` and `dnsRecordName = 'api'` in `infra/azure/api-domain/staging.bicepparam` instead.
 - Check CAA records. If any exist, they must allow the App Service managed certificate issuer: `az network dns record-set caa list -g <zone RG> -z efcnewlife.com -o table`.
 - Confirm the shared registry exists and an image record (EFC-294) is available for the commit you deploy.
 - Check that the proposed names are free. `NXDOMAIN` means free; an answer means taken:
@@ -147,9 +152,12 @@ Edit `infra/azure/api/staging.bicepparam` and commit it (no secrets):
 
 - `postgresOperatorIps`: your current public IPv4 (`curl -s https://api.ipify.org`), as `{ name: '<you>-<place>', ip: '<ip>' }`. Exact addresses only; never `0.0.0.0`.
 - `keyVaultSecretsOfficers`: `{ principalId: '<az ad signed-in-user show --query id -o tsv>', principalType: 'User' }`.
-- `dnsZoneResourceGroup`: the zone's resource group.
 - `azureTenantId`, `azureAppClientId`: the Entra tenant and the Admin Portal SPA app registration (the same client ID the portal uses as `VITE_AZURE_CLIENT_ID`).
 - `sentryDsn`: the Core API staging DSN, or leave empty to disable telemetry.
+
+Edit `infra/azure/api-domain/staging.bicepparam` and commit it:
+
+- `dnsZoneResourceGroup`: the zone's resource group.
 
 ```bash
 scripts/validate-bicep.sh
@@ -234,7 +242,7 @@ uv run python -m portal.cli.main init-all   # catalog seed, then an interactive 
 
 Never run `alembic downgrade` or delete data here. If `upgrade head` fails, stop: do not run phase 2, and post the revision shown by `alembic current` and the error message without connection details. Afterwards remove the worktree (`git worktree remove ../newlife-core-api-stg`) and unset the exported variables.
 
-### 6. Phase 2: App Service, DNS, and TLS
+### 6. Phase 2: App Service
 
 Use the image record from the [registry runbook](azure-container-registry.md#publish-verify-and-lock-human):
 
@@ -246,7 +254,7 @@ export NEWLIFE_PG_ADMIN_PASSWORD="$(az keyvault secret show --vault-name "$KV" -
 az deployment group what-if --resource-group "$RG" --template-file "$TEMPLATE" --parameters "$PARAMS"
 ```
 
-Expect the phase 1 resources unchanged (`NoChange`, or `Ignore` for read-only properties) and creates for the Plan (`B1`), Web App, its `logs` config, two publishing-credential policies, the `Key Vault Secrets User` assignment, the `AcrPull` assignment in `rg-newlife-shared`, `app-outbound-*` firewall rules, `CNAME api.dev` and `TXT asuid.api.dev` in the DNS zone, the hostname binding, and the managed certificate. Check that `linuxFxVersion` shows the digest you expect.
+Expect the phase 1 resources unchanged (`NoChange`, or `Ignore` for read-only properties) and creates for the Plan (`B1`), Web App, its `logs` config, two publishing-credential policies, the `Key Vault Secrets User` assignment, the `AcrPull` assignment in `rg-newlife-shared`, and `app-outbound-*` firewall rules. No DNS records, hostname binding, or certificate. Check that `linuxFxVersion` shows the digest you expect.
 
 ```bash
 az deployment group create --resource-group "$RG" --name newlife-api-staging \
@@ -254,15 +262,36 @@ az deployment group create --resource-group "$RG" --name newlife-api-staging \
 az deployment group show --resource-group "$RG" --name newlife-api-staging --query properties.outputs -o json
 ```
 
-The managed certificate can take several minutes. If it fails because the hostname cannot be validated, check `dig +short CNAME api.dev.efcnewlife.com` and `dig +short TXT asuid.api.dev.efcnewlife.com`, wait a few minutes, and run the same `create` again.
-
 The Web App starts before its new role assignments take effect, so the first image pull or Key Vault resolution can fail. Wait about five minutes, then restart:
 
 ```bash
 az webapp restart --resource-group "$RG" --name "$APP"
 ```
 
-### 7. Entra and API origins
+### 7. Custom domain and TLS (once)
+
+Run only after phase 2 succeeded. Later API deployments do not need this step.
+
+```bash
+DOMAIN_TEMPLATE=infra/azure/api-domain/main.bicep
+DOMAIN_PARAMS=infra/azure/api-domain/staging.bicepparam
+
+az deployment group what-if --resource-group "$RG" --template-file "$DOMAIN_TEMPLATE" --parameters "$DOMAIN_PARAMS"
+```
+
+Expect only creates: `CNAME api.dev` and `TXT asuid.api.dev` in the zone's resource group, the hostname binding on `app-newlife-api-stg`, and one managed certificate. Nothing else in the zone changes.
+
+```bash
+az deployment group create --resource-group "$RG" --name newlife-api-domain-staging \
+  --template-file "$DOMAIN_TEMPLATE" --parameters "$DOMAIN_PARAMS"
+az deployment group show --resource-group "$RG" --name newlife-api-domain-staging --query properties.outputs -o json
+```
+
+The managed certificate can take several minutes. If it fails because the hostname cannot be validated, check `dig +short CNAME api.dev.efcnewlife.com` and `dig +short TXT asuid.api.dev.efcnewlife.com`, wait a few minutes, and run the same `create` again.
+
+Rerun this template only to change the hostname. A rerun binds TLS again, so HTTPS on the hostname drops briefly while it runs.
+
+### 8. Entra and API origins
 
 - API origins are already set by the template: `CORS_ALLOWED_ORIGINS` and `MEMBER_WEB_APPS` allow exactly `https://portal.dev.efcnewlife.com` and `https://booking.dev.efcnewlife.com`. Change them only in `staging.bicepparam`.
 - `azureTenantId` and `azureAppClientId` (step 2) must be filled in, or Microsoft sign-in fails. Check: `az webapp config appsettings list -g "$RG" -n "$APP" --query "[?name=='AZURE_APP_CLIENT_ID'].value" -o tsv` is not empty.
@@ -315,7 +344,7 @@ Then, with a controlled test account and no real member notifications:
 
 - **Always set `NEWLIFE_API_IMAGE_DIGEST` to the digest staging should run.** An infrastructure deployment with an older digest rolls the app back. To keep the running image:
   `az webapp config show -g "$RG" -n "$APP" --query linuxFxVersion -o tsv` (the part after `@`).
-- Each deployment re-applies the hostname binding without TLS and then with TLS, so HTTPS on `api.dev` drops briefly. App settings changes restart the app. Basic has no slots.
+- API deployments leave the custom domain and certificate alone; do not rerun the `api-domain` template for them. App settings changes restart the app. Basic has no slots.
 - Deployments are incremental. Removing an IP from `postgresOperatorIps` or a principal from `keyVaultSecretsOfficers` does not delete the rule or assignment. Remove it by hand:
   `az postgres flexible-server firewall-rule delete -g "$RG" -n "$PG" --rule-name operator-<name> --yes`
 - Temporary single-IP rules for migrations and their cleanup belong to the release procedure ([EFC-296](https://linear.app/jayhsia/issue/EFC-296)).
@@ -336,6 +365,7 @@ All items stay pending until the operator posts evidence on EFC-295 (no keys, pa
 - [ ] All nine secrets exist; no secret value posted anywhere.
 - [ ] Initial migration reached head; `alembic current` revision recorded; `init-all` finished.
 - [ ] Phase 2 `what-if` matched; deployment succeeded; every Key Vault reference `Resolved`.
+- [ ] Domain `what-if` matched; deployment succeeded; certificate issued.
 - [ ] Log stream shows port 8000, Redis rate limiters, and the expiry sweep, with no pull, TLS, or connection errors.
 - [ ] `https://api.dev.efcnewlife.com/healthz` returns `200` with a valid certificate.
 - [ ] PostgreSQL rules are exact IPs only (operators plus every possible outbound IP); `require_secure_transport` is `ON`.
@@ -343,6 +373,7 @@ All items stay pending until the operator posts evidence on EFC-295 (no keys, pa
 - [ ] Sign-in, refresh, logout, revoked refresh token checks passed.
 - [ ] Authorised file link works; anonymous access fails.
 - [ ] Expiry sweep still running after 30+ minutes idle.
+- [ ] After one more API deployment (same digest), `api.dev` is still bound with the same certificate and HTTPS never failed.
 - [ ] Outputs table filled in.
 
 Evidence template:
@@ -350,7 +381,7 @@ Evidence template:
 ```text
 Operator: <name>   Date/time (UTC): <…>   Environment: staging   Subscription: <name>
 Commit: <full SHA>   Image: efcnewlifecr.azurecr.io/newlife-core-api@sha256:<…>   VERSION: <short SHA>
-Phase 1: pass/fail <notes>   Phase 2: pass/fail <notes>   Alembic revision: <rev>
+Phase 1: pass/fail <notes>   Phase 2: pass/fail <notes>   Domain: pass/fail <notes>   Alembic revision: <rev>
 Key Vault references resolved: yes/no   Log stream: pass/fail   healthz/TLS: pass/fail
 PG rules exact-IP: yes/no   Redis HA/TLS/policy: pass/fail   Auth: pass/fail   Files: pass/fail   Expiry: pass/fail
 Cleanup / follow-ups: <…>
@@ -367,4 +398,5 @@ Cleanup / follow-ups: <…>
 | `webAppName` / `webAppDefaultHostName` | `app-newlife-api-stg` / `app-newlife-api-stg.azurewebsites.net` | |
 | `webAppPrincipalId` | a GUID | |
 | `webAppPossibleOutboundIps` | comma-separated IPv4 list, same as the `app-outbound-*` rules | |
-| `customHostName` | `api.dev.efcnewlife.com` | |
+| `hostName` (domain template) | `api.dev.efcnewlife.com` | |
+| `certificateThumbprint` (domain template) | 40 hex characters | |

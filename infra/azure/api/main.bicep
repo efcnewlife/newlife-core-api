@@ -1,5 +1,6 @@
 // Core API environment: App Service Plan + Web App for Containers, PostgreSQL Flexible Server, Azure Managed Redis,
-// Blob Storage, Key Vault, and the api hostname in the existing public DNS zone. One deployment per environment.
+// Blob Storage, and Key Vault. One deployment per environment. The custom hostname and its TLS certificate are a
+// one-time setup in infra/azure/api-domain, so redeploying this template never touches them.
 // Public endpoints only: no VNet, Private Endpoints, or Private DNS (removed for cost on 2026-11-10, ADR 0039).
 // Authored and validated offline. A human operator runs what-if and deploys it; see docs/azure-staging-api.md.
 targetScope = 'resourceGroup'
@@ -31,7 +32,7 @@ param keyVaultName string
 @description('Plan size. B1 is the initial candidate; each environment is sized independently.')
 param appServicePlanSku string = 'B1'
 
-@description('Empty: phase 1, create data services and Key Vault only. Set to the image digest (sha256:...) to create the Plan, Web App, DNS records, and TLS binding.')
+@description('Empty: phase 1, create data services and Key Vault only. Set to the image digest (sha256:...) to create the Plan and Web App.')
 param apiImageDigest string = ''
 
 @description('Release identity reported by the API as VERSION: short commit for staging, x.y.z for production (ADR 0038).')
@@ -70,12 +71,8 @@ type secretsOfficer = {
   principalType: 'User' | 'Group' | 'ServicePrincipal'
 }
 
-// [DNS]
-@description('Existing public zone; referenced, never created.')
-param dnsZoneName string
-param dnsZoneResourceGroup string
-@description('Record name relative to dnsZoneName, e.g. api.dev for api.dev.efcnewlife.com.')
-param dnsRecordName string
+@description('Public API hostname, passed to the API as APP_FQDN. Bound by infra/azure/api-domain.')
+param apiHostName string
 
 // [Application]
 param adminPortalUrl string
@@ -90,8 +87,6 @@ param graphMailSenderMailbox string = ''
 param graphMailOverrideTo string = ''
 
 var deployApi = !empty(apiImageDigest)
-var customHostName = '${dnsRecordName}.${dnsZoneName}'
-var customHostSlug = replace(customHostName, '.', '-')
 var blobContainerName = 'files'
 
 // Built-in role IDs: https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles/security
@@ -369,7 +364,7 @@ resource webApp 'Microsoft.Web/sites@2025-03-01' = if (deployApi) {
         { name: 'ENV', value: environmentName }
         { name: 'VERSION', value: appRelease }
         { name: 'WEB_CONCURRENCY', value: '1' }
-        { name: 'APP_FQDN', value: customHostName }
+        { name: 'APP_FQDN', value: apiHostName }
         { name: 'ADMIN_PORTAL_URL', value: adminPortalUrl }
         { name: 'FACILITY_BOOKING_BASE_URL', value: facilityBookingUrl }
         { name: 'CORS_ALLOWED_ORIGINS', value: '${adminPortalUrl},${facilityBookingUrl}' }
@@ -492,55 +487,6 @@ module webAppAcrPull 'modules/acr-pull.bicep' = if (deployApi) {
   }
 }
 
-// [Hostname and TLS]
-module dnsRecords 'modules/dns-records.bicep' = if (deployApi) {
-  name: 'dns-${customHostSlug}'
-  scope: resourceGroup(dnsZoneResourceGroup)
-  params: {
-    zoneName: dnsZoneName
-    recordName: dnsRecordName
-    target: webApp!.properties.defaultHostName
-    verificationId: webApp!.properties.customDomainVerificationId
-  }
-}
-
-// Bound without TLS first; the managed certificate needs the binding, and hostname-tls then enables SNI.
-// Every redeploy repeats this, so HTTPS on the custom hostname drops briefly during the deployment.
-resource hostNameBinding 'Microsoft.Web/sites/hostNameBindings@2025-03-01' = if (deployApi) {
-  parent: webApp
-  name: customHostName
-  properties: {
-    siteName: webAppName
-    hostNameType: 'Verified'
-    sslState: 'Disabled'
-  }
-  dependsOn: [
-    dnsRecords
-  ]
-}
-
-resource certificate 'Microsoft.Web/certificates@2025-03-01' = if (deployApi) {
-  name: '${webAppName}-${customHostSlug}'
-  location: location
-  tags: tags
-  properties: {
-    serverFarmId: plan.id
-    canonicalName: customHostName
-  }
-  dependsOn: [
-    hostNameBinding
-  ]
-}
-
-module hostNameTls 'modules/hostname-tls.bicep' = if (deployApi) {
-  name: 'tls-${customHostSlug}'
-  params: {
-    webAppName: webAppName
-    hostName: customHostName
-    thumbprint: certificate!.properties.thumbprint
-  }
-}
-
 output keyVaultName string = keyVault.name
 output keyVaultUri string = keyVault.properties.vaultUri
 output postgresFqdn string = postgres.properties.fullyQualifiedDomainName
@@ -550,4 +496,3 @@ output webAppName string = deployApi ? webApp!.name : ''
 output webAppDefaultHostName string = deployApi ? webApp!.properties.defaultHostName : ''
 output webAppPrincipalId string = deployApi ? webApp!.identity.principalId : ''
 output webAppPossibleOutboundIps string = deployApi ? webApp!.properties.possibleOutboundIpAddresses : ''
-output customHostName string = customHostName
