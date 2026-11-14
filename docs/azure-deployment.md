@@ -1,8 +1,8 @@
-# Azure deployment plan
+# NewLife deployment plan across Azure and Cloudflare
 
-Design assembled on 2026-11-10 and revised on 2026-11-13 through [EFC-322](https://linear.app/jayhsia/issue/EFC-322). Decisions are recorded in [ADR 0039](adr/0039-azure-deployment-and-release-direction.md) and the [EFC-291 spec](https://linear.app/jayhsia/issue/EFC-291). This document describes the selected deployment direction; it does not report provisioned Azure resources or implemented pipelines.
+Design assembled on 2026-11-10 and revised on 2026-11-14 for Cloudflare hosting and DNS, preserving [EFC-322](https://linear.app/jayhsia/issue/EFC-322). Decisions are recorded in [ADR 0039](adr/0039-azure-deployment-and-release-direction.md) and the [EFC-291 spec](https://linear.app/jayhsia/issue/EFC-291). This document describes the selected deployment direction; it does not report provisioned Azure resources or implemented pipelines.
 
-The selected flow automatically publishes and deploys `main` and eligible tags to staging using GitHub OIDC. Both environments retain manual migrations and image rollback. Staging deploys first and the operator migrates afterward; production migrates first and the operator then deploys the verified tag manually. CI migration was considered and rejected because runner database access and firewall cleanup add unnecessary operational complexity for this application.
+The selected flow automatically publishes and deploys `main` and eligible tags to staging using scoped provider credentials (GitHub OIDC for Azure). Both environments retain manual migrations and image rollback. Staging deploys first and the operator migrates afterward; production migrates first and the operator then deploys the verified tag manually. CI migration was considered and rejected because runner database access and firewall cleanup add unnecessary operational complexity for this application.
 
 ## Mandatory execution boundary
 
@@ -16,7 +16,7 @@ After human setup, application workflows may use scoped GitHub OIDC federation f
 - Use Canada Central (Toronto) for regional resources. On 2026-11-12 the operator found PostgreSQL provisioning restricted in Canada East for the grant subscription, so the earlier Canada East choice is superseded (see [ADR 0039](adr/0039-azure-deployment-and-release-direction.md)). Validate each SKU, quota, and capacity before provisioning; Canada Central support for PostgreSQL 18 `Standard_B1ms`, Managed Redis `Balanced_B0`, and Linux App Service `B1` is a pending human check. Canada Central has Availability Zones, but this plan does not change the HA choices; whether production Redis HA spreads its nodes across zones is not part of the plan or the estimate. The API App Service of both environments is in East US 2 (no `B1` quota in Canada Central), and so is staging Managed Redis (no capacity). PostgreSQL, Storage, and Key Vault stay in Canada Central. These placement exceptions are recorded in ADR 0039.
 - Use the USD 2,000 annual nonprofit grant, with no self-funded overage. Verify the actual grant period, remaining credit, eligible services, subscription spending-limit behavior, and other workloads before committing resources.
 - Keep staging available around the clock. The user is the primary contact; email alerts are sufficient and overnight incidents can wait until the next day.
-- Use independent repository versions and the existing `efcnewlife.com` Azure DNS zone. Its existence is user-reported, not independently verified.
+- Use independent repository versions. Migrate authoritative DNS for `efcnewlife.com` to Cloudflare Free and retire the Azure DNS zone only after successful human cutover acceptance. This is a design revision, not evidence of live migration.
 
 ## Resource layout
 
@@ -24,8 +24,8 @@ After human setup, application workflows may use scoped GitHub OIDC federation f
 | --- | --- | --- |
 | Core API | Linux App Service Web App on its own Plan | Separate Linux App Service Web App and Plan |
 | App Service sizing | B1 initial validation candidate, Always On | B1 initial validation candidate, Always On; independently adjustable |
-| Portal | Its own Static Web App, Free | Its own Static Web App, Standard from launch |
-| Facility Booking | Its own Static Web App, Free | Its own Static Web App, Standard from launch |
+| Portal | Its own Workers Static Assets deployment, Free | Separate Workers Static Assets deployment, Free baseline |
+| Facility Booking | Its own Workers Static Assets deployment, Free | Separate Workers Static Assets deployment, Free baseline |
 | PostgreSQL | Separate Flexible Server, B1ms candidate, 32 GiB estimating assumption | Separate server with the same initial estimating assumptions, subject to load testing |
 | Managed Redis | Separate Balanced instance, smallest viable SKU, no HA | Separate Balanced instance, smallest viable SKU, HA enabled |
 | Blob Storage | Separate Standard GPv2 account | Separate Standard GPv2 account |
@@ -36,7 +36,7 @@ After human setup, application workflows may use scoped GitHub OIDC federation f
 
 Balanced B0 is the pricing candidate, not a reservation of capacity or a proven memory requirement. Validate client connection policy, TLS, connection limits, memory headroom, and behavior on restart/failover. Managed Redis supports database 0 only; Core API now keeps all Redis state in one database 0 keyspace (see the [Core API image and Managed Redis runbook](azure-core-api-image.md)). Prefer a compatible non-clustered policy initially if supported by the selected SKU, and test rate limiter operations rather than assuming compatibility.
 
-Static Web Apps distributes static assets globally. It has no Canada region, so its supported resource region is selected separately; this is not a guarantee that frontend content stays in Canada. The API remains separately hosted on App Service, using the existing MSAL and API authentication flows.
+Cloudflare distributes frontend static assets globally. Workers Static Assets replaces the four previously planned Azure Static Web Apps; no Canada-only frontend storage/processing guarantee is made. The API remains separately hosted on App Service, using the existing MSAL and API authentication flows.
 
 ## Repository ownership
 
@@ -44,12 +44,12 @@ Revision 2026-11-13 ([EFC-308](https://linear.app/jayhsia/issue/EFC-308)): all A
 
 | Repository | Owns |
 | --- | --- |
-| `newlife-infra` | Bicep and parameters for API apps/plans, PostgreSQL and its firewall allowlist, Redis, Blob, Key Vault, shared ACR, Portal and Booking Static Web Apps, domain bindings and DNS records, backend monitoring; cost estimate; Bicep validation and tests; infrastructure runbooks |
+| `newlife-infra` | Bicep and parameters for API apps/plans, PostgreSQL and its firewall allowlist, Redis, Blob, Key Vault, shared ACR and Azure API domain bindings; Cloudflare DNS/edge configuration records, backend monitoring; cost estimate; Bicep validation and tests; infrastructure runbooks |
 | `newlife-core-api` | API source, Dockerfile, image build and local smoke, [image publication](azure-container-registry.md), configuration contract, Alembic revisions, application CI, this spec and ADR 0039 |
-| `newlife-portal-frontend` | Portal source, builds, frontend workflows |
-| `facility-booking-frontend` | Booking source, builds, frontend workflows |
+| `newlife-portal-frontend` | Portal source, builds, static-asset deployment configuration and frontend workflows |
+| `facility-booking-frontend` | Booking source, builds, static-asset deployment configuration and frontend workflows |
 
-Keep Bicep modules reusable, with environment-specific parameters. Reference the existing public DNS zone; do not recreate or transfer it. Data services and credentials remain separate per environment.
+Keep Bicep modules reusable, with environment-specific parameters. Use Cloudflare Dashboard configuration plus a non-secret operator runbook for public DNS and security rules; do not introduce Terraform. Decouple Azure hostname/TLS binding from writes to the old Azure DNS zone so future Bicep runs cannot recreate the retired dependency. Data services and credentials remain separate per environment.
 
 Infrastructure delivery: the agent authors and offline-validates Bicep and operator procedures. The human runs Azure `what-if`, reviews changes/costs, and applies them. Infrastructure CI does not apply changes. Application workflows may publish artifacts and deploy staging using scoped OIDC federation. Humans establish operator/runtime identities and workflow federation/RBAC, documenting actual permission boundaries. Agent-run cloud inspection is prohibited.
 
@@ -57,18 +57,30 @@ Infrastructure delivery: the agent authors and offline-validates Bicep and opera
 
 | Application | Production | Staging |
 | --- | --- | --- |
-| Core API | `api.efcnewlife.com` | `api.dev.efcnewlife.com` |
-| Portal | `portal.efcnewlife.com` | `portal.dev.efcnewlife.com` |
-| Booking | `booking.efcnewlife.com` | `booking.dev.efcnewlife.com` |
+| Core API | `api.efcnewlife.com` | `api-dev.efcnewlife.com` |
+| Portal | `portal.efcnewlife.com` | `portal-dev.efcnewlife.com` |
+| Booking | `booking.efcnewlife.com` | `booking-dev.efcnewlife.com` |
 
-Here `dev` means staging, not local development. Configure exact HTTPS origins consistently in frontend builds, API CORS/member-app settings, Entra redirect URIs, and email/application links. Bind managed certificates to the full hostnames and verify the existing DNS/CAA configuration.
+Here `dev` means staging, not local development. Configure exact HTTPS origins consistently in frontend builds, API CORS/member-app settings, Entra redirect URIs, and email/application links. Use native Workers Custom Domains for frontend edge TLS; retain valid API edge/origin TLS and check DNSSEC/CAA and certificate-validation requirements. Do not promise API managed-certificate renewal support behind Cloudflare proxying.
 
-- API ingress is public HTTPS. The user removed Private Endpoints, Private DNS zones, and VNet integration on 2026-11-10 to save about USD 31/month; see the [cost estimate](https://github.com/efcnewlife/newlife-infra/blob/main/azure/cost/README.md).
+- API ingress is public HTTPS through the enabled Cloudflare proxy. Protect the Azure origin against ordinary direct access while preserving required platform probes and deployment access; Cloudflare IP ranges alone do not authenticate this particular zone. The user removed Private Endpoints, Private DNS zones, and VNet integration on 2026-11-10 to save about USD 31/month; see the [cost estimate](https://github.com/efcnewlife/newlife-infra/blob/main/azure/cost/README.md).
 - PostgreSQL uses `Public access (allowed IP addresses)`. The firewall allows every App Service possible outbound IP plus explicit developer/operator IPs, with TLS required. Those outbound IPs are shared with other customers on the same deployment unit and can change, so re-check the list after scaling. Do not enable the all-Azure-services rule or unrestricted public access.
 - Managed Redis has no IP allowlist, so both instances use public access from all networks, protected by access keys or Entra authentication and TLS. Sharing one instance between staging and production is under consideration, not selected.
 - Blob endpoints remain reachable by external browsers for authorized/SAS URLs, with anonymous access disabled. Use Hot/LRS without hierarchical namespace, 14-day soft delete, and a 10 GB first-year live-data estimating assumption. There is no initial video workload.
 - ACR Basic and Key Vault can use authenticated public endpoints initially. Use image-pull identity/RBAC and Key Vault references where supported; application secrets stay out of Git and frontend builds. The existing Blob adapter still uses connection-string/account-key SAS, so do not assume application-level managed identity conversion is already implemented.
 - No Private Endpoint, NAT Gateway, permanent administration VM, VPN Gateway, or Container Apps environment is included.
+
+## Cloudflare edge and DNS cutover
+
+Use Cloudflare Free authoritative DNS and keep API proxying enabled. Inventory existing records, mail/ownership TXT records, CAA, delegation, TTLs and registrar DNSSEC/DS before changing nameservers. Coordinate the flat staging hostname migration with builds, exact CORS/member-app origins, Entra redirects and application links. A maintenance cutover is acceptable because the applications are not yet in formal use. Prepare rollback and validate all services before deleting the old Azure DNS zone; changing nameservers alone does not stop zone hosting charges.
+
+Start with narrow scan-path blocking and conservative rate limiting. Preserve valid API paths, OPTIONS, assets, login, health/warm-up, deployment and required validation traffic. Staging stays public; browser API challenges and a tester-only access gate are excluded. Observe available security events for one week, acknowledging free-plan retention/sampling limits, before the operator selects any country denylist. Apply approved geographic rules to both websites and APIs with false-positive review and reversal procedures. No arbitrary initial country list or automatic blocking job is selected.
+
+Workers Static Assets uses four independent static deployment units with SPA fallback and native Custom Domains. Disable or protect unused default, preview, version, deployment and legacy URLs, then test them; setting one default-URL flag does not prove all alternatives are closed. Verify the actual WAF path and same-zone subrequests. Avoid unnecessary dynamic Worker execution and check free-tier build/file/security limits. Cache public static assets only; authenticated/user-specific API responses must not enter shared caching. Reuse existing request-context/rate-limit boundaries if trusted proxy-chain IP handling needs adjustment.
+
+Use Full (strict) and valid TLS on both browser-to-edge and edge-to-Azure API segments. API origin certificate-renewal architecture is explicitly deferred; a currently valid certificate is not evidence of future proxied renewal support. DNS-only is an emergency human-operated fallback, never the initial/default API setting: adjust Cloudflare-only origin restrictions and retain valid direct-client TLS first, record the loss of API edge protection, and restore proxying after recovery. This does not affect frontend CDN hosting.
+
+Cloudflare DNS/security setup and cloud acceptance remain human-operated. Application CI's existing staging-publication exception is preserved using narrowly scoped provider-supported credentials after human setup; it does not authorize infrastructure mutation, production deployment, database CI or agent-triggered workflows. Optional nonprofit programs are not a deployment prerequisite or a guaranteed discount.
 
 ## CI and deployment events
 
@@ -98,7 +110,7 @@ Validate the container entrypoint, listening port, and App Service container con
 
 Use pnpm with the committed lockfile, package-read authentication for `@efcnewlife/newlife-ui`, type checks, relevant tests, and production/staging builds. API URLs and MSAL/Sentry settings are build-time inputs: build distinct environment artifacts from the same tagged source when needed. Do not promote staging `dist` unchanged to production when it embeds staging endpoints.
 
-The publishing procedure creates and uploads required source maps using the exact Sentry release ID used by that build, whether the publication is automated staging or manual production. Source-map upload failure blocks publishing the new build while the running website remains available. Preserve [ADR 0038](adr/0038-sentry-observability-boundaries.md): `<repo>@<short-commit>` for staging and `<repo>@<version>` for production. Keep Sentry auth tokens and package tokens in CI secrets, never `VITE_*`. Frontends follow the same main/release/tag flow, but publish to Static Web Apps rather than ACR/App Service; detailed production publication remains existing frontend release work.
+The publishing procedure creates and uploads required source maps using the exact Sentry release ID used by that build, whether the publication is automated staging or manual production. Source-map upload failure blocks publishing the new build while the running website remains available. Preserve [ADR 0038](adr/0038-sentry-observability-boundaries.md): `<repo>@<short-commit>` for staging and `<repo>@<version>` for production. Keep Sentry auth tokens and package tokens in CI secrets, never `VITE_*`. Frontends follow the same main/release/tag flow, but publish static assets to Cloudflare rather than Static Web Apps or ACR/App Service; detailed production publication remains existing frontend release work.
 
 Configure SPA navigation fallback and explicit cache behavior so direct links work and an old HTML entry point does not strand users on unavailable assets. Keep previous deployable artifacts for rollback. Smoke-test HTTPS, a deep link, login, and API connectivity after deployment.
 
@@ -143,40 +155,21 @@ Use a separate database recovery procedure for destructive data mistakes; applic
 - Proposed budget notifications for final review: annual grant-use thresholds at 75%, 85%, and 95%, plus a forecast-over-budget alert. Include all grant-funded subscription resources, not only the new apps. These are alerts, not an enforced cap, and billing data is delayed.
 - Before exhaustion, reduce staging expenditure first, then arrange a user-approved production pause if necessary. Stopping a Web App does not stop its Plan charge; stopping PostgreSQL leaves storage/backup charges and automatically restarts compute after seven days. Cost reduction must be modeled per resource, preserving data, rather than assuming a generic stop action makes everything free. Grant expiration and any account-level spending limit need a separate pre-expiry check.
 
-## Budget basis (Canada East history)
+## Budget basis
 
-Indicative Canada East USD PAYG estimate, researched on 2026-11-09/10, using 730 hours/month and no reservations. Figures are planning inputs, not an Azure quote or proof of service/grant eligibility.
+The itemized inventory in [`newlife-infra/azure/cost/`](https://github.com/efcnewlife/newlife-infra/blob/main/azure/cost/README.md) is authoritative. Its 2026-11-14 post-cutover selected design totals about **USD 106.95/month (USD 1,283.42/year)** before tax and other grant spend. This reuses the recorded Azure price inputs; it is not a new price quote or observed bill savings. The prior USD 125.89/month estimate included two Standard SWAs, SWA bandwidth and public Azure DNS; their USD 18.94/month illustrative allowance is removed from the selected steady-state design, with historical rows retained.
 
-The itemized inventory in [`newlife-infra/azure/cost/`](https://github.com/efcnewlife/newlife-infra/blob/main/azure/cost/README.md) supersedes the table below. With Private Endpoints removed and prices rechecked for Canada Central on 2026-11-12, it gives about USD 125.89/month (USD 1,510.70/year, after the 2026-11-13 East US 2 moves) before tax and other grant spend; it also adds further variable charges and does not apply shared free allowances.
+Cloudflare DNS and static-only frontend hosting use a Free baseline outside the Azure grant. Dynamic Worker execution, builds, CI/package use, optional products and transition costs must be checked separately. Azure DNS continues charging until its old zone is actually deleted after acceptance. Existing API certificate renewal behind the proxy remains unverified and deferred; no paid renewal product is budgeted. Nonprofit support is optional, not guaranteed.
 
-| Item | Monthly USD assumption |
-| --- | ---: |
-| Two Linux B1 App Service Plans | 26.28 |
-| Two PostgreSQL B1ms servers, each 32 GiB | 38.62 |
-| Managed Redis Balanced B0, three nodes total | 37.23 |
-| Two Standard and two Free Static Web Apps | 18.00 |
-| Shared ACR Basic | 5.07 |
-| Four Private Endpoints | 29.20 |
-| Two shared Private DNS zones | 1.00 |
-| Small illustrative Blob, Key Vault, additional public DNS query usage | 0.44 |
-| Existing public DNS zone base charge, if charged to this grant | 0.50 |
-| **Illustrative baseline** | **156.34** |
-
-The baseline is approximately USD 1,876/year, leaving about USD 124/year before further usage. The small-use row assumes 10 GB live plus 2 GB soft-deleted Blob data, 10k writes/100k reads/10k other Blob operations, 20k Key Vault operations across both vaults, and 100k additional public DNS queries. These are examples to replace with measured usage, not quotas.
-
-Logs, Private Link data processing, excess backup/retained versions, Private DNS queries, bandwidth beyond available allowances, metric alert charges, CI/package usage, and tax are not comprehensively included. For illustration, adding 1 GB/month of charged Analytics Logs at USD 2.76 and 5 GB/month of charged North American internet egress at USD 0.435 moves the estimate to roughly USD 159.53/month (USD 1,914/year), before other variable charges. Do not assume free allowances are unused elsewhere. Sentry account charges, if any, are outside the Azure grant and require their own check.
-
-The rejected two-environment Container Apps estimate was about USD 210/month after its custom-VNet managed Public IP and Load Balancer costs were included. Earlier approximate USD 145-160 Container Apps estimates omitted those costs and are not valid complete budgets. App Service removes those particular Container Apps resources; it does not remove the four Private Endpoints.
-
-Final budget acceptance requires live calculator/account verification and a credible forecast within the remaining grant. If testing requires larger plans/SKUs or forecast usage exceeds the grant, revisit sizing/staging expenditure before provisioning those changes. No self-funded excess is implied by accepting this architecture.
+Retain the existing backend sizing, regional exceptions, separation and data-preserving pause rules. Check grant eligibility/expiry, remaining credit, account spending limits, taxes, logs/egress/backup and other workloads before adding recurring charges. Compare rejected alternatives on the same frontend/DNS baseline rather than mixing historical totals. Earlier Container Apps estimates and private-network budgets remain historical trade-off evidence in ADR 0039.
 
 ## Delivery sequence and acceptance gates
 
 The agent delivers offline-validated code/templates/CSV/workflows/runbooks for these stages. Human setup and live acceptance stay pending until operator evidence is recorded. After the operator establishes scoped federation and enables the application workflows, CI may publish artifacts and automatically deploy staging within the boundary above; the agent does not trigger those workflows.
 
-1. **Account checks and prerequisites:** verify grant/expiry/spending controls, existing DNS and permissions, Canada Central capacity and SKU support, the supported Static Web Apps resource region, Sentry entitlements, package access, and Entra registrations/redirects. Confirm which resources already consume the grant.
+1. **Account checks and prerequisites:** verify grant/expiry/spending controls, existing DNS and permissions, Canada Central capacity and SKU support, Cloudflare domain/account access and free-plan limits, Sentry entitlements, package access, and Entra registrations/redirects. Confirm which resources already consume the grant.
 2. **Application readiness:** fix/verify the current container entrypoint (it refers to `gunicorn_conf.py`, absent in the inspected checkout), constrain Docker build context with `.dockerignore`, test database/Redis TLS over public endpoints, adapt Redis single-database usage, verify HTTPS staging links, and disable production mock login. Existing auth/Redis failure behavior needs its own focused readiness review; do not promise immediate access-token revocation solely because a blacklist provider exists.
-3. **Infrastructure:** implement Bicep in `newlife-infra`, review `what-if` and costs, bootstrap identities/secrets, create staging first, and validate connections from the real App Service container. Keep production resources gated on the account and budget checks.
+3. **Infrastructure and edge:** author Azure Bicep plus human Cloudflare DNS/security/cutover procedures in `newlife-infra`; preserve the selected backend resources and regions. The operator reviews changes/costs, bootstraps identities/secrets, establishes edge/hostname readiness and creates staging first. Do not build Azure SWAs. Keep production gated on budget and acceptance.
 4. **Staging release package:** implement application CI/build, immutable artifact mappings, scoped OIDC publication and automatic staging deployment for main/tag events, and offline/mocked checks. Cover source-map publication, per-environment serialization, manual post-deployment migration/verification, and manual rollback. Test failed CI/publication/smoke, failed human migration, operator IP-rule cleanup, and older-tag/newer-schema cases without giving CI database access. Carry this decision into existing release tickets, including [EFC-311](https://linear.app/jayhsia/issue/EFC-311); no new spec or implementation ticket is required.
 5. **Recovery and capacity:** exercise PostgreSQL restore, Blob recovery, App Service restart/Always On behavior, Redis loss/failover and reconnects, and representative booking load. Validate B1/B1ms and Redis memory headroom; adjust the budget if capacity must change.
 6. **Production:** configure domains/TLS, alerts and spending notifications; run the manual migration and tag deployment procedure; verify the end-to-end workflows and record the initial version tuple.
@@ -188,6 +181,6 @@ This documentation change creates no Azure resources, workflows, or live account
 - [App Service plans](https://learn.microsoft.com/en-us/azure/app-service/overview-hosting-plans), [Linux pricing](https://azure.microsoft.com/en-us/pricing/details/app-service/linux/), [VNet integration](https://learn.microsoft.com/en-us/azure/app-service/overview-vnet-integration), [Always On](https://learn.microsoft.com/en-us/azure/app-service/configure-common#configure-general-settings).
 - [PostgreSQL Private Link](https://learn.microsoft.com/en-us/azure/postgresql/network/concepts-networking-private-link), [public networking](https://learn.microsoft.com/en-us/azure/postgresql/network/concepts-networking-public), [backup/restore](https://learn.microsoft.com/en-us/azure/postgresql/backup-restore/concepts-backup-restore), [pricing inputs](https://azure.microsoft.com/api/v3/pricing/postgresql/calculator/?culture=en-us&currency=USD).
 - [Managed Redis tier/capacity](https://learn.microsoft.com/en-us/azure/redis/plan-tiers-and-capacity), [Private Link](https://learn.microsoft.com/en-us/azure/redis/private-link), [migration differences](https://learn.microsoft.com/en-us/azure/redis/migrate/migrate-basic-standard-premium-understand), [pricing inputs](https://azure.microsoft.com/api/v3/pricing/managed-redis/calculator/?culture=en-us&currency=USD).
-- [Static Web Apps plans](https://learn.microsoft.com/en-us/azure/static-web-apps/plans), [custom domains](https://learn.microsoft.com/en-us/azure/static-web-apps/custom-domain), [pricing inputs](https://azure.microsoft.com/api/v3/pricing/app-service/static/calculator/?culture=en-us&currency=USD).
+- [Workers Static Assets](https://developers.cloudflare.com/workers/static-assets/), [billing and limits](https://developers.cloudflare.com/workers/static-assets/billing-and-limitations/), [Workers Custom Domains](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/), [custom rules](https://developers.cloudflare.com/waf/custom-rules/).
 - [Private Link pricing](https://azure.microsoft.com/en-us/pricing/details/private-link/), [DNS pricing](https://azure.microsoft.com/en-us/pricing/details/dns/), [ACR pricing](https://azure.microsoft.com/en-us/pricing/details/container-registry/), [Storage pricing inputs](https://azure.microsoft.com/api/v3/pricing/storage/calculator/?culture=en-us&currency=USD), [Key Vault pricing](https://azure.microsoft.com/en-us/pricing/details/key-vault/), [Monitor pricing](https://azure.microsoft.com/en-us/pricing/details/monitor/), [bandwidth pricing](https://azure.microsoft.com/en-us/pricing/details/bandwidth/).
 - [Azure region/AZ list](https://learn.microsoft.com/en-us/azure/reliability/regions-list), [Bicep overview](https://learn.microsoft.com/en-us/azure/azure-resource-manager/bicep/overview), [GitHub Azure OIDC](https://docs.github.com/en/actions/how-tos/secure-your-work/security-harden-deployments/oidc-in-azure), [budget behavior](https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/tutorial-acm-create-budgets), [Container Apps managed resources](https://learn.microsoft.com/en-us/azure/container-apps/custom-virtual-networks#managed-resources).
