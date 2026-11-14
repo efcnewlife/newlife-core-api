@@ -4,12 +4,14 @@ Runbook for [EFC-294](https://linear.app/jayhsia/issue/EFC-294) under the [Azure
 
 The shared registry itself (template, region, role assignments, its verification checklist) is infrastructure and lives in `newlife-infra`: see the [shared container registry runbook](https://github.com/efcnewlife/newlife-infra/blob/main/docs/azure-container-registry.md). Deploy the registry and grant your `AcrPush` role there first.
 
-Execution boundary: agents author scripts, docs, and offline/local checks only. Every Azure account or registry operation below marked **(human)** is performed by a human operator. No agent or CI job signs in to Azure, pushes or pulls through ACR, or deletes images.
+Execution boundary: agents author scripts, docs, and offline/local checks only. Every Azure account or registry operation below marked **(human)** is performed by a human operator. No agent signs in to Azure, pushes or pulls through ACR, or deletes images. Since [EFC-322](https://linear.app/jayhsia/issue/EFC-322) (ADR 0039), the one exception is the CI workflow: once the operator has set up its OIDC identity, it publishes `main` and release-tag images and deploys them to staging ([CI publication](#ci-publication)).
 
 | Verification | Who | Status |
 | --- | --- | --- |
 | Local `linux/amd64` image build with OCI labels + `scripts/local-image-smoke.sh` | Agent | Passed 2026-11-12, see [Local build record](#local-build-record) |
 | Push, pull, lock, cleanup | Human operator | **Pending** — see the registry runbook's [human verification checklist](https://github.com/efcnewlife/newlife-infra/blob/main/docs/azure-container-registry.md#human-verification-checklist) |
+| `scripts/acr-publish.sh`, `scripts/release-target.sh`, `scripts/deploy-staging.sh` against fake `az`/`docker`/`curl` (`scripts/*.test.sh`) | Agent | Passed 2026-11-13 |
+| CI publication and staging deployment with OIDC | Human operator | **Pending** — set up and verified with the [staging release runbook](https://github.com/efcnewlife/newlife-infra/blob/main/docs/azure-staging-release.md) |
 
 ## Image names and tags
 
@@ -31,7 +33,7 @@ Execution boundary: agents author scripts, docs, and offline/local checks only. 
 
 Build for `linux/amd64`. App Service runs amd64, and Apple Silicon builds arm64 unless told otherwise. `--provenance=false --sbom=false` keeps the pushed artifact a single image manifest instead of an index with attestation entries, which App Service support is untested for.
 
-Release images are built on the operator's machine from the exact Git tag, because CI has no registry access. A CI-built image artifact is later work ([EFC-311](https://linear.app/jayhsia/issue/EFC-311), formerly EFC-296).
+CI builds and publishes `main` and release-tag images ([CI publication](#ci-publication)). Build by hand only when CI publication is off or broken.
 
 ```bash
 git status --porcelain                      # must print nothing: build only committed source
@@ -63,7 +65,28 @@ One of three amd64-emulated smoke runs that day failed only the last step (`life
 
 The local image ID is not the registry digest. The digest exists only after the human pushes.
 
+## CI publication
+
+`.github/workflows/ci.yml` ([EFC-311](https://linear.app/jayhsia/issue/EFC-311)):
+
+| Event | Tests, image build, local smoke | Publish to ACR | Deploy staging |
+| --- | --- | --- | --- |
+| Pull request, `release/*` branch | Yes | No | No |
+| Push to `main` | Yes | Tag `main-<12-char commit>` | Yes |
+| Tag `x.y.z` on a commit of an `origin/release/*` branch | Yes | Tag `x.y.z` | Yes |
+| Any other tag (`v1.0.0`, `1.0`, `1.0.0-rc.1`, a tag only on `main`) | Fails in `release-target.sh` | No | No |
+
+- `scripts/release-target.sh` decides the image tag. The staging `VERSION` (Sentry release, ADR 0038) is the 7-character commit, for tags too.
+- `scripts/acr-publish.sh` pushes the smoke-tested image, then locks the tag and the digest. It never overwrites a tag: an existing tag with the same revision label is reused (a rerun), any other existing tag fails the run. A refused lock fails the run before deployment.
+- `scripts/deploy-staging.sh` changes only the staging Web App's image digest and `VERSION`, then waits for `/healthz`. A failed smoke fails the run and prints the previous image. It never rolls back.
+- Staging deployments run one at a time (`concurrency: staging-api-deploy`). A running one is never cancelled. GitHub keeps only the newest waiting run, so an image whose deployment was superseded stays published and can be deployed by hand.
+- Each deployment keeps `release-record.json` (commit, tag, digest, previous image, smoke result) as a 90-day run artifact and in the run summary. The image tag and the `org.opencontainers.image.revision` label keep the mapping after that.
+- The workflow never migrates a database, reads its revision, or changes a firewall. The operator migrates staging after the deployment and deploys production by hand ([staging release runbook](https://github.com/efcnewlife/newlife-infra/blob/main/docs/azure-staging-release.md)).
+- Publication stays off until the repository variable `AZURE_CLIENT_ID` is set; until then `main` and tag runs stop after the smoke test with a notice.
+
 ## Publish, verify, and lock (human)
+
+Fallback when CI publication is off or broken.
 
 ```bash
 REG=efcnewlifecr

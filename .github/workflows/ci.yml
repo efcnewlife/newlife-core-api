@@ -1,0 +1,241 @@
+# CI and staging release (ADR 0039, EFC-311).
+#   Pull requests, release/* branches: tests, image build, local image smoke. Nothing leaves GitHub.
+#   main and x.y.z tags on a release/* branch: the same, then publish the image to ACR and deploy it to staging.
+# Publication runs only once the operator has set up the OIDC identity (newlife-infra docs/azure-staging-release.md)
+# and the repository variable AZURE_CLIENT_ID. The workflow never migrates a database, changes a firewall, or
+# deploys production; the operator migrates staging by hand after the deployment.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, "release/**"]
+    tags: ["*"]
+
+permissions:
+  contents: read
+
+# Explicit bash adds pipefail, so a failing script piped into tee fails its step.
+defaults:
+  run:
+    shell: bash
+
+env:
+  UV_VERSION: "0.12.4"
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+
+      - name: Install
+        run: uv sync --frozen
+
+      - name: Format
+        run: |
+          uv run ruff format --check
+          uv run ruff check
+
+      - name: Tests
+        run: uv run pytest
+
+      - name: Script tests
+        run: for test in scripts/*.test.sh; do "$test"; done
+
+  image:
+    name: Image
+    needs: test
+    runs-on: ubuntu-latest
+    outputs:
+      publish: ${{ steps.target.outputs.publish }}
+      image_tag: ${{ steps.target.outputs.image_tag }}
+      release: ${{ steps.target.outputs.release }}
+      revision: ${{ steps.target.outputs.revision }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # release-target.sh checks that a tag is on an origin/release/* branch
+
+      - name: Release target
+        id: target
+        env:
+          EVENT: ${{ github.event_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+        run: |
+          if [ "$EVENT" = pull_request ]; then
+            echo "publish=false" >>"$GITHUB_OUTPUT"
+          else
+            scripts/release-target.sh "$REF_TYPE" "$REF_NAME" "$SHA" | tee -a "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+
+      - name: Install
+        run: uv sync --frozen
+
+      - name: Build
+        env:
+          SHA: ${{ github.sha }}
+          VERSION_LABEL: ${{ steps.target.outputs.image_tag || 'ci' }}
+        run: |
+          docker build --platform linux/amd64 --provenance=false --sbom=false \
+            --label org.opencontainers.image.source=https://github.com/efcnewlife/newlife-core-api \
+            --label org.opencontainers.image.revision="$SHA" \
+            --label org.opencontainers.image.version="$VERSION_LABEL" \
+            --label org.opencontainers.image.created="$(git show -s --format=%cI HEAD)" \
+            -t newlife-core-api:ci .
+
+      - name: Smoke
+        run: SMOKE_SKIP_BUILD=1 scripts/local-image-smoke.sh newlife-core-api:ci
+
+      - name: Save image
+        if: steps.target.outputs.publish == 'true'
+        run: docker save newlife-core-api:ci | gzip >image.tar.gz
+
+      - name: Keep image
+        if: steps.target.outputs.publish == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-${{ steps.target.outputs.image_tag }}
+          path: image.tar.gz
+          retention-days: 7
+          overwrite: true # a re-run of this job replaces its image
+
+      - name: Publication not enabled
+        if: steps.target.outputs.publish == 'true' && vars.AZURE_CLIENT_ID == ''
+        run: echo "::notice::Image built and smoke-tested; staging publication is off until AZURE_CLIENT_ID is set."
+
+  publish:
+    name: Publish to ACR
+    needs: image
+    if: needs.image.outputs.publish == 'true' && vars.AZURE_CLIENT_ID != ''
+    runs-on: ubuntu-latest
+    environment: staging
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      image: ${{ steps.push.outputs.image }}
+      digest: ${{ steps.push.outputs.digest }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fetch image
+        uses: actions/download-artifact@v4
+        with:
+          name: image-${{ needs.image.outputs.image_tag }}
+
+      - name: Load image
+        run: gunzip -c image.tar.gz | docker load
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Push and lock
+        id: push
+        env:
+          IMAGE_TAG: ${{ needs.image.outputs.image_tag }}
+          REVISION: ${{ needs.image.outputs.revision }}
+        run: scripts/acr-publish.sh newlife-core-api:ci "$IMAGE_TAG" "$REVISION" | tee -a "$GITHUB_OUTPUT"
+
+      - name: Image record
+        env:
+          IMAGE_TAG: ${{ needs.image.outputs.image_tag }}
+          REVISION: ${{ needs.image.outputs.revision }}
+          IMAGE: ${{ steps.push.outputs.image }}
+          REUSED: ${{ steps.push.outputs.reused }}
+        run: |
+          {
+            echo "### Image record"
+            echo "| Source | Tag | Image | Reused |"
+            echo "| --- | --- | --- | --- |"
+            echo "| \`$REVISION\` | \`$IMAGE_TAG\` | \`$IMAGE\` | $REUSED |"
+          } >>"$GITHUB_STEP_SUMMARY"
+
+  deploy-staging:
+    name: Deploy staging
+    needs: [image, publish]
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: https://api-dev.efcnewlife.com
+    # One staging deployment at a time; a running deployment is never cancelled. GitHub keeps only the newest
+    # waiting run, so a superseded image stays published and can be redeployed by hand.
+    concurrency:
+      group: staging-api-deploy
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy and smoke
+        id: deploy
+        env:
+          IMAGE: ${{ needs.publish.outputs.image }}
+          RELEASE: ${{ needs.image.outputs.release }}
+        run: scripts/deploy-staging.sh "$IMAGE" "$RELEASE" | tee -a "$GITHUB_OUTPUT"
+
+      - name: Release record
+        if: always() && steps.deploy.outcome != 'skipped'
+        env:
+          REF: ${{ github.ref }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/attempts/${{ github.run_attempt }}
+          REVISION: ${{ needs.image.outputs.revision }}
+          IMAGE_TAG: ${{ needs.image.outputs.image_tag }}
+          RELEASE: ${{ needs.image.outputs.release }}
+          IMAGE: ${{ needs.publish.outputs.image }}
+          PREVIOUS_IMAGE: ${{ steps.deploy.outputs.previous_image }}
+          SMOKE: ${{ steps.deploy.outputs.smoke || 'not run' }}
+        run: |
+          jq -n --arg ref "$REF" --arg run "$RUN_URL" --arg revision "$REVISION" --arg image_tag "$IMAGE_TAG" \
+            --arg release "$RELEASE" --arg image "$IMAGE" --arg previous_image "$PREVIOUS_IMAGE" --arg smoke "$SMOKE" \
+            --arg deployed_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{environment: "staging", ref: $ref, revision: $revision, image_tag: $image_tag, release: $release,
+              image: $image, previous_image: $previous_image, smoke: $smoke, deployed_at: $deployed_at, run: $run,
+              migration: "pending operator check"}' >release-record.json
+          {
+            echo "### Staging deployment"
+            echo '```json'
+            cat release-record.json
+            echo '```'
+            echo "Smoke checks only that /healthz answers. Migrate staging by hand if this version has new migrations."
+          } >>"$GITHUB_STEP_SUMMARY"
+
+      - name: Keep release record
+        if: always() && steps.deploy.outcome != 'skipped'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-record-${{ needs.image.outputs.image_tag }}-${{ github.run_attempt }}
+          path: release-record.json
+          retention-days: 90
