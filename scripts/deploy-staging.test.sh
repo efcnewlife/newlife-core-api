@@ -71,7 +71,7 @@ check "deploy sets VERSION" has "${calls}" "--settings VERSION=1a2b3c4"
 check "deploy sets the digest" has "${calls}" "--linux-fx-version DOCKER|${NEW}"
 check "deploy records the previous image" has "${output}" "previous_image=${OLD}"
 check "deploy reports smoke passed" has "${output}" "smoke=passed"
-check "deploy checks /healthz" has "${calls}" "https://api.dev.efcnewlife.com/healthz"
+check "deploy checks /healthz" has "${calls}" "https://api-dev.efcnewlife.com/healthz"
 
 run_deploy "${NEW}" 1a2b3c4
 check "VERSION is set before the image" test \

@@ -7,14 +7,14 @@
 #
 # Usage: deploy-staging.sh <registry>/newlife-core-api@sha256:<digest> <7-character commit>
 #   STAGING_RESOURCE_GROUP=rg-newlife-staging  STAGING_WEBAPP=app-newlife-api-stg
-#   STAGING_URL=https://api.dev.efcnewlife.com  SMOKE_DELAY=60  SMOKE_TRIES=20  SMOKE_INTERVAL=15 (seconds)
+#   STAGING_URL=https://api-dev.efcnewlife.com  SMOKE_DELAY=60  SMOKE_TRIES=20  SMOKE_INTERVAL=15 (seconds)
 set -euo pipefail
 
 image="${1:-}"
 release="${2:-}"
 resource_group="${STAGING_RESOURCE_GROUP:-rg-newlife-staging}"
 webapp="${STAGING_WEBAPP:-app-newlife-api-stg}"
-url="${STAGING_URL:-https://api.dev.efcnewlife.com}"
+url="${STAGING_URL:-https://api-dev.efcnewlife.com}"
 
 if [[ -z "${image}" || -z "${release}" ]]; then
   echo "Usage: $0 <registry>/newlife-core-api@sha256:<digest> <7-character commit>" >&2

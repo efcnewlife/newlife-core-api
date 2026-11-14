@@ -179,7 +179,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: staging
-      url: https://api.dev.efcnewlife.com
+      url: https://api-dev.efcnewlife.com
     # One staging deployment at a time; a running deployment is never cancelled. GitHub keeps only the newest
     # waiting run, so a superseded image stays published and can be redeployed by hand.
     concurrency:
