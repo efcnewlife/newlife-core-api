@@ -33,8 +33,8 @@ async def injected_async(value: int, *, _span: TraceSpan = NOOP_SPAN) -> int:
 
 
 def accepted_calls() -> None:
-    assert_type(ordinary_sync(1), str)
-    assert_type(injected_sync(2), int)
+    _ = assert_type(ordinary_sync(1), str)
+    _ = assert_type(injected_sync(2), int)
     span: TraceSpan = NOOP_SPAN
     span.set_attribute("synthetic.flag", True)
     span.set_attribute("synthetic.ratio", 0.5)
@@ -43,5 +43,5 @@ def accepted_calls() -> None:
 
 
 async def accepted_async_calls() -> None:
-    assert_type(await ordinary_async(1), str)
-    assert_type(await injected_async(2), int)
+    _ = assert_type(await ordinary_async(1), str)
+    _ = assert_type(await injected_async(2), int)
