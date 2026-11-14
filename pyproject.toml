@@ -12,7 +12,6 @@ dependencies = [
     # base
     "dependency-injector",
     "fastapi",
-    "fastapi-limiter",
     "gunicorn>=25,<26",
     "uvicorn",
     "pydantic",

@@ -4,10 +4,18 @@ reaching mounted sub-apps.
 """
 
 import pytest
-from fastapi import Depends, FastAPI
+from fastapi import APIRouter, Depends, FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from portal.libs.depends.rate_limiters import RedisRateLimiterDependency, attach_rate_limiters, create_redis_rate_limiters, get_rate_limiters_config
+from portal.libs.depends.rate_limiters import (
+    DEFAULT_RATE_LIMITERS,
+    READ_RATE_LIMITERS,
+    WRITE_RATE_LIMITERS,
+    RedisRateLimiterDependency,
+    attach_rate_limiters,
+    create_redis_rate_limiters,
+    get_rate_limiters_config,
+)
 
 
 class _FakeScript:
@@ -123,3 +131,29 @@ async def test_no_limiters_attached_lets_requests_through():
         response = await client.get("/admin/limited")
 
     assert response.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_route_dependencies_apply_attached_limiters_on_included_routers():
+    router = APIRouter()
+
+    @router.get("/default", dependencies=DEFAULT_RATE_LIMITERS)
+    async def default_route():
+        return {"ok": True}
+
+    @router.get("/read", dependencies=READ_RATE_LIMITERS)
+    async def read_route():
+        return {"ok": True}
+
+    @router.post("/write", dependencies=WRITE_RATE_LIMITERS)
+    async def write_route():
+        return {"ok": True}
+
+    app = FastAPI()
+    app.include_router(router, prefix="/api")
+    attach_rate_limiters(app, {config_type: [_RejectingLimiter()] for config_type in ("default", "read", "write")})
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        responses = [await client.get("/api/default"), await client.get("/api/read"), await client.post("/api/write")]
+
+    assert [response.status_code for response in responses] == [429, 429, 429]
