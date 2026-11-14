@@ -10,9 +10,10 @@ Different endpoint types rate limiters strategy:
 - Read endpoint: Looser, because read operations are less burdened on the system
 - Write endpoint: Stricter, because write operations need more resources
 
-When REDIS_URL is set, limiters keep one sliding-window sorted set per client identifier (IP + path) in Redis,
-shared across workers: `<app>:rate_limiter:<type>:<identifier>` in the database 0 keyspace, expiring after the
-longest window. Otherwise in-memory limiters are used (per-process).
+Limiters keep one sliding-window sorted set per client identifier (IP + path) in Redis, shared across workers:
+`<app>:rate_limiter:<type>:<identifier>` in the database 0 keyspace, expiring after the longest window.
+There is no in-process fallback: lifespan attaches the limiters at startup when REDIS_URL is set, and requests are
+not limited without them.
 
 Configuration file location: env/rate_limiters.yaml
 """
@@ -22,8 +23,6 @@ from uuid import uuid4
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import HTTPException
-from fastapi_limiter.depends import RateLimiter
-from pyrate_limiter import Duration, Limiter, Rate
 from redis.asyncio import Redis
 from starlette.routing import Mount
 
@@ -73,7 +72,7 @@ class RedisSlidingWindowLimiter:
 
 async def default_identifier(request: Request) -> str:
     """
-    Identifier for rate limit key, same as fastapi-limiter: IP + path.
+    Identifier for rate limit key: IP + path.
     """
     forwarded = request.headers.get("X-Forwarded-For")
     if forwarded:
@@ -83,20 +82,6 @@ async def default_identifier(request: Request) -> str:
     else:
         ip = "127.0.0.1"
     return f"{ip}:{request.scope['path']}"
-
-
-def create_rate_limiters(config: RateLimiterConfig) -> list:
-    """
-    Create rate limiters list from RateLimiterConfig Model
-
-    :param config: Rate limiter config Model
-    :return: Rate limiters list
-    """
-    return [
-        Depends(RateLimiter(limiter=Limiter(Rate(config.short.times, Duration.SECOND * config.short.seconds)))),
-        Depends(RateLimiter(limiter=Limiter(Rate(config.medium.times, Duration.SECOND * config.medium.seconds)))),
-        Depends(RateLimiter(limiter=Limiter(Rate(config.long.times, Duration.SECOND * config.long.seconds)))),
-    ]
 
 
 def get_rate_limiters_config(config_type: str = "default") -> RateLimiterConfig:
@@ -144,7 +129,7 @@ def attach_rate_limiters(app: FastAPI, limiters: dict[str, list[RedisSlidingWind
 class RedisRateLimiterDependency:
     """
     FastAPI dependency that applies Redis-backed rate limiters for a config type.
-    Requires app.state.rate_limiters to be set (attach_rate_limiters in lifespan when REDIS_URL is set).
+    Requires app.state.rate_limiters to be set (attach_rate_limiters in lifespan).
     """
 
     def __init__(self, config_type: str):
@@ -161,25 +146,9 @@ class RedisRateLimiterDependency:
                 raise HTTPException(status_code=429, detail="Too Many Requests")
 
 
-def _get_rate_limiters_dependencies() -> tuple[list, list, list]:
-    """
-    Return (DEFAULT_RATE_LIMITERS, READ_RATE_LIMITERS, WRITE_RATE_LIMITERS).
-    Uses Redis-backed dependency when REDIS_URL is set, otherwise in-memory limiters.
-    """
-    if settings.REDIS_URL:
-        return ([Depends(RedisRateLimiterDependency("default"))], [Depends(RedisRateLimiterDependency("read"))], [Depends(RedisRateLimiterDependency("write"))])
-    return (
-        create_rate_limiters(get_rate_limiters_config("default")),
-        create_rate_limiters(get_rate_limiters_config("read")),
-        create_rate_limiters(get_rate_limiters_config("write")),
-    )
-
-
-_default, _read, _write = _get_rate_limiters_dependencies()
-
 # Default rate limiter (for general endpoints)
-DEFAULT_RATE_LIMITERS = _default
+DEFAULT_RATE_LIMITERS = [Depends(RedisRateLimiterDependency("default"))]
 # Read endpoint rate limiter (looser)
-READ_RATE_LIMITERS = _read
+READ_RATE_LIMITERS = [Depends(RedisRateLimiterDependency("read"))]
 # Write endpoint rate limiter (stricter)
-WRITE_RATE_LIMITERS = _write
+WRITE_RATE_LIMITERS = [Depends(RedisRateLimiterDependency("write"))]
