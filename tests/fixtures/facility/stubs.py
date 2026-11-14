@@ -46,6 +46,7 @@ class StubRentalRepository:
         discount_rules: list[DiscountRuleResult] | None = None,
         surcharges: list[SurchargeResult] | None = None,
         insert_raises_unique: bool = False,
+        update_rate_raises_unique: bool = False,
         update_discount_affected: int = 1,
         update_surcharge_affected: int = 1,
     ):
@@ -53,6 +54,7 @@ class StubRentalRepository:
         self.discount_rules = discount_rules or []
         self.surcharges = surcharges or []
         self.insert_raises_unique = insert_raises_unique
+        self.update_rate_raises_unique = update_rate_raises_unique
         self.update_discount_affected = update_discount_affected
         self.update_surcharge_affected = update_surcharge_affected
         self.insert_discount_calls: list[dict] = []
@@ -129,6 +131,8 @@ class StubRentalRepository:
         return self.rates_by_id.get(rate_id)
 
     async def update_rate(self, rate_id: UUID, values: dict) -> int:
+        if self.update_rate_raises_unique:
+            raise UniqueViolationError("duplicate")
         return 1 if rate_id in self.rates_by_id else 0
 
     async def delete_rate_hard(self, rate_id: UUID) -> None:

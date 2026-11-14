@@ -5,9 +5,11 @@ Admin Microsoft auth route smoke tests (no database).
 import pytest
 from fastapi.testclient import TestClient
 
-from portal.application.locale.locale_service import LocaleService
 from portal.config import settings
 from portal.main import app
+from tests.fixtures.app.offline import offline_app  # noqa: F401
+
+pytestmark = pytest.mark.usefixtures("offline_app")
 
 
 @pytest.fixture(autouse=True)
@@ -18,22 +20,6 @@ def isolated_azure_settings(monkeypatch):
     app.container.core.microsoft_oidc_provider.reset()
     yield
     app.container.core.microsoft_oidc_provider.reset()
-
-
-@pytest.fixture(autouse=True)
-def stub_locale_snapshot(monkeypatch):
-    """Avoid Redis/DB during middleware locale resolution in route smoke tests."""
-
-    async def _stub_get_locale_snapshot(_self):
-        return {
-            "active_locales": ["en-US"],
-            "default_locale": "en-US",
-            "normalized_map": {"en-us": "en-US"},
-            "normalized_id_map": {},
-            "language_buckets": {"en": ["en-US"]},
-        }
-
-    monkeypatch.setattr(LocaleService, "get_locale_snapshot", _stub_get_locale_snapshot)
 
 
 @pytest.fixture

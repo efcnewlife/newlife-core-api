@@ -6,6 +6,7 @@ import pytest
 
 from portal.application.facility.commands import DeleteCommand, UpdateRentalRateCommand
 from portal.application.facility.rental_rate_service import RentalRateService
+from portal.domain.facility.constants import FacilityErrorCode
 from portal.exceptions.responses import ConflictErrorException, NotFoundException
 from tests.fixtures.facility.factories import make_create_rental_rate_command, make_rental_rate, make_rental_rate_template, new_uuid
 from tests.fixtures.facility.stubs import StubRentalRepository, StubRoomRepository
@@ -46,8 +47,23 @@ async def test_create_rate_unique_conflict():
     rental.templates_by_id[template_id] = make_rental_rate_template(template_id=template_id)
     room = StubRoomRepository(existing_ids={facility_id})
     service = RentalRateService(rental, room)
-    with pytest.raises(ConflictErrorException):
+    with pytest.raises(ConflictErrorException) as exc_info:
         await service.create_rate(make_create_rental_rate_command(facility_id, template_id))
+    assert exc_info.value.error_code == FacilityErrorCode.RENTAL_RATE_EXISTS.value
+
+
+@pytest.mark.asyncio
+async def test_update_rate_unique_conflict():
+    rate_id = new_uuid()
+    facility_id = new_uuid()
+    template_id = new_uuid()
+    rental = StubRentalRepository(update_rate_raises_unique=True)
+    rental.rates_by_id[rate_id] = make_rental_rate(facility_id=facility_id, rate_id=rate_id)
+    rental.templates_by_id[template_id] = make_rental_rate_template(template_id=template_id)
+    service = RentalRateService(rental, StubRoomRepository(existing_ids={facility_id}))
+    with pytest.raises(ConflictErrorException) as exc_info:
+        await service.update_rate(rate_id, UpdateRentalRateCommand(facility_id=facility_id, template_id=template_id))
+    assert exc_info.value.error_code == FacilityErrorCode.RENTAL_RATE_EXISTS.value
 
 
 @pytest.mark.asyncio
