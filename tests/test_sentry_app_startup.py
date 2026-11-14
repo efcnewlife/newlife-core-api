@@ -10,9 +10,10 @@ from portal.apps import get_public_application
 from portal.config import settings
 from portal.container import Container
 from portal.libs.telemetry import NoOpBackend, SentryBackend, capture_diagnostic_event, get_telemetry_backend, select_telemetry_backend
+from tests.fixtures.app.offline import offline_app  # noqa: F401
 from tests.fixtures.telemetry.sentry_transport import TEST_DSN, CapturingTransport, reset_sentry_client  # noqa: F401
 
-pytestmark = pytest.mark.usefixtures("reset_sentry_client")
+pytestmark = pytest.mark.usefixtures("reset_sentry_client", "offline_app")
 
 
 @pytest.fixture

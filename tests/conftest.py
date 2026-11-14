@@ -14,6 +14,10 @@ if str(_root) not in sys.path:
 os.environ["SENTRY_ENABLED"] = "false"
 os.environ["SENTRY_DSN"] = ""
 os.environ["TELEMETRY_BACKEND"] = ""
+# Same for a developer's Redis: this host never resolves (reserved TLD), so a test that reaches Redis fails.
+# The opt-in Redis integration suite brings its own REDIS_URL.
+if os.environ.get("PORTAL_REDIS_INTEGRATION") != "1":
+    os.environ["REDIS_URL"] = "redis://redis.invalid:6379/0"
 
 import pytest
 

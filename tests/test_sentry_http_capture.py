@@ -17,16 +17,16 @@ from fastapi.testclient import TestClient
 
 import portal.main
 from portal.application.auth.results import UserDetail, UserSensitive
-from portal.application.locale.locale_service import LocaleService
 from portal.config import settings
 from portal.libs.consts.enums import AccessTokenAudType
 from portal.libs.logger import logger
 from portal.libs.telemetry import NoOpBackend, SentryBackend, get_telemetry_backend, select_telemetry_backend
 from portal.main import app
 from portal.providers.jwt_provider import JWTProvider
+from tests.fixtures.app.offline import offline_app  # noqa: F401
 from tests.fixtures.telemetry.sentry_transport import TEST_DSN, CapturingTransport, reset_sentry_client, reset_telemetry_state  # noqa: F401
 
-pytestmark = pytest.mark.usefixtures("reset_sentry_client")
+pytestmark = pytest.mark.usefixtures("reset_sentry_client", "offline_app")
 
 APP_CODE = "test-booking-app"
 PREFERRED_LANGUAGE_PATH = "/api/v1/auth/me/preferred-language"
@@ -104,22 +104,6 @@ class FailingLoginService:
 def wire_application_container():
     """Other tests build their own Container, which rewires Provide markers away from the assembled app."""
     app.container.wire()
-
-
-@pytest.fixture(autouse=True)
-def stub_locale_snapshot(monkeypatch):
-    """Avoid Redis/DB during middleware locale resolution."""
-
-    async def _stub_get_locale_snapshot(_self):
-        return {
-            "active_locales": ["en-US"],
-            "default_locale": "en-US",
-            "normalized_map": {"en-us": "en-US"},
-            "normalized_id_map": {},
-            "language_buckets": {"en": ["en-US"]},
-        }
-
-    monkeypatch.setattr(LocaleService, "get_locale_snapshot", _stub_get_locale_snapshot)
 
 
 @pytest.fixture

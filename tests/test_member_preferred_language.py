@@ -15,6 +15,9 @@ from portal.application.auth.results import UserDetail, UserSensitive
 from portal.libs.consts.enums import AccessTokenAudType
 from portal.main import app
 from portal.providers.jwt_provider import JWTProvider
+from tests.fixtures.app.offline import offline_app  # noqa: F401
+
+pytestmark = pytest.mark.usefixtures("offline_app")
 
 APP_CODE = "test-booking-app"
 
@@ -40,23 +43,6 @@ class StubUserRepository:
 class StubMemberWebAppRegistry:
     def resolve_app_code(self, origin=None, referer=None):
         return APP_CODE
-
-
-@pytest.fixture(autouse=True)
-def stub_locale_snapshot(monkeypatch):
-    """Avoid Redis/DB during middleware locale resolution in route smoke tests."""
-    from portal.application.locale.locale_service import LocaleService
-
-    async def _stub_get_locale_snapshot(_self):
-        return {
-            "active_locales": ["en-US"],
-            "default_locale": "en-US",
-            "normalized_map": {"en-us": "en-US"},
-            "normalized_id_map": {},
-            "language_buckets": {"en": ["en-US"]},
-        }
-
-    monkeypatch.setattr(LocaleService, "get_locale_snapshot", _stub_get_locale_snapshot)
 
 
 @pytest.fixture

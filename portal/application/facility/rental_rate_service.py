@@ -69,7 +69,7 @@ class RentalRateService:
             if self._repository.is_unique_violation(error):
                 raise ConflictErrorException(
                     detail="Rental rate binding already exists for facility/template",
-                    error_code=FacilityErrorCode.RENTAL_RATE_BINDING_EXISTS.value,
+                    error_code=FacilityErrorCode.RENTAL_RATE_EXISTS.value,
                     context={"facility_id": str(command.facility_id), "template_id": str(command.template_id)},
                 )
             logger.exception("Rental rate binding create failed: %s", error)
@@ -93,7 +93,7 @@ class RentalRateService:
             if self._repository.is_unique_violation(error):
                 raise ConflictErrorException(
                     detail="Rental rate binding already exists for facility/template",
-                    error_code=FacilityErrorCode.RENTAL_RATE_BINDING_EXISTS.value,
+                    error_code=FacilityErrorCode.RENTAL_RATE_EXISTS.value,
                     context={"facility_id": str(command.facility_id), "template_id": str(command.template_id)},
                 )
             raise

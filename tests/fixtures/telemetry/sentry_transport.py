@@ -31,9 +31,12 @@ class CapturingTransport(Transport):
 
 
 def reset_telemetry_state() -> None:
-    """Forget the process-wide client and selection, as a restart would. Production has no such path."""
+    """Forget the process-wide client, scope data, and selection, as a restart would. Production has no such path."""
     sentry_sdk.get_client().close()
     sentry_sdk.get_global_scope().set_client(None)
+    # Outside a request, sentry_sdk.set_user() and friends write to these shared scopes, so later tests would inherit them.
+    sentry_sdk.get_isolation_scope().clear()
+    sentry_sdk.get_current_scope().clear()
     selection._selected_backend = None
 
 
