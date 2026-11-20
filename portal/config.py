@@ -11,7 +11,7 @@ from typing import Any, Optional, Tuple, Type
 
 import yaml
 from dotenv import load_dotenv
-from pydantic import model_validator
+from pydantic import SecretStr, model_validator
 from pydantic.fields import FieldInfo
 from pydantic_settings import BaseSettings, EnvSettingsSource, PydanticBaseSettingsSource
 
@@ -99,6 +99,13 @@ class Configuration(BaseSettings):
     # [CORS]
     CORS_ALLOWED_ORIGINS: list[str] = os.getenv(key="CORS_ALLOWED_ORIGINS", default="*").split()
     CORS_ALLOW_ORIGINS_REGEX: Optional[str] = os.getenv(key="CORS_ALLOW_ORIGINS_REGEX")
+
+    # [Trusted proxy]
+    # direct (default): the transport peer is the client and forwarding headers are ignored.
+    # cloudflare: requests must carry the zone origin secret, the APP_FQDN host, and one CF-Connecting-IP.
+    # Validated at application startup (portal/middlewares/trusted_ingress.py); the secret comes from Key Vault only.
+    TRUSTED_PROXY_MODE: str = os.getenv(key="TRUSTED_PROXY_MODE", default="direct")
+    CLOUDFLARE_ORIGIN_SECRET: Optional[SecretStr] = None
 
     # [Redis]
     # Single database 0 keyspace (Azure Managed Redis supports db 0 only); rediss:// enables TLS.

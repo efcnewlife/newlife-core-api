@@ -2,8 +2,9 @@
 # Build the Core API image and smoke-test it against disposable, TLS-only local PostgreSQL and Redis.
 #
 # Local only: never contacts Azure or ACR. Proves image startup, port 8000, secret exclusion,
-# database 0 Redis usage over TLS, login/refresh/logout, rate limiting, Redis restart recovery,
-# and graceful shutdown. It does NOT prove Azure Managed Redis or Azure PostgreSQL compatibility.
+# database 0 Redis usage over TLS, login/refresh/logout, Redis restart recovery, graceful shutdown, and
+# per-client rate limiting in both trusted proxy modes: direct (transport peer) and cloudflare (origin
+# secret plus CF-Connecting-IP). Forged forwarding headers never change the client. It does NOT prove Azure Managed Redis or Azure PostgreSQL compatibility.
 #
 # Usage: scripts/local-image-smoke.sh [image-tag]
 #   SMOKE_SKIP_BUILD=1   reuse an existing image tag instead of building
@@ -137,6 +138,8 @@ REDIS_URL=rediss://:$REDIS_PASSWORD@$REDIS:6379/0?ssl_ca_certs=/certs/ca.crt
 JWT_SECRET_KEY=smoke-jwt-$RANDOM$RANDOM$RANDOM
 REFRESH_TOKEN_HASH_SALT=smoke-salt-$RANDOM
 REFRESH_TOKEN_HASH_PEPPER=smoke-pepper-$RANDOM
+# Trust every proxy for scheme headers: forged forwarding headers must still never change the client.
+FORWARDED_ALLOW_IPS=*
 EOF
 docker run -d --name "$API" --network "$NET" -p "127.0.0.1:$API_PORT:8000" --env-file "$WORK/api.env" -v "$CERTS:/certs:ro" "$IMAGE" >/dev/null
 wait_healthz || fail "GET /healthz did not return 200"
@@ -189,21 +192,87 @@ code="$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $access
 [ "$(cached_scripts)" -ge 1 ] || fail "rate-limit script was not reloaded"
 pass "first request after restart -> 200 (reconnected; rate-limit script reloaded)"
 
-step "Rate limiting over HTTP (per client)"
-codes="$(seq 1 40 | xargs -P 20 -I{} curl -s -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $access" -H 'X-Forwarded-For: 198.51.100.1' \
-  "$BASE/admin/api/v1/auth/me" | sort | uniq -c | tr '\n' ' ')"
+# Status code of a GET from a separate container on the smoke network: a second transport peer.
+# http.client, not urllib: gunicorn's ASGI worker keeps a "Connection: close" request's connection open,
+# which would stall the graceful stop below for the whole timeout.
+peer_status() {
+  docker run --rm --network "$NET" --entrypoint python "$IMAGE" -c 'import http.client, sys
+connection = http.client.HTTPConnection(sys.argv[1], 8000)
+connection.request("GET", sys.argv[2], headers=dict(item.split(": ", 1) for item in sys.argv[3:]))
+response = connection.getresponse()
+response.read()
+print(response.status)
+connection.close()' "$@"
+}
+
+graceful_stop() {
+  docker stop -t 30 "$API" >/dev/null
+  exit_code="$(docker inspect -f '{{.State.ExitCode}}' "$API")"
+  docker logs "$API" 2>&1 | grep -q "Lifespan finished" || fail "lifespan shutdown did not finish"
+  [ "$exit_code" = "0" ] || fail "container exit code $exit_code"
+}
+
+forged_limiter_key() { redis_cli --scan --pattern 'newlife-core-api:rate_limiter:*:192.0.2.*' | head -1; }
+
+step "Rate limiting over HTTP, direct mode (transport peer; forged forwarding headers ignored)"
+codes="$(seq 1 40 | xargs -P 20 -I{} curl -s -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $access" \
+  -H 'X-Forwarded-For: 192.0.2.{}' -H 'X-Real-IP: 192.0.2.{}' -H 'CF-Connecting-IP: 192.0.2.{}' "$BASE/admin/api/v1/auth/me" | sort | uniq -c | tr '\n' ' ')"
+grep -q ' 429' <<<" $codes" || fail "forged forwarding headers split one peer's burst of 40: $codes"
+code="$(peer_status "$API" /admin/api/v1/auth/me "Authorization: Bearer $access" 'X-Forwarded-For: 192.0.2.1')"
+[ "$code" = "200" ] || fail "another transport peer was limited too ($code)"
+[ -z "$(forged_limiter_key)" ] || fail "a limiter key used a forged forwarding address: $(forged_limiter_key)"
+pass "one peer's burst of 40 with 40 forged addresses -> $codes; another peer -> 200; no forged-address keys"
+
+step "Graceful stop (direct mode)"
+graceful_stop
+pass "SIGTERM -> lifespan finished, exit code 0"
+
+step "Run the image in cloudflare mode"
+CF_HOST="api-smoke.example.test"
+CF_SECRET="smoke-origin-$(openssl rand -hex 24)"
+CF_LOGIN_IP="198.51.100.3"
+docker rm -f "$API" >/dev/null
+# The container gets the throwaway secret from the env file only; the checks below send it as curl headers.
+{ cat "$WORK/api.env"; printf 'TRUSTED_PROXY_MODE=cloudflare\nCLOUDFLARE_ORIGIN_SECRET=%s\nAPP_FQDN=%s\n' "$CF_SECRET" "$CF_HOST"; } >"$WORK/api-cloudflare.env"
+docker run -d --name "$API" --network "$NET" -p "127.0.0.1:$API_PORT:8000" --env-file "$WORK/api-cloudflare.env" -v "$CERTS:/certs:ro" "$IMAGE" >/dev/null
+wait_healthz || fail "GET /healthz without the origin secret did not return 200"
+pass "GET /healthz -> 200 without the origin secret (liveness exception)"
+
+status() { curl -s -o /dev/null -w '%{http_code}' "$@"; }
+edge_status() { status -H "Host: $CF_HOST" -H "X-NewLife-Origin-Secret: $CF_SECRET" "$@"; }
+preflight=(-X OPTIONS -H 'Origin: https://portal-dev.example.test' -H 'Access-Control-Request-Method: GET')
+
+step "Cloudflare mode: untrusted ingress is rejected before the application"
+[ "$(status -H "Host: $CF_HOST" -H 'CF-Connecting-IP: 198.51.100.1' "$BASE/admin/api/v1/auth/me")" = "403" ] || fail "missing origin secret was not rejected"
+[ "$(status -H "Host: $CF_HOST" -H 'X-NewLife-Origin-Secret: forged' -H 'CF-Connecting-IP: 198.51.100.1' "$BASE/api/v1/auth/me")" = "403" ] ||
+  fail "wrong origin secret was not rejected"
+[ "$(edge_status -H 'X-Forwarded-For: 198.51.100.1' "$BASE/admin/api/v1/auth/me")" = "403" ] || fail "missing CF-Connecting-IP was not rejected"
+[ "$(status -H "X-NewLife-Origin-Secret: $CF_SECRET" -H 'CF-Connecting-IP: 198.51.100.1' "$BASE/admin/api/v1/auth/me")" = "403" ] || fail "unexpected host was not rejected"
+[ "$(status "${preflight[@]}" "$BASE/admin/api/v1/auth/me")" = "403" ] || fail "CORS preflight without the origin secret was not rejected"
+code="$(edge_status "${preflight[@]}" -H 'CF-Connecting-IP: 198.51.100.1' "$BASE/admin/api/v1/auth/me")"
+[ "$code" = "200" ] || fail "verified CORS preflight returned $code, expected 200"
+pass "missing/wrong secret, missing client IP, unexpected host, unverified preflight -> 403; verified preflight -> 200"
+
+step "Rate limiting over HTTP, cloudflare mode (per CF-Connecting-IP; forged X-Forwarded-For ignored)"
+login="$(curl -sf -X POST "$BASE/admin/api/v1/auth/login" -H "Host: $CF_HOST" -H "X-NewLife-Origin-Secret: $CF_SECRET" -H "CF-Connecting-IP: $CF_LOGIN_IP" \
+  -H 'Content-Type: application/json' -d "{\"email\":\"$ADMIN_EMAIL\",\"password\":\"$ADMIN_PASSWORD\"}")" || fail "login through the trusted edge"
+access="$(json_get token.accessToken <<<"$login")"
+[ "$(redis_cli EXISTS "newlife-core-api:rate_limiter:default:$CF_LOGIN_IP:/admin/api/v1/auth/login")" = "1" ] || fail "login was not limited per CF-Connecting-IP"
+codes="$(seq 1 40 | xargs -P 20 -I{} curl -s -o /dev/null -w '%{http_code}\n' -H "Host: $CF_HOST" -H "X-NewLife-Origin-Secret: $CF_SECRET" \
+  -H "Authorization: Bearer $access" -H 'CF-Connecting-IP: 198.51.100.1' -H 'X-Forwarded-For: 192.0.2.{}' "$BASE/admin/api/v1/auth/me" | sort | uniq -c | tr '\n' ' ')"
 grep -q ' 429' <<<" $codes" || fail "no 429 in a burst of 40 requests from one client: $codes"
-code="$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $access" -H 'X-Forwarded-For: 198.51.100.2' "$BASE/admin/api/v1/auth/me")"
+code="$(edge_status -H "Authorization: Bearer $access" -H 'CF-Connecting-IP: 198.51.100.2' -H 'X-Forwarded-For: 198.51.100.1' "$BASE/admin/api/v1/auth/me")"
 [ "$code" = "200" ] || fail "another client was limited too ($code)"
 limiter_ttl="$(redis_cli PTTL 'newlife-core-api:rate_limiter:default:198.51.100.1:/admin/api/v1/auth/me')"
 [ "$limiter_ttl" -gt 0 ] || fail "per-client limiter key has no TTL ($limiter_ttl)"
-pass "one client's burst of 40 -> $codes; another client -> 200; limiter key expires in ${limiter_ttl}ms"
+[ -z "$(forged_limiter_key)" ] || fail "a limiter key used a forged X-Forwarded-For address: $(forged_limiter_key)"
+pass "one client's burst of 40 -> $codes; another client -> 200; limiter key expires in ${limiter_ttl}ms; no forged-address keys"
 
-step "Graceful stop"
-docker stop -t 30 "$API" >/dev/null
-exit_code="$(docker inspect -f '{{.State.ExitCode}}' "$API")"
-docker logs "$API" 2>&1 | grep -q "Lifespan finished" || fail "lifespan shutdown did not finish"
-[ "$exit_code" = "0" ] || fail "container exit code $exit_code"
-pass "SIGTERM -> lifespan finished, exit code 0"
+step "Graceful stop (cloudflare mode); the origin secret never reached the logs"
+graceful_stop
+logs="$(docker logs "$API" 2>&1)"
+! grep -qF "$CF_SECRET" <<<"$logs" || fail "the origin secret appears in the container logs"
+grep -q "Rejected request from untrusted ingress" <<<"$logs" || fail "rejections were not logged"
+pass "SIGTERM -> lifespan finished, exit code 0; rejections logged without the secret"
 
 printf '\nSMOKE PASSED  image=%s id=%s\n' "$IMAGE" "$IMAGE_ID"

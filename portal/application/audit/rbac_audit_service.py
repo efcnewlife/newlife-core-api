@@ -114,7 +114,7 @@ class RbacAuditService:
             ip_address = None
             user_agent = None
             if req_ctx:
-                ip_address = req_ctx.ip or req_ctx.client_ip
+                ip_address = req_ctx.ip
                 user_agent = req_ctx.headers.user_agent if req_ctx.headers else None
             publish_event_in_background(
                 event=AdminOperationLogEvent(

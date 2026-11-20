@@ -2,6 +2,8 @@
 Configuration loads in a clean container environment (no .env file, only required variables set).
 """
 
+from uuid import uuid4
+
 from portal.config import Configuration
 
 
@@ -19,3 +21,23 @@ def test_list_setting_splits_on_commas(monkeypatch):
     config = Configuration()
 
     assert config.CORS_ALLOWED_ORIGINS == ["https://portal.efcnewlife.com", "https://portal.dev.efcnewlife.com"]
+
+
+def test_trusted_proxy_mode_defaults_to_direct(monkeypatch):
+    monkeypatch.delenv("TRUSTED_PROXY_MODE", raising=False)
+    monkeypatch.delenv("CLOUDFLARE_ORIGIN_SECRET", raising=False)
+
+    config = Configuration()
+
+    assert config.TRUSTED_PROXY_MODE == "direct"
+    assert config.CLOUDFLARE_ORIGIN_SECRET is None
+
+
+def test_cloudflare_origin_secret_is_hidden_from_the_configuration_repr(monkeypatch):
+    secret = f"origin-{uuid4().hex}"
+    monkeypatch.setenv("CLOUDFLARE_ORIGIN_SECRET", secret)
+
+    config = Configuration()
+
+    assert config.CLOUDFLARE_ORIGIN_SECRET.get_secret_value() == secret
+    assert secret not in repr(config) and secret not in str(config)
