@@ -295,6 +295,11 @@ def test_rejected_request_logs_the_reason_without_header_values(cloudflare_mode,
     [
         pytest.param("cloudflare", None, API_HOST, id="missing-secret"),
         pytest.param("cloudflare", "short-but-secret-value", API_HOST, id="short-secret"),
+        # App Service passes an unresolved reference through as text, and that text is public in newlife-infra.
+        pytest.param(
+            "cloudflare", "@Microsoft.KeyVault(VaultName=kv-newlife-stg;SecretName=cloudflare-origin-secret)", API_HOST, id="unresolved-key-vault-reference"
+        ),
+        pytest.param("cloudflare", " @microsoft.keyvault(SecretUri=https://kv.vault.azure.net/secrets/x/) ", API_HOST, id="unresolved-secret-uri-reference"),
         pytest.param("cloudflare", ORIGIN_SECRET, "", id="missing-host"),
         pytest.param("cloudfare", ORIGIN_SECRET, API_HOST, id="unknown-mode"),
     ],

@@ -21,6 +21,8 @@ CLOUDFLARE_MODE = "cloudflare"
 ORIGIN_SECRET_HEADER = b"x-newlife-origin-secret"
 CLIENT_IP_HEADER = b"cf-connecting-ip"
 MIN_ORIGIN_SECRET_LENGTH = 32
+# App Service passes an unresolved Key Vault reference through as its own text, which is public in newlife-infra.
+_KEY_VAULT_REFERENCE_PREFIX = "@microsoft.keyvault("
 # App Service health check probes the origin without the zone secret; it gets no trusted client IP.
 _LIVENESS_PATH = "/healthz"
 _LIVENESS_METHODS = frozenset({"GET", "HEAD"})
@@ -43,7 +45,7 @@ class IngressPolicy:
         """
         :param config:
         :return:
-        :raises TrustedProxyConfigError: cloudflare mode without a usable secret or host, or an unknown mode
+        :raises TrustedProxyConfigError: cloudflare mode without a usable secret (missing, short, or an unresolved Key Vault reference) or host, or an unknown mode
         """
         mode = (config.TRUSTED_PROXY_MODE or "").strip().lower()
         if mode == DIRECT_MODE:
@@ -54,6 +56,8 @@ class IngressPolicy:
         secret = config.CLOUDFLARE_ORIGIN_SECRET.get_secret_value().strip() if config.CLOUDFLARE_ORIGIN_SECRET else ""
         if len(secret) < MIN_ORIGIN_SECRET_LENGTH:
             raise TrustedProxyConfigError(f"CLOUDFLARE_ORIGIN_SECRET must be at least {MIN_ORIGIN_SECRET_LENGTH} characters in cloudflare mode")
+        if secret.lower().startswith(_KEY_VAULT_REFERENCE_PREFIX):
+            raise TrustedProxyConfigError("CLOUDFLARE_ORIGIN_SECRET is an unresolved Key Vault reference")
         expected_host = (config.APP_FQDN or "").strip().lower()
         if not expected_host:
             raise TrustedProxyConfigError("APP_FQDN is required in cloudflare mode")

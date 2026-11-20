@@ -33,7 +33,7 @@ No warm-up exception is added. App Service health check calls `GET /healthz`. Al
 | `CLOUDFLARE_ORIGIN_SECRET` | Key Vault reference; at least 32 characters                | Required in cloudflare mode, ignored in direct mode. Generate high-entropy (e.g. `openssl rand -hex 32`) in a human-operated procedure. |
 | `APP_FQDN`                 | `api-dev.efcnewlife.com` (staging)                         | Already set by the `app-service` template. Cloudflare mode accepts only this `Host` (case-insensitive, no port).                       |
 
-Surrounding whitespace in the secret is stripped before use. Invalid cloudflare-mode settings raise `TrustedProxyConfigError` while the application is built, so gunicorn workers fail to boot. The error names the setting, never its value. `CLOUDFLARE_ORIGIN_SECRET` is a `SecretStr`, so it never shows in the configuration's `repr`. The value must not be in Git, parameter files, `zone.json`, frontend builds, logs, Sentry, or response headers. Browsers never send it.
+Surrounding whitespace in the secret is stripped before use. Invalid cloudflare-mode settings raise `TrustedProxyConfigError` while the application is built, so gunicorn workers fail to boot. That includes a value starting with `@Microsoft.KeyVault(` (any case): App Service passes an unresolved reference through as its own text, which is public in `newlife-infra`. The error names the setting, never its value. `CLOUDFLARE_ORIGIN_SECRET` is a `SecretStr`, so it never shows in the configuration's `repr`. The value must not be in Git, parameter files, `zone.json`, frontend builds, logs, Sentry, or response headers. Browsers never send it.
 
 ## Server forwarding settings
 
