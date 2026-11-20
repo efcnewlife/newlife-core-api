@@ -16,7 +16,7 @@ from portal.libs.consts.enums import APIScope
 from portal.libs.contexts.request_session_context import get_request_session
 from portal.libs.telemetry import capture_request_failure, select_telemetry_backend
 from portal.libs.utils.lifespan import lifespan
-from portal.middlewares import AuthMiddleware, CoreRequestMiddleware
+from portal.middlewares import AuthMiddleware, CoreRequestMiddleware, IngressPolicy, TrustedIngressMiddleware
 from portal.routers import admin_api_router, api_router
 from portal.runtime_context import set_runtime_container
 
@@ -47,14 +47,16 @@ def _register_admin_stack(application: FastAPI) -> None:
     _register_cors(application)
 
 
-def _register_public_stack(application: FastAPI) -> None:
+def _register_public_stack(application: FastAPI, ingress_policy: IngressPolicy) -> None:
     """
-
+    Trusted ingress is outermost: it guards CORS preflight and the mounted apps, which share this stack.
     :param application:
+    :param ingress_policy:
     :return:
     """
     _register_core_request_middleware(application)
     _register_cors(application)
+    application.add_middleware(TrustedIngressMiddleware, policy=ingress_policy)
 
 
 def _register_api_stack(application: FastAPI) -> None:
@@ -168,6 +170,8 @@ def get_api_application(container: Container) -> FastAPI:
 def get_public_application(container: Container) -> FastAPI:
     # Before any FastAPI app (public or mounted) is built; idempotent and never blocks startup.
     select_telemetry_backend(settings)
+    # Fails startup on invalid trusted proxy settings, before any request can be served.
+    ingress_policy = IngressPolicy.from_settings(settings)
     application = FastAPI(lifespan=lifespan, title=f"{settings.APP_NAME} Public API", version=settings.APP_VERSION)
     application.container = container
 
@@ -180,7 +184,7 @@ def get_public_application(container: Container) -> FastAPI:
     async def public_healthz():
         return {"message": "ok"}
 
-    _register_public_stack(application)
+    _register_public_stack(application, ingress_policy)
     _setup_exception_handlers(application)
     custom_openapi(scope=APIScope.PUBLIC, application=application)
 

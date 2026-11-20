@@ -8,6 +8,7 @@ Execution boundary: agents author code, scripts, docs, and offline/local tests o
 | ------------------------------------------------ | -------- | ----------------------------------------------------------- |
 | Local image build and smoke (disposable TLS PostgreSQL 18 + Redis 7.4) | Agent | Passed 2026-11-12, local build `sha256:882a436d83cff9c9fa95c2ecae12f6325c7e78c186bae4f9b7e3d04af12a83c5` |
 | Offline pytest (Redis client, per-client limiter keys, mounted-app limiting, auth state TTL) | Agent | Passed 2026-11-12 |
+| Local smoke with trusted proxy modes (EFC-336: direct and cloudflare) | Agent | Passed 2026-11-20, local build `sha256:0bae8214bdc63ac5c4b731e491ae90c900263801039374fd8b20f17f3c1b6f4d` |
 | Real Azure PostgreSQL / Managed Redis / App Service checks | Human operator | **Pending** — see [Operator tests on Azure](#operator-tests-on-azure-human) |
 
 Local results do not prove Azure Managed Redis or Azure PostgreSQL compatibility.
@@ -28,7 +29,7 @@ Local results do not prove Azure Managed Redis or Azure PostgreSQL compatibility
 
   Old rate limiter keys (`newlife-core-api_limiter_*` in db 10) are abandoned; they had no effect (see below).
 - **Client and TLS:** `rediss://` enables TLS with certificate and hostname verification. Clients retry connection errors and timeouts 3 times with jittered exponential backoff (0.5 s base, 5 s cap), health-check idle connections every 30 s, and use TCP keepalive.
-- **Rate limiting works with Redis, per client:** `/admin` and `/api` are mounted sub-apps, and Redis limiters were set only on the root app, so with `REDIS_URL` set, rate limiting was silently off. Lifespan now attaches limiters to mounted apps. Each client identifier (first `X-Forwarded-For` address, else the peer address, plus the request path) has its own sorted set, and one atomic script checks the short/medium/long windows from `env/rate_limiters.yaml` (default: 10/s, 50/30 s, 1000/h per client and path). The previous pyrate-limiter buckets were one shared bucket per window for all clients.
+- **Rate limiting works with Redis, per client:** `/admin` and `/api` are mounted sub-apps, and Redis limiters were set only on the root app, so with `REDIS_URL` set, rate limiting was silently off. Lifespan now attaches limiters to mounted apps. Each client identifier (the resolved client IP from [trusted ingress](trusted-ingress.md), plus the request path) has its own sorted set, and one atomic script checks the short/medium/long windows from `env/rate_limiters.yaml` (default: 10/s, 50/30 s, 1000/h per client and path). The previous pyrate-limiter buckets were one shared bucket per window for all clients.
 - **Failover/restart:** the Redis script cache is neither persisted nor replicated. The limiter script is registered through redis-py, which reloads it on `NOSCRIPT`; the plain pyrate-limiter bucket failed every rate-limited request until the app restarted.
 - **Config import:** an unset `CORS_ALLOWED_ORIGINS` no longer crashes startup; the default applies.
 - **PostgreSQL TLS:** no code change. asyncpg (app) and libpq/psycopg2 (Alembic) both read `PGSSLMODE` and `PGSSLROOTCERT`. asyncpg needs an explicit root certificate file for `verify-full`; the image's system bundle is `/etc/ssl/certs/ca-certificates.crt`.
@@ -70,7 +71,7 @@ REFRESH_TOKEN_HASH_PEPPER=local-only-pepper
 CORS_ALLOWED_ORIGINS=http://localhost:5173,http://localhost:5174
 ```
 
-Expected smoke output (2026-11-12):
+Expected smoke output (2026-11-20):
 
 ```text
     PASS no local secrets, Git metadata, or dev-only files; non-root user
@@ -81,8 +82,12 @@ Expected smoke output (2026-11-12):
     PASS login 200, me 200, refresh 200, logout 200, revoked refresh token 401
     PASS db0:keys=11,expires=11,…; all keys under newlife-core-api:; revocation TTL 898s
     PASS first request after restart -> 200 (reconnected; rate-limit script reloaded)
-    PASS one client's burst of 40 ->   12 200   28 429 ; another client -> 200; limiter key expires in 3599852ms
+    PASS one peer's burst of 40 with 40 forged addresses ->   13 200   27 429 ; another peer -> 200; no forged-address keys
     PASS SIGTERM -> lifespan finished, exit code 0
+    PASS GET /healthz -> 200 without the origin secret (liveness exception)
+    PASS missing/wrong secret, missing client IP, unexpected host, unverified preflight -> 403; verified preflight -> 200
+    PASS one client's burst of 40 ->   12 200   28 429 ; another client -> 200; limiter key expires in 3599823ms; no forged-address keys
+    PASS SIGTERM -> lifespan finished, exit code 0; rejections logged without the secret
 SMOKE PASSED  image=newlife-core-api:local id=sha256:…
 ```
 
@@ -117,7 +122,9 @@ Settings this ticket depends on. Others (Microsoft Entra, Blob, mail, Sentry) fo
 | `REFRESH_TOKEN_HASH_SALT` / `REFRESH_TOKEN_HASH_PEPPER` | random                                    | Key Vault. |
 | `CORS_ALLOWED_ORIGINS`      | comma-separated Portal and Facility Booking origins                   | Always set. Unset falls back to the code default `*` (credentials allowed). |
 | `WEB_CONCURRENCY`           | `1` (default)                                                         | Each worker runs its own expiry loop; the PostgreSQL advisory lock serialises sweeps. |
-| `FORWARDED_ALLOW_IPS`       | unset                                                                 | Rate limiting reads `X-Forwarded-For` directly. |
+| `FORWARDED_ALLOW_IPS`       | unset                                                                 | Affects only the scheme in gunicorn's ASGI worker, never the client address. |
+| `TRUSTED_PROXY_MODE`        | `direct` (default) / `cloudflare`                                     | See [trusted ingress](trusted-ingress.md). Cloudflare mode only after EFC-337 protections are live. |
+| `CLOUDFLARE_ORIGIN_SECRET`  | ≥ 32 characters, cloudflare mode only                                 | Key Vault. Also set in the Cloudflare Transform Rule; never in Git. |
 
 Managed Redis: access-key authentication (the app has no Entra token support for Redis), TLS port 10000, and a **non-clustered** policy if the SKU offers it, otherwise **Enterprise**. Do not use the **OSS cluster** policy: the app uses a non-cluster client.
 
@@ -150,7 +157,7 @@ Image: <tag> @ <digest>   App: <app name>   Redis: <name, SKU, policy, HA>   Pos
 ## Known limitations (not changed here)
 
 - **Access tokens survive logout until they expire** (`JWT_ACCESS_TOKEN_EXPIRE_MINUTES`, default 15). Logout writes the revocation key, but no request path reads `is_blacklisted`. Refresh tokens are revoked.
-- **The client IP comes from the first `X-Forwarded-For` entry,** which a client can set. A caller can spread requests across forged addresses. Confirm what App Service puts in that header before relying on limits for abuse protection. The path in the identifier includes IDs, so each `/…/{id}` path counts separately.
+- **The client IP is the transport peer in direct mode** (forwarding headers are ignored), so behind App Service all visitors may share one limiter bucket per path. Cloudflare mode uses the verified `CF-Connecting-IP` instead; see [trusted ingress](trusted-ingress.md). The path in the identifier includes IDs, so each `/…/{id}` path counts separately.
 - **`/healthz` touches Redis** through the locale middleware and returns `500` while Redis is unreachable. An App Service health check on `/healthz` therefore also tracks Redis.
 - **Redis unavailable at startup** disables Redis rate limiting (fail-open) until the app restarts; the log shows `Failed to initialize Redis rate limiters`.
 - The image keeps its build toolchain (`build-base`, `libffi-dev`), which adds size.

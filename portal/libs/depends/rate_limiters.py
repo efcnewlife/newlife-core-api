@@ -10,7 +10,7 @@ Different endpoint types rate limiters strategy:
 - Read endpoint: Looser, because read operations are less burdened on the system
 - Write endpoint: Stricter, because write operations need more resources
 
-Limiters keep one sliding-window sorted set per client identifier (IP + path) in Redis, shared across workers:
+Limiters keep one sliding-window sorted set per client identifier (resolved client IP + path) in Redis, shared across workers:
 `<app>:rate_limiter:<type>:<identifier>` in the database 0 keyspace, expiring after the longest window.
 There is no in-process fallback: lifespan attaches the limiters at startup when REDIS_URL is set, and requests are
 not limited without them.
@@ -27,6 +27,7 @@ from redis.asyncio import Redis
 from starlette.routing import Mount
 
 from portal.config import settings
+from portal.libs.client_ip import resolved_client_ip
 from portal.libs.consts.cache_keys import CacheKeys
 from portal.libs.rate_limit.config import RateLimiterConfig
 
@@ -72,16 +73,9 @@ class RedisSlidingWindowLimiter:
 
 async def default_identifier(request: Request) -> str:
     """
-    Identifier for rate limit key: IP + path.
+    Identifier for rate limit key: resolved client IP + path. Requests without a trustworthy address share "unknown".
     """
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        ip = forwarded.split(",")[0].strip()
-    elif request.client:
-        ip = request.client.host
-    else:
-        ip = "127.0.0.1"
-    return f"{ip}:{request.scope['path']}"
+    return f"{resolved_client_ip(request) or 'unknown'}:{request.scope['path']}"
 
 
 def get_rate_limiters_config(config_type: str = "default") -> RateLimiterConfig:

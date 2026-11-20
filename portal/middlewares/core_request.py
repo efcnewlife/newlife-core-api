@@ -10,19 +10,10 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from portal.application.auth.results import HeaderInfo
 from portal.application.locale.locale_service import LocaleService
 from portal.container import Container
+from portal.libs.client_ip import resolved_client_ip
 from portal.libs.contexts.request_context import RequestContext, reset_request_context, set_request_context
 from portal.libs.contexts.request_session_context import reset_request_session, set_request_session
 from portal.libs.telemetry import bind_http_request, bind_request_id
-
-
-def _resolve_ip(request: Request) -> str | None:
-    xff = request.headers.get("x-forwarded-for")
-    if xff:
-        return xff.split(",")[0].strip()
-    xri = request.headers.get("x-real-ip")
-    if xri:
-        return xri.strip()
-    return request.client.host if request.client else None
 
 
 class CoreRequestMiddleware(BaseHTTPMiddleware):
@@ -109,7 +100,7 @@ class CoreRequestMiddleware(BaseHTTPMiddleware):
             req_ctx_token = set_request_context(
                 RequestContext(
                     request_id=request_id,
-                    ip=_resolve_ip(request),
+                    ip=resolved_client_ip(request),
                     client_ip=(request.client.host if request.client else None),
                     method=request.method,
                     host=(request.headers.get("host") or request.url.hostname),

@@ -47,7 +47,7 @@ docker compose up -d
 uv run alembic upgrade head
 
 # Dev server
-uv run uvicorn portal.main:app --reload
+uv run uvicorn portal.main:app --reload --no-proxy-headers
 # or: uv run python -m portal
 
 # IDE debug (Cursor / VS Code): Run and Debug → FastAPI: Debug
@@ -454,6 +454,7 @@ Use **Permission** or **Verb** as the reference implementation.
 | `portal/application/rbac/mappers.py`                                      | Canonical mapper pattern                                  |
 | `portal/infrastructure/persistence/repositories/permission_repository.py` | Canonical repository pattern                              |
 | `portal/middlewares/auth_middleware.py`                                   | AuthZ flow                                                |
+| `docs/trusted-ingress.md`                                                 | Trusted proxy modes and the one client IP resolver        |
 | `portal/libs/consts/permission.py`                                        | Permission tokens for routes                              |
 | `portal/config.py`                                                        | Environment settings                                      |
 | `example.env`                                                             | Required env vars                                         |

@@ -12,6 +12,7 @@
                 "127.0.0.1",
                 "--port",
                 "8000",
+                "--no-proxy-headers",
                 "--log-level",
                 "debug",
                 "--use-colors"

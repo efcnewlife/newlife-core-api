@@ -585,7 +585,7 @@ Notes:
 
 ```shell
 # development (with reload)
-uv run uvicorn portal.main:app --reload
+uv run uvicorn portal.main:app --reload --no-proxy-headers
 
 # or
 uv run python -m portal

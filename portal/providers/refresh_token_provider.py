@@ -46,7 +46,7 @@ class RefreshTokenProvider:
         now = datetime.now(timezone.utc)
         expires_at = now + timedelta(days=self._ttl_days)
         user_agent = self._req_ctx.headers.user_agent if self._req_ctx.headers else None
-        ip = self._req_ctx.ip or self._req_ctx.client_ip or None
+        ip = self._req_ctx.ip
         try:
             # Upsert device info - if device_id already exists, update last seen; otherwise insert new
             await (
@@ -106,7 +106,7 @@ class RefreshTokenProvider:
                 last_used_at=now,
                 revoked_at=None,
                 revoked_reason=None,
-                ip=self._req_ctx.ip or self._req_ctx.client_ip or None,
+                ip=self._req_ctx.ip,
                 user_agent=user_agent,
             )
             # Update device last seen
@@ -114,7 +114,7 @@ class RefreshTokenProvider:
                 await (
                     self._session.update(AuthDevice)
                     .where(AuthDevice.id == rt_data.device_id)
-                    .values(last_seen_at=now, last_ip=self._req_ctx.ip or self._req_ctx.client_ip or None, last_user_agent=user_agent)
+                    .values(last_seen_at=now, last_ip=self._req_ctx.ip, last_user_agent=user_agent)
                     .execute()
                 )
             await self._session.insert(AuthRefreshToken).values(new_rt_data.model_dump(exclude_none=True)).execute()
