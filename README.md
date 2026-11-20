@@ -546,8 +546,9 @@ uv run python -m portal.cli.main seed-mock-data
 4. `seed-positions`
 5. `seed-target-audiences`
 6. `seed-facility-rental` (upsert only; never `--reset`)
-7. `seed-legal-documents`
-8. existing interactive `create-superuser`
+7. `seed-room-slot-templates`
+8. `seed-legal-documents`
+9. existing interactive `create-superuser`
 
 It does **not** seed Ministry Types, Mock users, Ministries, Bookings, or other business fixtures. Re-running uses the same catalog upsert semantics as the individual commands and never resets or deletes catalog rows.
 
@@ -565,6 +566,7 @@ It does **not** seed Ministry Types, Mock users, Ministries, Bookings, or other 
 | `seed-ministry-types`   | Upsert ministry type catalog (`outreach`, `internal`, `worship`) and translations. Not part of `init-all`.                                   |
 | `seed-target-audiences` | Upsert target audience catalog (`children`, `youths`, `adults`, `family`, `all_ages`) and translations.                                      |
 | `seed-facility-rental`  | Upsert facility rooms, rates, discounts, and surcharges.                                                                                     |
+| `seed-room-slot-templates` | Insert default opening hours (Mon-Sat 08:00-22:00, Sun 14:00-22:00, 60-minute slots) from `portal/cli/datas/room_slot_template_seed_data.py` for each seeded room that has no Room Slot Template (active or inactive). Never updates or deletes existing templates. |
 | `seed-legal-documents`  | Insert missing built-in Legal Documents (Product x Kind; empty bodies).                                                                      |
 | `reset-rbac`            | **Destructive:** delete all RBAC data and re-seed from `rbac_seed_data`.                                                                     |
 
@@ -573,6 +575,8 @@ Notes:
 - Prefer `init-all` for a new environment. Individual catalog commands remain for targeted re-runs.
 - Run `init-locales` before `init-rbac` when invoking those commands separately; RBAC translations depend on locale rows.
 - `seed-positions`, `seed-ministry-types`, `seed-target-audiences`, `seed-facility-rental`, `seed-position-assignments`, and `reset-rbac` are blocked when `ENV` is not `dev` unless `--force` is passed. `init-all` uses the existing upsert paths and does not apply those confirmation/`--force` gates.
+- `seed-room-slot-templates` runs in every environment, including production, with no `--force` gate. To keep a room Closed, deactivate its template rather than deleting it; an inactive template still counts, so re-running does not re-open the room.
+- `seed-mock-data` adds its Mock slot template only to rooms without an active template, so it does not overlap the defaults from `init-all`. Mock Bookings are placed only inside each room's opening hours (for example, never on a Sunday morning under the defaults).
 - `seed-mock-users`, `seed-mock-data`, and `remove-mock-data` use a stricter guard: they run in `dev` freely, require `--force` in `stg`, and are **never** allowed when `ENV=prod` even with `--force`.
 - Suggested empty-DB flow: `init-all` → optional `seed-mock-users` → optional `seed-mock-data`. `seed-local-demo` is retired with no compatibility alias.
 - Seed logic lives in `portal/application/cli/*_seed_service.py`; `portal/cli/` provides thin Click entrypoints only.

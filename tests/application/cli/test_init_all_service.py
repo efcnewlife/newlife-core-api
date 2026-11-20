@@ -7,7 +7,7 @@ import pytest
 from portal.application.cli.init_all_service import InitAllService
 from portal.cli.main import cli
 
-CATALOG_STEP_NAMES = ("locales", "rbac", "system_settings", "positions", "target_audiences", "facility_rental", "legal_documents")
+CATALOG_STEP_NAMES = ("locales", "rbac", "system_settings", "positions", "target_audiences", "facility_rental", "room_slot_templates", "legal_documents")
 
 
 def _build_service(calls: list[str], *, fail_on: str | None = None) -> InitAllService:
@@ -29,6 +29,7 @@ def _build_service(calls: list[str], *, fail_on: str | None = None) -> InitAllSe
         seed_positions=make_step("positions"),
         seed_target_audiences=make_step("target_audiences"),
         seed_facility_rental=make_step("facility_rental"),
+        seed_room_slot_templates=make_step("room_slot_templates"),
         seed_legal_documents=make_step("legal_documents"),
         create_superuser=create_superuser,
     )

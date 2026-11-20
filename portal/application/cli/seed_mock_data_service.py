@@ -28,11 +28,15 @@ from portal.application.cli.mock_fixture_plans import (
     ROOM_BLACKOUT_LABEL,
     ROOM_BLACKOUT_ROOM_CODE,
     ROOM_BLACKOUT_START,
+    SLOT_TEMPLATE_END,
     SLOT_TEMPLATE_LABEL,
+    SLOT_TEMPLATE_START,
     ExistingBlackout,
     OccupyingInterval,
+    OpeningWindow,
     build_mock_booking_plans,
     mock_fixture_name,
+    mock_opening_windows,
     place_booking_plan,
     place_campus_blackout,
     place_room_blackout,
@@ -133,6 +137,15 @@ class _BlackoutRow(BaseModel):
     effective_to: Optional[date]
 
 
+class _OpeningWindowRow(BaseModel):
+    facility_id: UUID
+    days_of_week_mask: int
+    start_time: time
+    end_time: time
+    effective_from: Optional[date]
+    effective_to: Optional[date]
+
+
 class SeedMockDataService:
     """Complete the near-term Facility Booking QA fixture suite for the current Mock inventory."""
 
@@ -202,11 +215,27 @@ class SeedMockDataService:
         )
         return [ExistingBlackout(**row.model_dump()) for row in rows or []]
 
-    async def _insert_slot_templates(self, *, rooms: dict[str, UUID], run_identity: str) -> int:
+    async def _load_opening_windows(self) -> list[OpeningWindow]:
+        rows = await (
+            self._session.select(
+                FacilityRoomSlotTemplate.facility_id,
+                FacilityRoomSlotTemplate.days_of_week_mask,
+                FacilityRoomSlotTemplate.start_time,
+                FacilityRoomSlotTemplate.end_time,
+                FacilityRoomSlotTemplate.effective_from,
+                FacilityRoomSlotTemplate.effective_to,
+            )
+            .where(FacilityRoomSlotTemplate.is_active == True)
+            .where(FacilityRoomSlotTemplate.is_deleted == False)
+            .fetch(as_model=_OpeningWindowRow)
+        )
+        return [OpeningWindow(**row.model_dump()) for row in rows or []]
+
+    async def _insert_slot_templates(self, *, facility_ids: list[UUID], run_identity: str) -> int:
         name = mock_fixture_name(SLOT_TEMPLATE_LABEL, run_identity)
         mask = slot_template_mask()
         count = 0
-        for facility_id in rooms.values():
+        for facility_id in facility_ids:
             await (
                 self._session.insert(FacilityRoomSlotTemplate)
                 .values(
@@ -214,8 +243,8 @@ class SeedMockDataService:
                     facility_id=facility_id,
                     name=name,
                     days_of_week_mask=mask,
-                    start_time=time(8, 0),
-                    end_time=time(22, 0),
+                    start_time=SLOT_TEMPLATE_START,
+                    end_time=SLOT_TEMPLATE_END,
                     slot_duration_minutes=60,
                     is_active=True,
                 )
@@ -345,6 +374,11 @@ class SeedMockDataService:
         owner_position_id, owner_position_code = await self._first_owning_position()
         occupancy = await self._load_occupancy()
         blackouts = await self._load_blackouts()
+        opening_windows = await self._load_opening_windows()
+        # Active templates for the same room and weekday must not overlap, so only rooms without opening hours get the Mock template.
+        rooms_with_opening_hours = {window.facility_id for window in opening_windows}
+        mock_template_facility_ids = [facility_id for facility_id in rooms.values() if facility_id not in rooms_with_opening_hours]
+        opening_windows.extend(mock_opening_windows(mock_template_facility_ids))
         now = self._clock()
         today = now.astimezone(MOCK_FIXTURE_TIMEZONE).date()
         all_facility_ids = list(rooms.values())
@@ -392,7 +426,7 @@ class SeedMockDataService:
             if missing_rooms:
                 raise MockDataPrerequisiteError(f"Room code {missing_rooms[0]!r} not found. Run seed-facility-rental first.")
             facility_ids = [rooms[code] for code in plan.room_codes]
-            placed = place_booking_plan(plan, today=today, occupancy=occupancy, blackouts=blackouts, facility_ids=facility_ids)
+            placed = place_booking_plan(plan, today=today, occupancy=occupancy, blackouts=blackouts, opening_windows=opening_windows, facility_ids=facility_ids)
             if placed is None:
                 raise MockFixturePlacementError(
                     f"No available slot in the next {BOOKING_PLACEMENT_WINDOW_DAYS} days for Mock booking scenario {plan.title!r}. "
@@ -402,7 +436,7 @@ class SeedMockDataService:
             for facility_id in facility_ids:
                 occupancy.append(OccupyingInterval(facility_id=facility_id, start_at=placed.start_at, end_at=placed.end_at))
 
-        slot_template_count = await self._insert_slot_templates(rooms=rooms, run_identity=run_identity)
+        slot_template_count = await self._insert_slot_templates(facility_ids=mock_template_facility_ids, run_identity=run_identity)
         await self._insert_blackout(
             facility_id=None,
             label=CAMPUS_BLACKOUT_LABEL,

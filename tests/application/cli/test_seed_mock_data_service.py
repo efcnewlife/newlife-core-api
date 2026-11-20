@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 from asyncpg import NotNullViolationError
+from sqlalchemy.sql.elements import False_, True_
 
 from portal.application.cli.mock_account_archive import ACCOUNT_CSV_COLUMNS, MINISTRY_CSV_COLUMNS, write_csv
 from portal.application.cli.mock_fixture_plans import BOOKING_PLACEMENT_WINDOW_DAYS, local_range_to_utc
@@ -44,6 +45,8 @@ def _where_value(cond):
     left = getattr(cond, "left", None)
     key = getattr(left, "key", None) if left is not None else None
     right = getattr(cond, "right", None)
+    if isinstance(right, (True_, False_)):
+        return key, isinstance(right, True_)
     try:
         value = right.value if right is not None else None
     except AttributeError:
@@ -64,6 +67,7 @@ class FakeSession:
         locale_rows: list[dict] | None = None,
         occupying_slots: list[dict] | None = None,
         existing_blackouts: list[dict] | None = None,
+        slot_templates: list[dict] | None = None,
         raise_on_insert: dict[str, Exception] | None = None,
     ):
         self._users = users if users is not None else _default_users()
@@ -73,6 +77,7 @@ class FakeSession:
         self._locale_rows = [{"id": uuid4(), "language_code": "en"}] if locale_rows is None else locale_rows
         self._occupying_slots = occupying_slots or []
         self._existing_blackouts = existing_blackouts or []
+        self._slot_templates = slot_templates or []
         self._raise_on_insert = raise_on_insert or {}
 
         self.inserted: dict[str, list[dict]] = defaultdict(list)
@@ -125,6 +130,14 @@ class FakeSession:
             rows = self._occupying_slots
         elif model_name == "FacilityRoomBlackout":
             rows = self._existing_blackouts
+        elif model_name == "FacilityRoomSlotTemplate":
+            wheres = self._where_map()
+            rows = [
+                {key: row.get(key) for key in keys}
+                for row in self._slot_templates
+                if ("is_active" not in wheres or row["is_active"] == wheres["is_active"])
+                and ("is_deleted" not in wheres or row.get("is_deleted", False) == wheres["is_deleted"])
+            ]
         else:
             rows = []
         # Mirror the real ORM: without as_model, datetime/date values come back as strings.
@@ -268,6 +281,57 @@ def _service(tmp_path: Path, *, session: FakeSession | None = None) -> tuple[See
     fake = session or FakeSession()
     service = SeedMockDataService(fake, env="dev", default_locale_code="en", output_dir=tmp_path, clock=lambda: CLOCK)
     return service, fake
+
+
+def _slot_template(room_code: str, *, mask: int, start: time, end: time, is_active: bool = True) -> dict:
+    return {
+        "facility_id": ROOM_IDS[room_code],
+        "days_of_week_mask": mask,
+        "start_time": start,
+        "end_time": end,
+        "effective_from": None,
+        "effective_to": None,
+        "is_active": is_active,
+    }
+
+
+ALL_WEEK_MASK = 0b1111111
+TUESDAY_MASK = 0b0000010
+
+
+@pytest.mark.asyncio
+async def test_seed_mock_data_skips_slot_templates_for_rooms_that_already_have_active_templates(tmp_path: Path):
+    _write_inventory(tmp_path)
+    opened_rooms = {ROOM_IDS["gym"], ROOM_IDS["lounge"]}
+    templates = [
+        _slot_template("gym", mask=ALL_WEEK_MASK, start=time(8), end=time(22)),
+        _slot_template("lounge", mask=ALL_WEEK_MASK, start=time(8), end=time(22)),
+        _slot_template("kitchen", mask=ALL_WEEK_MASK, start=time(8), end=time(22), is_active=False),
+    ]
+    service, session = _service(tmp_path, session=FakeSession(slot_templates=templates))
+
+    result = await service.run()
+
+    slots = session.inserted["FacilityRoomSlotTemplate"]
+    assert {row["facility_id"] for row in slots} == set(ROOM_IDS.values()) - opened_rooms
+    assert result.slot_template_count == len(ROOM_IDS) - 2
+
+
+@pytest.mark.asyncio
+async def test_seed_mock_data_places_bookings_only_inside_existing_opening_hours(tmp_path: Path):
+    _write_inventory(tmp_path)
+    # Thursday clock: the campus Blackout takes Friday, so bookings start on Saturday 2026-09-19.
+    templates = [_slot_template("classroom-105", mask=TUESDAY_MASK, start=time(9), end=time(12))]
+    service, session = _service(tmp_path, session=FakeSession(slot_templates=templates))
+
+    await service.run()
+
+    booking_day_by_room = {}
+    for line in session.inserted["FacilityBookingRoom"]:
+        booking = next(row for row in session.inserted["FacilityBooking"] if row["id"] == line["facility_booking_id"])
+        booking_day_by_room[line["facility_id"]] = _local_day(booking["start_at"])
+    assert booking_day_by_room[ROOM_IDS["classroom-105"]] == datetime(2026, 9, 22).date()
+    assert booking_day_by_room[ROOM_IDS["classroom-106"]] == datetime(2026, 9, 19).date()
 
 
 def _local_day(value: datetime) -> object:

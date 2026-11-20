@@ -21,6 +21,7 @@ class InitAllService:
         seed_positions: CatalogStep,
         seed_target_audiences: CatalogStep,
         seed_facility_rental: CatalogStep,
+        seed_room_slot_templates: CatalogStep,
         seed_legal_documents: CatalogStep,
         create_superuser: SuperuserStep,
     ):
@@ -31,6 +32,7 @@ class InitAllService:
             seed_positions,
             seed_target_audiences,
             seed_facility_rental,
+            seed_room_slot_templates,
             seed_legal_documents,
         )
         self._create_superuser = create_superuser
