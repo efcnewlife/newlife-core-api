@@ -15,6 +15,7 @@ from .seed_mock_data import seed_mock_data_process
 from .seed_mock_users import seed_mock_users_process
 from .seed_position import seed_positions_process
 from .seed_position_assignment import seed_position_assignments_process
+from .seed_room_slot_templates import seed_room_slot_templates_process
 from .seed_system_settings import seed_system_settings_process
 from .seed_target_audience import seed_target_audiences_process
 from .superuser import create_superuser_process
@@ -96,6 +97,12 @@ def seed_target_audiences_cmd(force: bool):
 def seed_facility_rental_cmd(force: bool, reset: bool):
     """Seed facility rooms, rates, discounts, and surcharges."""
     seed_facility_rental_process(force=force, reset=reset)
+
+
+@cli.command(name="seed-room-slot-templates")
+def seed_room_slot_templates_cmd():
+    """Seed default opening hours for seeded rooms with no Room Slot Template (never touches existing templates)."""
+    seed_room_slot_templates_process()
 
 
 @cli.command(name="seed-mock-users")

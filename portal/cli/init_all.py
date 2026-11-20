@@ -10,6 +10,7 @@ from portal.cli.rbac import init_rbac
 from portal.cli.seed_facility_rental import seed_facility_rental
 from portal.cli.seed_legal_documents import seed_legal_documents_async
 from portal.cli.seed_position import seed_positions
+from portal.cli.seed_room_slot_templates import seed_room_slot_templates_async
 from portal.cli.seed_system_settings import seed_system_settings_async
 from portal.cli.seed_target_audience import seed_target_audiences
 from portal.cli.superuser import create_superuser_process
@@ -23,7 +24,9 @@ async def seed_facility_rental_catalog() -> None:
 def init_all_process() -> None:
     """Seed catalog data in fail-fast order, then run interactive superuser creation."""
     click.echo(click.style("Bootstrapping catalog data, then creating a superuser.", fg="cyan"))
-    click.echo("Order: locales -> RBAC -> system settings -> positions -> target audiences -> facility rooms/rates -> Legal Documents -> create-superuser.")
+    click.echo(
+        "Order: locales -> RBAC -> system settings -> positions -> target audiences -> facility rooms/rates -> default Room Slot Templates -> Legal Documents -> create-superuser."
+    )
     click.echo("Does not seed Ministry Types, Mock users, Ministries, or Bookings.")
     service = InitAllService(
         init_locales=init_locales,
@@ -32,6 +35,7 @@ def init_all_process() -> None:
         seed_positions=seed_positions,
         seed_target_audiences=seed_target_audiences,
         seed_facility_rental=seed_facility_rental_catalog,
+        seed_room_slot_templates=seed_room_slot_templates_async,
         seed_legal_documents=seed_legal_documents_async,
         create_superuser=create_superuser_process,
     )

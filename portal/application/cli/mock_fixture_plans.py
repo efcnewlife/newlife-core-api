@@ -3,8 +3,8 @@ Near-term Mock fixture plans for `seed-mock-data`.
 
 Booking scenarios keep the agreed personal/Ministry/multi-room distribution.
 Slot templates and Blackouts carry a machine-readable `mock:` run marker in a
-readable QA label. Placement searches the next 30 local days and never replaces
-existing occupancy or Blackouts.
+readable QA label. Placement searches the next 30 local days, never replaces
+existing occupancy or Blackouts, and keeps Bookings inside room opening hours.
 """
 
 from dataclasses import dataclass
@@ -22,6 +22,8 @@ BOOKING_PLACEMENT_WINDOW_DAYS = 30
 MOCK_FIXTURE_TIMEZONE = ZoneInfo("America/Toronto")
 ALL_DAYS = [DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY, DayOfWeek.FRIDAY, DayOfWeek.SATURDAY, DayOfWeek.SUNDAY]
 SLOT_TEMPLATE_LABEL = "all-week daytime"
+SLOT_TEMPLATE_START = time(8, 0)
+SLOT_TEMPLATE_END = time(22, 0)
 CAMPUS_BLACKOUT_LABEL = "campus holiday"
 ROOM_BLACKOUT_LABEL = "sanctuary maintenance"
 ROOM_BLACKOUT_ROOM_CODE = "sanctuary-hall"
@@ -71,6 +73,18 @@ class ExistingBlackout:
     kind: str
     blackout_date: Optional[date]
     days_of_week_mask: Optional[int]
+    start_time: time
+    end_time: time
+    effective_from: Optional[date] = None
+    effective_to: Optional[date] = None
+
+
+@dataclass(frozen=True)
+class OpeningWindow:
+    """One active Room Slot Template window; Mock Bookings must fit inside one for every room."""
+
+    facility_id: UUID
+    days_of_week_mask: int
     start_time: time
     end_time: time
     effective_from: Optional[date] = None
@@ -159,6 +173,32 @@ def blackout_overlaps_interval(
     return _times_overlap(local_start.time(), local_end.time(), blackout.start_time, blackout.end_time)
 
 
+def _window_covers(window: OpeningWindow, *, day: date, start_time: time, end_time: time) -> bool:
+    if window.effective_from is not None and day < window.effective_from:
+        return False
+    if window.effective_to is not None and day > window.effective_to:
+        return False
+    if (window.days_of_week_mask & (1 << day.weekday())) == 0:
+        return False
+    return window.start_time <= start_time and end_time <= window.end_time
+
+
+def interval_is_open(
+    opening_windows: list[OpeningWindow], *, facility_ids: list[UUID], start_at: datetime, end_at: datetime, tz: ZoneInfo = MOCK_FIXTURE_TIMEZONE
+) -> bool:
+    """Return True when every room in `facility_ids` has one opening window covering [start_at, end_at)."""
+    local_start = start_at.astimezone(tz)
+    local_end = end_at.astimezone(tz)
+    day = local_start.date()
+    return all(
+        any(
+            window.facility_id == facility_id and _window_covers(window, day=day, start_time=local_start.time(), end_time=local_end.time())
+            for window in opening_windows
+        )
+        for facility_id in facility_ids
+    )
+
+
 def occupancy_overlaps_interval(occupancy: list[OccupyingInterval], *, facility_ids: list[UUID], start_at: datetime, end_at: datetime) -> bool:
     """Return True when any confirmed occupancy overlaps the requested room interval."""
     wanted = set(facility_ids)
@@ -209,12 +249,15 @@ def place_booking_plan(
     today: date,
     occupancy: list[OccupyingInterval],
     blackouts: list[ExistingBlackout],
+    opening_windows: list[OpeningWindow],
     facility_ids: list[UUID],
     tz: ZoneInfo = MOCK_FIXTURE_TIMEZONE,
 ) -> Optional[PlacedBooking]:
-    """Return the first 30-day slot that keeps this scenario's rooms, hours, and duration."""
+    """Return the first open 30-day slot that keeps this scenario's rooms, hours, and duration."""
     for local_day in _candidate_days(today):
         start_at, end_at = local_range_to_utc(local_day=local_day, start_hour=plan.start_hour, end_hour=plan.end_hour, tz=tz)
+        if not interval_is_open(opening_windows, facility_ids=facility_ids, start_at=start_at, end_at=end_at, tz=tz):
+            continue
         if _interval_is_free(facility_ids=facility_ids, start_at=start_at, end_at=end_at, occupancy=occupancy, blackouts=blackouts, tz=tz):
             return PlacedBooking(plan=plan, local_day=local_day, start_at=start_at, end_at=end_at)
     return None
@@ -223,3 +266,12 @@ def place_booking_plan(
 def slot_template_mask() -> int:
     """Return the all-week bitmask used by Mock weekly slot templates."""
     return days_to_mask(ALL_DAYS)
+
+
+def mock_opening_windows(facility_ids: list[UUID]) -> list[OpeningWindow]:
+    """Return the opening windows the Mock slot template adds to rooms that have none."""
+    mask = slot_template_mask()
+    return [
+        OpeningWindow(facility_id=facility_id, days_of_week_mask=mask, start_time=SLOT_TEMPLATE_START, end_time=SLOT_TEMPLATE_END)
+        for facility_id in facility_ids
+    ]
