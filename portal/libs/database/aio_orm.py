@@ -22,7 +22,7 @@ from sqlalchemy.sql.dml import Delete, Insert, Update
 from sqlalchemy.sql.selectable import ScalarSelect
 
 from portal.config import settings
-from portal.libs.database.aio_pg import ConnectionType, PostgresConnection
+from portal.libs.database.aio_pg import ConnectionType, PoolAcquireTimeoutError, PostgresConnection
 from portal.libs.database.orm import Base, ModelBase
 from portal.libs.logger import logger
 from portal.libs.shared import Assert, Converter, validator
@@ -30,6 +30,10 @@ from portal.libs.shared import Assert, Converter, validator
 dialect = postgresql.dialect()
 
 __all__ = ["ISession", "Session"]
+
+POOL_ACQUIRE_TIMEOUT_SECONDS = 5
+# Releasing resets the connection; without its own timeout, asyncpg would reuse the acquire timeout.
+POOL_RELEASE_TIMEOUT_SECONDS = 60
 
 T = TypeVar("T")
 
@@ -661,7 +665,10 @@ class Session(ISession):
                 if self._pool is None:
                     self._pool = await self._postgres_connection.create_connection(connection_type=ConnectionType.POOL, command_timeout=self._timeout)
                 if self._conn is None or self._conn.is_closed():
-                    self._conn = await self._pool.acquire(timeout=60)
+                    try:
+                        self._conn = await self._pool.acquire(timeout=POOL_ACQUIRE_TIMEOUT_SECONDS)
+                    except TimeoutError as e:
+                        raise PoolAcquireTimeoutError("Timed out waiting for a PostgreSQL connection") from e
             else:
                 if self._conn is None or self._conn.is_closed():
                     self._conn = await self._postgres_connection.create_connection(
@@ -911,7 +918,7 @@ class Session(ISession):
                 return
             await self.rollback(False)
             if self._use_pool:
-                self._pool and self._conn and await self._pool.release(self._conn)
+                self._pool and self._conn and await self._pool.release(self._conn, timeout=POOL_RELEASE_TIMEOUT_SECONDS)
             else:
                 self._conn and await self._conn.close()
             self._conn = None

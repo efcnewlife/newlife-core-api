@@ -16,7 +16,16 @@ from portal.libs.consts.enums import APIScope
 from portal.libs.contexts.request_session_context import get_request_session
 from portal.libs.telemetry import capture_request_failure, select_telemetry_backend
 from portal.libs.utils.lifespan import lifespan
-from portal.middlewares import AuthMiddleware, CoreRequestMiddleware, IngressPolicy, TrustedIngressMiddleware
+from portal.middlewares import (
+    AuthMiddleware,
+    CoreRequestMiddleware,
+    IngressPolicy,
+    PoolExhaustionMiddleware,
+    RateLimitMiddleware,
+    TrustedIngressMiddleware,
+    is_pool_exhausted,
+    pool_exhausted_response,
+)
 from portal.routers import admin_api_router, api_router
 from portal.runtime_context import set_runtime_container
 
@@ -32,8 +41,9 @@ def _register_cors(application: FastAPI) -> None:
     )
 
 
-def _register_core_request_middleware(application: FastAPI) -> None:
+def _register_request_middlewares(application: FastAPI) -> None:
     application.add_middleware(CoreRequestMiddleware)
+    application.add_middleware(PoolExhaustionMiddleware)
 
 
 def _register_admin_stack(application: FastAPI) -> None:
@@ -43,18 +53,20 @@ def _register_admin_stack(application: FastAPI) -> None:
     :return:
     """
     application.add_middleware(AuthMiddleware)
-    _register_core_request_middleware(application)
+    _register_request_middlewares(application)
     _register_cors(application)
 
 
 def _register_public_stack(application: FastAPI, ingress_policy: IngressPolicy) -> None:
     """
     Trusted ingress is outermost: it guards CORS preflight and the mounted apps, which share this stack.
+    The rate limit covers the mounted apps too, before any request context or authentication work.
     :param application:
     :param ingress_policy:
     :return:
     """
-    _register_core_request_middleware(application)
+    _register_request_middlewares(application)
+    application.add_middleware(RateLimitMiddleware)
     _register_cors(application)
     application.add_middleware(TrustedIngressMiddleware, policy=ingress_policy)
 
@@ -66,7 +78,7 @@ def _register_api_stack(application: FastAPI) -> None:
     :return:
     """
     application.add_middleware(AuthMiddleware)
-    _register_core_request_middleware(application)
+    _register_request_middlewares(application)
     _register_cors(application)
 
 
@@ -103,6 +115,8 @@ def _setup_exception_handlers(application: FastAPI) -> None:
         session = get_request_session()
         if session is not None:
             await session.rollback()
+        if exc.status_code >= status.HTTP_500_INTERNAL_SERVER_ERROR and is_pool_exhausted(exc):
+            return pool_exhausted_response()
         content = defaultdict()
         content["detail"] = exc.detail
         if exc.error_code:

@@ -6,7 +6,7 @@ Execution boundary: agents author code, tests, and the local image smoke only. E
 
 ## What the application does
 
-`TrustedIngressMiddleware` (`portal/middlewares/trusted_ingress.py`) is the outermost middleware of the public application. It runs before CORS (including preflight `OPTIONS`), both mounted apps (`/admin`, `/api`), the request context, rate limiters, audit, and refresh-token writes.
+`TrustedIngressMiddleware` (`portal/middlewares/trusted_ingress.py`) is the outermost middleware of the public application. It runs before CORS (including preflight `OPTIONS`), the rate limit, the request context, both mounted apps (`/admin`, `/api`), audit, and refresh-token writes.
 
 It resolves one canonical client IP per request (`portal/libs/client_ip.py`). That value is the rate-limit identifier (`<ip>:<path>`), `RequestContext.ip`, the audit `ip_address`, and refresh-token / device `last_ip`. No consumer reads `X-Forwarded-For`, `X-Real-IP`, or `CF-Connecting-IP` itself. IPv4-mapped IPv6 (`::ffff:a.b.c.d`) becomes IPv4; IPv6 uses its compressed lowercase form.
 

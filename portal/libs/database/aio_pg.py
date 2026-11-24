@@ -10,7 +10,11 @@ import asyncpg
 
 from portal.config import settings
 
-__all__ = ["PostgresConnection", "PostgresConnection", "ConnectionType"]
+__all__ = ["PostgresConnection", "PostgresConnection", "ConnectionType", "PoolAcquireTimeoutError"]
+
+
+class PoolAcquireTimeoutError(TimeoutError):
+    """The connection pool could not hand out a connection in time. Distinct from a query timeout."""
 
 
 class ConnectionType(Enum):
@@ -53,7 +57,7 @@ class PostgresConnection:
                 schema=settings.DATABASE_SCHEMA,
                 application_name=settings.DATABASE_APPLICATION_NAME,
                 min_size=0,
-                max_size=100,
+                max_size=settings.DATABASE_POOL_MAX_SIZE,
                 command_timeout=command_timeout,
             )
 

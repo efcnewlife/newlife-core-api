@@ -14,13 +14,14 @@ from uuid import uuid4
 
 import pytest
 import pytest_asyncio
-from fastapi import Depends, FastAPI
+from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from portal.config import settings
 from portal.libs.database import RedisPool
 from portal.libs.database.aio_redis import create_redis_client
-from portal.libs.depends.rate_limiters import RedisRateLimiterDependency, create_redis_rate_limiters, get_rate_limiters_config
+from portal.libs.depends.rate_limiters import create_redis_rate_limiters, get_rate_limiters_config
+from portal.middlewares import RateLimitMiddleware
 from portal.providers.member_refresh_app_binding_provider import MemberRefreshAppBindingProvider
 from portal.providers.token_blacklist_provider import TokenBlacklistProvider
 
@@ -28,6 +29,7 @@ pytestmark = pytest.mark.skipif(
     os.getenv("PORTAL_REDIS_INTEGRATION") != "1" or not settings.REDIS_URL, reason="set PORTAL_REDIS_INTEGRATION=1 and REDIS_URL to run against a local Redis"
 )
 
+LIMITED_PATH = "/api/v1/limited"
 RATE_LIMITER_PATTERN = f"{settings.APP_NAME}:rate_limiter:*"
 
 
@@ -50,11 +52,17 @@ async def _rate_limited_app(redis) -> FastAPI:
     app = FastAPI()
     app.state.rate_limiters = await create_redis_rate_limiters(redis)
 
-    @app.get("/limited", dependencies=[Depends(RedisRateLimiterDependency("default"))])
+    app.add_middleware(RateLimitMiddleware)
+
+    @app.get(LIMITED_PATH)
     async def limited():
         return {"ok": True}
 
     return app
+
+
+def _client(app: FastAPI, ip: str) -> AsyncClient:
+    return AsyncClient(transport=ASGITransport(app=app, client=(ip, 50000)), base_url="http://test")
 
 
 @pytest.mark.asyncio
@@ -67,18 +75,16 @@ async def test_connection_uses_database_zero(redis):
 async def test_each_client_gets_429_beyond_its_own_short_window(redis):
     app = await _rate_limited_app(redis)
     config = get_rate_limiters_config("default")
-    first = {"X-Forwarded-For": "203.0.113.1"}
-    second = {"X-Forwarded-For": "203.0.113.2"}
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        statuses = [(await client.get("/limited", headers=first)).status_code for _ in range(config.short.times + 1)]
-        other_client = (await client.get("/limited", headers=second)).status_code
+    async with _client(app, "203.0.113.1") as first, _client(app, "203.0.113.2") as second:
+        statuses = [(await first.get(LIMITED_PATH)).status_code for _ in range(config.short.times + 1)]
+        other_client = (await second.get(LIMITED_PATH)).status_code
 
     assert statuses[: config.short.times] == [200] * config.short.times
     assert statuses[-1] == 429
     assert other_client == 200
 
-    key = f"{settings.APP_NAME}:rate_limiter:default:203.0.113.1:/limited"
+    key = f"{settings.APP_NAME}:rate_limiter:default:203.0.113.1:{LIMITED_PATH}"
     assert await redis.zcard(key) == config.short.times
     assert 0 < await redis.pttl(key) <= config.long.seconds * 1000
 
@@ -87,10 +93,10 @@ async def test_each_client_gets_429_beyond_its_own_short_window(redis):
 async def test_rate_limiting_survives_script_flush(redis):
     app = await _rate_limited_app(redis)
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        before = (await client.get("/limited")).status_code
+    async with _client(app, "203.0.113.1") as client:
+        before = (await client.get(LIMITED_PATH)).status_code
         await redis.script_flush()
-        after = (await client.get("/limited")).status_code
+        after = (await client.get(LIMITED_PATH)).status_code
 
     assert (before, after) == (200, 200)
 
