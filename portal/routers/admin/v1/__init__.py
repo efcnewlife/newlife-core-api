@@ -2,7 +2,6 @@
 Top level router for admin v1 API
 """
 
-from portal.libs.depends import DEFAULT_RATE_LIMITERS
 from portal.routers.auth_router import AuthRouter
 
 from .auth import router as auth_router
@@ -18,7 +17,7 @@ from .system import router as system_router
 from .user import router as user_router
 from .verb import router as verb_router
 
-router = AuthRouter(dependencies=[*DEFAULT_RATE_LIMITERS], is_admin=True)
+router = AuthRouter(is_admin=True)
 router.include_router(auth_router, prefix="/auth", tags=["Auth"])
 router.include_router(locale_router, prefix="/locale", tags=["Locale"])
 router.include_router(permission_router, prefix="/permission", tags=["Permission"])

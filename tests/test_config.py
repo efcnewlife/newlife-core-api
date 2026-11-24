@@ -41,3 +41,15 @@ def test_cloudflare_origin_secret_is_hidden_from_the_configuration_repr(monkeypa
 
     assert config.CLOUDFLARE_ORIGIN_SECRET.get_secret_value() == secret
     assert secret not in repr(config) and secret not in str(config)
+
+
+def test_database_pool_max_size_defaults_to_30(monkeypatch):
+    monkeypatch.delenv("DATABASE_POOL_MAX_SIZE", raising=False)
+
+    assert Configuration().DATABASE_POOL_MAX_SIZE == 30
+
+
+def test_database_pool_max_size_comes_from_the_environment(monkeypatch):
+    monkeypatch.setenv("DATABASE_POOL_MAX_SIZE", "80")
+
+    assert Configuration().DATABASE_POOL_MAX_SIZE == 80

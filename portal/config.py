@@ -118,7 +118,8 @@ class Configuration(BaseSettings):
     DATABASE_PORT: str = os.getenv(key="DATABASE_PORT", default="5432")
     DATABASE_NAME: str = os.getenv(key="DATABASE_NAME", default="postgres")
     DATABASE_SCHEMA: str = os.getenv(key="DATABASE_SCHEMA", default="public")
-    DATABASE_CONNECTION_POOL_MAX_SIZE: int = os.getenv("DATABASE_CONNECTION_POOL_MAX_SIZE", 10)
+    # Per worker process. All workers together must stay under the user connections PostgreSQL allows.
+    DATABASE_POOL_MAX_SIZE: int = int(os.getenv(key="DATABASE_POOL_MAX_SIZE", default="30"))
     DATABASE_APPLICATION_NAME: str = APP_NAME
 
     DATABASE_POOL: bool = os.getenv("DATABASE_POOL", True)

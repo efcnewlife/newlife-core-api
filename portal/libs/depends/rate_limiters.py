@@ -1,5 +1,6 @@
 """
-Rate limiters dependencies for API endpoints.
+Rate limiters for API endpoints. RateLimitMiddleware applies the default type to every admin and member request;
+the read and write types are opt-in route dependencies.
 
 Rate limiters strategy:
 1. Short-term rate limiting (1 second): Prevent sudden traffic, protect system stability
@@ -120,6 +121,21 @@ def attach_rate_limiters(app: FastAPI, limiters: dict[str, list[RedisSlidingWind
             attach_rate_limiters(route.app, limiters)
 
 
+async def acquire_rate_limit(request: Request, config_type: str) -> bool:
+    """
+    Count the request against the limiters attached to its app.
+    :param request:
+    :param config_type:
+    :return: False when a window is full; True otherwise, including when no limiters are attached
+    """
+    limiters = getattr(request.app.state, "rate_limiters", None) or {}
+    identifier = await default_identifier(request)
+    for limiter in limiters.get(config_type, []):
+        if not await limiter.try_acquire_async(identifier, blocking=False):
+            return False
+    return True
+
+
 class RedisRateLimiterDependency:
     """
     FastAPI dependency that applies Redis-backed rate limiters for a config type.
@@ -130,18 +146,10 @@ class RedisRateLimiterDependency:
         self.config_type = config_type
 
     async def __call__(self, request: Request) -> None:
-        limiters = getattr(request.app.state, "rate_limiters", None)
-        if not limiters or self.config_type not in limiters:
-            return
-        identifier = await default_identifier(request)
-        for limiter in limiters[self.config_type]:
-            acquired = await limiter.try_acquire_async(identifier, blocking=False)
-            if not acquired:
-                raise HTTPException(status_code=429, detail="Too Many Requests")
+        if not await acquire_rate_limit(request, self.config_type):
+            raise HTTPException(status_code=429, detail="Too Many Requests")
 
 
-# Default rate limiter (for general endpoints)
-DEFAULT_RATE_LIMITERS = [Depends(RedisRateLimiterDependency("default"))]
 # Read endpoint rate limiter (looser)
 READ_RATE_LIMITERS = [Depends(RedisRateLimiterDependency("read"))]
 # Write endpoint rate limiter (stricter)

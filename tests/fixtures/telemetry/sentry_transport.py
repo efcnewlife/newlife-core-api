@@ -9,7 +9,8 @@ import sentry_sdk
 from sentry_sdk.envelope import Envelope
 from sentry_sdk.transport import Transport
 
-from portal.libs.telemetry import selection
+from portal.config import settings
+from portal.libs.telemetry import SentryBackend, select_telemetry_backend, selection
 
 # Reserved DSN shape; the host is never contacted because tests always pass a transport.
 TEST_DSN = "https://public@o0.ingest.invalid/0"
@@ -46,3 +47,15 @@ def reset_sentry_client():
     reset_telemetry_state()
     yield
     reset_telemetry_state()
+
+
+@pytest.fixture
+def sentry_transport(reset_sentry_client, monkeypatch) -> CapturingTransport:
+    """Request before the application is built, because building it selects the telemetry backend."""
+    monkeypatch.setattr(settings, "ENV", "stg")
+    monkeypatch.setattr(settings, "APP_VERSION", "5ba2c79")
+    monkeypatch.setattr(settings, "SENTRY_ENABLED", True)
+    monkeypatch.setattr(settings, "SENTRY_DSN", TEST_DSN)
+    transport = CapturingTransport()
+    assert isinstance(select_telemetry_backend(settings, transport=transport), SentryBackend)
+    return transport
