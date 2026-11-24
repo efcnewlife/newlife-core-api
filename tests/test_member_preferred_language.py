@@ -45,6 +45,12 @@ class StubMemberWebAppRegistry:
         return APP_CODE
 
 
+@pytest.fixture(autouse=True)
+def wire_application_container():
+    """Other tests build their own Container, which rewires Provide markers away from the assembled app."""
+    app.container.wire()
+
+
 @pytest.fixture
 def client():
     with TestClient(app) as test_client:

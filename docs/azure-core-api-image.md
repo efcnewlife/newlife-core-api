@@ -161,6 +161,6 @@ Image: <tag> @ <digest>   App: <app name>   Redis: <name, SKU, policy, HA>   Pos
 
 - **Access tokens survive logout until they expire** (`JWT_ACCESS_TOKEN_EXPIRE_MINUTES`, default 15). Logout writes the revocation key, but no request path reads `is_blacklisted`. Refresh tokens are revoked.
 - **The client IP is the transport peer in direct mode** (forwarding headers are ignored), so behind App Service all visitors may share one limiter bucket per path. Cloudflare mode uses the verified `CF-Connecting-IP` instead; see [trusted ingress](trusted-ingress.md). The path in the identifier includes IDs, so each `/…/{id}` path counts separately.
-- **`/healthz` touches Redis** through the locale middleware and returns `500` while Redis is unreachable. An App Service health check on `/healthz` therefore also tracks Redis.
+- **`/healthz` checks HTTP responsiveness only** (ADR 0038). It runs no locale lookup and opens no database session, so it returns `200` while Redis or PostgreSQL is unreachable. An App Service health check on `/healthz` does not detect those outages.
 - **Redis unavailable at startup** disables Redis rate limiting (fail-open) until the app restarts; the log shows `Failed to initialize Redis rate limiters`.
 - The image keeps its build toolchain (`build-base`, `libffi-dev`), which adds size.

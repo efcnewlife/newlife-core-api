@@ -152,7 +152,7 @@ FastAPI (public)  portal.main:app
 - **Admin API prefix:** `/admin/api/v1`
 - **App API prefix:** `/api/v1`
 - Admin routes use `AuthRouter` with JWT + permission metadata on each endpoint.
-- `CoreRequestMiddleware` binds per-request DB session and resolved locale.
+- `CoreRequestMiddleware` binds per-request DB session and resolved locale. It runs in the mounted admin and app APIs only; public routes such as `/healthz` get neither.
 
 ### Admin route modules (`portal/routers/admin/v1/`)
 

@@ -80,7 +80,7 @@ Account region, retention, entitlements, source-map/release API access, deployme
 
 - `@distributed_trace()` / `@distributed_trace("name")` keep working for sync and async call sites. Optional `inject_span=True` injects the decorator’s own span as a keyword-only `_span: TraceSpan = NOOP_SPAN` parameter; ordinary callers omit it.
 - `TraceSpan` only supports `set_attribute` with `str | int | float | bool` values. It does not expose the native SDK span, finish controls, or a business-facing child-span facade. Nested decorated calls create child spans.
-- HTTP middleware continues supported inbound `sentry-trace` / `baggage` headers and opens one `http.server` transaction per request; service spans nest under it. Standalone decorated background work opens its own transaction root without fabricating an HTTP request.
+- HTTP middleware continues supported inbound `sentry-trace` / `baggage` headers and opens one `http.server` transaction per request to the mounted admin and member apps; service spans nest under it. Since EFC-341 that middleware does not run for public routes, so they have no HTTP root and their errors carry no request ID. Standalone decorated background work opens its own transaction root without fabricating an HTTP request.
 - Tracing export requires `SENTRY_TRACES_SAMPLE_RATE` in `0..1` in addition to a started Sentry backend. Unset leaves tracing off (no prescribed sampling policy). Automatic framework integrations stay disabled.
 - Custom attributes, transaction payloads, and automatic span metadata pass through the same privacy sanitizer; credentials, personal content, payload, and remark markers must not leave through spans. The decorator records span status and does not independently `capture_exception` at every nested layer.
 

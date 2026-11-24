@@ -42,6 +42,12 @@ def _register_cors(application: FastAPI) -> None:
 
 
 def _register_request_middlewares(application: FastAPI) -> None:
+    """
+    Mounted apps only, so each request runs CoreRequestMiddleware once. The public app must not own the request session:
+    a mounted app answers an unhandled exception itself, so the public app would commit partial work.
+    :param application:
+    :return:
+    """
     application.add_middleware(CoreRequestMiddleware)
     application.add_middleware(PoolExhaustionMiddleware)
 
@@ -61,11 +67,12 @@ def _register_public_stack(application: FastAPI, ingress_policy: IngressPolicy) 
     """
     Trusted ingress is outermost: it guards CORS preflight and the mounted apps, which share this stack.
     The rate limit covers the mounted apps too, before any request context or authentication work.
+    Public routes get no locale lookup and no DB session.
     :param application:
     :param ingress_policy:
     :return:
     """
-    _register_request_middlewares(application)
+    application.add_middleware(PoolExhaustionMiddleware)
     application.add_middleware(RateLimitMiddleware)
     _register_cors(application)
     application.add_middleware(TrustedIngressMiddleware, policy=ingress_policy)

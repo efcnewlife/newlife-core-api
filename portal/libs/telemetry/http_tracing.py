@@ -42,7 +42,7 @@ def sentry_bind_http_request(request: Request) -> Iterator[None]:
         return
 
     if http_trace_active():
-        # Public middleware already opened the root for a mounted admin/api request.
+        # An outer application already opened the root for this request; never open a second one.
         try:
             yield None
         finally:

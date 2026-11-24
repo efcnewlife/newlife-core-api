@@ -75,7 +75,7 @@ def test_exhausted_postgres_during_authentication_gets_503(client, monkeypatch, 
     _assert_service_unavailable(client.get(ADMIN_ME, headers=_admin_headers()))
 
 
-@pytest.mark.parametrize("path", ["/healthz", ADMIN_ME, MEMBER_ME])
+@pytest.mark.parametrize("path", [ADMIN_ME, MEMBER_ME])
 def test_exhausted_redis_during_the_locale_lookup_gets_503(client, monkeypatch, path):
     create = RedisPool.create
 

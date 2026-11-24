@@ -252,7 +252,7 @@ def test_direct_mode_needs_no_origin_secret(client):
 
 @pytest.fixture
 def captured_request_headers(monkeypatch):
-    """Headers the request context captures, in the public app and each mounted app."""
+    """Headers the request context captures, once per request to a mounted app."""
     captured: list[dict[str, str]] = []
     resolve_raw_headers = CoreRequestMiddleware.resolve_raw_headers
 
@@ -272,7 +272,7 @@ def test_origin_secret_never_reaches_the_application(request, captured_request_h
     response = client.get(ADMIN_ME, headers=_cloudflare_headers())
 
     assert response.status_code == 401
-    assert len(captured_request_headers) == 2
+    assert len(captured_request_headers) == 1
     for headers in captured_request_headers:
         assert "x-newlife-origin-secret" not in headers
         assert all(ORIGIN_SECRET not in value for value in headers.values())
