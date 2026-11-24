@@ -4,6 +4,8 @@
 
 Accepted on 2026-10-27 after the user confirmed the final scope. This ADR records the agreed design; SDK implementation has not started.
 
+Partially superseded on 2026-11-24 by [ADR 0040: Additive Azure Monitor observability](0040-additive-azure-monitor-observability.md). The accepted direction retains Sentry and adds Azure, replacing mutually exclusive destination selection and Sentry-native Core API tracing ownership with unified OpenTelemetry instrumentation and multiple export destinations. Native tracing initialization and sampling settings below must be reconciled with that composition rather than enabled alongside it. Preserve the Sentry capability, privacy, profiling, error-deduplication, and notification requirements unless ADR 0040 explicitly revises them. This is a design change, not evidence that implementation or deployment has changed.
+
 Published specification: [Core API #258](https://github.com/efcnewlife/newlife-core-api/issues/258), synchronized as [EFC-277](https://linear.app/jayhsia/issue/EFC-277/spec-sentry-sdk-integration-across-newlife-applications).
 
 ## Confirmed decisions
@@ -36,7 +38,7 @@ Use `<repo>@<version>` as the Sentry release identifier, with production semanti
 
 None of the three applications is deployed yet. Azure is the intended future hosting platform; the Azure service and deployment pipeline are not yet established by this interview. Do not copy TheHope's deployment provider or assume live URLs or existing Azure resources.
 
-Defer deep performance analysis, Profiling, and custom business metrics.
+Defer deep performance analysis and custom business metrics. Profiling was initially deferred; the Core API scope revision below supersedes that deferral for Core API.
 
 User identity sent to Sentry is limited to an internal ID without name or email. This ceiling allows affected-user correlation while reducing direct identity disclosure. Exclude request and response bodies, passwords, tokens, names, email addresses, phone numbers, and remarks. Apply sanitization to URLs, logs, and breadcrumbs as well. Mask replay text and inputs, and block images and video by default. Detailed filtering and verification cases remain to be designed.
 
@@ -88,6 +90,26 @@ Account region, retention, entitlements, source-map/release API access, deployme
 - Explicit capture coordinates with the existing logging integration (`event_level=None`) and the shared `__telemetry_captured__` flag so a logged exception plus a second capture still produce one error event. Nested `@distributed_trace` layers do not report independently.
 - Background boundaries that need explicit reporting today: Pending-payment expiry email failure inside a successful sweep, the expiry sweep/unlock lifecycle runner, and EventBus handler execution. Expected business rejections and normal advisory-lock contention are not reported as errors. Notification-email failure does not change the sweep's cancelled-series result.
 - Capture uses an isolation scope that clears inherited user identity so background work does not keep a stale request user, while any active trace context remains attached. Reporting also works when no span is active. Sanitization reuses the shared allowlist policy (no bodies, credentials, personal fields, remarks, or exception text).
+
+## Core API SDK coverage scope revision (2026-11-20)
+
+The user confirmed HTTP, database, Redis, outbound HTTP, and Profiles as the target Core API observability capabilities, using `TheHopeTechTeam/conf-portal-api` as a reference. This brings Profiling into the Core API design scope. Initial sampling is explicitly selected below; the reference application's collection policy is not adopted wholesale.
+
+The reference API explicitly configures FastAPI, SQLAlchemy, asyncpg, Redis, and HTTPX integrations and transaction-based profiling. Its worker separately configures the database, Redis, and HTTPX integrations and profiling. This is configuration evidence, not proof of successful ingestion or account entitlements.
+
+The user confirmed retaining operation type, duration, status, sanitized query structure, and sanitized URLs, while excluding SQL parameters, Redis keys/values, headers, and bodies. Query strings retain ordinary query conditions rather than being removed wholesale; credentials, personal data, and sensitive content in free-text searches are masked.
+
+Staging and production both enable the agreed SDK capabilities, with separate configurable enablement and sampling settings. Production enablement is part of the same delivery scope rather than deferred to a separate development phase. Development retains explicit opt-in. This is an implementation target, not evidence that deployed configuration has changed or telemetry has been received.
+
+Continuous Profiling follows active spans using `profile_lifecycle="trace"`. Profile session sampling is decided at SDK initialization and must not be described as a per-request sampling percentage.
+
+The user selected initial `traces_sample_rate=1.0` and `profile_session_sample_rate=1.0` for both staging and production, retaining independently configurable settings per environment. This supersedes the earlier deferral of sampling percentages for this Core API scope. A 100% profile session rate makes each SDK process eligible for trace-lifecycle profiling; it does not promise a distinct profile for every request or continuous collection without active spans. No account upgrade or entitlement change is authorized by this selection.
+
+FastAPI/Starlette integrations own HTTP instrumentation, replacing the custom HTTP-root instrumentation while preserving the `TelemetryBackend` and service-span boundaries. This supersedes the earlier restriction that automatic framework integrations stay disabled. The replacement must retain one HTTP root per request, one error event per unexpected failure, and the existing ordinary-4xx exclusion and sanitization requirements.
+
+Third-party outbound HTTP calls are included in local span recording. Outbound `sentry-trace` and `baggage` headers are sent only to explicitly allowlisted services; arbitrary third parties do not receive them. Local span recording does not depend on propagating those headers. Propagation targets must match intended service origins without inadvertently permitting lookalike hosts.
+
+The user requested publication of the agreed design and confirmed the test boundary. Published specification: [Core API #313](https://github.com/efcnewlife/newlife-core-api/issues/313), synchronized as [EFC-343](https://linear.app/jayhsia/issue/EFC-343/spec-core-api-sentry-dependency-integrations-and-continuous-profiling). Integration composition is to be verified against the selected SDK, including SQLAlchemy/asyncpg overlap and HTTP-root/error deduplication; the target is the agreed operation coverage rather than a mandatory duplicate instrumentation layer. Verification must inspect automatic span metadata, outgoing propagation headers, and profile envelope items rather than assuming the existing error/transaction sanitizers cover every payload. Existing privacy, single-report error capture, and fail-open requirements remain in force.
 
 ## Plan and notification evidence
 
